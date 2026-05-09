@@ -65,10 +65,29 @@ def test_min_size_filter():
     assert find_cycles(g, min_size=3) == []
 
 
-def test_self_loop_excluded_at_default_min_size():
+def test_self_loop_reported_at_default_min_size():
     g: nx.DiGraph = nx.DiGraph()
     g.add_edge("a", "a", lines=(1,))
+    [cycle] = find_cycles(g)
+    assert cycle.modules == ("a",)
+    assert {(e.source, e.target) for e in cycle.edges} == {("a", "a")}
+    assert cycle.edges[0].lines == (1,)
+
+
+def test_isolated_node_without_self_loop_not_reported():
+    g: nx.DiGraph = nx.DiGraph()
+    g.add_node("loner")
     assert find_cycles(g) == []
+
+
+def test_self_loop_alongside_multi_node_cycle():
+    g = _g(("a", "b", (1,)), ("b", "a", (2,)))
+    g.add_edge("c", "c", lines=(5,))
+    cycles = find_cycles(g)
+    sizes = sorted(len(c.modules) for c in cycles)
+    assert sizes == [1, 2]
+    self_cycle = next(c for c in cycles if c.modules == ("c",))
+    assert self_cycle.edges[0].lines == (5,)
 
 
 def test_edge_lines_preserved():
@@ -135,16 +154,17 @@ def test_same_sized_cycles_sorted_by_qualname():
     assert [c.modules[0] for c in cycles] == ["a1", "z1"]
 
 
-def test_min_size_one_includes_singletons():
+def test_min_size_does_not_gate_self_loops():
+    # min_size only filters multi-node SCCs; self-loops are real cycles
+    # regardless. min_size=99 still surfaces a self-loop.
     g: nx.DiGraph = nx.DiGraph()
-    g.add_node("isolated")
-    g.add_edge("a", "b", lines=(1,))
-    g.add_edge("b", "a", lines=(2,))
-    cycles = find_cycles(g, min_size=1)
+    g.add_edge("a", "a", lines=(1,))
+    g.add_edge("b", "c", lines=(2,))
+    g.add_edge("c", "b", lines=(3,))
+    cycles = find_cycles(g, min_size=99)
     sizes = sorted(len(c.modules) for c in cycles)
-    # 1 SCC of size 2, plus 3 singleton SCCs (a, b are *in* the size-2 SCC,
-    # not singletons; only "isolated" is a singleton SCC).
-    assert sizes == [1, 2]
+    assert sizes == [1]
+    assert cycles[0].modules == ("a",)
 
 
 def test_aggregated_lines_preserved_in_cycle_edges():

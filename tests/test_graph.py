@@ -206,11 +206,7 @@ def test_wildcard_reexport_does_not_crash(tmp_path: Path):
     assert g.has_edge("pkg.consumer", "pkg")
 
 
-def test_reexport_chain_one_hop_only(tmp_path: Path):
-    # `pkg/__init__.py` re-exports from `pkg.sub`, and `pkg.sub/__init__.py`
-    # re-exports from `pkg.sub.impl`. v1 only resolves one hop, so the consumer
-    # edge lands on `pkg.sub` (not `pkg.sub.impl`). When chain following ships,
-    # update this test to expect the deeper resolution.
+def test_reexport_chain_two_hops(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     sub = pkg / "sub"
@@ -220,5 +216,59 @@ def test_reexport_chain_one_hop_only(tmp_path: Path):
     (sub / "impl.py").write_text("class Foo: ...\n")
     (pkg / "consumer.py").write_text("from pkg import Foo\n")
     g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.sub.impl")
+    assert not g.has_edge("pkg.consumer", "pkg.sub")
+    assert not g.has_edge("pkg.consumer", "pkg")
+
+
+def test_reexport_chain_three_hops(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    sub = pkg / "sub"
+    sub.mkdir()
+    deep = sub / "deep"
+    deep.mkdir()
+    (pkg / "__init__.py").write_text("from .sub import Foo\n")
+    (sub / "__init__.py").write_text("from .deep import Foo\n")
+    (deep / "__init__.py").write_text("from .impl import Foo\n")
+    (deep / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.sub.deep.impl")
+
+
+def test_reexport_chain_circular_does_not_loop(tmp_path: Path):
+    # pkg/__init__.py re-exports Foo from pkg.a, and pkg.a/__init__.py
+    # re-exports Foo from pkg (an evil-twin loop). The chain follower
+    # must not infinite-loop; it should bail and leave the entry pointing
+    # at the first hop.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    a = pkg / "a"
+    a.mkdir()
+    (pkg / "__init__.py").write_text("from .a import Foo\n")
+    (a / "__init__.py").write_text("from pkg import Foo\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    # Just assert build_graph terminates; the resulting edge can land at
+    # either pkg or pkg.a depending on how the cycle is broken, but the
+    # important property is that the resolver returns at all.
+    g = build_graph(tmp_path)
+    assert g.number_of_nodes() > 0
+
+
+def test_reexport_chain_does_not_resolve_different_names(tmp_path: Path):
+    # pkg/__init__.py re-exports Foo from pkg.sub, but pkg.sub/__init__.py
+    # only has a re-export for Bar, not Foo. The chain follower must not
+    # mis-attribute Foo to wherever Bar lives.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    sub = pkg / "sub"
+    sub.mkdir()
+    (pkg / "__init__.py").write_text("from .sub import Foo\n")
+    (sub / "__init__.py").write_text("from .impl import Bar\n")
+    (sub / "impl.py").write_text("class Bar: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    # Foo doesn't chain through pkg.sub because pkg.sub doesn't re-export Foo.
     assert g.has_edge("pkg.consumer", "pkg.sub")
     assert not g.has_edge("pkg.consumer", "pkg.sub.impl")

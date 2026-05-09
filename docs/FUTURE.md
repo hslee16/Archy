@@ -4,8 +4,6 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 
 ## Near-term (next 2–3 PRs)
 
-- **Multi-hop re-export chains** - re-export resolution currently follows only one hop. If `pkg/__init__.py` re-exports from `pkg.sub` and `pkg.sub/__init__.py` re-exports from `pkg.sub.impl`, consumers of `pkg.Foo` resolve to `pkg.sub`, not `pkg.sub.impl`. Add transitive following capped at a small max-depth to avoid pathological loops.
-- **Self-loop / size-1 SCC reporting** - cycle detection currently requires `min_size >= 2`. A module that imports itself (rare but possible, especially through `__init__.py` patterns) is a real cycle. Detect self-edges as size-1 cycles and surface them, ideally without changing default `min_size` semantics for the ≥2 case.
 - **Call graph** - second edge type alongside imports. Tree-sitter query for `(call function: ...)`, resolve callee to its defining module. Doubles the signal for modularity/coupling because two modules can be independent by imports but tightly coupled by calls. [sentrux: uses both import and call edges in Q]
 - **Cyclomatic complexity per function** - branch-node counts via tree-sitter. Feeds the equality (Gini) metric and the redundancy proxy. [sentrux: `[semantics.complexity]` config]
 

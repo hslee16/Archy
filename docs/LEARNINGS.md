@@ -86,3 +86,21 @@ Sentrux is optimized for the cybernetic feedback loop its README pitches: agent 
 archy keeps both capabilities. JSONL is a strict superset - we get long-term history *and* per-commit regression gating from the same file. `archy score --strict` reads the last row and compares against it (the same logic as sentrux's `gate`); `archy trend` reads the full history (which sentrux can't, because it overwrites). The default tolerance (0.02) matches sentrux's threshold so cross-tool intuition transfers.
 
 The trade-off: a JSONL history grows unboundedly. For most projects (one record per commit, ~250 bytes/row) that's a few hundred KB per year of churn. We considered rotating but defaulted to letting it accumulate; users who want bounded history can post-process with `tail -n 1000 history.jsonl > history.jsonl` or similar.
+
+## v0.3.x follow-ups - chain follower + self-loop reporting
+
+Two small refinements to features shipped earlier.
+
+**Multi-hop re-export chains.** v0.2 only resolved one hop: if `pkg/__init__.py` did `from .sub import Foo` and `pkg.sub/__init__.py` did `from .impl import Foo`, consumers of `pkg.Foo` landed at `pkg.sub` rather than the `pkg.sub.impl` source. The fix is a fixed-point pass over the re-export map after the per-package build:
+
+```
+for (pkg, name) -> target in maps:
+    visited = {pkg}
+    while target has a deeper re-export for `name` and target not in visited:
+        visited.add(target); target = deeper_target
+    # capped at max_depth=8 to short-circuit pathological loops
+```
+
+The visited-set + max-depth guard handle the malicious "evil twin" case where two `__init__.py` files re-export each other under the same name, which would otherwise loop forever. `max_depth=8` is enough for real codebases (FastAPI's deepest re-export chain we have seen is 3) and short enough that cycle-induced misbehaviour is bounded.
+
+**Self-loop reporting.** `find_cycles` previously required `min_size >= 2`, which meant a module that imports itself - rare but possible, particularly through `__init__.py` re-exports - was silently dropped. The new semantics: self-loops are *always* reported regardless of `min_size`; the gate only suppresses incidental DAG-singleton SCCs (which never represent a cycle anyway). This was a behaviour-change for `find_cycles(g, min_size=1)` - it no longer reports isolated nodes - but that mode was uninteresting in practice (it was effectively "list all SCCs," not "list cycles"), so the change makes the function's name match what it does.

@@ -280,7 +280,26 @@ def _build_reexport_maps(
                 pkg_map[local] = source
         if pkg_map:
             maps[m.qualname] = pkg_map
+    _follow_reexport_chains(maps)
     return maps
+
+
+def _follow_reexport_chains(maps: dict[str, dict[str, str]], *, max_depth: int = 8) -> None:
+    # If pkg/__init__.py re-exports name X from pkg.sub, and pkg.sub/__init__.py
+    # re-exports the same name X from pkg.sub.impl, the consumer's `from pkg
+    # import X` should land on pkg.sub.impl. Walk each (pkg, name) -> target
+    # in place, capped at max_depth so a malicious cycle (A re-exports from B,
+    # B re-exports from A) cannot loop forever.
+    for pkg, name_map in maps.items():
+        for name, target in name_map.items():
+            visited: set[str] = {pkg}
+            for _ in range(max_depth):
+                deeper = maps.get(target, {}).get(name)
+                if deeper is None or deeper in visited:
+                    break
+                visited.add(target)
+                target = deeper
+            name_map[name] = target
 
 
 def _reexport_source(

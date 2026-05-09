@@ -21,15 +21,23 @@ class Cycle:
 
 
 def find_cycles(graph: nx.DiGraph, *, min_size: int = 2) -> list[Cycle]:
-    """Return SCCs of size >= min_size, sorted largest-first then by qualname.
+    """Return cycles in the graph, sorted largest-first then by qualname.
 
-    Single-module SCCs are excluded by default; raise min_size=1 to include
-    them, but note that a 1-element SCC only constitutes a real cycle if the
-    node has a self-loop. v1 does not synthesize self-cycles.
+    A cycle is either a strongly-connected component of size >= min_size or
+    a singleton SCC whose only node has a self-edge. Self-loops are always
+    real cycles (a module importing itself), so we report them regardless
+    of min_size; the gate only suppresses incidental singletons (DAG nodes
+    that happen to be their own SCC because they have no inbound mutual
+    relationship).
     """
     cycles: list[Cycle] = []
     for component in nx.strongly_connected_components(graph):
-        if len(component) < min_size:
+        size = len(component)
+        if size == 1:
+            node = next(iter(component))
+            if not graph.has_edge(node, node):
+                continue
+        elif size < min_size:
             continue
         modules = tuple(sorted(component))
         component_set = set(component)
