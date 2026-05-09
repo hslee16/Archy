@@ -1,0 +1,23 @@
+- id: archy-check
+  name: archy check
+  description: Enforce layer rules declared in archy.yaml
+  entry: archy check .
+  language: python
+  pass_filenames: false
+  always_run: true
+
+- id: archy-score-strict
+  name: archy score --strict
+  description: Fail if the composite quality score regresses beyond tolerance
+  entry: archy score . --strict
+  language: python
+  pass_filenames: false
+  always_run: true
+
+- id: archy-cycles
+  name: archy cycles --strict
+  description: Fail if any import cycle (size >= 2) is present
+  entry: archy cycles . --strict
+  language: python
+  pass_filenames: false
+  always_run: true

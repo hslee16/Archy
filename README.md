@@ -130,6 +130,48 @@ Wire it into Claude Code with this stanza in your config:
 
 `--strict` reads the last row from `.archy/history.jsonl` and compares the current score against it. Drops beyond the tolerance fail with exit code 1. The default tolerance (0.02) matches the threshold sentrux's `gate` uses. This gives archy parity with sentrux's regression-gate use case while keeping the long-term JSONL history for `archy trend`.
 
+## CI integration
+
+### GitHub Action
+
+archy ships a composite action you can drop into any workflow:
+
+```yaml
+- uses: hslee16/archy@v0.4.0
+  with:
+    command: score      # score | check | cycles
+    path: .
+    strict: "true"      # fail on regression (score) or any cycle (cycles)
+```
+
+Inputs (all optional unless noted):
+
+| Input | Default | Notes |
+|---|---|---|
+| `command` | `score` | `score`, `check`, or `cycles` |
+| `path` | `.` | Project root to analyze |
+| `strict` | `true` | `score`/`cycles`: fail on regression / any cycle |
+| `strict-tolerance` | `0.02` | `score --strict` tolerance |
+| `record` | `false` | `score`: append result to `.archy/history.jsonl` |
+| `config` | (auto) | `check`: path to `archy.yaml` |
+| `python-version` | `3.10` | Python to install |
+
+### Pre-commit hook
+
+Add to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/hslee16/archy
+    rev: v0.4.0
+    hooks:
+      - id: archy-check          # layer rules from archy.yaml
+      - id: archy-score-strict   # regression gate against last recorded score
+      - id: archy-cycles         # fail on any import cycle
+```
+
+`archy-score-strict` reads `.archy/history.jsonl`; commit a baseline first with `archy score . --record`.
+
 ## Layer rules (`archy check`)
 
 Drop an `archy.yaml` at the repo root declaring layers and forbidden directions:
@@ -171,14 +213,14 @@ uv run pytest              # tests
 
 ## Roadmap
 
-- [x] Tree-sitter-based import graph
-- [x] `__init__.py` re-export resolution
-- [x] Cycle detection (Tarjan SCC)
-- [x] Layer/boundary rules from YAML config (`archy check`)
-- [x] Single-score computation (`archy score`), four sub-metrics, geometric mean
-- [x] Per-commit JSONL history + `archy trend` (sparkline + last-N table)
-- [x] MCP server (`archy mcp`), five tools an AI agent can call
-- [ ] Pre-commit hook + GitHub Action
+Next up:
+
+- [ ] `archy_impact` MCP tool: blast-radius analysis for a set of changed files
+- [ ] `archy graph` MCP tool: expose the dep graph itself for agent-side reasoning
+- [ ] Score deltas (`archy_evolution`): per-component diffs vs. the last recorded run
+- [ ] Design Structure Matrix (`archy dsm`)
+
+Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks.
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
