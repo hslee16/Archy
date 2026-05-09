@@ -44,9 +44,7 @@ def main() -> None:
 )
 def graph(path: Path, fmt: str, internal_only: bool) -> None:
     """Build the import graph for a Python project rooted at PATH."""
-    g = build_graph(path)
-    if internal_only:
-        _drop_external_nodes(g)
+    g = _load_graph(path, internal_only=internal_only)
 
     if fmt == "json":
         click.echo(json.dumps(_graph_to_dict(g), indent=2, sort_keys=True))
@@ -91,9 +89,7 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
 )
 def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: bool) -> None:
     """Find import cycles in a Python project rooted at PATH."""
-    g = build_graph(path)
-    if internal_only:
-        _drop_external_nodes(g)
+    g = _load_graph(path, internal_only=internal_only)
 
     found = find_cycles(g, min_size=min_size)
 
@@ -179,9 +175,7 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
 )
 def score(path: Path, fmt: str, internal_only: bool) -> None:
     """Compute the composite architecture quality score for PATH."""
-    g = build_graph(path)
-    if internal_only:
-        _drop_external_nodes(g)
+    g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
     if fmt == "json":
         click.echo(json.dumps(_score_to_dict(s), indent=2, sort_keys=True))
@@ -195,9 +189,12 @@ def trend() -> None:
     raise click.ClickException("not implemented yet")
 
 
-def _drop_external_nodes(g: nx.DiGraph) -> None:
-    external = {n for n, d in g.nodes(data=True) if d.get("external")}
-    g.remove_nodes_from(external)
+def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
+    g = build_graph(path)
+    if internal_only:
+        external = {n for n, d in g.nodes(data=True) if d.get("external")}
+        g.remove_nodes_from(external)
+    return g
 
 
 def _format_lines(lines: tuple[int, ...]) -> str:
