@@ -8,7 +8,7 @@
 
 AI agents generate code at machine speed. Without a feedback loop on *structural* health - module coupling, import cycles, layer violations - codebases drift architecturally even when every individual change looks fine in review.
 
-`archy` is a small tool that watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and (eventually) as an MCP server so coding agents can read their own architectural impact before committing.
+`archy` is a small tool that watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
 ## Scope
 
@@ -140,7 +140,6 @@ uv run pytest              # tests
 - [x] Per-commit JSONL history + `archy trend` - sparkline + last-N table
 - [x] MCP server (`archy mcp`) - five tools an AI agent can call
 - [ ] Pre-commit hook + GitHub Action
-- [ ] MCP server
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 

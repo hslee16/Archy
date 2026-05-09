@@ -34,6 +34,32 @@ def acyclic_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture
+def layered_project(tmp_path: Path):
+    def build(core_api_src: str = "", cli_runner_src: str = "") -> Path:
+        pkg = tmp_path / "myapp"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        core = pkg / "core"
+        core.mkdir()
+        (core / "__init__.py").write_text("")
+        (core / "api.py").write_text(core_api_src)
+        cli = pkg / "cli"
+        cli.mkdir()
+        (cli / "__init__.py").write_text("")
+        (cli / "runner.py").write_text(cli_runner_src)
+        (tmp_path / "archy.yaml").write_text(
+            "layers:\n"
+            "  core: {modules: [myapp.core.**]}\n"
+            "  cli: {modules: [myapp.cli.**]}\n"
+            "forbid:\n"
+            "  - {from: core, to: cli}\n"
+        )
+        return tmp_path
+
+    return build
+
+
 # --- create_server ----------------------------------------------------------
 
 
@@ -66,7 +92,6 @@ def test_run_score_returns_full_payload(acyclic_project: Path):
     assert "overall" in payload
     assert set(payload["components"]) == {"modularity", "acyclicity", "depth", "equality"}
     assert "gate" not in payload
-    # Stateless when record=False.
     assert not (acyclic_project / ".archy" / "history.jsonl").exists()
 
 
@@ -155,50 +180,16 @@ def test_run_cycles_clean(acyclic_project: Path):
 # --- _run_check -------------------------------------------------------------
 
 
-def test_run_check_with_layered_project_clean(tmp_path: Path):
-    pkg = tmp_path / "myapp"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    core = pkg / "core"
-    core.mkdir()
-    (core / "__init__.py").write_text("")
-    (core / "api.py").write_text("")
-    cli = pkg / "cli"
-    cli.mkdir()
-    (cli / "__init__.py").write_text("")
-    (cli / "runner.py").write_text("from myapp.core import api\n")
-    (tmp_path / "archy.yaml").write_text(
-        "layers:\n"
-        "  core: {modules: [myapp.core.**]}\n"
-        "  cli: {modules: [myapp.cli.**]}\n"
-        "forbid:\n"
-        "  - {from: core, to: cli}\n"
-    )
-    result = _run_check(tmp_path, config_path=None)
+def test_run_check_with_layered_project_clean(layered_project):
+    project = layered_project(cli_runner_src="from myapp.core import api\n")
+    result = _run_check(project, config_path=None)
     assert result["passed"] is True
     assert result["violations"] == []
 
 
-def test_run_check_with_violation(tmp_path: Path):
-    pkg = tmp_path / "myapp"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    core = pkg / "core"
-    core.mkdir()
-    (core / "__init__.py").write_text("")
-    (core / "api.py").write_text("from myapp.cli.runner import go\n")
-    cli = pkg / "cli"
-    cli.mkdir()
-    (cli / "__init__.py").write_text("")
-    (cli / "runner.py").write_text("")
-    (tmp_path / "archy.yaml").write_text(
-        "layers:\n"
-        "  core: {modules: [myapp.core.**]}\n"
-        "  cli: {modules: [myapp.cli.**]}\n"
-        "forbid:\n"
-        "  - {from: core, to: cli}\n"
-    )
-    result = _run_check(tmp_path, config_path=None)
+def test_run_check_with_violation(layered_project):
+    project = layered_project(core_api_src="from myapp.cli.runner import go\n")
+    result = _run_check(project, config_path=None)
     assert result["passed"] is False
     assert len(result["violations"]) == 1
     assert result["violations"][0]["rule"] == {"from": "core", "to": "cli"}
