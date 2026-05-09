@@ -19,12 +19,13 @@ from archy.layers import (
     find_violations,
     load_config,
 )
+from archy.score import Score, compute_score
 
 
 @click.group()
 @click.version_option(__version__)
 def main() -> None:
-    """archy — architectural sensor for Python codebases."""
+    """archy - architectural sensor for Python codebases."""
 
 
 @main.command()
@@ -43,10 +44,7 @@ def main() -> None:
 )
 def graph(path: Path, fmt: str, internal_only: bool) -> None:
     """Build the import graph for a Python project rooted at PATH."""
-    g = build_graph(path)
-    if internal_only:
-        external = {n for n, d in g.nodes(data=True) if d.get("external")}
-        g.remove_nodes_from(external)
+    g = _load_graph(path, internal_only=internal_only)
 
     if fmt == "json":
         click.echo(json.dumps(_graph_to_dict(g), indent=2, sort_keys=True))
@@ -91,10 +89,7 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
 )
 def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: bool) -> None:
     """Find import cycles in a Python project rooted at PATH."""
-    g = build_graph(path)
-    if internal_only:
-        external = {n for n, d in g.nodes(data=True) if d.get("external")}
-        g.remove_nodes_from(external)
+    g = _load_graph(path, internal_only=internal_only)
 
     found = find_cycles(g, min_size=min_size)
 
@@ -161,15 +156,85 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
 
 
 @main.command()
-def score() -> None:
-    """Compute the architecture score for the current commit. (not implemented)"""
-    raise click.ClickException("not implemented yet")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+@click.option(
+    "--internal-only/--all",
+    default=True,
+    help="Restrict scoring to internal modules (default).",
+)
+def score(path: Path, fmt: str, internal_only: bool) -> None:
+    """Compute the composite architecture quality score for PATH."""
+    g = _load_graph(path, internal_only=internal_only)
+    s = compute_score(g)
+    if fmt == "json":
+        click.echo(json.dumps(_score_to_dict(s), indent=2, sort_keys=True))
+    else:
+        click.echo(_score_to_text(s))
 
 
 @main.command()
 def trend() -> None:
     """Show the score trend over recorded history. (not implemented)"""
     raise click.ClickException("not implemented yet")
+
+
+def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
+    g = build_graph(path)
+    if internal_only:
+        external = {n for n, d in g.nodes(data=True) if d.get("external")}
+        g.remove_nodes_from(external)
+    return g
+
+
+def _format_lines(lines: tuple[int, ...]) -> str:
+    label = "lines" if len(lines) > 1 else "line"
+    text = ", ".join(str(n) for n in lines) or "?"
+    return f"({label}: {text})"
+
+
+def _score_to_dict(s: Score) -> dict:
+    return {
+        "overall": s.overall,
+        "components": {
+            "modularity": s.modularity,
+            "acyclicity": s.acyclicity,
+            "depth": s.depth,
+            "equality": s.equality,
+        },
+        "inputs": {
+            "module_count": s.inputs.module_count,
+            "edge_count": s.inputs.edge_count,
+            "cycle_count": s.inputs.cycle_count,
+            "max_depth": s.inputs.max_depth,
+            "community_count": s.inputs.community_count,
+            "raw_modularity": s.inputs.raw_modularity,
+            "raw_gini": s.inputs.raw_gini,
+        },
+    }
+
+
+def _score_to_text(s: Score) -> str:
+    lines = [
+        f"# archy score: {s.overall:.3f}",
+        f"modularity:  {s.modularity:.3f}  "
+        f"({s.inputs.community_count} communities, raw Q={s.inputs.raw_modularity:.3f})",
+        f"acyclicity:  {s.acyclicity:.3f}  ({s.inputs.cycle_count} cycles)",
+        f"depth:       {s.depth:.3f}  (max depth {s.inputs.max_depth})",
+        f"equality:    {s.equality:.3f}  (Gini={s.inputs.raw_gini:.3f})",
+        f"# graph: {s.inputs.module_count} modules, {s.inputs.edge_count} edges",
+    ]
+    return "\n".join(lines)
 
 
 def _violations_to_json(violations: list[Violation]) -> list[dict]:
@@ -194,9 +259,7 @@ def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
         if rule_pair != current_rule:
             lines.append(f"\n{v.rule.from_layer} -> {v.rule.to_layer} (forbidden):")
             current_rule = rule_pair
-        line_label = "lines" if len(v.lines) > 1 else "line"
-        line_text = ", ".join(str(n) for n in v.lines) or "?"
-        lines.append(f"  {v.source} -> {v.target}  ({line_label}: {line_text})")
+        lines.append(f"  {v.source} -> {v.target}  {_format_lines(v.lines)}")
     return "\n".join(lines)
 
 
@@ -222,9 +285,7 @@ def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:
             lines.append(f"  - {m}")
         lines.append("Edges:")
         for e in c.edges:
-            line_label = "lines" if len(e.lines) > 1 else "line"
-            line_text = ", ".join(str(n) for n in e.lines) or "?"
-            lines.append(f"  {e.source} -> {e.target}  ({line_label}: {line_text})")
+            lines.append(f"  {e.source} -> {e.target}  {_format_lines(e.lines)}")
     return "\n".join(lines)
 
 

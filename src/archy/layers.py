@@ -129,7 +129,7 @@ def _parse_layers(raw: object, path: Path) -> list[LayerSpec]:
             raise LayerConfigError(
                 f"layer {name!r} must define `modules` as a list of non-empty strings in {path}"
             )
-        # mypy/ty: explicit narrowing — the all(...) check above guarantees str.
+        # mypy/ty: explicit narrowing - the all(...) check above guarantees str.
         modules: tuple[str, ...] = tuple(m for m in modules_raw if isinstance(m, str))
         out.append(LayerSpec(name=name, patterns=modules))
     return out

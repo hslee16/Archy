@@ -1,4 +1,4 @@
-# archy's own layer rules — enforced in CI via `archy check .`.
+# archy's own layer rules - enforced in CI via `archy check .`.
 #
 # The intent is a pure dependency tree:
 #   parser  →  (nothing internal)
@@ -16,6 +16,7 @@ layers:
     modules:
       - "archy.graph"
       - "archy.cycles"
+      - "archy.score"
   policy:
     modules:
       - "archy.layers"
