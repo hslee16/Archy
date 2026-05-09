@@ -2,13 +2,13 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.3.0. Usable today for inspection (`archy graph`, `archy cycles`), CI governance (`archy check` against an `archy.yaml`), one-shot scoring (`archy score`), and trended scoring over time (`archy score --record` + `archy trend`) - see [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. The score follows sentrux's design (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for the side-by-side comparison.
+**Status:** v0.4.0. Usable today as a CLI for inspection (`archy graph`, `archy cycles`), CI governance (`archy check` against an `archy.yaml`), one-shot scoring (`archy score`), trended scoring over time (`archy score --record` + `archy trend`), AND as an MCP server (`archy mcp`) so AI agents can call archy as a structural sensor in their own feedback loop. See [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. The score follows sentrux's design (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for the side-by-side comparison.
 
 ## Why
 
 AI agents generate code at machine speed. Without a feedback loop on *structural* health - module coupling, import cycles, layer violations - codebases drift architecturally even when every individual change looks fine in review.
 
-`archy` is a small tool that watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and (eventually) as an MCP server so coding agents can read their own architectural impact before committing.
+`archy` is a small tool that watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
 ## Scope
 
@@ -54,6 +54,32 @@ uv run archy trend path/to/your/python/project --last 30 --format json
 uv run archy score path/to/your/python/project --strict
 uv run archy score path/to/your/python/project --strict --record  # check then record
 uv run archy score path/to/your/python/project --strict --strict-tolerance 0.0
+
+# Run archy as an MCP server on stdio so AI agents can call it directly
+uv run archy mcp
+```
+
+### MCP server (`archy mcp`)
+
+`archy mcp` exposes five tools to MCP-aware AI agents (Claude Code,
+the Anthropic API, etc.):
+
+| Tool | Purpose |
+|---|---|
+| `archy_score` | Compute the four-metric score; optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. |
+| `archy_cycles` | Find import cycles. |
+| `archy_check` | Run layer rules from `archy.yaml`. |
+| `archy_trend` | Read recent score history. |
+| `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
+
+Wire it into Claude Code with this stanza in your config:
+
+```json
+{
+  "mcpServers": {
+    "archy": { "command": "uv", "args": ["run", "archy", "mcp"] }
+  }
+}
 ```
 
 `--strict` reads the last row from `.archy/history.jsonl` and compares the
@@ -112,8 +138,8 @@ uv run pytest              # tests
 - [x] Layer/boundary rules from YAML config (`archy check`)
 - [x] Single-score computation (`archy score`) - four sub-metrics, geometric mean
 - [x] Per-commit JSONL history + `archy trend` - sparkline + last-N table
+- [x] MCP server (`archy mcp`) - five tools an AI agent can call
 - [ ] Pre-commit hook + GitHub Action
-- [ ] MCP server
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 

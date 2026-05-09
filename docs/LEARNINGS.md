@@ -104,3 +104,19 @@ for (pkg, name) -> target in maps:
 The visited-set + max-depth guard handle the malicious "evil twin" case where two `__init__.py` files re-export each other under the same name, which would otherwise loop forever. `max_depth=8` is enough for real codebases (FastAPI's deepest re-export chain we have seen is 3) and short enough that cycle-induced misbehaviour is bounded.
 
 **Self-loop reporting.** `find_cycles` previously required `min_size >= 2`, which meant a module that imports itself - rare but possible, particularly through `__init__.py` re-exports - was silently dropped. The new semantics: self-loops are *always* reported regardless of `min_size`; the gate only suppresses incidental DAG-singleton SCCs (which never represent a cycle anyway). This was a behaviour-change for `find_cycles(g, min_size=1)` - it no longer reports isolated nodes - but that mode was uninteresting in practice (it was effectively "list all SCCs," not "list cycles"), so the change makes the function's name match what it does.
+
+## v0.4.0 - MCP server: comparison with sentrux
+
+archy and sentrux both ship an MCP server so AI agents can call the analyzer directly. The surfaces overlap but trade off scope vs. statefulness.
+
+| | sentrux | archy v0.4.0 |
+|---|---|---|
+| Tools | 9 (`scan`, `health`, `session_start`, `session_end`, `rescan`, `check_rules`, `evolution`, `dsm`, `test_gaps`) | 5 (`archy_score`, `archy_cycles`, `archy_check`, `archy_trend`, `archy_record_baseline`) |
+| Session model | Stateful: `session_start` saves an in-process baseline; `session_end` compares against it. | Stateless: each tool call is independent. The "baseline" lives in `.archy/history.jsonl`, which any tool can read or extend. |
+| Data behind tools | Snapshot-and-diff against an in-memory baseline. | The CLI's existing JSON shapes - same data agents would read by piping CLI output. |
+| Dependencies | Pure Rust, no Python runtime. | Python `mcp` SDK over stdio. |
+| Distribution | Single binary. | `uv run archy mcp` (or `pipx run archy mcp` once on PyPI). |
+
+Why the smaller surface: archy's CLI primitives are already orthogonal (`graph` is the building block; `cycles`, `check`, `score`, `trend` are projections). Wrapping each as an MCP tool gives the agent the same composable primitives. The five tools cover sentrux's `scan`, `health`, `session_start`, `session_end`, and `check_rules` directly; the other four sentrux tools (`evolution`, `dsm`, `test_gaps`, `rescan`) are either FUTURE.md items (`evolution` ≈ trend deltas, `dsm` ≈ a richer graph projection) or out-of-scope (`test_gaps` requires a coverage source archy doesn't ingest).
+
+Why stateless: the `.archy/history.jsonl` file is already the source of truth for trend and gating, so making the MCP surface stateless avoids two ways to compare scores. An agent that wants the sentrux session feel calls `archy_record_baseline(path)` at session start and `archy_score(path, strict=True)` at session end - same pattern, different storage shape.

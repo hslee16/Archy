@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "archy"
-version = "0.2.0"
+version = "0.4.0"
 description = "Architectural sensor for Python codebases"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -24,6 +24,7 @@ dependencies = [
     "networkx>=3.2",
     "pyyaml>=6.0",
     "click>=8.1",
+    "mcp>=1.27.1",
 ]
 
 [project.scripts]
