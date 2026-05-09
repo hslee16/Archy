@@ -50,7 +50,16 @@ runs:
 
     - name: Install archy
       shell: bash
-      run: uv pip install --system "${{ github.action_path }}"
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_PATH: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        if [[ "$ACTION_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+          uv pip install --system "archy==${BASH_REMATCH[1]}"
+        else
+          uv pip install --system "$ACTION_PATH"
+        fi
 
     - name: Run archy ${{ inputs.command }}
       shell: bash
