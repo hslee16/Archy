@@ -1,8 +1,13 @@
+"""Click-based command-line interface for archy."""
+
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
 
 import click
+import networkx as nx
 
 from archy import __version__
 from archy.graph import build_graph
@@ -68,7 +73,7 @@ def trend() -> None:
     raise click.ClickException("not implemented yet")
 
 
-def _graph_to_dict(g) -> dict:
+def _graph_to_dict(g: nx.DiGraph) -> dict:
     return {
         "root": g.graph.get("root"),
         "parse_errors": list(g.graph.get("parse_errors", ())),
@@ -80,7 +85,7 @@ def _graph_to_dict(g) -> dict:
     }
 
 
-def _graph_to_dot(g) -> str:
+def _graph_to_dot(g: nx.DiGraph) -> str:
     lines = ["digraph imports {", '  rankdir="LR";']
     for n, d in sorted(g.nodes(data=True)):
         style = ' style="dashed" color="gray"' if d.get("external") else ""
@@ -91,19 +96,14 @@ def _graph_to_dot(g) -> str:
     return "\n".join(lines)
 
 
-def _graph_to_text(g) -> str:
-    lines = []
+def _graph_to_text(g: nx.DiGraph) -> str:
     internal = sorted(n for n, d in g.nodes(data=True) if not d.get("external"))
-    lines.append(f"# {len(internal)} internal module(s), {g.number_of_edges()} import edge(s)")
+    lines = [f"# {len(internal)} internal module(s), {g.number_of_edges()} import edge(s)"]
     for n in internal:
-        targets = sorted(g.successors(n))
-        if not targets:
-            lines.append(f"{n}")
-        else:
-            lines.append(f"{n}")
-            for t in targets:
-                marker = "ext" if g.nodes[t].get("external") else "int"
-                lines.append(f"  -> [{marker}] {t}")
+        lines.append(f"{n}")
+        for t in sorted(g.successors(n)):
+            marker = "ext" if g.nodes[t].get("external") else "int"
+            lines.append(f"  -> [{marker}] {t}")
     return "\n".join(lines)
 
 

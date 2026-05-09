@@ -179,7 +179,10 @@ def _expand_with_imported_names(
     imported_names: tuple[str, ...],
     internal_qualnames: set[str],
 ) -> list[str]:
-    """Decide whether to attribute edges to `base` or to its submodules."""
+    # `from X import a, b` is statically ambiguous (a, b may be submodules or
+    # symbols in X's namespace). When X is internal we prefer submodule edges
+    # where they exist so the graph reflects real file-level dependencies; for
+    # external X we collapse to a single edge to the top-level package.
     base_internal = base in internal_qualnames
 
     if base_internal and imported_names:
@@ -235,52 +238,6 @@ def _resolve_relative_base(
     target_parts = [*base, *(suffix.split(".") if suffix else [])]
     target = ".".join(p for p in target_parts if p)
     return target or None
-
-
-def _resolve_relative(
-    raw: str,
-    source_module: Module,
-    internal_qualnames: set[str],
-) -> str | None:
-    """Resolve a leading-dot relative import to an absolute qualname.
-
-    `raw` is the literal text of the relative_import node, e.g. '.', '..pkg',
-    '...sub.mod'. The dot count tells us how many package levels to walk up
-    from the source module's package.
-    """
-    leading_dots = 0
-    for ch in raw:
-        if ch == ".":
-            leading_dots += 1
-        else:
-            break
-    suffix = raw[leading_dots:]
-
-    src_parts = source_module.qualname.split(".")
-    if not source_module.is_package:
-        # For a non-package module, its package is everything but the last segment.
-        src_parts = src_parts[:-1]
-
-    walk_up = leading_dots - 1  # `from .` stays in the current package
-    if walk_up > len(src_parts):
-        return None  # escapes the project root
-    base = src_parts[: len(src_parts) - walk_up] if walk_up else src_parts
-
-    target_parts = [*base, *(suffix.split(".") if suffix else [])]
-    target = ".".join(p for p in target_parts if p)
-    if not target:
-        return None
-
-    if target in internal_qualnames:
-        return target
-    # Try shorter prefixes — `from ..util import helpers` may target
-    # `pkg.util` even if `pkg.util.helpers` isn't a module.
-    parts = target.split(".")
-    for end in range(len(parts) - 1, 0, -1):
-        candidate = ".".join(parts[:end])
-        if candidate in internal_qualnames:
-            return candidate
-    return None
 
 
 def _add_or_extend_edge(

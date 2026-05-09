@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from archy.parser import parse_source
 
 
@@ -39,7 +41,6 @@ def test_multiple_imports_preserve_order_by_line():
 
 
 def test_partial_recovery_on_syntax_error():
-    # The third line is broken; we should still get the two clean imports.
     src = b"import a\nimport b\ndef !!!broken(:\n"
     result = parse_source(src)
     modules = [r.module for r in result.imports]
