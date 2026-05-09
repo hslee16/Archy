@@ -109,6 +109,29 @@ def test_load_config_missing_forbid_key(tmp_path: Path):
         load_config(cfg)
 
 
+def test_load_config_exclude_omitted_defaults_to_empty(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers:\n  core: {modules: [myapp.core.**]}\nforbid: []\n")
+    assert load_config(cfg).exclude == ()
+
+
+def test_load_config_exclude_parsed(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text(
+        "layers:\n  core: {modules: [myapp.core.**]}\n"
+        "forbid: []\n"
+        "exclude:\n  - baml_client\n  - generated\n"
+    )
+    assert load_config(cfg).exclude == ("baml_client", "generated")
+
+
+def test_load_config_exclude_must_be_list_of_strings(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {core: {modules: [myapp.core.**]}}\nforbid: []\nexclude: not_a_list\n")
+    with pytest.raises(LayerConfigError, match="exclude"):
+        load_config(cfg)
+
+
 # --- discover_config ----------------------------------------------------------
 
 

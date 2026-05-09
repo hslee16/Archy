@@ -234,3 +234,19 @@ def test_run_trend_last_n_truncates(acyclic_project: Path):
         )
     rows = _run_trend(acyclic_project, last_n=3)
     assert len(rows) == 3
+
+
+# --- exclude config plumbed through MCP --------------------------------------
+
+
+def test_run_cycles_honors_archy_yaml_exclude(tmp_path: Path):
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "real.py").write_text("import os\n")
+    gen = pkg / "baml_client"
+    gen.mkdir()
+    (gen / "__init__.py").write_text("from myapp.baml_client.b import x\n")
+    (gen / "b.py").write_text("from myapp.baml_client import other\n")
+    (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
+    assert _run_cycles(tmp_path, min_size=2, internal_only=True) == []

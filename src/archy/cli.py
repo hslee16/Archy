@@ -11,7 +11,7 @@ import networkx as nx
 
 from archy import __version__
 from archy.cycles import Cycle, find_cycles
-from archy.graph import build_graph
+from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
@@ -144,7 +144,7 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     except LayerConfigError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    g = build_graph(path)
+    g = build_graph(path, ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude))
     try:
         violations = find_violations(g, config)
     except LayerConfigError as exc:
@@ -294,11 +294,23 @@ def mcp() -> None:
 
 
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
-    g = build_graph(path)
+    g = build_graph(path, ignored_dirs=_ignored_dirs_for(path))
     if internal_only:
         external = {n for n, d in g.nodes(data=True) if d.get("external")}
         g.remove_nodes_from(external)
     return g
+
+
+def _ignored_dirs_for(path: Path) -> frozenset[str]:
+    # Best-effort: pick up `exclude:` from a discovered archy.yaml so generated
+    # or vendored directories disappear from every analysis (graph, cycles,
+    # score, check). Missing config is fine; malformed config is a real bug
+    # the user wants to see, so we let LayerConfigError propagate.
+    config_path = discover_config(path)
+    if config_path is None:
+        return DEFAULT_IGNORED_DIRS
+    config = load_config(config_path)
+    return DEFAULT_IGNORED_DIRS | frozenset(config.exclude)
 
 
 def _format_lines(lines: tuple[int, ...]) -> str:

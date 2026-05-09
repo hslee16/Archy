@@ -18,7 +18,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from archy.cycles import find_cycles
-from archy.graph import build_graph
+from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
@@ -208,7 +208,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
             )
         config_path = discovered
     config = load_config(config_path)
-    graph = build_graph(path)
+    graph = build_graph(path, ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude))
     violations = find_violations(graph, config)
     return {
         "config_path": str(config_path),
@@ -253,8 +253,18 @@ def _run_trend(path: Path, *, last_n: int) -> list[dict[str, Any]]:
 
 
 def _load_graph(path: Path, *, internal_only: bool):
-    graph = build_graph(path)
+    graph = build_graph(path, ignored_dirs=_ignored_dirs_for(path))
     if internal_only:
         external = {n for n, d in graph.nodes(data=True) if d.get("external")}
         graph.remove_nodes_from(external)
     return graph
+
+
+def _ignored_dirs_for(path: Path) -> frozenset[str]:
+    # Best-effort archy.yaml discovery so MCP tools honor user `exclude:`
+    # entries the same way the CLI does. See cli._ignored_dirs_for.
+    config_path = discover_config(path)
+    if config_path is None:
+        return DEFAULT_IGNORED_DIRS
+    config = load_config(config_path)
+    return DEFAULT_IGNORED_DIRS | frozenset(config.exclude)

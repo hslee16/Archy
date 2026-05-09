@@ -31,6 +31,7 @@ class ForbidRule:
 class LayerConfig:
     layers: tuple[LayerSpec, ...]
     forbid: tuple[ForbidRule, ...]
+    exclude: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -57,7 +58,8 @@ def load_config(path: Path) -> LayerConfig:
 
     layers = _parse_layers(raw.get("layers", {}), path)
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
-    return LayerConfig(layers=tuple(layers), forbid=tuple(forbid))
+    exclude = _parse_exclude(raw.get("exclude", []), path)
+    return LayerConfig(layers=tuple(layers), forbid=tuple(forbid), exclude=tuple(exclude))
 
 
 def discover_config(start: Path) -> Path | None:
@@ -162,6 +164,18 @@ def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[Forbi
             )
         out.append(ForbidRule(from_layer=src_raw, to_layer=tgt_raw))
     return out
+
+
+def _parse_exclude(raw: object, path: Path) -> list[str]:
+    # `exclude` is an optional list of directory basenames added to archy's
+    # built-in ignore set (caches, .venv, node_modules, ...). Each entry
+    # matches any directory in the project tree with that exact name. Useful
+    # for codegen output (baml_client/, generated/) and vendored code.
+    if not raw:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(d, str) and d for d in raw):
+        raise LayerConfigError(f"`exclude` must be a list of non-empty strings in {path}")
+    return [d for d in raw if isinstance(d, str)]
 
 
 def _as_str_dict(value: object, label: str, path: Path) -> dict[str, object]:
