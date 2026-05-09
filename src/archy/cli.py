@@ -46,8 +46,7 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
     """Build the import graph for a Python project rooted at PATH."""
     g = build_graph(path)
     if internal_only:
-        external = {n for n, d in g.nodes(data=True) if d.get("external")}
-        g.remove_nodes_from(external)
+        _drop_external_nodes(g)
 
     if fmt == "json":
         click.echo(json.dumps(_graph_to_dict(g), indent=2, sort_keys=True))
@@ -94,8 +93,7 @@ def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: boo
     """Find import cycles in a Python project rooted at PATH."""
     g = build_graph(path)
     if internal_only:
-        external = {n for n, d in g.nodes(data=True) if d.get("external")}
-        g.remove_nodes_from(external)
+        _drop_external_nodes(g)
 
     found = find_cycles(g, min_size=min_size)
 
@@ -183,8 +181,7 @@ def score(path: Path, fmt: str, internal_only: bool) -> None:
     """Compute the composite architecture quality score for PATH."""
     g = build_graph(path)
     if internal_only:
-        external = {n for n, d in g.nodes(data=True) if d.get("external")}
-        g.remove_nodes_from(external)
+        _drop_external_nodes(g)
     s = compute_score(g)
     if fmt == "json":
         click.echo(json.dumps(_score_to_dict(s), indent=2, sort_keys=True))
@@ -196,6 +193,17 @@ def score(path: Path, fmt: str, internal_only: bool) -> None:
 def trend() -> None:
     """Show the score trend over recorded history. (not implemented)"""
     raise click.ClickException("not implemented yet")
+
+
+def _drop_external_nodes(g: nx.DiGraph) -> None:
+    external = {n for n, d in g.nodes(data=True) if d.get("external")}
+    g.remove_nodes_from(external)
+
+
+def _format_lines(lines: tuple[int, ...]) -> str:
+    label = "lines" if len(lines) > 1 else "line"
+    text = ", ".join(str(n) for n in lines) or "?"
+    return f"({label}: {text})"
 
 
 def _score_to_dict(s: Score) -> dict:
@@ -254,9 +262,7 @@ def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
         if rule_pair != current_rule:
             lines.append(f"\n{v.rule.from_layer} -> {v.rule.to_layer} (forbidden):")
             current_rule = rule_pair
-        line_label = "lines" if len(v.lines) > 1 else "line"
-        line_text = ", ".join(str(n) for n in v.lines) or "?"
-        lines.append(f"  {v.source} -> {v.target}  ({line_label}: {line_text})")
+        lines.append(f"  {v.source} -> {v.target}  {_format_lines(v.lines)}")
     return "\n".join(lines)
 
 
@@ -282,9 +288,7 @@ def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:
             lines.append(f"  - {m}")
         lines.append("Edges:")
         for e in c.edges:
-            line_label = "lines" if len(e.lines) > 1 else "line"
-            line_text = ", ".join(str(n) for n in e.lines) or "?"
-            lines.append(f"  {e.source} -> {e.target}  ({line_label}: {line_text})")
+            lines.append(f"  {e.source} -> {e.target}  {_format_lines(e.lines)}")
     return "\n".join(lines)
 
 
