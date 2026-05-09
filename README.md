@@ -2,13 +2,23 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.4.0. Usable today as a CLI for inspection (`archy graph`, `archy cycles`), CI governance (`archy check` against an `archy.yaml`), one-shot scoring (`archy score`), trended scoring over time (`archy score --record` + `archy trend`), AND as an MCP server (`archy mcp`) so AI agents can call archy as a structural sensor in their own feedback loop. See [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. The score follows sentrux's design (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for the side-by-side comparison.
+**Status:** v0.4.0. Usable today via:
+
+| Mode | Command |
+|---|---|
+| Inspection | `archy graph`, `archy cycles` |
+| CI governance | `archy check` (reads `archy.yaml`) |
+| One-shot score | `archy score` |
+| Trended score | `archy score --record` + `archy trend` |
+| MCP server | `archy mcp` |
+
+Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy live in [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Score design follows sentrux (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
 
 ## Why
 
-AI agents generate code at machine speed. Without a feedback loop on *structural* health - module coupling, import cycles, layer violations - codebases drift architecturally even when every individual change looks fine in review.
+AI agents generate code at machine speed. Without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
 
-`archy` is a small tool that watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
+`archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
 ## Scope
 
@@ -27,42 +37,76 @@ AI agents generate code at machine speed. Without a feedback loop on *structural
 
 ```bash
 uv sync
-uv run archy graph path/to/your/python/project --internal-only
-uv run archy graph path/to/your/python/project --format json > graph.json
-uv run archy graph path/to/your/python/project --format dot | dot -Tsvg > graph.svg
+```
 
-# Find import cycles (Tarjan SCCs of size >= 2)
-uv run archy cycles path/to/your/python/project
-uv run archy cycles path/to/your/python/project --format json
-uv run archy cycles path/to/your/python/project --strict   # exit 1 if any cycles
+### Inspect the graph
 
-# Enforce layer rules from archy.yaml; exit 1 on any violation
-uv run archy check path/to/your/python/project
-uv run archy check path/to/your/python/project --format json
-uv run archy check path/to/your/python/project --config custom.yaml
+```bash
+uv run archy graph path/to/project --internal-only
+uv run archy graph path/to/project --format json > graph.json
+uv run archy graph path/to/project --format dot | dot -Tsvg > graph.svg
+```
 
-# Composite quality score (modularity * acyclicity * depth * equality, geometric mean)
-uv run archy score path/to/your/python/project
-uv run archy score path/to/your/python/project --format json
+### Find import cycles
 
-# Persist scores over time and chart the trend
-uv run archy score path/to/your/python/project --record
-uv run archy trend path/to/your/python/project
-uv run archy trend path/to/your/python/project --last 30 --format json
+Tarjan SCCs of size >= 2. Use `--strict` in CI to fail on any cycle.
 
-# CI gate: fail if score drops more than 0.02 below the most recent recorded run
-uv run archy score path/to/your/python/project --strict
-uv run archy score path/to/your/python/project --strict --record  # check then record
-uv run archy score path/to/your/python/project --strict --strict-tolerance 0.0
+```bash
+uv run archy cycles path/to/project
+uv run archy cycles path/to/project --format json
+uv run archy cycles path/to/project --strict
+```
 
-# Run archy as an MCP server on stdio so AI agents can call it directly
+### Enforce layer rules
+
+Reads `archy.yaml` from the repo root. Exits 1 on any violation. See [Layer rules](#layer-rules-archy-check) below.
+
+```bash
+uv run archy check path/to/project
+uv run archy check path/to/project --format json
+uv run archy check path/to/project --config custom.yaml
+```
+
+### Compute a quality score
+
+Composite of modularity, acyclicity, depth, and equality (geometric mean).
+
+```bash
+uv run archy score path/to/project
+uv run archy score path/to/project --format json
+```
+
+### Track score over time
+
+Persist per-commit scores to `.archy/history.jsonl` and chart the trend.
+
+```bash
+uv run archy score path/to/project --record
+uv run archy trend path/to/project
+uv run archy trend path/to/project --last 30 --format json
+```
+
+### Regression gate
+
+Fail if the current score drops more than `--strict-tolerance` (default 0.02) below the most recent recorded run.
+
+```bash
+uv run archy score path/to/project --strict
+uv run archy score path/to/project --strict --record           # check then record
+uv run archy score path/to/project --strict --strict-tolerance 0.0
+```
+
+### Run as an MCP server
+
+Stdio transport, so AI agents can call archy directly. See [MCP server](#mcp-server-archy-mcp) below.
+
+```bash
 uv run archy mcp
 ```
 
-### MCP server (`archy mcp`)
+## MCP server (`archy mcp`)
 
-`archy mcp` exposes five tools to MCP-aware AI agents (Claude Code,
-the Anthropic API, etc.):
+`archy mcp` exposes five tools to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -82,13 +126,11 @@ Wire it into Claude Code with this stanza in your config:
 }
 ```
 
-`--strict` reads the last row from `.archy/history.jsonl` and compares the
-current score against it. Drops beyond the tolerance fail with exit code 1.
-The default tolerance (0.02) matches the threshold sentrux's `gate` uses.
-This gives archy parity with sentrux's regression-gate use case while
-keeping the long-term JSONL history for `archy trend`.
+### Regression-gate semantics
 
-### Layer rules (`archy check`)
+`--strict` reads the last row from `.archy/history.jsonl` and compares the current score against it. Drops beyond the tolerance fail with exit code 1. The default tolerance (0.02) matches the threshold sentrux's `gate` uses. This gives archy parity with sentrux's regression-gate use case while keeping the long-term JSONL history for `archy trend`.
+
+## Layer rules (`archy check`)
 
 Drop an `archy.yaml` at the repo root declaring layers and forbidden directions:
 
@@ -111,16 +153,13 @@ forbid:
   - {from: application, to: infra}
 ```
 
-Patterns are dotted-name globs: `*` matches one segment, `**` matches zero
-or more. `myapp.domain.**` covers the package itself and every descendant.
-Modules must belong to at most one layer. `archy check` discovers
-`archy.yaml` from PATH upward unless `--config` is given; exits 1 on
-violation.
+**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. Modules must belong to at most one layer.
 
-archy enforces its own architecture this way - see [`archy.yaml`](archy.yaml)
-at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
+**Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 
-### Development
+archy enforces its own architecture this way; see [`archy.yaml`](archy.yaml) at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
+
+## Development
 
 ```bash
 uv sync                    # install runtime + dev deps from uv.lock
@@ -136,9 +175,9 @@ uv run pytest              # tests
 - [x] `__init__.py` re-export resolution
 - [x] Cycle detection (Tarjan SCC)
 - [x] Layer/boundary rules from YAML config (`archy check`)
-- [x] Single-score computation (`archy score`) - four sub-metrics, geometric mean
-- [x] Per-commit JSONL history + `archy trend` - sparkline + last-N table
-- [x] MCP server (`archy mcp`) - five tools an AI agent can call
+- [x] Single-score computation (`archy score`), four sub-metrics, geometric mean
+- [x] Per-commit JSONL history + `archy trend` (sparkline + last-N table)
+- [x] MCP server (`archy mcp`), five tools an AI agent can call
 - [ ] Pre-commit hook + GitHub Action
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
@@ -149,4 +188,4 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) for style rules. Notably: no em-dash ch
 
 ## License
 
-MIT - see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
