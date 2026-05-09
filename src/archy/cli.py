@@ -285,6 +285,14 @@ def trend(path: Path, last_n: int, fmt: str) -> None:
         click.echo(render_trend(rows, last_n=last_n))
 
 
+@main.command()
+def mcp() -> None:
+    """Run archy as an MCP server on stdio for AI agent integration."""
+    from archy.mcp import create_server
+
+    create_server().run()
+
+
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     g = build_graph(path)
     if internal_only:
