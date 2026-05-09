@@ -68,3 +68,21 @@ archy's score follows sentrux's [`quality-signal-design.md`](https://github.com/
 What we get from being faithful: a v0.2.0 archy score on a given codebase is directly comparable to whatever sentrux would produce on its four-metric subset. What we lose: redundancy. When `archy redundancy` ships (FUTURE.md, deferred), aggregation will widen back to five and the numeric scale will line up with sentrux's.
 
 The deeper agreement is methodological - sentrux's argument for geometric mean (the only aggregator that's Pareto-optimal, symmetric, and independent) is the load-bearing claim. That's why score gaming works only by improving every axis.
+
+## v0.3.0 - history persistence: comparison with sentrux
+
+archy and sentrux solve overlapping but different problems with persistence:
+
+| | sentrux | archy v0.3.0 |
+|---|---|---|
+| File | `.sentrux/baseline.json` | `.archy/history.jsonl` |
+| Format | Single pretty-JSON record | JSONL, one row per recorded run |
+| Retention | One point only (overwritten on each `gate --save`) | All recorded runs |
+| Verbs | `gate --save` writes; `gate` (no flag) compares current vs saved | `score --record` appends; `trend` reads back; `score --strict` compares current vs last recorded row |
+| Scope | Within-session regression gating for AI agent loops | Long-term drift visualization + per-commit regression gating |
+
+Sentrux is optimized for the cybernetic feedback loop its README pitches: agent saves a baseline, makes changes, runs `gate`, sees pass/fail, self-corrects. A single rolling file is sufficient and JSONL would be wasteful.
+
+archy keeps both capabilities. JSONL is a strict superset - we get long-term history *and* per-commit regression gating from the same file. `archy score --strict` reads the last row and compares against it (the same logic as sentrux's `gate`); `archy trend` reads the full history (which sentrux can't, because it overwrites). The default tolerance (0.02) matches sentrux's threshold so cross-tool intuition transfers.
+
+The trade-off: a JSONL history grows unboundedly. For most projects (one record per commit, ~250 bytes/row) that's a few hundred KB per year of churn. We considered rotating but defaulted to letting it accumulate; users who want bounded history can post-process with `tail -n 1000 history.jsonl > history.jsonl` or similar.

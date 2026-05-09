@@ -49,7 +49,18 @@ uv run archy score path/to/your/python/project --format json
 uv run archy score path/to/your/python/project --record
 uv run archy trend path/to/your/python/project
 uv run archy trend path/to/your/python/project --last 30 --format json
+
+# CI gate: fail if score drops more than 0.02 below the most recent recorded run
+uv run archy score path/to/your/python/project --strict
+uv run archy score path/to/your/python/project --strict --record  # check then record
+uv run archy score path/to/your/python/project --strict --strict-tolerance 0.0
 ```
+
+`--strict` reads the last row from `.archy/history.jsonl` and compares the
+current score against it. Drops beyond the tolerance fail with exit code 1.
+The default tolerance (0.02) matches the threshold sentrux's `gate` uses.
+This gives archy parity with sentrux's regression-gate use case while
+keeping the long-term JSONL history for `archy trend`.
 
 ### Layer rules (`archy check`)
 

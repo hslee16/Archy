@@ -182,18 +182,56 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     is_flag=True,
     help="Append this score to .archy/history.jsonl for archy trend.",
 )
-def score(path: Path, fmt: str, internal_only: bool, record: bool) -> None:
+@click.option(
+    "--strict",
+    is_flag=True,
+    help=(
+        "Compare against the most recent recorded score; exit 1 if the overall "
+        "score drops by more than --strict-tolerance."
+    ),
+)
+@click.option(
+    "--strict-tolerance",
+    type=float,
+    default=0.02,
+    show_default=True,
+    help="Maximum allowed drop in overall score before --strict fails.",
+)
+def score(
+    path: Path,
+    fmt: str,
+    internal_only: bool,
+    record: bool,
+    strict: bool,
+    strict_tolerance: float,
+) -> None:
     """Compute the composite architecture quality score for PATH."""
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
+
+    history_path = path / ".archy" / "history.jsonl"
+    # Strict reads BEFORE recording so the comparison is against the truly
+    # previous run rather than the row we are about to append.
+    gate = _gate_against_history(s, history_path) if strict else None
+
     if fmt == "json":
-        click.echo(json.dumps(_score_to_dict(s), indent=2, sort_keys=True))
+        payload = _score_to_dict(s)
+        if gate is not None:
+            payload["gate"] = _gate_to_dict(gate, strict_tolerance)
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_score_to_text(s))
+        if gate is not None:
+            click.echo("")
+            click.echo(_gate_to_text(gate, strict_tolerance))
+
     if record:
         commit, branch = git_metadata(path)
         row = row_from_score(s, commit=commit, branch=branch)
-        append_history(path / ".archy" / "history.jsonl", row)
+        append_history(history_path, row)
+
+    if gate is not None and gate["delta"] is not None and gate["delta"] < -strict_tolerance:
+        sys.exit(1)
 
 
 @main.command()
@@ -259,6 +297,48 @@ def _format_lines(lines: tuple[int, ...]) -> str:
     label = "lines" if len(lines) > 1 else "line"
     text = ", ".join(str(n) for n in lines) or "?"
     return f"({label}: {text})"
+
+
+def _gate_against_history(current: Score, history_path: Path) -> dict:
+    rows = read_history(history_path)
+    if not rows:
+        return {"previous": None, "current": current.overall, "delta": None}
+    previous = rows[-1]
+    return {
+        "previous": previous.overall,
+        "previous_commit": previous.commit,
+        "previous_timestamp": previous.timestamp,
+        "current": current.overall,
+        "delta": current.overall - previous.overall,
+    }
+
+
+def _gate_to_dict(gate: dict, tolerance: float) -> dict:
+    delta = gate["delta"]
+    return {
+        "previous": gate["previous"],
+        "current": gate["current"],
+        "delta": delta,
+        "tolerance": tolerance,
+        "passed": delta is None or delta >= -tolerance,
+    }
+
+
+def _gate_to_text(gate: dict, tolerance: float) -> str:
+    if gate["delta"] is None:
+        return (
+            "# strict: no prior score recorded; nothing to compare. "
+            "Pass `--record` to seed the baseline."
+        )
+    delta = gate["delta"]
+    direction = "improved" if delta >= 0 else "dropped"
+    verdict = "PASS" if delta >= -tolerance else "FAIL"
+    prev_label = (gate.get("previous_commit") or "?")[:7]
+    return (
+        f"# strict: {verdict}  "
+        f"{gate['previous']:.3f} ({prev_label}) -> {gate['current']:.3f}  "
+        f"({direction} {delta:+.3f}, tolerance {tolerance:.3f})"
+    )
 
 
 def _score_to_dict(s: Score) -> dict:
