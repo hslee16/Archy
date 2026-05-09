@@ -23,15 +23,36 @@ AI agents generate code at machine speed. Without a feedback loop on *structural
 - Replacing linters, type checkers, or test runners
 - Generating code or auto-fixing violations
 
+## Quick start
+
+```bash
+uv sync
+uv run archy graph path/to/your/python/project --internal-only
+uv run archy graph path/to/your/python/project --format json > graph.json
+uv run archy graph path/to/your/python/project --format dot | dot -Tsvg > graph.svg
+```
+
+### Development
+
+```bash
+uv sync                    # install runtime + dev deps from uv.lock
+uv run ruff check          # lint
+uv run ruff format         # format
+uv run ty check            # type check
+uv run pytest              # tests
+```
+
 ## Roadmap
 
-- [ ] Tree-sitter-based import graph
+- [x] Tree-sitter-based import graph
 - [ ] Cycle detection (Tarjan SCC)
 - [ ] Layer/boundary rules from YAML config
 - [ ] Single-score computation + JSONL history
 - [ ] CLI: `archy check`, `archy score`, `archy trend`
 - [ ] Pre-commit hook + GitHub Action
 - [ ] MCP server
+
+See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
 ## License
 
