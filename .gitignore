@@ -216,4 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DeepWork (local-only review tooling)
 .deepwork/
+.deepreview
