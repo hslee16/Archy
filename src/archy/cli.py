@@ -12,6 +12,13 @@ import networkx as nx
 from archy import __version__
 from archy.cycles import Cycle, find_cycles
 from archy.graph import build_graph
+from archy.layers import (
+    LayerConfigError,
+    Violation,
+    discover_config,
+    find_violations,
+    load_config,
+)
 
 
 @click.group()
@@ -101,9 +108,56 @@ def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: boo
 
 
 @main.command()
-def check() -> None:
-    """Run rule checks against the current codebase. (not implemented)"""
-    raise click.ClickException("not implemented yet")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--config",
+    "config_path",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Path to archy.yaml. Discovered from PATH upward if omitted.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def check(path: Path, config_path: Path | None, fmt: str) -> None:
+    """Check the project at PATH against layer rules in archy.yaml.
+
+    Exits 0 if there are no violations, 1 otherwise.
+    """
+    if config_path is None:
+        discovered = discover_config(path)
+        if discovered is None:
+            raise click.ClickException(
+                f"no archy.yaml found near {path}; pass --config or create one at the project root."
+            )
+        config_path = discovered
+
+    try:
+        config = load_config(config_path)
+    except LayerConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    g = build_graph(path)
+    try:
+        violations = find_violations(g, config)
+    except LayerConfigError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if fmt == "json":
+        click.echo(json.dumps(_violations_to_json(violations), indent=2, sort_keys=True))
+    else:
+        click.echo(_violations_to_text(violations, config_path))
+
+    if violations:
+        sys.exit(1)
 
 
 @main.command()
@@ -116,6 +170,34 @@ def score() -> None:
 def trend() -> None:
     """Show the score trend over recorded history. (not implemented)"""
     raise click.ClickException("not implemented yet")
+
+
+def _violations_to_json(violations: list[Violation]) -> list[dict]:
+    return [
+        {
+            "rule": {"from": v.rule.from_layer, "to": v.rule.to_layer},
+            "source": v.source,
+            "target": v.target,
+            "lines": list(v.lines),
+        }
+        for v in violations
+    ]
+
+
+def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
+    if not violations:
+        return f"# No layer violations (config: {config_path})."
+    lines = [f"# {len(violations)} layer violation(s) (config: {config_path})"]
+    current_rule: tuple[str, str] | None = None
+    for v in violations:
+        rule_pair = (v.rule.from_layer, v.rule.to_layer)
+        if rule_pair != current_rule:
+            lines.append(f"\n{v.rule.from_layer} -> {v.rule.to_layer} (forbidden):")
+            current_rule = rule_pair
+        line_label = "lines" if len(v.lines) > 1 else "line"
+        line_text = ", ".join(str(n) for n in v.lines) or "?"
+        lines.append(f"  {v.source} -> {v.target}  ({line_label}: {line_text})")
+    return "\n".join(lines)
 
 
 def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
