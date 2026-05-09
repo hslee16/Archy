@@ -26,10 +26,20 @@ AI agents generate code at machine speed. Without a feedback loop on *structural
 ## Quick start
 
 ```bash
-pip install -e ".[dev]"
-archy graph path/to/your/python/project --internal-only
-archy graph path/to/your/python/project --format json > graph.json
-archy graph path/to/your/python/project --format dot | dot -Tsvg > graph.svg
+uv sync
+uv run archy graph path/to/your/python/project --internal-only
+uv run archy graph path/to/your/python/project --format json > graph.json
+uv run archy graph path/to/your/python/project --format dot | dot -Tsvg > graph.svg
+```
+
+### Development
+
+```bash
+uv sync                    # install runtime + dev deps from uv.lock
+uv run ruff check          # lint
+uv run ruff format         # format
+uv run ty check            # type check
+uv run pytest              # tests
 ```
 
 ## Roadmap

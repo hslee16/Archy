@@ -24,7 +24,14 @@ def project(tmp_path: Path) -> Path:
 def test_discovers_internal_modules(project: Path):
     g = build_graph(project)
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
-    assert internal == {"myapp", "myapp.core", "myapp.utils", "myapp.cli", "myapp.sub", "myapp.sub.leaf"}
+    assert internal == {
+        "myapp",
+        "myapp.core",
+        "myapp.utils",
+        "myapp.cli",
+        "myapp.sub",
+        "myapp.sub.leaf",
+    }
 
 
 def test_internal_edges_resolve_correctly(project: Path):
@@ -87,7 +94,8 @@ def test_monorepo_with_two_top_level_packages(tmp_path: Path):
     """Two unrelated packages under one root, each with internal imports."""
     a = tmp_path / "alpha"
     b = tmp_path / "beta"
-    a.mkdir(); b.mkdir()
+    a.mkdir()
+    b.mkdir()
     (a / "__init__.py").write_text("")
     (a / "core.py").write_text("from alpha import util\n")
     (a / "util.py").write_text("")
