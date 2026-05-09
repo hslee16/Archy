@@ -302,7 +302,6 @@ def test_score_strict_fails_when_score_drops_beyond_tolerance(tmp_path: Path):
 def test_score_strict_within_tolerance_passes(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     _seed_history(project, overall=0.95)
-    # Wide tolerance absorbs the drop.
     result = CliRunner().invoke(
         main,
         ["score", str(project), "--strict", "--strict-tolerance", "1.0"],
@@ -341,9 +340,10 @@ def test_score_strict_compares_before_recording(tmp_path: Path):
             "--record",
         ],
     )
-    assert result.exit_code == 1  # strict still fails on the drop
+    # `--record` appends unconditionally; the gate verdict is independent.
+    assert result.exit_code == 1
     rows_after = len(history_path.read_text().splitlines())
-    assert rows_after == rows_before + 1  # the new row was still appended
+    assert rows_after == rows_before + 1
 
 
 def test_score_strict_json_includes_gate_block(tmp_path: Path):
@@ -379,3 +379,46 @@ def test_graph_command_still_works(tmp_path: Path):
     assert result.exit_code == 0
     assert "pkg.a" in result.output
     assert "pkg.b" in result.output
+
+
+def _make_project_with_generated_dir(tmp_path: Path) -> Path:
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "real.py").write_text("import os\n")
+    gen = pkg / "baml_client"
+    gen.mkdir()
+    (gen / "__init__.py").write_text("from myapp.baml_client.b import x\n")
+    (gen / "b.py").write_text("from myapp.baml_client import other\n")
+    return tmp_path
+
+
+def test_exclude_drops_directory_from_graph(tmp_path: Path):
+    project = _make_project_with_generated_dir(tmp_path)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
+    args = ["graph", str(project), "--internal-only", "--format", "json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    qualnames = {n["id"] for n in payload["nodes"]}
+    assert "myapp" in qualnames
+    assert "myapp.real" in qualnames
+    assert not any(q.startswith("myapp.baml_client") for q in qualnames)
+
+
+def test_exclude_omitted_keeps_generated_dir(tmp_path: Path):
+    project = _make_project_with_generated_dir(tmp_path)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\n")
+    args = ["graph", str(project), "--internal-only", "--format", "json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    qualnames = {n["id"] for n in payload["nodes"]}
+    assert any(q.startswith("myapp.baml_client") for q in qualnames)
+
+
+def test_exclude_silences_cycles_inside_generated_dir(tmp_path: Path):
+    project = _make_project_with_generated_dir(tmp_path)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
+    result = CliRunner().invoke(main, ["cycles", str(project), "--strict"])
+    assert result.exit_code == 0

@@ -15,7 +15,7 @@ import networkx as nx
 
 from archy.parser import ImportRef, ParseResult, parse_file
 
-_DEFAULT_IGNORED_DIRS = frozenset(
+DEFAULT_IGNORED_DIRS = frozenset(
     {
         "__pycache__",
         ".mypy_cache",
@@ -46,7 +46,7 @@ class Module:
 def build_graph(
     root: Path,
     *,
-    ignored_dirs: Iterable[str] = _DEFAULT_IGNORED_DIRS,
+    ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
 ) -> nx.DiGraph:
     """Discover modules under `root` and build their import graph.
 

@@ -20,7 +20,7 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 - **Redundancy metric** - dead functions (no inbound call edges) and duplicate functions (AST-shape hash). Hard to do without false positives because of dynamic dispatch, decorators, and entry points (`if __name__ == "__main__"`). [sentrux: `redundancy_ratio`]
 - **Type reference edges** - function parameter and return annotations as a third edge type. Useful for catching layer violations that hide behind `if TYPE_CHECKING:` imports. [sentrux: `tags.scm` type-reference query]
 - **Treemap visualization** - D3 or Observable Plot, wrapped in a static HTML report. Sentrux's signature feature; valuable but not load-bearing for governance use.
-- **Pre-commit hook + GitHub Action** - distribute the obvious wrappers.
+- ~~**Pre-commit hook + GitHub Action**~~ shipped in v0.4.1/v0.4.2 - see `README.md` for usage.
 
 ## Hard problems that probably won't ship
 
