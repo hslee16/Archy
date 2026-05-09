@@ -302,7 +302,6 @@ def test_score_strict_fails_when_score_drops_beyond_tolerance(tmp_path: Path):
 def test_score_strict_within_tolerance_passes(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     _seed_history(project, overall=0.95)
-    # Wide tolerance absorbs the drop.
     result = CliRunner().invoke(
         main,
         ["score", str(project), "--strict", "--strict-tolerance", "1.0"],
@@ -341,9 +340,10 @@ def test_score_strict_compares_before_recording(tmp_path: Path):
             "--record",
         ],
     )
-    assert result.exit_code == 1  # strict still fails on the drop
+    # `--record` appends unconditionally; the gate verdict is independent.
+    assert result.exit_code == 1
     rows_after = len(history_path.read_text().splitlines())
-    assert rows_after == rows_before + 1  # the new row was still appended
+    assert rows_after == rows_before + 1
 
 
 def test_score_strict_json_includes_gate_block(tmp_path: Path):

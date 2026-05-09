@@ -187,8 +187,7 @@ def test_violations_ignores_unlayered_endpoints():
 
 
 def test_violations_aggregates_per_edge_lines():
-    g: nx.DiGraph = nx.DiGraph()
-    g.add_edge("myapp.core.user", "myapp.cli.runner", lines=(2, 5, 9))
+    g = _g(("myapp.core.user", "myapp.cli.runner", (2, 5, 9)))
     config = LayerConfig(
         layers=(
             LayerSpec("core", ("myapp.core.**",)),

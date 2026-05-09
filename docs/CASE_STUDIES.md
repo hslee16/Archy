@@ -89,13 +89,6 @@ indicator of phantom-cycle pressure caused by re-exports).
   (`from rich.console import Console`) instead of using the public surface.
   No-op in those cases is the correct behavior.
 
-### Known limitation
-
-Re-export *chains* are followed only one hop. If `pkg/__init__.py` re-exports
-from `pkg.sub`, and `pkg.sub/__init__.py` re-exports from `pkg.sub.impl`,
-consumers of `pkg.Foo` resolve to `pkg.sub`, not `pkg.sub.impl`. Multi-hop
-following is filed as a follow-up.
-
 ## Cycle detection - multi-library benchmark (v0.0.3)
 
 `archy cycles <path>` reports each strongly-connected component of size ≥ 2
