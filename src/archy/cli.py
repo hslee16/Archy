@@ -12,6 +12,9 @@ import networkx as nx
 from archy import __version__
 from archy.cycles import Cycle, find_cycles
 from archy.graph import build_graph
+from archy.history import append as append_history
+from archy.history import git_metadata, row_from_score
+from archy.history import read as read_history
 from archy.layers import (
     LayerConfigError,
     Violation,
@@ -20,6 +23,7 @@ from archy.layers import (
     load_config,
 )
 from archy.score import Score, compute_score
+from archy.trend import render_text as render_trend
 
 
 @click.group()
@@ -173,7 +177,12 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     default=True,
     help="Restrict scoring to internal modules (default).",
 )
-def score(path: Path, fmt: str, internal_only: bool) -> None:
+@click.option(
+    "--record",
+    is_flag=True,
+    help="Append this score to .archy/history.jsonl for archy trend.",
+)
+def score(path: Path, fmt: str, internal_only: bool, record: bool) -> None:
     """Compute the composite architecture quality score for PATH."""
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
@@ -181,12 +190,61 @@ def score(path: Path, fmt: str, internal_only: bool) -> None:
         click.echo(json.dumps(_score_to_dict(s), indent=2, sort_keys=True))
     else:
         click.echo(_score_to_text(s))
+    if record:
+        commit, branch = git_metadata(path)
+        row = row_from_score(s, commit=commit, branch=branch)
+        append_history(path / ".archy" / "history.jsonl", row)
 
 
 @main.command()
-def trend() -> None:
-    """Show the score trend over recorded history. (not implemented)"""
-    raise click.ClickException("not implemented yet")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--last",
+    "last_n",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Number of most-recent records to display.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def trend(path: Path, last_n: int, fmt: str) -> None:
+    """Show the archy score trend for PATH (reads .archy/history.jsonl)."""
+    rows = read_history(path / ".archy" / "history.jsonl")
+    if fmt == "json":
+        window = rows[-last_n:] if last_n > 0 else rows
+        click.echo(
+            json.dumps(
+                [
+                    {
+                        "timestamp": r.timestamp,
+                        "commit": r.commit,
+                        "branch": r.branch,
+                        "score": {
+                            "overall": r.overall,
+                            "modularity": r.modularity,
+                            "acyclicity": r.acyclicity,
+                            "depth": r.depth,
+                            "equality": r.equality,
+                        },
+                    }
+                    for r in window
+                ],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        click.echo(render_trend(rows, last_n=last_n))
 
 
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:

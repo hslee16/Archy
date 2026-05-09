@@ -202,6 +202,57 @@ def test_score_drops_when_cycle_introduced(tmp_path: Path):
     # are exercised in tests/test_score.py against larger fixtures.
 
 
+def test_score_record_writes_history_row(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    history_path = project / ".archy" / "history.jsonl"
+    assert not history_path.exists()
+    result = CliRunner().invoke(main, ["score", str(project), "--record"])
+    assert result.exit_code == 0
+    assert history_path.exists()
+    [line] = history_path.read_text().splitlines()
+    payload = json.loads(line)
+    assert "score" in payload
+    assert "overall" in payload["score"]
+
+
+def test_score_without_record_does_not_write_history(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    history_path = project / ".archy" / "history.jsonl"
+    result = CliRunner().invoke(main, ["score", str(project)])
+    assert result.exit_code == 0
+    assert not history_path.exists()
+
+
+def test_trend_empty_history(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["trend", str(project)])
+    assert result.exit_code == 0
+    assert "No archy score history" in result.output
+
+
+def test_trend_after_recording(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    runner = CliRunner()
+    runner.invoke(main, ["score", str(project), "--record"])
+    runner.invoke(main, ["score", str(project), "--record"])
+    result = runner.invoke(main, ["trend", str(project)])
+    assert result.exit_code == 0
+    assert "last 2 of 2" in result.output
+    assert "score" in result.output
+
+
+def test_trend_json_output(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    runner = CliRunner()
+    runner.invoke(main, ["score", str(project), "--record"])
+    result = runner.invoke(main, ["trend", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert isinstance(payload, list)
+    assert len(payload) == 1
+    assert "overall" in payload[0]["score"]
+
+
 def test_graph_command_still_works(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["graph", str(project), "--internal-only"])

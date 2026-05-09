@@ -2,7 +2,7 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.2.0. Usable today for inspection (`archy graph`, `archy cycles`), CI governance (`archy check` against an `archy.yaml`), and one-shot scoring (`archy score`) - see [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. The score follows sentrux's design (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for the side-by-side comparison. **Not yet** a *trended* scoring tool - that's the next milestone (per-commit JSONL history + `archy trend`).
+**Status:** v0.3.0. Usable today for inspection (`archy graph`, `archy cycles`), CI governance (`archy check` against an `archy.yaml`), one-shot scoring (`archy score`), and trended scoring over time (`archy score --record` + `archy trend`) - see [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. The score follows sentrux's design (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for the side-by-side comparison.
 
 ## Why
 
@@ -44,6 +44,11 @@ uv run archy check path/to/your/python/project --config custom.yaml
 # Composite quality score (modularity * acyclicity * depth * equality, geometric mean)
 uv run archy score path/to/your/python/project
 uv run archy score path/to/your/python/project --format json
+
+# Persist scores over time and chart the trend
+uv run archy score path/to/your/python/project --record
+uv run archy trend path/to/your/python/project
+uv run archy trend path/to/your/python/project --last 30 --format json
 ```
 
 ### Layer rules (`archy check`)
@@ -95,7 +100,7 @@ uv run pytest              # tests
 - [x] Cycle detection (Tarjan SCC)
 - [x] Layer/boundary rules from YAML config (`archy check`)
 - [x] Single-score computation (`archy score`) - four sub-metrics, geometric mean
-- [ ] Per-commit JSONL history + `archy trend`
+- [x] Per-commit JSONL history + `archy trend` - sparkline + last-N table
 - [ ] Pre-commit hook + GitHub Action
 - [ ] MCP server
 
