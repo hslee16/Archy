@@ -32,6 +32,7 @@ class LayerConfig:
     layers: tuple[LayerSpec, ...]
     forbid: tuple[ForbidRule, ...]
     exclude: tuple[str, ...] = ()
+    roots: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,13 @@ def load_config(path: Path) -> LayerConfig:
     layers = _parse_layers(raw.get("layers", {}), path)
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
     exclude = _parse_exclude(raw.get("exclude", []), path)
-    return LayerConfig(layers=tuple(layers), forbid=tuple(forbid), exclude=tuple(exclude))
+    roots = _parse_roots(raw.get("roots", []), path)
+    return LayerConfig(
+        layers=tuple(layers),
+        forbid=tuple(forbid),
+        exclude=tuple(exclude),
+        roots=tuple(roots),
+    )
 
 
 def discover_config(start: Path) -> Path | None:
@@ -175,6 +182,20 @@ def _parse_exclude(raw: object, path: Path) -> list[str]:
         return []
     if not isinstance(raw, list) or not all(isinstance(d, str) and d for d in raw):
         raise LayerConfigError(f"`exclude` must be a list of non-empty strings in {path}")
+    return [d for d in raw if isinstance(d, str)]
+
+
+def _parse_roots(raw: object, path: Path) -> list[str]:
+    # `roots` is an optional list of project-relative directory paths that
+    # archy should treat as top-level packages even when they don't contain
+    # __init__.py. Supports PEP 420 namespace-package layouts (no __init__.py)
+    # without forcing the user to add empty markers to their tree. Each entry
+    # becomes a package root whose name is the final path segment, so
+    # `src/app` produces qualnames like `app.libs.db`.
+    if not raw:
+        return []
+    if not isinstance(raw, list) or not all(isinstance(d, str) and d for d in raw):
+        raise LayerConfigError(f"`roots` must be a list of non-empty strings in {path}")
     return [d for d in raw if isinstance(d, str)]
 
 

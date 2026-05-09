@@ -132,6 +132,27 @@ def test_load_config_exclude_must_be_list_of_strings(tmp_path: Path):
         load_config(cfg)
 
 
+def test_load_config_roots_omitted_defaults_to_empty(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers:\n  core: {modules: [myapp.core.**]}\nforbid: []\n")
+    assert load_config(cfg).roots == ()
+
+
+def test_load_config_roots_parsed(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text(
+        "layers:\n  core: {modules: [app.**]}\nforbid: []\nroots:\n  - app\n  - experiments\n"
+    )
+    assert load_config(cfg).roots == ("app", "experiments")
+
+
+def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {core: {modules: [app.**]}}\nforbid: []\nroots: not_a_list\n")
+    with pytest.raises(LayerConfigError, match="roots"):
+        load_config(cfg)
+
+
 # --- discover_config ----------------------------------------------------------
 
 

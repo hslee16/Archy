@@ -211,6 +211,16 @@ exclude:
 
 `exclude:` applies to every analysis (`graph`, `cycles`, `score`, `check`) and the equivalent MCP tools.
 
+**Namespace packages (`roots:`).** archy discovers packages by walking `__init__.py` files. PEP 420 namespace packages (no `__init__.py`) are invisible by default. Declare them as roots so descendants get qualified names:
+
+```yaml
+roots:
+  - app           # `app/main.py` becomes `app.main`
+  - src/service   # `src/service/db.py` becomes `service.db`
+```
+
+Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
+
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 
 archy enforces its own architecture this way; see [`archy.yaml`](archy.yaml) at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.

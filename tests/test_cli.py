@@ -422,3 +422,46 @@ def test_exclude_silences_cycles_inside_generated_dir(tmp_path: Path):
     (project / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
     result = CliRunner().invoke(main, ["cycles", str(project), "--strict"])
     assert result.exit_code == 0
+
+
+def test_roots_makes_namespace_packages_visible(tmp_path: Path):
+    # PEP 420 layout: no __init__.py at any level. archy.yaml declares
+    # `roots: [app]` so descendants get qualnames rooted at app.
+    app = tmp_path / "app"
+    libs = app / "libs"
+    libs.mkdir(parents=True)
+    (libs / "db.py").write_text("import os\n")
+    (app / "main.py").write_text("from app.libs.db import x\n")
+    (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nroots: [app]\n")
+
+    args = ["graph", str(tmp_path), "--internal-only", "--format", "json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    qualnames = {n["id"] for n in payload["nodes"]}
+    assert "app.main" in qualnames
+    assert "app.libs.db" in qualnames
+
+
+def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):
+    # Without `roots:`, app.routers.** patterns match nothing because the
+    # discovered module is bare `routers.user`. With `roots: [app]`, the layer
+    # rule fires and a forbidden edge surfaces as a violation.
+    app = tmp_path / "app"
+    routers = app / "routers"
+    libs = app / "libs"
+    routers.mkdir(parents=True)
+    libs.mkdir(parents=True)
+    (libs / "db.py").write_text("from app.routers.user import handler\n")
+    (routers / "user.py").write_text("")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  routers: {modules: [app.routers.**]}\n"
+        "  libs: {modules: [app.libs.**]}\n"
+        "forbid:\n"
+        "  - {from: libs, to: routers}\n"
+        "roots: [app]\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(tmp_path)])
+    assert result.exit_code == 1
+    assert "libs -> routers" in result.output
