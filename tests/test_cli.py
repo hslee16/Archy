@@ -202,6 +202,177 @@ def test_score_drops_when_cycle_introduced(tmp_path: Path):
     # are exercised in tests/test_score.py against larger fixtures.
 
 
+def test_score_record_writes_history_row(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    history_path = project / ".archy" / "history.jsonl"
+    assert not history_path.exists()
+    result = CliRunner().invoke(main, ["score", str(project), "--record"])
+    assert result.exit_code == 0
+    assert history_path.exists()
+    [line] = history_path.read_text().splitlines()
+    payload = json.loads(line)
+    assert "score" in payload
+    assert "overall" in payload["score"]
+
+
+def test_score_without_record_does_not_write_history(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    history_path = project / ".archy" / "history.jsonl"
+    result = CliRunner().invoke(main, ["score", str(project)])
+    assert result.exit_code == 0
+    assert not history_path.exists()
+
+
+def test_trend_empty_history(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["trend", str(project)])
+    assert result.exit_code == 0
+    assert "No archy score history" in result.output
+
+
+def test_trend_after_recording(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    runner = CliRunner()
+    runner.invoke(main, ["score", str(project), "--record"])
+    runner.invoke(main, ["score", str(project), "--record"])
+    result = runner.invoke(main, ["trend", str(project)])
+    assert result.exit_code == 0
+    assert "last 2 of 2" in result.output
+    assert "score" in result.output
+
+
+def test_score_strict_with_no_history_passes(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["score", str(project), "--strict"])
+    assert result.exit_code == 0
+    assert "no prior score recorded" in result.output
+
+
+def test_score_strict_passes_when_unchanged(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    runner = CliRunner()
+    runner.invoke(main, ["score", str(project), "--record"])
+    result = runner.invoke(main, ["score", str(project), "--strict"])
+    assert result.exit_code == 0
+    assert "strict: PASS" in result.output
+
+
+def _seed_history(project: Path, overall: float) -> None:
+    """Write a synthetic history row with a chosen `overall`.
+
+    Geometric-mean composites are noisy on tiny fixtures - small structural
+    changes can move overall in either direction - so we seed history
+    directly to test the gate decision in isolation from the score.
+    """
+    history = project / ".archy" / "history.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    row = {
+        "timestamp": "2026-05-09T13:45:07Z",
+        "commit": "deadbee",
+        "branch": "main",
+        "score": {
+            "overall": overall,
+            "modularity": 0.5,
+            "acyclicity": 1.0,
+            "depth": 0.5,
+            "equality": 0.5,
+        },
+        "inputs": {
+            "module_count": 3,
+            "edge_count": 1,
+            "cycle_count": 0,
+            "max_depth": 1,
+            "community_count": 2,
+        },
+    }
+    history.write_text(json.dumps(row) + "\n")
+
+
+def test_score_strict_fails_when_score_drops_beyond_tolerance(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    _seed_history(project, overall=0.95)
+    result = CliRunner().invoke(
+        main,
+        ["score", str(project), "--strict", "--strict-tolerance", "0.05"],
+    )
+    assert result.exit_code == 1
+    assert "strict: FAIL" in result.output
+
+
+def test_score_strict_within_tolerance_passes(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    _seed_history(project, overall=0.95)
+    # Wide tolerance absorbs the drop.
+    result = CliRunner().invoke(
+        main,
+        ["score", str(project), "--strict", "--strict-tolerance", "1.0"],
+    )
+    assert result.exit_code == 0
+    assert "strict: PASS" in result.output
+
+
+def test_score_strict_passes_when_score_improves(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    _seed_history(project, overall=0.10)
+    result = CliRunner().invoke(
+        main,
+        ["score", str(project), "--strict", "--strict-tolerance", "0.0"],
+    )
+    assert result.exit_code == 0
+    assert "strict: PASS" in result.output
+    assert "improved" in result.output
+
+
+def test_score_strict_compares_before_recording(tmp_path: Path):
+    # `--strict --record` together must compare against the existing last row,
+    # not against the row about to be appended (which would always tie at 0).
+    project = _make_acyclic_project(tmp_path)
+    _seed_history(project, overall=0.95)
+    history_path = project / ".archy" / "history.jsonl"
+    rows_before = len(history_path.read_text().splitlines())
+    result = CliRunner().invoke(
+        main,
+        [
+            "score",
+            str(project),
+            "--strict",
+            "--strict-tolerance",
+            "0.0",
+            "--record",
+        ],
+    )
+    assert result.exit_code == 1  # strict still fails on the drop
+    rows_after = len(history_path.read_text().splitlines())
+    assert rows_after == rows_before + 1  # the new row was still appended
+
+
+def test_score_strict_json_includes_gate_block(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    runner = CliRunner()
+    runner.invoke(main, ["score", str(project), "--record"])
+    result = runner.invoke(
+        main,
+        ["score", str(project), "--strict", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert "gate" in payload
+    assert payload["gate"]["passed"] is True
+    assert payload["gate"]["tolerance"] == 0.02
+
+
+def test_trend_json_output(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    runner = CliRunner()
+    runner.invoke(main, ["score", str(project), "--record"])
+    result = runner.invoke(main, ["trend", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert isinstance(payload, list)
+    assert len(payload) == 1
+    assert "overall" in payload[0]["score"]
+
+
 def test_graph_command_still_works(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["graph", str(project), "--internal-only"])

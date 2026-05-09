@@ -12,6 +12,9 @@ import networkx as nx
 from archy import __version__
 from archy.cycles import Cycle, find_cycles
 from archy.graph import build_graph
+from archy.history import append as append_history
+from archy.history import git_metadata, row_from_score
+from archy.history import read as read_history
 from archy.layers import (
     LayerConfigError,
     Violation,
@@ -20,6 +23,7 @@ from archy.layers import (
     load_config,
 )
 from archy.score import Score, compute_score
+from archy.trend import render_text as render_trend
 
 
 @click.group()
@@ -173,20 +177,112 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     default=True,
     help="Restrict scoring to internal modules (default).",
 )
-def score(path: Path, fmt: str, internal_only: bool) -> None:
+@click.option(
+    "--record",
+    is_flag=True,
+    help="Append this score to .archy/history.jsonl for archy trend.",
+)
+@click.option(
+    "--strict",
+    is_flag=True,
+    help=(
+        "Compare against the most recent recorded score; exit 1 if the overall "
+        "score drops by more than --strict-tolerance."
+    ),
+)
+@click.option(
+    "--strict-tolerance",
+    type=float,
+    default=0.02,
+    show_default=True,
+    help="Maximum allowed drop in overall score before --strict fails.",
+)
+def score(
+    path: Path,
+    fmt: str,
+    internal_only: bool,
+    record: bool,
+    strict: bool,
+    strict_tolerance: float,
+) -> None:
     """Compute the composite architecture quality score for PATH."""
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
+
+    history_path = path / ".archy" / "history.jsonl"
+    # Strict reads BEFORE recording so the comparison is against the truly
+    # previous run rather than the row we are about to append.
+    gate = _gate_against_history(s, history_path) if strict else None
+
     if fmt == "json":
-        click.echo(json.dumps(_score_to_dict(s), indent=2, sort_keys=True))
+        payload = _score_to_dict(s)
+        if gate is not None:
+            payload["gate"] = _gate_to_dict(gate, strict_tolerance)
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_score_to_text(s))
+        if gate is not None:
+            click.echo("")
+            click.echo(_gate_to_text(gate, strict_tolerance))
+
+    if record:
+        commit, branch = git_metadata(path)
+        row = row_from_score(s, commit=commit, branch=branch)
+        append_history(history_path, row)
+
+    if gate is not None and gate["delta"] is not None and gate["delta"] < -strict_tolerance:
+        sys.exit(1)
 
 
 @main.command()
-def trend() -> None:
-    """Show the score trend over recorded history. (not implemented)"""
-    raise click.ClickException("not implemented yet")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--last",
+    "last_n",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Number of most-recent records to display.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def trend(path: Path, last_n: int, fmt: str) -> None:
+    """Show the archy score trend for PATH (reads .archy/history.jsonl)."""
+    rows = read_history(path / ".archy" / "history.jsonl")
+    if fmt == "json":
+        window = rows[-last_n:] if last_n > 0 else rows
+        click.echo(
+            json.dumps(
+                [
+                    {
+                        "timestamp": r.timestamp,
+                        "commit": r.commit,
+                        "branch": r.branch,
+                        "score": {
+                            "overall": r.overall,
+                            "modularity": r.modularity,
+                            "acyclicity": r.acyclicity,
+                            "depth": r.depth,
+                            "equality": r.equality,
+                        },
+                    }
+                    for r in window
+                ],
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        click.echo(render_trend(rows, last_n=last_n))
 
 
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
@@ -201,6 +297,48 @@ def _format_lines(lines: tuple[int, ...]) -> str:
     label = "lines" if len(lines) > 1 else "line"
     text = ", ".join(str(n) for n in lines) or "?"
     return f"({label}: {text})"
+
+
+def _gate_against_history(current: Score, history_path: Path) -> dict:
+    rows = read_history(history_path)
+    if not rows:
+        return {"previous": None, "current": current.overall, "delta": None}
+    previous = rows[-1]
+    return {
+        "previous": previous.overall,
+        "previous_commit": previous.commit,
+        "previous_timestamp": previous.timestamp,
+        "current": current.overall,
+        "delta": current.overall - previous.overall,
+    }
+
+
+def _gate_to_dict(gate: dict, tolerance: float) -> dict:
+    delta = gate["delta"]
+    return {
+        "previous": gate["previous"],
+        "current": gate["current"],
+        "delta": delta,
+        "tolerance": tolerance,
+        "passed": delta is None or delta >= -tolerance,
+    }
+
+
+def _gate_to_text(gate: dict, tolerance: float) -> str:
+    if gate["delta"] is None:
+        return (
+            "# strict: no prior score recorded; nothing to compare. "
+            "Pass `--record` to seed the baseline."
+        )
+    delta = gate["delta"]
+    direction = "improved" if delta >= 0 else "dropped"
+    verdict = "PASS" if delta >= -tolerance else "FAIL"
+    prev_label = (gate.get("previous_commit") or "?")[:7]
+    return (
+        f"# strict: {verdict}  "
+        f"{gate['previous']:.3f} ({prev_label}) -> {gate['current']:.3f}  "
+        f"({direction} {delta:+.3f}, tolerance {tolerance:.3f})"
+    )
 
 
 def _score_to_dict(s: Score) -> dict:

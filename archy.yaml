@@ -17,6 +17,8 @@ layers:
       - "archy.graph"
       - "archy.cycles"
       - "archy.score"
+      - "archy.history"
+      - "archy.trend"
   policy:
     modules:
       - "archy.layers"

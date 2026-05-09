@@ -12,8 +12,9 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 ## Scoring (the headline feature)
 
 - ~~**Single quality score**~~ shipped in v0.2.0 as `archy score`. Four sub-metrics (modularity, acyclicity, depth, equality), geometric mean. Side-by-side comparison with sentrux's design in `docs/LEARNINGS.md`.
-- **Per-commit JSONL history** in `.archy/history.jsonl`. One row per `archy score` invocation with `{commit_sha, ts, score, sub_metrics, file_count, loc}`.
-- **`archy trend`** - ASCII sparkline + last-N table for terminal viewing; static HTML with Chart.js as a stretch goal.
+- ~~**Per-commit JSONL history** in `.archy/history.jsonl`~~ shipped in v0.3.0 (`archy score --record`).
+- ~~**`archy trend`**~~ shipped in v0.3.0 - ASCII sparkline + last-N table.
+- **Static HTML trend report** - the original stretch goal. Render `.archy/history.jsonl` as a self-contained HTML page with Chart.js so trend can be linked from a CI artifact or dashboard.
 - **Equality based on per-function CC** - we currently compute Gini over module out-degrees as a proxy. The eventual signal is `gini(per_function_cyclomatic_complexity)`, which requires the cyclomatic-complexity metric below.
 
 ## Deferred - needs more thought

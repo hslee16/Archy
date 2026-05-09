@@ -220,3 +220,6 @@ __marimo__/
 # DeepWork (local-only review tooling)
 .deepwork/
 .deepreview
+
+# archy score history (per-checkout, not committed; one row per `archy score --record`)
+.archy/
