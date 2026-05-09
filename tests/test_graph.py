@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
@@ -37,9 +39,9 @@ def test_discovers_internal_modules(project: Path):
 def test_internal_edges_resolve_correctly(project: Path):
     g = build_graph(project)
     assert g.has_edge("myapp.core", "myapp.utils")
-    assert g.has_edge("myapp.utils", "myapp.core")  # via `from . import core`
+    assert g.has_edge("myapp.utils", "myapp.core")
     assert g.has_edge("myapp.cli", "myapp.core")
-    assert g.has_edge("myapp.sub.leaf", "myapp.utils")  # via `from ..utils`
+    assert g.has_edge("myapp.sub.leaf", "myapp.utils")
 
 
 def test_external_imports_recorded_as_external_nodes(project: Path):

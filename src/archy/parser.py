@@ -114,7 +114,6 @@ def _handle_from_import(node, source: bytes) -> list[ImportRef]:
 
 
 def _extract_module_name(node, source: bytes) -> str:
-    """Pull the underlying dotted name from `dotted_name` or `aliased_import`."""
     if node.type == "aliased_import":
         inner = node.child_by_field_name("name")
         if inner is not None:
