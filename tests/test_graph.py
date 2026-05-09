@@ -8,6 +8,20 @@ from archy.graph import build_graph
 
 
 @pytest.fixture
+def pkg(tmp_path: Path) -> Path:
+    """An empty `pkg/` package rooted at tmp_path. Tests fill in the .py files.
+
+    Most test bodies need only the `pkg` Path; tests that build the graph
+    pass `tmp_path` to `build_graph`. A few tests that exercise non-empty
+    `__init__.py` re-exports overwrite it with `(pkg / "__init__.py").write_text(...)`.
+    """
+    pkg_dir = tmp_path / "pkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("")
+    return pkg_dir
+
+
+@pytest.fixture
 def project(tmp_path: Path) -> Path:
     """A small fake project with a src layout and a few modules."""
     pkg = tmp_path / "src" / "myapp"
@@ -63,10 +77,7 @@ def test_internal_only_filtering(project: Path):
     assert set(external) >= {"os", "requests", "json"}
 
 
-def test_syntax_errors_dont_kill_the_run(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_syntax_errors_dont_kill_the_run(tmp_path: Path, pkg: Path):
     (pkg / "good.py").write_text("import os\n")
     (pkg / "bad.py").write_text("import os\ndef broken(:\n")
     g = build_graph(tmp_path)
@@ -77,10 +88,7 @@ def test_syntax_errors_dont_kill_the_run(tmp_path: Path):
     assert g.has_edge("pkg.bad", "os")
 
 
-def test_ignored_dirs_are_skipped(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_ignored_dirs_are_skipped(tmp_path: Path, pkg: Path):
     (pkg / "real.py").write_text("import os\n")
     venv_pkg = tmp_path / ".venv" / "lib" / "fake"
     venv_pkg.mkdir(parents=True)
@@ -110,39 +118,28 @@ def test_monorepo_with_two_top_level_packages(tmp_path: Path):
     assert g.has_edge("beta.main", "alpha.core")  # cross-package internal edge
 
 
-def test_wildcard_import_creates_single_edge_to_module(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_wildcard_import_creates_single_edge_to_module(tmp_path: Path, pkg: Path):
     (pkg / "consumer.py").write_text("from pkg.utils import *\n")
     (pkg / "utils.py").write_text("")
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.consumer", "pkg.utils")
 
 
-def test_function_local_imports_appear_in_graph(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_function_local_imports_appear_in_graph(tmp_path: Path, pkg: Path):
     (pkg / "lazy.py").write_text("def go():\n    from pkg import other\n    return other\n")
     (pkg / "other.py").write_text("")
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.lazy", "pkg.other")
 
 
-def test_multiple_imports_same_target_aggregate_lines(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_multiple_imports_same_target_aggregate_lines(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("import os\nimport os.path\nfrom os import sep\n")
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.a", "os")
     assert len(g["pkg.a"]["os"]["lines"]) == 3
 
 
-def test_reexport_relative_resolves_to_source_module(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
+def test_reexport_relative_resolves_to_source_module(tmp_path: Path, pkg: Path):
     (pkg / "__init__.py").write_text("from .impl import Foo\n")
     (pkg / "impl.py").write_text("class Foo: ...\n")
     (pkg / "consumer.py").write_text("from pkg import Foo\n")
@@ -151,9 +148,7 @@ def test_reexport_relative_resolves_to_source_module(tmp_path: Path):
     assert not g.has_edge("pkg.consumer", "pkg")
 
 
-def test_reexport_aliased_resolves_to_source_module(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
+def test_reexport_aliased_resolves_to_source_module(tmp_path: Path, pkg: Path):
     (pkg / "__init__.py").write_text("from .impl import Foo as Bar\n")
     (pkg / "impl.py").write_text("class Foo: ...\n")
     (pkg / "consumer.py").write_text("from pkg import Bar\n")
@@ -162,9 +157,7 @@ def test_reexport_aliased_resolves_to_source_module(tmp_path: Path):
     assert not g.has_edge("pkg.consumer", "pkg")
 
 
-def test_reexport_mixed_with_submodule(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
+def test_reexport_mixed_with_submodule(tmp_path: Path, pkg: Path):
     (pkg / "__init__.py").write_text("from .impl import Foo\n")
     (pkg / "impl.py").write_text("class Foo: ...\n")
     (pkg / "Sub.py").write_text("")
@@ -174,9 +167,7 @@ def test_reexport_mixed_with_submodule(tmp_path: Path):
     assert g.has_edge("pkg.consumer", "pkg.Sub")
 
 
-def test_reexport_absolute_self_reference(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
+def test_reexport_absolute_self_reference(tmp_path: Path, pkg: Path):
     (pkg / "__init__.py").write_text("from pkg.impl import Foo\n")
     (pkg / "impl.py").write_text("class Foo: ...\n")
     (pkg / "consumer.py").write_text("from pkg import Foo\n")
@@ -184,18 +175,13 @@ def test_reexport_absolute_self_reference(tmp_path: Path):
     assert g.has_edge("pkg.consumer", "pkg.impl")
 
 
-def test_unknown_name_falls_back_to_package_edge(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_unknown_name_falls_back_to_package_edge(tmp_path: Path, pkg: Path):
     (pkg / "consumer.py").write_text("from pkg import SomethingDefinedInline\n")
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.consumer", "pkg")
 
 
-def test_wildcard_reexport_does_not_crash(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
+def test_wildcard_reexport_does_not_crash(tmp_path: Path, pkg: Path):
     (pkg / "__init__.py").write_text("from .impl import *\n")
     (pkg / "impl.py").write_text("class Foo: ...\n")
     (pkg / "consumer.py").write_text("from pkg import Foo\n")
@@ -206,11 +192,7 @@ def test_wildcard_reexport_does_not_crash(tmp_path: Path):
     assert g.has_edge("pkg.consumer", "pkg")
 
 
-def test_reexport_chain_one_hop_only(tmp_path: Path):
-    # `pkg/__init__.py` re-exports from `pkg.sub`, and `pkg.sub/__init__.py`
-    # re-exports from `pkg.sub.impl`. v1 only resolves one hop, so the consumer
-    # edge lands on `pkg.sub` (not `pkg.sub.impl`). When chain following ships,
-    # update this test to expect the deeper resolution.
+def test_reexport_chain_two_hops(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     sub = pkg / "sub"
@@ -220,5 +202,59 @@ def test_reexport_chain_one_hop_only(tmp_path: Path):
     (sub / "impl.py").write_text("class Foo: ...\n")
     (pkg / "consumer.py").write_text("from pkg import Foo\n")
     g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.sub.impl")
+    assert not g.has_edge("pkg.consumer", "pkg.sub")
+    assert not g.has_edge("pkg.consumer", "pkg")
+
+
+def test_reexport_chain_three_hops(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    sub = pkg / "sub"
+    sub.mkdir()
+    deep = sub / "deep"
+    deep.mkdir()
+    (pkg / "__init__.py").write_text("from .sub import Foo\n")
+    (sub / "__init__.py").write_text("from .deep import Foo\n")
+    (deep / "__init__.py").write_text("from .impl import Foo\n")
+    (deep / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.sub.deep.impl")
+
+
+def test_reexport_chain_circular_does_not_loop(tmp_path: Path):
+    # pkg/__init__.py re-exports Foo from pkg.a, and pkg.a/__init__.py
+    # re-exports Foo from pkg (an evil-twin loop). The chain follower
+    # must not infinite-loop; it should bail and leave the entry pointing
+    # at the first hop.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    a = pkg / "a"
+    a.mkdir()
+    (pkg / "__init__.py").write_text("from .a import Foo\n")
+    (a / "__init__.py").write_text("from pkg import Foo\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    # Just assert build_graph terminates; the resulting edge can land at
+    # either pkg or pkg.a depending on how the cycle is broken, but the
+    # important property is that the resolver returns at all.
+    g = build_graph(tmp_path)
+    assert g.number_of_nodes() > 0
+
+
+def test_reexport_chain_does_not_resolve_different_names(tmp_path: Path):
+    # pkg/__init__.py re-exports Foo from pkg.sub, but pkg.sub/__init__.py
+    # only has a re-export for Bar, not Foo. The chain follower must not
+    # mis-attribute Foo to wherever Bar lives.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    sub = pkg / "sub"
+    sub.mkdir()
+    (pkg / "__init__.py").write_text("from .sub import Foo\n")
+    (sub / "__init__.py").write_text("from .impl import Bar\n")
+    (sub / "impl.py").write_text("class Bar: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    # Foo doesn't chain through pkg.sub because pkg.sub doesn't re-export Foo.
     assert g.has_edge("pkg.consumer", "pkg.sub")
     assert not g.has_edge("pkg.consumer", "pkg.sub.impl")

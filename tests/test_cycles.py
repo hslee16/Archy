@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import networkx as nx
+import pytest
 
 from archy.cycles import find_cycles
 from archy.graph import build_graph
@@ -13,6 +14,15 @@ def _g(*edges: tuple[str, str, tuple[int, ...]]) -> nx.DiGraph:
     for u, v, lines in edges:
         g.add_edge(u, v, lines=lines)
     return g
+
+
+@pytest.fixture
+def pkg(tmp_path: Path) -> Path:
+    """An empty `pkg/` package rooted at tmp_path. Tests fill in the .py files."""
+    pkg_dir = tmp_path / "pkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("")
+    return pkg_dir
 
 
 def test_no_cycles_on_dag():
@@ -56,7 +66,6 @@ def test_dag_nodes_not_reported():
     )
     [cycle] = find_cycles(g)
     assert cycle.modules == ("a", "b")
-    # The outside-the-cycle edge is excluded.
     assert all(e.target != "outside" for e in cycle.edges)
 
 
@@ -65,10 +74,29 @@ def test_min_size_filter():
     assert find_cycles(g, min_size=3) == []
 
 
-def test_self_loop_excluded_at_default_min_size():
+def test_self_loop_reported_at_default_min_size():
     g: nx.DiGraph = nx.DiGraph()
     g.add_edge("a", "a", lines=(1,))
+    [cycle] = find_cycles(g)
+    assert cycle.modules == ("a",)
+    assert {(e.source, e.target) for e in cycle.edges} == {("a", "a")}
+    assert cycle.edges[0].lines == (1,)
+
+
+def test_isolated_node_without_self_loop_not_reported():
+    g: nx.DiGraph = nx.DiGraph()
+    g.add_node("loner")
     assert find_cycles(g) == []
+
+
+def test_self_loop_alongside_multi_node_cycle():
+    g = _g(("a", "b", (1,)), ("b", "a", (2,)))
+    g.add_edge("c", "c", lines=(5,))
+    cycles = find_cycles(g)
+    sizes = sorted(len(c.modules) for c in cycles)
+    assert sizes == [1, 2]
+    self_cycle = next(c for c in cycles if c.modules == ("c",))
+    assert self_cycle.edges[0].lines == (5,)
 
 
 def test_edge_lines_preserved():
@@ -79,10 +107,7 @@ def test_edge_lines_preserved():
     assert by_pair[("b", "a")] == (12,)
 
 
-def test_real_project_with_cycle(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_real_project_with_cycle(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("from pkg.b import thing\n")
     (pkg / "b.py").write_text("from pkg.a import other\n")
     g = build_graph(tmp_path)
@@ -90,10 +115,7 @@ def test_real_project_with_cycle(tmp_path: Path):
     assert any(c.modules == ("pkg.a", "pkg.b") for c in cycles)
 
 
-def test_real_project_dag_clean(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_real_project_dag_clean(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("from pkg.b import thing\n")
     (pkg / "b.py").write_text("")
     g = build_graph(tmp_path)
@@ -111,7 +133,6 @@ def test_cycle_excludes_attached_dag_branches():
     assert cycle.modules == ("a", "b")
     pairs = {(e.source, e.target) for e in cycle.edges}
     assert pairs == {("a", "b"), ("b", "a")}
-    # neither the entry-edge nor the leaf-edge participates
     assert ("entry", "a") not in pairs
     assert ("a", "leaf") not in pairs
 
@@ -135,16 +156,17 @@ def test_same_sized_cycles_sorted_by_qualname():
     assert [c.modules[0] for c in cycles] == ["a1", "z1"]
 
 
-def test_min_size_one_includes_singletons():
+def test_min_size_does_not_gate_self_loops():
+    # min_size only filters multi-node SCCs; self-loops are real cycles
+    # regardless. min_size=99 still surfaces a self-loop.
     g: nx.DiGraph = nx.DiGraph()
-    g.add_node("isolated")
-    g.add_edge("a", "b", lines=(1,))
-    g.add_edge("b", "a", lines=(2,))
-    cycles = find_cycles(g, min_size=1)
+    g.add_edge("a", "a", lines=(1,))
+    g.add_edge("b", "c", lines=(2,))
+    g.add_edge("c", "b", lines=(3,))
+    cycles = find_cycles(g, min_size=99)
     sizes = sorted(len(c.modules) for c in cycles)
-    # 1 SCC of size 2, plus 3 singleton SCCs (a, b are *in* the size-2 SCC,
-    # not singletons; only "isolated" is a singleton SCC).
-    assert sizes == [1, 2]
+    assert sizes == [1]
+    assert cycles[0].modules == ("a",)
 
 
 def test_aggregated_lines_preserved_in_cycle_edges():
@@ -156,10 +178,7 @@ def test_aggregated_lines_preserved_in_cycle_edges():
     assert by_pair[("a", "b")] == (1, 4, 9)
 
 
-def test_real_project_two_independent_cycles(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_real_project_two_independent_cycles(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("from pkg.b import thing\n")
     (pkg / "b.py").write_text("from pkg.a import other\n")
     (pkg / "x.py").write_text("from pkg.y import thing\n")
@@ -170,14 +189,12 @@ def test_real_project_two_independent_cycles(tmp_path: Path):
     assert pair_modules == [("pkg.a", "pkg.b"), ("pkg.x", "pkg.y")]
 
 
-def test_real_project_reexport_mediated_cycle(tmp_path: Path):
+def test_real_project_reexport_mediated_cycle(tmp_path: Path, pkg: Path):
     # Even with re-export resolution, a genuine cycle through __init__.py
     # is still a cycle: pkg/__init__.py imports a name from pkg.a, pkg.a
     # imports back from pkg (which after re-export resolution still resolves
     # to a *different* source module - so a→b cycle should appear iff the
     # re-export points at b).
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
     (pkg / "__init__.py").write_text("from .a import Foo\n")
     (pkg / "a.py").write_text("from pkg import Bar\nclass Foo: ...\n")
     (pkg / "b.py").write_text("class Bar: ...\n")
