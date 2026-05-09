@@ -4,6 +4,7 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 
 ## Near-term (next 2–3 PRs)
 
+- **`__init__.py` re-export resolution** — when `pkg/__init__.py` does `from .x import Foo`, downstream `from pkg import Foo` should resolve to `pkg.x` rather than `pkg`. Without this, any well-factored package that uses `__init__.py` as a public surface (i.e. most of them) over-reports cycles: submodules import the package's re-exported names, the package imports its submodules, and the resulting back-edges look like real cycles. **Hit this immediately on FastAPI** — 7 of the 12 cycle members in the core cluster were artifacts of this. Must land before cycle detection ships.
 - **Cycle detection** — Tarjan SCC over the existing graph; report each cycle with the participating modules and the offending import lines. Foundation for the acyclicity metric.
 - **Layer rules from YAML** — `archy.yaml` declaring layer membership and forbidden directions; `archy check` exits non-zero on violation. Minimum viable governance. [sentrux: `.sentrux/` rules]
 - **Call graph** — second edge type alongside imports. Tree-sitter query for `(call function: ...)`, resolve callee to its defining module. Doubles the signal for modularity/coupling because two modules can be independent by imports but tightly coupled by calls. [sentrux: uses both import and call edges in Q]
@@ -26,7 +27,6 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 ## Hard problems that probably won't ship
 
 - **Dynamic imports** — `importlib.import_module(name)` where `name` is a runtime string. Static analysis can flag these as opaque but can't resolve them. Acceptable.
-- **`__init__.py` re-exports** — `from .x import Foo` in `pkg/__init__.py` makes `pkg.Foo` valid downstream. We currently miss this; users would see a "missing" edge from `consumer` to `pkg.x` and an extra edge to `pkg`. Could be fixed by parsing `__init__.py` re-exports and substituting them at resolve time. Worth doing if it shows up in real usage; ignored for now.
 - **Conditional imports under `sys.platform` / `TYPE_CHECKING`** — currently treated as unconditional. We could tag edges with their guarding condition for richer rules ("CI must not depend on Windows-only modules") but the YAML schema for that is non-trivial.
 
 ## Anti-goals (stay disciplined)
