@@ -2,6 +2,50 @@
 
 Real-world runs of archy. Useful as regression evidence and as a place to point new contributors at "what does the output actually look like."
 
+## archy on archy (dogfooding, v0.1.0)
+
+archy enforces its own architecture in CI via `archy check .` against
+[`archy.yaml`](../archy.yaml). The intended layering is a pure dependency
+tree:
+
+```
+parser  →  (nothing internal)
+graph   →  parser
+policy  →  graph
+cli     →  parser, graph, policy
+```
+
+`graph` covers `archy.graph` and `archy.cycles`; `policy` covers
+`archy.layers` (the rule engine). `cli` is the only layer allowed to
+depend on every lower layer. Lower layers must not depend on higher
+ones — six `forbid` rules encode the full anti-set.
+
+```bash
+$ uv run archy graph . --internal-only
+# 13 internal module(s), 12 import edge(s)
+archy
+archy.cli
+  -> [int] archy
+  -> [int] archy.cycles
+  -> [int] archy.graph
+  -> [int] archy.layers
+archy.cycles
+archy.graph
+  -> [int] archy.parser
+archy.layers
+archy.parser
+...
+
+$ uv run archy cycles .
+# No cycles found (min_size=2).
+
+$ uv run archy check .
+# No layer violations (config: /Users/.../archy/archy.yaml).
+```
+
+The CI step (`.github/workflows/ci.yml`) makes any layer-crossing PR fail
+fast, so AI-assisted refactors can't quietly invert the dependency tree.
+
 ## `__init__.py` re-export resolution — multi-library benchmark (v0.0.2)
 
 After landing re-export resolution (so that `from pkg import Foo`, where
