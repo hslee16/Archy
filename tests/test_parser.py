@@ -40,6 +40,30 @@ def test_multiple_imports_preserve_order_by_line():
     assert [r.module for r in result.imports] == ["a", "b", "c"]
 
 
+def test_from_import_captures_alias():
+    src = b"from x import a as b\n"
+    result = parse_source(src)
+    [ref] = result.imports
+    assert ref.imported_names == ("a",)
+    assert ref.imported_aliases == ("b",)
+
+
+def test_from_import_mixed_aliases():
+    src = b"from x import a, b as c, d\n"
+    result = parse_source(src)
+    [ref] = result.imports
+    assert ref.imported_names == ("a", "b", "d")
+    assert ref.imported_aliases == (None, "c", None)
+
+
+def test_plain_import_has_no_aliases_tuple():
+    src = b"from x import a\n"
+    result = parse_source(src)
+    [ref] = result.imports
+    assert ref.imported_names == ("a",)
+    assert ref.imported_aliases == (None,)
+
+
 def test_partial_recovery_on_syntax_error():
     src = b"import a\nimport b\ndef !!!broken(:\n"
     result = parse_source(src)

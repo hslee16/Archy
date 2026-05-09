@@ -31,16 +31,19 @@ class ImportRef:
 
     `module` is the dotted path written after `import` or `from`. For
     relative imports the leading dots are preserved (e.g. '.', '..pkg').
-    `imported_names` is the tuple of names brought into the local namespace
-    by a `from X import a, b, c` form — these may be submodules of `X`,
-    so the graph resolver checks both `X` and `X.a` against the internal
-    module set. For plain `import X` forms it is empty.
+    `imported_names` is the tuple of source names from a
+    `from X import a, b, c` form — these may be submodules of `X`, so the
+    graph resolver checks both `X` and `X.a` against the internal module
+    set. For plain `import X` forms it is empty. `imported_aliases` runs
+    parallel to `imported_names`: each entry is the local rebinding name
+    from `as`, or None if the name was imported under its source spelling.
     """
 
     module: str
     imported_names: tuple[str, ...]
     is_relative: bool
     line: int  # 1-indexed
+    imported_aliases: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -98,10 +101,13 @@ def _handle_from_import(node, source: bytes) -> list[ImportRef]:
 
     name_nodes = node.children_by_field_name("name")
     imported: list[str] = []
+    aliases: list[str | None] = []
     for n in name_nodes:
         name = _extract_module_name(n, source)
-        if name:
-            imported.append(name)
+        if not name:
+            continue
+        imported.append(name)
+        aliases.append(_extract_alias(n, source))
 
     return [
         ImportRef(
@@ -109,8 +115,16 @@ def _handle_from_import(node, source: bytes) -> list[ImportRef]:
             imported_names=tuple(imported),
             is_relative=is_relative,
             line=line,
+            imported_aliases=tuple(aliases),
         )
     ]
+
+
+def _extract_alias(node, source: bytes) -> str | None:
+    if node.type != "aliased_import":
+        return None
+    alias = node.child_by_field_name("alias")
+    return _node_text(alias, source) if alias is not None else None
 
 
 def _extract_module_name(node, source: bytes) -> str:

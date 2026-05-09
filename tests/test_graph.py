@@ -138,3 +138,87 @@ def test_multiple_imports_same_target_aggregate_lines(tmp_path: Path):
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.a", "os")
     assert len(g["pkg.a"]["os"]["lines"]) == 3
+
+
+def test_reexport_relative_resolves_to_source_module(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .impl import Foo\n")
+    (pkg / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.impl")
+    assert not g.has_edge("pkg.consumer", "pkg")
+
+
+def test_reexport_aliased_resolves_to_source_module(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .impl import Foo as Bar\n")
+    (pkg / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Bar\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.impl")
+    assert not g.has_edge("pkg.consumer", "pkg")
+
+
+def test_reexport_mixed_with_submodule(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .impl import Foo\n")
+    (pkg / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "Sub.py").write_text("")
+    (pkg / "consumer.py").write_text("from pkg import Foo, Sub\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.impl")
+    assert g.has_edge("pkg.consumer", "pkg.Sub")
+
+
+def test_reexport_absolute_self_reference(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from pkg.impl import Foo\n")
+    (pkg / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.impl")
+
+
+def test_unknown_name_falls_back_to_package_edge(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "consumer.py").write_text("from pkg import SomethingDefinedInline\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg")
+
+
+def test_wildcard_reexport_does_not_crash(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .impl import *\n")
+    (pkg / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    # Wildcards are unresolvable statically; the consumer falls back to `pkg`,
+    # the package's own re-export from .impl still creates an edge to pkg.impl.
+    assert g.has_edge("pkg", "pkg.impl")
+    assert g.has_edge("pkg.consumer", "pkg")
+
+
+def test_reexport_chain_one_hop_only(tmp_path: Path):
+    # `pkg/__init__.py` re-exports from `pkg.sub`, and `pkg.sub/__init__.py`
+    # re-exports from `pkg.sub.impl`. v1 only resolves one hop, so the consumer
+    # edge lands on `pkg.sub` (not `pkg.sub.impl`). When chain following ships,
+    # update this test to expect the deeper resolution.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    sub = pkg / "sub"
+    sub.mkdir()
+    (pkg / "__init__.py").write_text("from .sub import Foo\n")
+    (sub / "__init__.py").write_text("from .impl import Foo\n")
+    (sub / "impl.py").write_text("class Foo: ...\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.sub")
+    assert not g.has_edge("pkg.consumer", "pkg.sub.impl")
