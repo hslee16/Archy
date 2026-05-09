@@ -43,19 +43,22 @@ def test_sparkline_constant_series_renders_flat():
     assert len(set(out)) == 1
 
 
+_SPARK_GLYPHS = "▁▂▃▄▅▆▇█"
+
+
+def _glyph_indices(rendered: str) -> list[int]:
+    return [_SPARK_GLYPHS.index(ch) for ch in rendered]
+
+
 def test_sparkline_monotonic_increase_is_ascending():
-    out = sparkline([0.1, 0.3, 0.5, 0.7, 0.9])
-    glyphs = "▁▂▃▄▅▆▇█"
-    indices = [glyphs.index(ch) for ch in out]
+    indices = _glyph_indices(sparkline([0.1, 0.3, 0.5, 0.7, 0.9]))
     assert indices == sorted(indices)
     assert indices[0] == 0
-    assert indices[-1] == len(glyphs) - 1
+    assert indices[-1] == len(_SPARK_GLYPHS) - 1
 
 
 def test_sparkline_monotonic_decrease_is_descending():
-    out = sparkline([0.9, 0.7, 0.5, 0.3, 0.1])
-    glyphs = "▁▂▃▄▅▆▇█"
-    indices = [glyphs.index(ch) for ch in out]
+    indices = _glyph_indices(sparkline([0.9, 0.7, 0.5, 0.3, 0.1]))
     assert indices == sorted(indices, reverse=True)
 
 
@@ -75,13 +78,10 @@ def test_render_text_includes_table_columns_and_sparkline():
         _row(0.6, when="2026-05-10T10:00:00Z", commit="ccccccc"),
     ]
     out = render_text(rows, last_n=10)
-    # Sparkline arrow shows first to last.
     assert "0.400 -> 0.600" in out
-    # Each row's short SHA appears.
     assert "aaaaaaa" in out
     assert "bbbbbbb" in out
     assert "ccccccc" in out
-    # Header columns.
     for column in ["score", "mod", "acy", "dep", "eq"]:
         assert column in out
 

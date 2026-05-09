@@ -252,7 +252,6 @@ def test_score_strict_passes_when_unchanged(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     runner = CliRunner()
     runner.invoke(main, ["score", str(project), "--record"])
-    # Same project, same score: PASS.
     result = runner.invoke(main, ["score", str(project), "--strict"])
     assert result.exit_code == 0
     assert "strict: PASS" in result.output

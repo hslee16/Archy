@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from archy.history import HistoryRow
 
-# Eight Unicode block elements give the sparkline its resolution. Lowest is
-# U+2581 (lower one-eighth block), highest U+2588 (full block).
+# Eight glyphs is enough vertical resolution to read drift in a single
+# terminal line without overwhelming the eye, and the standard Unicode
+# block-element range (U+2581 lower one-eighth through U+2588 full)
+# renders without surprises in every monospace font we care about.
 _SPARK_GLYPHS = "▁▂▃▄▅▆▇█"
 
 
@@ -54,7 +56,6 @@ def sparkline(values: list[float]) -> str:
     glyph_count = len(_SPARK_GLYPHS)
     out: list[str] = []
     for v in values:
-        # Map v in [lo, hi] linearly into [0, glyph_count - 1].
         index = round((v - lo) / span * (glyph_count - 1))
         out.append(_SPARK_GLYPHS[index])
     return "".join(out)
