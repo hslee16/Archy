@@ -52,6 +52,52 @@ from `pkg.sub`, and `pkg.sub/__init__.py` re-exports from `pkg.sub.impl`,
 consumers of `pkg.Foo` resolve to `pkg.sub`, not `pkg.sub.impl`. Multi-hop
 following is filed as a follow-up.
 
+## Cycle detection — multi-library benchmark (v0.0.3)
+
+`archy cycles <path>` reports each strongly-connected component of size ≥ 2
+(Tarjan SCC via `networkx.strongly_connected_components`). Run against the
+same 9 libraries as the re-export benchmark, post re-export resolution.
+
+| Library | Internal | Cycles | Largest cycle | Modules in cycles |
+|---|---:|---:|---:|---:|
+| pydantic | 402 | 2 | 46 | 64 |
+| rich | 213 | 2 | 53 | 55 |
+| pytest | 247 | 1 | 33 | 33 |
+| flask | 54 | 2 | 19 | 21 |
+| httpx | 60 | 2 | 11 | 17 |
+| click | 22 | 2 | 11 | 13 |
+| fastapi | 48 | 2 | 7 | 11 |
+| starlette | 67 | 1 | 14 | 14 |
+| requests | 37 | 1 | 8 | 8 |
+
+### Notable findings
+
+- **FastAPI** retains a 7-module core cycle even after re-export resolution
+  (`fastapi ↔ applications ↔ dependencies.utils ↔ exception_handlers ↔
+  openapi.utils ↔ routing ↔ utils`) plus a 4-module compat cluster
+  (`_compat.v2 ↔ datastructures ↔ openapi.models ↔ params`). The earlier
+  case-study prediction that the core cycle was *entirely* an artifact of
+  re-export resolution turned out to be too optimistic — it was *partly* an
+  artifact (visibility on this only became possible after the re-export fix
+  routed the obvious phantom edges away).
+- **Pydantic** has a 46-module cycle anchored at the `pydantic` package
+  root, plus an 18-module cycle inside `pydantic.v1` (the legacy
+  compatibility layer). Both look like real coupling.
+- **Rich** has a 53-module cycle that includes `rich` itself and most of
+  its public surface — typical for a library where the package node is
+  imported widely and most modules have at least one back-edge into the
+  shared namespace.
+- **Requests, starlette** show a single mid-sized cycle each — interesting
+  candidates for refactoring exercises.
+- **Click** and **httpx** have small, tight cycles (≤ 11 modules).
+
+### Why this matters
+
+These numbers are *baseline* readings, not value judgments. Some of these
+cycles will be deliberate (compat layers, plugin entry points), some will
+be accidents that have accumulated over years. Trended over commits, they
+become a structural-drift sensor — that's the eventual scoring story.
+
 
 ## FastAPI (v0.0.1, import graph only)
 

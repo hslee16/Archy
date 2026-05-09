@@ -30,6 +30,11 @@ uv sync
 uv run archy graph path/to/your/python/project --internal-only
 uv run archy graph path/to/your/python/project --format json > graph.json
 uv run archy graph path/to/your/python/project --format dot | dot -Tsvg > graph.svg
+
+# Find import cycles (Tarjan SCCs of size >= 2)
+uv run archy cycles path/to/your/python/project
+uv run archy cycles path/to/your/python/project --format json
+uv run archy cycles path/to/your/python/project --strict   # exit 1 if any cycles
 ```
 
 ### Development
@@ -45,7 +50,8 @@ uv run pytest              # tests
 ## Roadmap
 
 - [x] Tree-sitter-based import graph
-- [ ] Cycle detection (Tarjan SCC)
+- [x] `__init__.py` re-export resolution
+- [x] Cycle detection (Tarjan SCC)
 - [ ] Layer/boundary rules from YAML config
 - [ ] Single-score computation + JSONL history
 - [ ] CLI: `archy check`, `archy score`, `archy trend`
