@@ -13,7 +13,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from archy.parser import ImportRef, parse_file
+from archy.parser import ImportRef, ParseResult, parse_file
 
 _DEFAULT_IGNORED_DIRS = frozenset(
     {
@@ -72,13 +72,16 @@ def build_graph(
             external=False,
         )
 
+    parse_results: dict[str, ParseResult] = {m.qualname: parse_file(m.path) for m in modules}
+    reexport_maps = _build_reexport_maps(modules, parse_results, qualname_set)
+
     parse_errors: list[str] = []
     for m in modules:
-        result = parse_file(m.path)
+        result = parse_results[m.qualname]
         if result.has_errors:
             parse_errors.append(m.qualname)
         for ref in result.imports:
-            for target in _resolve_targets(ref, m, qualname_set):
+            for target in _resolve_targets(ref, m, qualname_set, reexport_maps):
                 if target not in graph:
                     graph.add_node(target, external=True)
                 _add_or_extend_edge(graph, m.qualname, target, ref)
@@ -156,6 +159,7 @@ def _resolve_targets(
     ref: ImportRef,
     source_module: Module,
     internal_qualnames: set[str],
+    reexport_maps: dict[str, dict[str, str]],
 ) -> list[str]:
     """Map an ImportRef to one or more target qualnames.
 
@@ -169,33 +173,42 @@ def _resolve_targets(
         base = _resolve_relative_base(ref.module, source_module)
         if base is None:
             return []
-        return _expand_with_imported_names(base, ref.imported_names, internal_qualnames)
+        return _expand_with_imported_names(
+            base, ref.imported_names, internal_qualnames, reexport_maps
+        )
 
-    return _expand_with_imported_names(ref.module, ref.imported_names, internal_qualnames)
+    return _expand_with_imported_names(
+        ref.module, ref.imported_names, internal_qualnames, reexport_maps
+    )
 
 
 def _expand_with_imported_names(
     base: str,
     imported_names: tuple[str, ...],
     internal_qualnames: set[str],
+    reexport_maps: dict[str, dict[str, str]],
 ) -> list[str]:
     # `from X import a, b` is statically ambiguous (a, b may be submodules or
     # symbols in X's namespace). When X is internal we prefer submodule edges
-    # where they exist so the graph reflects real file-level dependencies; for
-    # external X we collapse to a single edge to the top-level package.
+    # where they exist; otherwise we consult X's __init__.py re-export map
+    # so that `from pkg import Foo` resolves to the file where Foo actually
+    # lives rather than the package node (which would manufacture a cycle).
+    # For external X we collapse to a single edge to the top-level package.
     base_internal = base in internal_qualnames
 
     if base_internal and imported_names:
-        # `from internal_pkg import a, b` — prefer submodule edges where they exist,
-        # fall back to the parent edge for names that are just symbols.
         targets: list[str] = []
-        had_submodule_match = False
+        matched_any = False
+        reexports = reexport_maps.get(base, {})
         for name in imported_names:
-            candidate = f"{base}.{name}"
-            if candidate in internal_qualnames:
-                targets.append(candidate)
-                had_submodule_match = True
-        if not had_submodule_match:
+            submodule = f"{base}.{name}"
+            if submodule in internal_qualnames:
+                targets.append(submodule)
+                matched_any = True
+            elif name in reexports:
+                targets.append(reexports[name])
+                matched_any = True
+        if not matched_any:
             targets.append(base)
         return targets
 
@@ -238,6 +251,56 @@ def _resolve_relative_base(
     target_parts = [*base, *(suffix.split(".") if suffix else [])]
     target = ".".join(p for p in target_parts if p)
     return target or None
+
+
+def _build_reexport_maps(
+    modules: list[Module],
+    parse_results: dict[str, ParseResult],
+    internal_qualnames: set[str],
+) -> dict[str, dict[str, str]]:
+    # Re-exports live in package __init__.py files. For each `from .x import Foo`
+    # (or absolute self-reference), record `{local_name: source_qualname}` so the
+    # consumer-side resolver can route `from pkg import Foo` to `pkg.x` instead
+    # of falling back to `pkg`.
+    maps: dict[str, dict[str, str]] = {}
+    for m in modules:
+        if not m.is_package:
+            continue
+        result = parse_results.get(m.qualname)
+        if result is None:
+            continue
+        pkg_map: dict[str, str] = {}
+        for ref in result.imports:
+            source = _reexport_source(ref, m, internal_qualnames)
+            if source is None:
+                continue
+            for i, name in enumerate(ref.imported_names):
+                alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
+                local = alias or name
+                pkg_map[local] = source
+        if pkg_map:
+            maps[m.qualname] = pkg_map
+    return maps
+
+
+def _reexport_source(
+    ref: ImportRef,
+    package: Module,
+    internal_qualnames: set[str],
+) -> str | None:
+    if not ref.imported_names:
+        return None
+    if ref.is_relative:
+        base = _resolve_relative_base(ref.module, package)
+    elif ref.module == package.qualname or ref.module.startswith(package.qualname + "."):
+        base = ref.module
+    else:
+        # Re-exports of *external* modules don't help us resolve cycles inside
+        # the project, so we skip them.
+        return None
+    if base is None or base not in internal_qualnames:
+        return None
+    return base
 
 
 def _add_or_extend_edge(

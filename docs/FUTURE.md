@@ -4,8 +4,8 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 
 ## Near-term (next 2–3 PRs)
 
-- **`__init__.py` re-export resolution** — when `pkg/__init__.py` does `from .x import Foo`, downstream `from pkg import Foo` should resolve to `pkg.x` rather than `pkg`. Without this, any well-factored package that uses `__init__.py` as a public surface (i.e. most of them) over-reports cycles: submodules import the package's re-exported names, the package imports its submodules, and the resulting back-edges look like real cycles. **Hit this immediately on FastAPI** — 7 of the 12 cycle members in the core cluster were artifacts of this. Must land before cycle detection ships.
 - **Cycle detection** — Tarjan SCC over the existing graph; report each cycle with the participating modules and the offending import lines. Foundation for the acyclicity metric.
+- **Multi-hop re-export chains** — re-export resolution currently follows only one hop. If `pkg/__init__.py` re-exports from `pkg.sub` and `pkg.sub/__init__.py` re-exports from `pkg.sub.impl`, consumers of `pkg.Foo` resolve to `pkg.sub`, not `pkg.sub.impl`. Add transitive following capped at a small max-depth to avoid pathological loops.
 - **Layer rules from YAML** — `archy.yaml` declaring layer membership and forbidden directions; `archy check` exits non-zero on violation. Minimum viable governance. [sentrux: `.sentrux/` rules]
 - **Call graph** — second edge type alongside imports. Tree-sitter query for `(call function: ...)`, resolve callee to its defining module. Doubles the signal for modularity/coupling because two modules can be independent by imports but tightly coupled by calls. [sentrux: uses both import and call edges in Q]
 - **Cyclomatic complexity per function** — branch-node counts via tree-sitter. Feeds the equality (Gini) metric and the redundancy proxy. [sentrux: `[semantics.complexity]` config]
