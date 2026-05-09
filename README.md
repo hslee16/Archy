@@ -1,5 +1,9 @@
 # archy
 
+[![PyPI](https://img.shields.io/pypi/v/archy.svg)](https://pypi.org/project/archy/)
+[![Python](https://img.shields.io/pypi/pyversions/archy.svg)](https://pypi.org/project/archy/)
+[![License](https://img.shields.io/pypi/l/archy.svg)](LICENSE)
+
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
 **Status:** v0.4.1. Usable today via:
