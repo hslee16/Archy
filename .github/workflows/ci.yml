@@ -33,3 +33,6 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+      - name: Layer rules (archy check)
+        run: uv run archy check .

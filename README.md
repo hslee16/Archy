@@ -2,7 +2,7 @@
 
 > Architectural sensor for Python codebases — keeps structure honest under AI-assisted development.
 
-**Status:** early scaffold. Not yet usable.
+**Status:** v0.1.0. Usable today for inspection (`archy graph`, `archy cycles`) and for CI governance (`archy check` against an `archy.yaml`) — see [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. **Not yet** a trended scoring tool — that's the 0.2.0 headline.
 
 ## Why
 
@@ -35,7 +35,44 @@ uv run archy graph path/to/your/python/project --format dot | dot -Tsvg > graph.
 uv run archy cycles path/to/your/python/project
 uv run archy cycles path/to/your/python/project --format json
 uv run archy cycles path/to/your/python/project --strict   # exit 1 if any cycles
+
+# Enforce layer rules from archy.yaml; exit 1 on any violation
+uv run archy check path/to/your/python/project
+uv run archy check path/to/your/python/project --format json
+uv run archy check path/to/your/python/project --config custom.yaml
 ```
+
+### Layer rules (`archy check`)
+
+Drop an `archy.yaml` at the repo root declaring layers and forbidden directions:
+
+```yaml
+layers:
+  domain:
+    modules:
+      - "myapp.domain.**"
+  application:
+    modules:
+      - "myapp.application.**"
+  infra:
+    modules:
+      - "myapp.infra.**"
+      - "myapp.adapters.**"
+
+forbid:
+  - {from: domain, to: application}
+  - {from: domain, to: infra}
+  - {from: application, to: infra}
+```
+
+Patterns are dotted-name globs: `*` matches one segment, `**` matches zero
+or more. `myapp.domain.**` covers the package itself and every descendant.
+Modules must belong to at most one layer. `archy check` discovers
+`archy.yaml` from PATH upward unless `--config` is given; exits 1 on
+violation.
+
+archy enforces its own architecture this way — see [`archy.yaml`](archy.yaml)
+at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
 
 ### Development
 
@@ -52,9 +89,9 @@ uv run pytest              # tests
 - [x] Tree-sitter-based import graph
 - [x] `__init__.py` re-export resolution
 - [x] Cycle detection (Tarjan SCC)
-- [ ] Layer/boundary rules from YAML config
+- [x] Layer/boundary rules from YAML config (`archy check`)
 - [ ] Single-score computation + JSONL history
-- [ ] CLI: `archy check`, `archy score`, `archy trend`
+- [ ] CLI: `archy score`, `archy trend`
 - [ ] Pre-commit hook + GitHub Action
 - [ ] MCP server
 

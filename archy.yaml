@@ -1,0 +1,32 @@
+# archy's own layer rules — enforced in CI via `archy check .`.
+#
+# The intent is a pure dependency tree:
+#   parser  →  (nothing internal)
+#   graph   →  parser
+#   policy  →  graph
+#   cli     →  parser, graph, policy
+#
+# Lower layers must not depend on higher ones.
+
+layers:
+  parser:
+    modules:
+      - "archy.parser"
+  graph:
+    modules:
+      - "archy.graph"
+      - "archy.cycles"
+  policy:
+    modules:
+      - "archy.layers"
+  cli:
+    modules:
+      - "archy.cli"
+
+forbid:
+  - {from: parser, to: graph}
+  - {from: parser, to: policy}
+  - {from: parser, to: cli}
+  - {from: graph,  to: policy}
+  - {from: graph,  to: cli}
+  - {from: policy, to: cli}
