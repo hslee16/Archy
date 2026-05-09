@@ -18,7 +18,7 @@ cli     →  parser, graph, policy
 `graph` covers `archy.graph` and `archy.cycles`; `policy` covers
 `archy.layers` (the rule engine). `cli` is the only layer allowed to
 depend on every lower layer. Lower layers must not depend on higher
-ones — six `forbid` rules encode the full anti-set.
+ones - six `forbid` rules encode the full anti-set.
 
 ```bash
 $ uv run archy graph . --internal-only
@@ -46,7 +46,7 @@ $ uv run archy check .
 The CI step (`.github/workflows/ci.yml`) makes any layer-crossing PR fail
 fast, so AI-assisted refactors can't quietly invert the dependency tree.
 
-## `__init__.py` re-export resolution — multi-library benchmark (v0.0.2)
+## `__init__.py` re-export resolution - multi-library benchmark (v0.0.2)
 
 After landing re-export resolution (so that `from pkg import Foo`, where
 `pkg/__init__.py` does `from .impl import Foo`, attributes the edge to
@@ -80,7 +80,7 @@ indicator of phantom-cycle pressure caused by re-exports).
   `__init__.py` public surface and the fix recovers the per-file dependencies.
 - **FastAPI**: only 1 edge into `fastapi` either way (FastAPI internally
   prefers `from fastapi.<sub> import …` over the bare form), but the
-  `_compat` cluster gets a clear correction — 9 edges that pointed at the
+  `_compat` cluster gets a clear correction - 9 edges that pointed at the
   `fastapi._compat` package now route to the actual `fastapi._compat.shared`
   / `fastapi._compat.v2` files where the names live.
 - **Unchanged libraries** (requests, starlette, httpx, click, rich, pytest)
@@ -96,7 +96,7 @@ from `pkg.sub`, and `pkg.sub/__init__.py` re-exports from `pkg.sub.impl`,
 consumers of `pkg.Foo` resolve to `pkg.sub`, not `pkg.sub.impl`. Multi-hop
 following is filed as a follow-up.
 
-## Cycle detection — multi-library benchmark (v0.0.3)
+## Cycle detection - multi-library benchmark (v0.0.3)
 
 `archy cycles <path>` reports each strongly-connected component of size ≥ 2
 (Tarjan SCC via `networkx.strongly_connected_components`). Run against the
@@ -121,17 +121,17 @@ same 9 libraries as the re-export benchmark, post re-export resolution.
   openapi.utils ↔ routing ↔ utils`) plus a 4-module compat cluster
   (`_compat.v2 ↔ datastructures ↔ openapi.models ↔ params`). The earlier
   case-study prediction that the core cycle was *entirely* an artifact of
-  re-export resolution turned out to be too optimistic — it was *partly* an
+  re-export resolution turned out to be too optimistic - it was *partly* an
   artifact (visibility on this only became possible after the re-export fix
   routed the obvious phantom edges away).
 - **Pydantic** has a 46-module cycle anchored at the `pydantic` package
   root, plus an 18-module cycle inside `pydantic.v1` (the legacy
   compatibility layer). Both look like real coupling.
 - **Rich** has a 53-module cycle that includes `rich` itself and most of
-  its public surface — typical for a library where the package node is
+  its public surface - typical for a library where the package node is
   imported widely and most modules have at least one back-edge into the
   shared namespace.
-- **Requests, starlette** show a single mid-sized cycle each — interesting
+- **Requests, starlette** show a single mid-sized cycle each - interesting
   candidates for refactoring exercises.
 - **Click** and **httpx** have small, tight cycles (≤ 11 modules).
 
@@ -140,7 +140,7 @@ same 9 libraries as the re-export benchmark, post re-export resolution.
 These numbers are *baseline* readings, not value judgments. Some of these
 cycles will be deliberate (compat layers, plugin entry points), some will
 be accidents that have accumulated over years. Trended over commits, they
-become a structural-drift sensor — that's the eventual scoring story.
+become a structural-drift sensor - that's the eventual scoring story.
 
 
 ## FastAPI (v0.0.1, import graph only)
@@ -171,7 +171,7 @@ become a structural-drift sensor — that's the eventual scoring story.
 | 7 | `enum` |
 | 7 | `typing_extensions` |
 
-`starlette` dominating is exactly right — FastAPI is structurally a starlette extension. `pydantic` showing up at 14 inbound matches FastAPI's dual-model story.
+`starlette` dominating is exactly right - FastAPI is structurally a starlette extension. `pydantic` showing up at 14 inbound matches FastAPI's dual-model story.
 
 ### Top internal fan-out (potential god-modules)
 
@@ -192,18 +192,58 @@ become a structural-drift sensor — that's the eventual scoring story.
 | 8 | `fastapi.openapi.models` |
 | 8 | `fastapi.types` |
 
-### Strongly connected components (size > 1) — preview of cycle detection
+### Strongly connected components (size > 1) - preview of cycle detection
 
 Two SCCs found:
 
-1. **`_compat` cluster (5 modules)** — `_compat ↔ _compat.v2 ↔ datastructures ↔ openapi.models ↔ params`. Likely a real cycle in the pydantic v1/v2 compatibility layer.
+1. **`_compat` cluster (5 modules)** - `_compat ↔ _compat.v2 ↔ datastructures ↔ openapi.models ↔ params`. Likely a real cycle in the pydantic v1/v2 compatibility layer.
 
-2. **Core API cluster (7 modules)** — `fastapi ↔ applications ↔ dependencies.utils ↔ exception_handlers ↔ openapi.utils ↔ routing ↔ utils`. **At least partly an artifact of `__init__.py` re-exports**: `fastapi/__init__.py` re-exports a public surface; submodules then `from fastapi import X` to use those names; the resulting back-edge to `fastapi` closes a phantom cycle.
+2. **Core API cluster (7 modules)** - `fastapi ↔ applications ↔ dependencies.utils ↔ exception_handlers ↔ openapi.utils ↔ routing ↔ utils`. **At least partly an artifact of `__init__.py` re-exports**: `fastapi/__init__.py` re-exports a public surface; submodules then `from fastapi import X` to use those names; the resulting back-edge to `fastapi` closes a phantom cycle.
 
 This was the trigger for promoting `__init__.py` re-export resolution into the near-term roadmap (see `docs/FUTURE.md`). After that PR lands, this case study should be re-run; the expected outcome is the second SCC dropping to 0–1 modules and only the `_compat` cycle remaining as a real finding.
 
 ### Why this case study matters
 
-- **Validates the parser on a non-toy codebase** — 0 parse errors across the FastAPI source tree, sub-second runtime.
-- **Surfaces a real correctness bug in the resolver** — the `__init__.py` over-reporting wouldn't have shown up on archy's own tests, because archy's own `__init__.py` is empty. Real codebases use `__init__.py` as a public surface, and our resolver needs to follow.
-- **Provides a regression target** — re-running this command after the next PR lets us measure whether the fix actually works.
+- **Validates the parser on a non-toy codebase** - 0 parse errors across the FastAPI source tree, sub-second runtime.
+- **Surfaces a real correctness bug in the resolver** - the `__init__.py` over-reporting wouldn't have shown up on archy's own tests, because archy's own `__init__.py` is empty. Real codebases use `__init__.py` as a public surface, and our resolver needs to follow.
+- **Provides a regression target** - re-running this command after the next PR lets us measure whether the fix actually works.
+
+## Composite quality score - multi-library benchmark (v0.2.0)
+
+`archy score <path>` reports the four-metric composite (modularity, acyclicity, depth, equality, geometric mean). Same 9 libraries, same checkouts as the cycle benchmark.
+
+| Library | Score | Modularity | Acyclicity | Depth | Equality |
+|---|---:|---:|---:|---:|---:|
+| starlette | 0.546 | 0.456 | 0.500 | 0.667 | 0.584 |
+| httpx | 0.491 | 0.580 | 0.333 | 0.615 | 0.489 |
+| click | 0.488 | 0.495 | 0.333 | 0.667 | 0.515 |
+| rich | 0.485 | 0.546 | 0.333 | 0.615 | 0.494 |
+| flask | 0.482 | 0.557 | 0.333 | 0.571 | 0.510 |
+| requests | 0.467 | 0.490 | 0.500 | 0.533 | 0.365 |
+| pytest | 0.465 | 0.519 | 0.500 | 0.471 | 0.382 |
+| pydantic | 0.460 | 0.641 | 0.333 | 0.533 | 0.392 |
+| fastapi | 0.423 | 0.522 | 0.333 | 0.615 | 0.300 |
+
+Notes:
+
+- Acyclicity dominates the variance: 1 cycle drops it to 0.5, 2 cycles to 0.333. Most libraries have 1-2 cycles.
+- Pydantic has the highest raw modularity (0.641 normalized) but low equality (0.392): heavy fan-out concentrated in a few modules pulls the geometric mean down.
+- FastAPI is the bottom-scorer mainly because of low equality (0.300): `applications.py`, `routing.py`, and `openapi.utils.py` carry most of the public surface, creating a steep out-degree distribution.
+- Numbers are not directly comparable to sentrux's display because archy reports floats in `[0, 1]` and sentrux reports integers `0-10000`; multiply archy's `overall` by 10000 for parity.
+
+### archy on archy (v0.2.0)
+
+`archy score .` on the archy repo:
+
+```
+# archy score: 0.677
+modularity:  0.606  (5 communities, raw Q=0.409)
+acyclicity:  1.000  (0 cycles)
+depth:       0.727  (max depth 3)
+equality:    0.476  (Gini=0.524)
+# graph: 15 modules, 15 edges
+```
+
+archy outscores every library in the benchmark above, mostly because it has zero cycles (the layer rules block them in CI) and a shallow dependency tree. Equality is the weakest axis: `archy.cli` aggregates all user-facing surfaces and naturally has higher fan-out than the modules below it. Expected for a CLI app.
+
+For the design-side comparison with sentrux's quality-signal model, see [`docs/LEARNINGS.md`](LEARNINGS.md#v020---score-comparison-with-sentrux).

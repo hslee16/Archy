@@ -174,14 +174,14 @@ def test_real_project_reexport_mediated_cycle(tmp_path: Path):
     # Even with re-export resolution, a genuine cycle through __init__.py
     # is still a cycle: pkg/__init__.py imports a name from pkg.a, pkg.a
     # imports back from pkg (which after re-export resolution still resolves
-    # to a *different* source module — so a→b cycle should appear iff the
+    # to a *different* source module - so a→b cycle should appear iff the
     # re-export points at b).
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("from .a import Foo\n")
     (pkg / "a.py").write_text("from pkg import Bar\nclass Foo: ...\n")
     (pkg / "b.py").write_text("class Bar: ...\n")
-    # Make Bar live in pkg.b via __init__.py re-export — but we already only
+    # Make Bar live in pkg.b via __init__.py re-export - but we already only
     # have one re-export of Foo. So `from pkg import Bar` falls back to `pkg`.
     # That manufactures the pkg → pkg.a → pkg cycle we expect to detect.
     g = build_graph(tmp_path)

@@ -32,7 +32,7 @@ class ImportRef:
     `module` is the dotted path written after `import` or `from`. For
     relative imports the leading dots are preserved (e.g. '.', '..pkg').
     `imported_names` is the tuple of source names from a
-    `from X import a, b, c` form — these may be submodules of `X`, so the
+    `from X import a, b, c` form - these may be submodules of `X`, so the
     graph resolver checks both `X` and `X.a` against the internal module
     set. For plain `import X` forms it is empty. `imported_aliases` runs
     parallel to `imported_names`: each entry is the local rebinding name

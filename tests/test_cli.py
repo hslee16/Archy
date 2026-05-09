@@ -159,6 +159,49 @@ def test_check_malformed_config_reports_error(tmp_path: Path):
     assert "ghost" in result.output
 
 
+def test_score_text_output(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["score", str(project)])
+    assert result.exit_code == 0
+    assert "archy score:" in result.output
+    assert "modularity:" in result.output
+    assert "acyclicity:" in result.output
+    assert "depth:" in result.output
+    assert "equality:" in result.output
+
+
+def test_score_json_output(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["score", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert "overall" in payload
+    assert set(payload["components"]) == {"modularity", "acyclicity", "depth", "equality"}
+    assert 0.0 <= payload["overall"] <= 1.0
+    for v in payload["components"].values():
+        assert 0.0 <= v <= 1.0
+
+
+def test_score_drops_when_cycle_introduced(tmp_path: Path):
+    (tmp_path / "clean").mkdir()
+    (tmp_path / "cyclic").mkdir()
+    clean_project = _make_acyclic_project(tmp_path / "clean")
+    cyclic_project = _make_cyclic_project(tmp_path / "cyclic")
+    runner = CliRunner()
+    clean = json.loads(
+        runner.invoke(main, ["score", str(clean_project), "--format", "json"]).output
+    )
+    cyclic = json.loads(
+        runner.invoke(main, ["score", str(cyclic_project), "--format", "json"]).output
+    )
+    assert cyclic["components"]["acyclicity"] < clean["components"]["acyclicity"]
+    assert cyclic["inputs"]["cycle_count"] == 1
+    assert clean["inputs"]["cycle_count"] == 0
+    # Tiny graphs are noisy across the other three metrics, so we only assert
+    # the deterministic acyclicity drop. compute_score's overall semantics
+    # are exercised in tests/test_score.py against larger fixtures.
+
+
 def test_graph_command_still_works(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["graph", str(project), "--internal-only"])

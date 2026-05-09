@@ -1,12 +1,12 @@
 # archy
 
-> Architectural sensor for Python codebases — keeps structure honest under AI-assisted development.
+> Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.1.0. Usable today for inspection (`archy graph`, `archy cycles`) and for CI governance (`archy check` against an `archy.yaml`) — see [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. **Not yet** a trended scoring tool — that's the 0.2.0 headline.
+**Status:** v0.2.0. Usable today for inspection (`archy graph`, `archy cycles`), CI governance (`archy check` against an `archy.yaml`), and one-shot scoring (`archy score`) - see [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md) for benchmarks against pydantic, fastapi, flask, pytest, and the dogfooded archy-on-archy run. The score follows sentrux's design (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for the side-by-side comparison. **Not yet** a *trended* scoring tool - that's the next milestone (per-commit JSONL history + `archy trend`).
 
 ## Why
 
-AI agents generate code at machine speed. Without a feedback loop on *structural* health — module coupling, import cycles, layer violations — codebases drift architecturally even when every individual change looks fine in review.
+AI agents generate code at machine speed. Without a feedback loop on *structural* health - module coupling, import cycles, layer violations - codebases drift architecturally even when every individual change looks fine in review.
 
 `archy` is a small tool that watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and (eventually) as an MCP server so coding agents can read their own architectural impact before committing.
 
@@ -40,6 +40,10 @@ uv run archy cycles path/to/your/python/project --strict   # exit 1 if any cycle
 uv run archy check path/to/your/python/project
 uv run archy check path/to/your/python/project --format json
 uv run archy check path/to/your/python/project --config custom.yaml
+
+# Composite quality score (modularity * acyclicity * depth * equality, geometric mean)
+uv run archy score path/to/your/python/project
+uv run archy score path/to/your/python/project --format json
 ```
 
 ### Layer rules (`archy check`)
@@ -71,7 +75,7 @@ Modules must belong to at most one layer. `archy check` discovers
 `archy.yaml` from PATH upward unless `--config` is given; exits 1 on
 violation.
 
-archy enforces its own architecture this way — see [`archy.yaml`](archy.yaml)
+archy enforces its own architecture this way - see [`archy.yaml`](archy.yaml)
 at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
 
 ### Development
@@ -90,13 +94,17 @@ uv run pytest              # tests
 - [x] `__init__.py` re-export resolution
 - [x] Cycle detection (Tarjan SCC)
 - [x] Layer/boundary rules from YAML config (`archy check`)
-- [ ] Single-score computation + JSONL history
-- [ ] CLI: `archy score`, `archy trend`
+- [x] Single-score computation (`archy score`) - four sub-metrics, geometric mean
+- [ ] Per-commit JSONL history + `archy trend`
 - [ ] Pre-commit hook + GitHub Action
 - [ ] MCP server
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for style rules. Notably: no em-dash characters (U+2014) anywhere in the repo.
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
