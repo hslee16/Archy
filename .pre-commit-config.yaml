@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+      - id: ruff-format
+
+  - repo: https://github.com/hslee16/archy
+    rev: v0.4.1
+    hooks:
+      - id: archy-check
+      - id: archy-cycles
+      # archy-score-strict intentionally not enabled here.
+      # `.archy/history.jsonl` is gitignored ("per-checkout, not committed"),
+      # so there is no shared baseline for the gate to read.

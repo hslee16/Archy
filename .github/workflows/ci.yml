@@ -35,4 +35,12 @@ jobs:
         run: uv run pytest
 
       - name: Layer rules (archy check)
-        run: uv run archy check .
+        uses: ./
+        with:
+          command: check
+
+      - name: Cycle gate (archy cycles --strict)
+        uses: ./
+        with:
+          command: cycles
+          strict: "true"

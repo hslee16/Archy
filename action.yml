@@ -56,10 +56,11 @@ runs:
       run: |
         set -euo pipefail
         if [[ "$ACTION_REF" =~ ^v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
-          uv pip install --system "archy==${BASH_REMATCH[1]}"
+          uv tool install "archy==${BASH_REMATCH[1]}"
         else
-          uv pip install --system "$ACTION_PATH"
+          uv tool install "$ACTION_PATH"
         fi
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
     - name: Run archy ${{ inputs.command }}
       shell: bash
