@@ -98,7 +98,9 @@ def test_run_contracts_missing_config_raises(
     tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _purge_top(monkeypatch)
-    # Don't write the fixture; just point at an empty dir.
+    # No .importlinter present at the project root: verify the wrap raises
+    # the typed error rather than silently passing or surfacing a misleading
+    # FileNotFoundError from import-linter's reader.
     with pytest.raises(ContractsConfigError):
         run_contracts(Path(tmp_path))
 

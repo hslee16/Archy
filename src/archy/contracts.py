@@ -86,7 +86,7 @@ def run_contracts(
     if not config_path.exists():
         raise ContractsConfigError(f"contracts config not found: {config_path}")
 
-    with _project_on_sys_path(project_dir):
+    with _ProjectOnSysPath(project_dir):
         return _drive_import_linter(config_path)
 
 
@@ -136,7 +136,7 @@ def _drive_import_linter(config_path: Path) -> ContractsResult:
     )
 
 
-class _project_on_sys_path:
+class _ProjectOnSysPath:
     """Context manager that prepends `project_dir` and `project_dir/src` to
     sys.path so import-linter's importlib lookup resolves the project
     correctly when the user hasn't installed the package."""

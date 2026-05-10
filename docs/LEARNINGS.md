@@ -111,7 +111,7 @@ archy and sentrux both ship an MCP server so AI agents can call the analyzer dir
 
 | | sentrux | archy |
 |---|---|---|
-| Tools | 9 (`scan`, `health`, `session_start`, `session_end`, `rescan`, `check_rules`, `evolution`, `dsm`, `test_gaps`) | 8 (`archy_score`, `archy_cycles`, `archy_check`, `archy_trend`, `archy_impact`, `archy_snapshot`, `archy_diff`, `archy_record_baseline`) |
+| Tools | 9 (`scan`, `health`, `session_start`, `session_end`, `rescan`, `check_rules`, `evolution`, `dsm`, `test_gaps`) | 9 (`archy_score`, `archy_cycles`, `archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`, `archy_snapshot`, `archy_diff`, `archy_record_baseline`) |
 | Session model | Stateful: `session_start` saves an in-process baseline; `session_end` compares against it. | File-based: `archy_snapshot` writes `.archy/baseline.json`, `archy_diff` compares current state against it. The long-lived score history (`.archy/history.jsonl`) is separate and feeds `archy_trend` / `archy_score --strict`. |
 | Data behind tools | Snapshot-and-diff against an in-memory baseline. | The CLI's existing JSON shapes - same data agents would read by piping CLI output. |
 | Dependencies | Pure Rust, no Python runtime. | Python `mcp` SDK over stdio. |
