@@ -200,9 +200,7 @@ def test_run_contracts_prefers_importlinter_over_archy_yaml(
     assert result.contracts[0].name == "top.b must not reach top.a"
 
 
-def test_run_contracts_no_config_raises(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_contracts_no_config_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _purge_top(monkeypatch)
     # Empty project: neither .importlinter nor archy.yaml.
     with pytest.raises(ContractsConfigError, match="no contracts config"):
