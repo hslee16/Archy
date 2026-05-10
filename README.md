@@ -18,7 +18,7 @@
 | Trended score | `archy score --record` + `archy trend` |
 | MCP server | `archy mcp` |
 
-Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy live in [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Score design follows sentrux (modularity, acyclicity, depth, equality, geometric mean); see [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
+How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
 
 ## Why
 
@@ -75,7 +75,7 @@ uv run archy check path/to/project --config custom.yaml
 
 ### Compute a quality score
 
-Composite of modularity, acyclicity, depth, and equality (geometric mean).
+Composite of modularity, acyclicity, depth, and equality (geometric mean). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown.
 
 ```bash
 uv run archy score path/to/project
