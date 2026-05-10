@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import textwrap
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -86,7 +87,7 @@ def test_run_contracts_violation_surfaces_chain(
     assert result.broken == 1
     contract = result.contracts[0]
     assert not contract.kept
-    chains = contract.metadata.get("invalid_chains")
+    chains = cast(list[dict[str, object]], contract.metadata.get("invalid_chains"))
     assert chains, "expected invalid_chains in violation metadata"
     chain = chains[0]
     # The shape import-linter exposes; surface it through the wrap unchanged.

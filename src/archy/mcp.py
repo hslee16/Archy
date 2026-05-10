@@ -14,6 +14,7 @@ it from the CLI via `archy mcp`.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any  # noqa: TID251  # pydantic conversion in follow-up PR
 
 from mcp.server.fastmcp import FastMCP
 
@@ -100,7 +101,7 @@ def _register_tools(server: FastMCP) -> None:
         record: bool = False,
         strict: bool = False,
         strict_tolerance: float = 0.02,
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         return _run_score(
             Path(path),
             internal_only=internal_only,
@@ -120,7 +121,7 @@ def _register_tools(server: FastMCP) -> None:
         path: str,
         min_size: int = 2,
         internal_only: bool = True,
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         return _run_cycles(Path(path), min_size=min_size, internal_only=internal_only)
 
     @server.tool(
@@ -136,7 +137,7 @@ def _register_tools(server: FastMCP) -> None:
     def archy_check(
         path: str,
         config_path: str | None = None,
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         return _run_check(Path(path), config_path=Path(config_path) if config_path else None)
 
     @server.tool(
@@ -155,7 +156,7 @@ def _register_tools(server: FastMCP) -> None:
     def archy_contracts(
         path: str,
         config_path: str | None = None,
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         return _run_contracts(
             Path(path),
             config_filename=Path(config_path) if config_path else None,
@@ -169,7 +170,7 @@ def _register_tools(server: FastMCP) -> None:
             "can compare deltas."
         ),
     )
-    def archy_trend(path: str, last_n: int = 10) -> list[dict[str, object]]:
+    def archy_trend(path: str, last_n: int = 10) -> list[dict[str, Any]]:
         return _run_trend(Path(path), last_n=last_n)
 
     @server.tool(
@@ -185,7 +186,7 @@ def _register_tools(server: FastMCP) -> None:
     def archy_impact(
         path: str,
         files: list[str],
-    ) -> dict[str, object]:
+    ) -> dict[str, Any]:
         return _run_impact(Path(path), files=[Path(f) for f in files])
 
     @server.tool(
@@ -196,7 +197,7 @@ def _register_tools(server: FastMCP) -> None:
             "start of an editing session. See the `loop` prompt for full usage."
         ),
     )
-    def archy_snapshot(path: str) -> dict[str, object]:
+    def archy_snapshot(path: str) -> dict[str, Any]:
         return _run_snapshot(Path(path))
 
     @server.tool(
@@ -208,7 +209,7 @@ def _register_tools(server: FastMCP) -> None:
             "edits to localize regressions; see the `loop` prompt."
         ),
     )
-    def archy_diff(path: str) -> dict[str, object]:
+    def archy_diff(path: str) -> dict[str, Any]:
         return _run_diff(Path(path))
 
     @server.tool(
@@ -220,7 +221,7 @@ def _register_tools(server: FastMCP) -> None:
             "can detect degradation."
         ),
     )
-    def archy_record_baseline(path: str, internal_only: bool = True) -> dict[str, object]:
+    def archy_record_baseline(path: str, internal_only: bool = True) -> dict[str, Any]:
         return _run_score(
             Path(path),
             internal_only=internal_only,
@@ -240,12 +241,12 @@ def _run_score(
     record: bool,
     strict: bool,
     strict_tolerance: float,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     graph = _load_graph(path, internal_only=internal_only)
     score = compute_score(graph)
     history_path = path / ".archy" / "history.jsonl"
 
-    gate: dict[str, object] | None = None
+    gate: dict[str, Any] | None = None
     if strict:
         rows = read_history(history_path)
         if rows:
@@ -273,7 +274,7 @@ def _run_score(
         commit, branch = git_metadata(path)
         append_history(history_path, row_from_score(score, commit=commit, branch=branch))
 
-    payload: dict[str, object] = {
+    payload: dict[str, Any] = {
         "overall": score.overall,
         "components": {
             "modularity": score.modularity,
@@ -297,7 +298,7 @@ def _run_score(
     return payload
 
 
-def _run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[dict[str, object]]:
+def _run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[dict[str, Any]]:
     graph = _load_graph(path, internal_only=internal_only)
     return [
         {
@@ -310,7 +311,7 @@ def _run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[dict[
     ]
 
 
-def _run_check(path: Path, *, config_path: Path | None) -> dict[str, object]:
+def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
     if config_path is None:
         discovered = discover_config(path)
         if discovered is None:
@@ -340,7 +341,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, object]:
     }
 
 
-def _run_contracts(path: Path, *, config_filename: Path | None) -> dict[str, object]:
+def _run_contracts(path: Path, *, config_filename: Path | None) -> dict[str, Any]:
     from archy.contracts import (
         ContractsConfigError,
         ContractsNotAvailable,
@@ -374,7 +375,7 @@ def _run_contracts(path: Path, *, config_filename: Path | None) -> dict[str, obj
     }
 
 
-def _run_snapshot(path: Path) -> dict[str, object]:
+def _run_snapshot(path: Path) -> dict[str, Any]:
     graph = _load_graph(path, internal_only=True)
     config_path = discover_config(path)
     snap = take_snapshot(graph, config_path=config_path)
@@ -385,7 +386,7 @@ def _run_snapshot(path: Path) -> dict[str, object]:
     return payload
 
 
-def _run_diff(path: Path) -> dict[str, object]:
+def _run_diff(path: Path) -> dict[str, Any]:
     target = path / ".archy" / "baseline.json"
     baseline = read_snapshot(target)
     if baseline is None:
@@ -395,7 +396,7 @@ def _run_diff(path: Path) -> dict[str, object]:
     return compute_diff(baseline, current)
 
 
-def _run_impact(path: Path, *, files: list[Path]) -> dict[str, object]:
+def _run_impact(path: Path, *, files: list[Path]) -> dict[str, Any]:
     graph = _load_graph(path, internal_only=True)
     resolved = [path / f if not f.is_absolute() else f for f in files]
     result = find_impact(graph, resolved)
@@ -406,7 +407,7 @@ def _run_impact(path: Path, *, files: list[Path]) -> dict[str, object]:
     }
 
 
-def _run_trend(path: Path, *, last_n: int) -> list[dict[str, object]]:
+def _run_trend(path: Path, *, last_n: int) -> list[dict[str, Any]]:
     rows = read_history(path / ".archy" / "history.jsonl")
     window = rows[-last_n:] if last_n > 0 else rows
     return [

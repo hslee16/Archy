@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any  # noqa: TID251  # pydantic conversion in follow-up PR
 
 from archy.cycles import find_cycles
 from archy.layers import (
@@ -32,22 +33,22 @@ from archy.score import Score, compute_score
 @dataclass(frozen=True)
 class Snapshot:
     score: Score
-    cycles: tuple[dict[str, object], ...]
-    violations: tuple[dict[str, object], ...]
+    cycles: tuple[dict[str, Any], ...]
+    violations: tuple[dict[str, Any], ...]
 
 
 def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
     """Capture score, cycles, and layer violations from a single graph build."""
     score = compute_score(graph)
     cycles = tuple(_cycle_to_dict(c) for c in find_cycles(graph, min_size=2))
-    violations: tuple[dict[str, object], ...] = ()
+    violations: tuple[dict[str, Any], ...] = ()
     config = _load_config_if_present(config_path)
     if config is not None:
         violations = tuple(_violation_to_dict(v) for v in find_violations(graph, config))
     return Snapshot(score=score, cycles=cycles, violations=violations)
 
 
-def snapshot_to_dict(snap: Snapshot) -> dict[str, object]:
+def snapshot_to_dict(snap: Snapshot) -> dict[str, Any]:
     return {
         "score": _score_to_dict(snap.score),
         "cycles": list(snap.cycles),
@@ -67,7 +68,7 @@ def read_snapshot(path: Path) -> Snapshot | None:
     return _snapshot_from_dict(payload)
 
 
-def compute_diff(baseline: Snapshot, current: Snapshot) -> dict[str, object]:
+def compute_diff(baseline: Snapshot, current: Snapshot) -> dict[str, Any]:
     """Compute per-component score deltas plus added/resolved cycles & violations.
 
     Cycle identity = the frozenset of member modules; violation identity =
@@ -107,7 +108,7 @@ def discover_config_for(path: Path) -> Path | None:
     return discover_config(path)
 
 
-def _cycle_to_dict(cycle) -> dict[str, object]:
+def _cycle_to_dict(cycle) -> dict[str, Any]:
     return {
         "modules": list(cycle.modules),
         "edges": [
@@ -116,7 +117,7 @@ def _cycle_to_dict(cycle) -> dict[str, object]:
     }
 
 
-def _violation_to_dict(v) -> dict[str, object]:
+def _violation_to_dict(v) -> dict[str, Any]:
     return {
         "rule": {"from": v.rule.from_layer, "to": v.rule.to_layer},
         "source": v.source,
@@ -125,7 +126,7 @@ def _violation_to_dict(v) -> dict[str, object]:
     }
 
 
-def _score_to_dict(s: Score) -> dict[str, object]:
+def _score_to_dict(s: Score) -> dict[str, Any]:
     return {
         "overall": s.overall,
         "components": {
@@ -138,7 +139,7 @@ def _score_to_dict(s: Score) -> dict[str, object]:
     }
 
 
-def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
+def _snapshot_from_dict(payload: dict[str, Any]) -> Snapshot:
     from archy.score import ScoreInputs
 
     score_dict = payload["score"]
@@ -173,11 +174,11 @@ def _score_delta(baseline: Score, current: Score) -> dict[str, float]:
 
 
 def _set_diff(
-    baseline: tuple[dict[str, object], ...],
-    current: tuple[dict[str, object], ...],
+    baseline: tuple[dict[str, Any], ...],
+    current: tuple[dict[str, Any], ...],
     *,
     key,
-) -> dict[str, list[dict[str, object]]]:
+) -> dict[str, list[dict[str, Any]]]:
     baseline_keys = {key(item) for item in baseline}
     current_keys = {key(item) for item in current}
     return {
