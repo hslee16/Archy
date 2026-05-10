@@ -68,7 +68,7 @@ For reference, archy ships these and they're documented in
 | Metric         | What it captures                                |
 | -------------- | ----------------------------------------------- |
 | Modularity     | Newman's Q over greedy community partition     |
-| Acyclicity    | `1 / (1 + cycle_count)` over SCCs of size ≥ 2  |
+| Acyclicity    | `1 - tangle_ratio` (fraction of nodes in SCCs of size ≥ 2) |
 | Depth         | Longest path through the SCC condensation      |
 | Equality      | `1 - Gini(out_degree)`                          |
 
