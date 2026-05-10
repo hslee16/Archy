@@ -84,7 +84,7 @@ Install the optional dependency, then author a config:
 uv sync --extra contracts        # or: pip install 'archy[contracts]'
 ```
 
-Minimal `.importlinter` (one Forbidden contract — the parser layer must never reach the CLI layer, even transitively):
+Minimal `.importlinter` (one Forbidden contract: the parser layer must never reach the CLI layer, even transitively):
 
 ```ini
 [importlinter]
