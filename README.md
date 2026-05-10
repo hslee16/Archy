@@ -8,7 +8,7 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.7.0. Usable today via:
+**Status:** v0.8.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -167,7 +167,7 @@ Wire it into Claude Code with this stanza in your config:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.7.0
+- uses: hslee16/archy@v0.8.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -193,7 +193,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.7.0
+    rev: v0.8.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
