@@ -10,14 +10,16 @@ from __future__ import annotations
 import datetime as dt
 import json
 import subprocess
-from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 from archy.score import Score
 
 
-@dataclass(frozen=True)
-class HistoryRow:
+class HistoryRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     timestamp: str  # ISO-8601 UTC, second precision, suffixed Z.
     commit: str | None
     branch: str | None

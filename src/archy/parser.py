@@ -6,10 +6,10 @@ and we still recover whatever imports parsed cleanly.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import tree_sitter_python as tsp
+from pydantic import BaseModel, ConfigDict
 from tree_sitter import Language, Parser, Query, QueryCursor
 
 PY_LANGUAGE = Language(tsp.language())
@@ -25,8 +25,7 @@ _IMPORT_QUERY_SRC = """
 _IMPORT_QUERY = Query(PY_LANGUAGE, _IMPORT_QUERY_SRC)
 
 
-@dataclass(frozen=True)
-class ImportRef:
+class ImportRef(BaseModel):
     """A single import statement extracted from a source file.
 
     `module` is the dotted path written after `import` or `from`. For
@@ -39,6 +38,8 @@ class ImportRef:
     from `as`, or None if the name was imported under its source spelling.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     module: str
     imported_names: tuple[str, ...]
     is_relative: bool
@@ -46,8 +47,9 @@ class ImportRef:
     imported_aliases: tuple[str | None, ...] = ()
 
 
-@dataclass(frozen=True)
-class ParseResult:
+class ParseResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     imports: tuple[ImportRef, ...]
     has_errors: bool
 

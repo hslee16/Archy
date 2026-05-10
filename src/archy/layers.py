@@ -8,35 +8,39 @@ graph and returns every edge that crosses a forbidden boundary.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 import networkx as nx
 import yaml
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True)
-class LayerSpec:
+class LayerSpec(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
     patterns: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class ForbidRule:
+class ForbidRule(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     from_layer: str
     to_layer: str
 
 
-@dataclass(frozen=True)
-class LayerConfig:
+class LayerConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     layers: tuple[LayerSpec, ...]
     forbid: tuple[ForbidRule, ...]
     exclude: tuple[str, ...] = ()
     roots: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True)
-class Violation:
+class Violation(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     rule: ForbidRule
     source: str
     target: str

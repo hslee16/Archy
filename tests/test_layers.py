@@ -28,10 +28,10 @@ def _g(*edges: tuple[str, str, tuple[int, ...]]) -> nx.DiGraph:
 def core_cli_config() -> LayerConfig:
     return LayerConfig(
         layers=(
-            LayerSpec("core", ("myapp.core.**",)),
-            LayerSpec("cli", ("myapp.cli.**",)),
+            LayerSpec(name="core", patterns=("myapp.core.**",)),
+            LayerSpec(name="cli", patterns=("myapp.cli.**",)),
         ),
-        forbid=(ForbidRule("core", "cli"),),
+        forbid=(ForbidRule(from_layer="core", to_layer="cli"),),
     )
 
 
@@ -39,13 +39,13 @@ def core_cli_config() -> LayerConfig:
 
 
 def test_match_exact_qualname():
-    layers = (LayerSpec("core", ("myapp.core",)),)
+    layers = (LayerSpec(name="core", patterns=("myapp.core",)),)
     assert match_layer("myapp.core", layers) == "core"
     assert match_layer("myapp.core.x", layers) is None
 
 
 def test_match_double_star_includes_package_and_descendants():
-    layers = (LayerSpec("core", ("myapp.core.**",)),)
+    layers = (LayerSpec(name="core", patterns=("myapp.core.**",)),)
     assert match_layer("myapp.core", layers) == "core"
     assert match_layer("myapp.core.x", layers) == "core"
     assert match_layer("myapp.core.x.y", layers) == "core"
@@ -53,21 +53,21 @@ def test_match_double_star_includes_package_and_descendants():
 
 
 def test_match_single_star_one_segment():
-    layers = (LayerSpec("apps", ("myapp.*",)),)
+    layers = (LayerSpec(name="apps", patterns=("myapp.*",)),)
     assert match_layer("myapp.cli", layers) == "apps"
     assert match_layer("myapp.cli.commands", layers) is None
     assert match_layer("myapp", layers) is None
 
 
 def test_match_returns_none_for_unlayered():
-    layers = (LayerSpec("core", ("myapp.core.**",)),)
+    layers = (LayerSpec(name="core", patterns=("myapp.core.**",)),)
     assert match_layer("third_party.lib", layers) is None
 
 
 def test_match_raises_on_ambiguous_overlap():
     layers = (
-        LayerSpec("a", ("myapp.**",)),
-        LayerSpec("b", ("myapp.core.**",)),
+        LayerSpec(name="a", patterns=("myapp.**",)),
+        LayerSpec(name="b", patterns=("myapp.core.**",)),
     )
     with pytest.raises(LayerConfigError, match="multiple layers"):
         match_layer("myapp.core.thing", layers)
@@ -89,7 +89,7 @@ def test_load_config_minimal(tmp_path: Path):
     )
     config = load_config(cfg)
     assert {layer.name for layer in config.layers} == {"core", "cli"}
-    assert config.forbid == (ForbidRule("core", "cli"),)
+    assert config.forbid == (ForbidRule(from_layer="core", to_layer="cli"),)
 
 
 def test_load_config_missing_file(tmp_path: Path):
@@ -184,7 +184,7 @@ def test_discover_returns_none_when_absent(tmp_path: Path):
 def test_violations_reports_forbidden_edge(core_cli_config: LayerConfig):
     g = _g(("myapp.core.user", "myapp.cli.runner", (12,)))
     [violation] = find_violations(g, core_cli_config)
-    assert violation.rule == ForbidRule("core", "cli")
+    assert violation.rule == ForbidRule(from_layer="core", to_layer="cli")
     assert violation.source == "myapp.core.user"
     assert violation.target == "myapp.cli.runner"
     assert violation.lines == (12,)
@@ -198,7 +198,7 @@ def test_violations_ignores_allowed_edge(core_cli_config: LayerConfig):
 def test_violations_ignores_unlayered_endpoints():
     g = _g(("third_party.x", "myapp.cli.y", (1,)))
     config = LayerConfig(
-        layers=(LayerSpec("cli", ("myapp.cli.**",)),),
+        layers=(LayerSpec(name="cli", patterns=("myapp.cli.**",)),),
         forbid=(),
     )
     assert find_violations(g, config) == []
