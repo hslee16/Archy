@@ -9,7 +9,7 @@ This document explains what each sub-metric measures, the exact formula
 archy uses, why that formula was chosen, and how to read the output. The
 implementation lives in [`src/archy/score.py`](../src/archy/score.py).
 
-The model — four-of-five sub-metrics plus geometric-mean aggregation —
+The model - four-of-five sub-metrics plus geometric-mean aggregation -
 follows sentrux's [`quality-signal-design.md`][sentrux-design]. archy
 defers sentrux's fifth metric (redundancy); see
 [Deferred metrics](#deferred-metrics) below.
@@ -101,7 +101,7 @@ acyclicity = 1 / (1 + cycle_count)
 ```
 
 This is a sigmoid in `(0, 1]`: zero cycles gives 1.0, one cycle gives
-0.5, two gives 0.33, etc. The penalty is steep on purpose — cycles
+0.5, two gives 0.33, etc. The penalty is steep on purpose - cycles
 make build order undefined and change propagation unpredictable, so
 even one cycle should visibly dent the score.
 
@@ -124,7 +124,7 @@ even one cycle should visibly dent the score.
 > **What it measures:** the length of the longest dependency chain.
 
 archy first builds the [condensation][dag-condensation] of the import
-graph — every SCC collapses to a single super-node — then computes the
+graph - every SCC collapses to a single super-node - then computes the
 longest path in the resulting DAG via NetworkX's
 [`dag_longest_path_length`][nx-dag-longest], a topological-order DP
 that runs in linear time.[^longest-path]
@@ -148,7 +148,7 @@ metric saturates near 1.0; above ~16 it asymptotes to 0.
 
 - Depth is independent of modularity by construction: a graph can
   have perfect community structure and a 50-deep chain, or a flat
-  graph with no community structure at all. That's the point — these
+  graph with no community structure at all. That's the point - these
   axes catch different pathologies.
 - Condensing first means a single giant SCC reads as `depth = 0` (one
   node, no edges) even though it's pathological. Acyclicity already
@@ -185,7 +185,7 @@ equivalent to `1 - 2 * (area under the Lorenz curve)`.[^gini-formula]
 **Caveats:**
 
 - This is currently a **proxy** for the metric we actually want. The
-  long-term target is `gini(per_function_cyclomatic_complexity)` —
+  long-term target is `gini(per_function_cyclomatic_complexity)` -
   inequality across function complexity, not module fan-out. Module-
   level Gini is computable from the import graph alone; per-function
   CC requires AST-level analysis that archy plans to add but has not
@@ -203,7 +203,7 @@ Geometric mean, not arithmetic. The reason is the
 [Nash][nash-bargaining] / Cobb–Douglas characterization: the geometric
 mean is, up to monotone transforms, the unique aggregator that is
 simultaneously *Pareto-optimal*, *symmetric*, and *independent of
-irrelevant alternatives* — i.e., independent across the indicators
+irrelevant alternatives* - i.e., independent across the indicators
 being aggregated.[^geomean-axioms] More practically, geometric mean is
 **non-compensatory**: a low value on one axis cannot be hidden by
 piling up high values on the others, the way it can with arithmetic
@@ -222,7 +222,7 @@ There is no universal "good architecture score." The systematic-
 mapping literature on software-metric thresholds is explicit that
 thresholds must be derived empirically from a benchmark population
 rather than asserted from intuition.[^thresholds-empirical] The bands
-below are derived from archy's own benchmark — nine widely-used Python
+below are derived from archy's own benchmark - nine widely-used Python
 libraries (pydantic, fastapi, flask, pytest, requests, click, rich,
 httpx, starlette) plus archy on archy. Full numbers in
 [`docs/CASE_STUDIES.md`](CASE_STUDIES.md).
@@ -232,7 +232,7 @@ httpx, starlette) plus archy on archy. Full numbers in
 | `≥ 0.65`    | Zero cycles, shallow tree (depth ≤ 4), distributed fan-out. Hard to reach without deliberate architectural discipline.   | archy (0.677)                              |
 | `0.50–0.65` | Strong on three axes; usually one weak axis (typically equality or acyclicity).                                          | starlette (0.546)                          |
 | `0.40–0.50` | "Typical mature library." One or two cycles plus some fan-out concentration. Most production libraries land here.        | httpx, click, rich, flask, requests, pytest, pydantic, fastapi (0.42–0.49) |
-| `0.30–0.40` | At least one axis collapsing — 3+ cycles, severe god-module, or a 12+ deep chain.                                        | None in the benchmark.                     |
+| `0.30–0.40` | At least one axis collapsing - 3+ cycles, severe god-module, or a 12+ deep chain.                                        | None in the benchmark.                     |
 | `< 0.30`    | Multiple axes weak simultaneously. Worth investigating before adding features.                                           | None in the benchmark.                     |
 
 Two things to note when reading these bands:
@@ -241,8 +241,8 @@ Two things to note when reading these bands:
    the benchmark, eight of nine libraries lose 0.5 or more on this
    axis to a single SCC. Adding one cycle drops acyclicity from 1.0 to
    0.5, which through the geometric mean caps the overall around
-   `0.84 × (other axes)^(3/4)`. This is a deliberate design choice —
-   cycles are the highest-signal pathology — but it means cross-
+   `0.84 × (other axes)^(3/4)`. This is a deliberate design choice -
+   cycles are the highest-signal pathology - but it means cross-
    project comparisons should always look at the breakdown, not just
    the overall.
 2. **Modularity has its own well-established literature band.** Newman
@@ -254,7 +254,7 @@ Two things to note when reading these bands:
    suggests the graph has no clear community structure, above ~0.80
    is unusual outside very small or already-decomposed codebases.
 
-When reading the breakdown, look at the **lowest** sub-metric first —
+When reading the breakdown, look at the **lowest** sub-metric first -
 geometric mean means that's the one bottlenecking the overall. The
 `Score.inputs` payload exposes the raw, un-normalized values
 (`raw_modularity`, `cycle_count`, `max_depth`, `raw_gini`,
@@ -269,7 +269,7 @@ what `archy score --record` and `archy trend` are for.
 
 sentrux ships a fifth sub-metric, **redundancy**: dead functions plus
 duplicate functions over total functions. archy intentionally omits
-it for now — static dead-code detection is fragile under dynamic
+it for now - static dead-code detection is fragile under dynamic
 dispatch, decorators, and entry-point guards (`if __name__ ==
 "__main__":`), and a noisy redundancy signal would degrade the
 aggregate it's meant to improve. Tracked in
@@ -284,10 +284,10 @@ comparisons will need a note.
 
 - Sentrux quality-signal design (the model archy follows): [sentrux/docs/quality-signal-design.md][sentrux-design]
 - Newman, M. E. J. *Modularity and community structure in networks.* PNAS, 2006. See also [Wikipedia: Modularity (networks)][modularity-wiki].
-- Clauset, A., Newman, M. E. J., Moore, C. *Finding community structure in very large networks.* Phys. Rev. E, 2004. — The greedy algorithm `greedy_modularity_communities` implements. [Paper PDF][cnm-paper-pdf].
+- Clauset, A., Newman, M. E. J., Moore, C. *Finding community structure in very large networks.* Phys. Rev. E, 2004. - The greedy algorithm `greedy_modularity_communities` implements. [Paper PDF][cnm-paper-pdf].
 - Tarjan, R. E. *Depth-first search and linear graph algorithms.* SIAM J. Computing, 1972. See also [Wikipedia: Tarjan's SCC algorithm][tarjan-scc].
 - Gini, C. (1912). Gini coefficient overview: [Wikipedia: Gini coefficient][gini-wiki].
-- Nash, J. F. *The Bargaining Problem.* Econometrica, 1950. — Geometric-mean axiomatization. See also [Mazziotta–Pareto on non-compensatory composite indices][mazziotta-pareto] for the practical case.
+- Nash, J. F. *The Bargaining Problem.* Econometrica, 1950. - Geometric-mean axiomatization. See also [Mazziotta–Pareto on non-compensatory composite indices][mazziotta-pareto] for the practical case.
 - NetworkX docs: [`greedy_modularity_communities`][nx-greedy], [`dag_longest_path_length`][nx-dag-longest], [`condensation`][nx-condensation].
 
 [sentrux-design]: https://github.com/sentrux/sentrux/blob/main/docs/quality-signal-design.md
@@ -310,6 +310,6 @@ comparisons will need a note.
 [^gini-bounds]: Gini ranges over `[0, 1)` for non-degenerate finite distributions: 0 is perfect equality, and the upper bound approaches 1 as concentration approaches a single recipient.
 [^gini-formula]: This is the standard "Brown" or sorted-rank formula, equivalent to `1 - 2 * AUC(Lorenz)` to the precision of trapezoidal integration.
 [^geomean-axioms]: For composite-index theory specifically, see Mazziotta & Pareto, *Methods for Constructing Composite Indices*, ISTAT, 2013, which formalizes why geometric-mean variants are the standard non-compensatory aggregator.
-[^non-compensatory]: "Non-compensatory" means a deficit on one indicator cannot be fully offset by surplus on another — the property that prevents gaming a single dimension. Arithmetic mean is fully compensatory; geometric mean is partially non-compensatory; the lexicographic minimum is fully non-compensatory.
+[^non-compensatory]: "Non-compensatory" means a deficit on one indicator cannot be fully offset by surplus on another - the property that prevents gaming a single dimension. Arithmetic mean is fully compensatory; geometric mean is partially non-compensatory; the lexicographic minimum is fully non-compensatory.
 [^thresholds-empirical]: See *Techniques for Calculating Software Product Metrics Threshold Values: A Systematic Mapping Study*, [Applied Sciences, 2021](https://www.mdpi.com/2076-3417/11/23/11377). The literature consensus is that universal thresholds across projects are unreliable; thresholds derived from a benchmark population (e.g., Mori et al., >3000 systems) outperform expert-asserted ones in fault detection.
 [^modularity-band]: Newman, *Modularity and community structure in networks*, [PNAS 2006](https://www.pnas.org/doi/10.1073/pnas.0601602103). The `Q ∈ [0.3, 0.7]` band has been replicated across biological networks (e.g., E. coli transcription `Qm = 0.54`, C. elegans synaptic network `Qm = 0.54`, human signal-transduction `Qm = 0.58`).
