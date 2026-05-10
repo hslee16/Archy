@@ -2,6 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/archy.svg)](https://pypi.org/project/archy/)
 [![Python](https://img.shields.io/pypi/pyversions/archy.svg)](https://pypi.org/project/archy/)
+[![CI](https://github.com/hslee16/archy/actions/workflows/ci.yml/badge.svg)](https://github.com/hslee16/archy/actions/workflows/ci.yml)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License](https://img.shields.io/pypi/l/archy.svg)](LICENSE)
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
