@@ -75,7 +75,7 @@ The minimum bar for shipping this beyond the experimental phase is that **at lea
 
 ## Known finding to set aside
 
-The repo currently fails the `graph layer must not reach policy/cli layers` contract because `archy.diff` (graph layer) imports from `archy.layers` (policy layer). This is a real pre-existing architectural drift surfaced by the wrap when this PR was developed; `archy check` doesn't catch it because archy.yaml's layer rules don't include `archy.diff` in any layer. Tracking separately; not part of the agent-loop test.
+The repo currently fails the `graph layer must not reach policy/cli layers` contract because `archy.diff` imports from `archy.layers`. The "graph layer" label here refers to the import-linter contract grouping in `.importlinter`, not archy.yaml - in archy.yaml, `archy.diff` is unlayered, which is why `archy check` doesn't flag the import. The wrap surfaced this drift exactly because import-linter's Forbidden contract requires you to enumerate the source set explicitly, forcing the missing layer assignment into the open. Tracking separately; not part of the agent-loop test.
 
 ## After the test
 

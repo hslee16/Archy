@@ -268,7 +268,6 @@ uv run pytest              # tests
 Next up:
 
 - [ ] `archy graph` MCP tool: expose the dep graph itself for agent-side reasoning
-- [ ] Score deltas (`archy_evolution`): per-component diffs vs. the last recorded run
 - [ ] Call graph: second edge type alongside imports
 - [ ] Design Structure Matrix (`archy dsm`)
 

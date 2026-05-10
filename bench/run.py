@@ -34,7 +34,11 @@ def load_manifest() -> list[dict]:
 def clone_or_update(proj: dict) -> Path:
     name = proj["name"]
     sha = proj["sha"]
-    if name == "archy":
+    if name == "archy" and sha == "HEAD":
+        # Dev convenience: when the manifest deliberately tracks HEAD, use
+        # the working tree so iterating on archy itself doesn't require
+        # repeated clones. Anything else (a tag or commit SHA) goes through
+        # the normal clone+checkout path so the result is reproducible.
         return REPO_ROOT
     target = WORKDIR / name
     if not target.exists():

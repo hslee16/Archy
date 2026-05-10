@@ -744,7 +744,7 @@ additive unless marked **Replace**.
 Empirical checks supporting load-bearing claims in the doc.
 
 The benchmark is now driven by a checked-in manifest at
-[`bench/projects.yaml`](../bench/projects.yaml) with **22 pinned
+[`bench/projects.yaml`](../bench/projects.yaml) with **23 pinned
 SHAs** spanning small CLI tools to very large frameworks across web
 / async / scientific / ORM / plugin-host / devops domains. The
 benchmark runner is [`bench/run.py`](../bench/run.py); run with
@@ -755,7 +755,7 @@ Specific validations referenced above:
 
 1. **Vulture false-positive rate** (section 12). Vulture 2.16 run with
    default settings (60% confidence) and at `--min-confidence 90` on
-   all 22 projects. 15 random findings per project spot-checked across
+   all 23 projects. 15 random findings per project spot-checked across
    FastAPI, pytest, and Django to identify dominant FP patterns.
 2. **NCCD vs depth correlation** (section 3). Computed CCD/ACD/NCCD
    on the original 9-library benchmark plus archy. Pearson correlation
