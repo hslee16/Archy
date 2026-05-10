@@ -17,44 +17,83 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any  # noqa: TID251  # phase B follow-up types compute_diff outputs
 
 from pydantic import BaseModel, ConfigDict
 
-from archy.cycles import find_cycles
+from archy.cycles import Cycle, CycleEdge, find_cycles
 from archy.layers import (
+    ForbidRule,
     LayerConfig,
+    Violation,
     discover_config,
     find_violations,
     load_config,
 )
-from archy.score import Score, compute_score
+from archy.score import Score, ScoreInputs, compute_score
 
 
 class Snapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     score: Score
-    cycles: tuple[dict[str, Any], ...]
-    violations: tuple[dict[str, Any], ...]
+    cycles: tuple[Cycle, ...]
+    violations: tuple[Violation, ...]
+
+
+class ScoreDelta(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    overall: float
+    modularity: float
+    acyclicity: float
+    depth: float
+    equality: float
+
+
+class CycleSetDiff(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    added: tuple[Cycle, ...] = ()
+    resolved: tuple[Cycle, ...] = ()
+
+
+class ViolationSetDiff(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    added: tuple[Violation, ...] = ()
+    resolved: tuple[Violation, ...] = ()
+
+
+class DiffReport(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    score_delta: ScoreDelta
+    cycles: CycleSetDiff
+    violations: ViolationSetDiff
 
 
 def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
     """Capture score, cycles, and layer violations from a single graph build."""
     score = compute_score(graph)
-    cycles = tuple(_cycle_to_dict(c) for c in find_cycles(graph, min_size=2))
-    violations: tuple[dict[str, Any], ...] = ()
+    cycles = tuple(find_cycles(graph, min_size=2))
+    violations: tuple[Violation, ...] = ()
     config = _load_config_if_present(config_path)
     if config is not None:
-        violations = tuple(_violation_to_dict(v) for v in find_violations(graph, config))
+        violations = tuple(find_violations(graph, config))
     return Snapshot(score=score, cycles=cycles, violations=violations)
 
 
-def snapshot_to_dict(snap: Snapshot) -> dict[str, Any]:
+def snapshot_to_dict(snap: Snapshot) -> dict[str, object]:
+    """Serialize to the legacy JSON wire shape (rule.from/to, score.components).
+
+    We hand-build this rather than using `model_dump()` because the legacy
+    shape predates pydantic and existing `.archy/baseline.json` files on
+    disk depend on it.
+    """
     return {
         "score": _score_to_dict(snap.score),
-        "cycles": list(snap.cycles),
-        "violations": list(snap.violations),
+        "cycles": [_cycle_to_dict(c) for c in snap.cycles],
+        "violations": [_violation_to_dict(v) for v in snap.violations],
     }
 
 
@@ -70,27 +109,19 @@ def read_snapshot(path: Path) -> Snapshot | None:
     return _snapshot_from_dict(payload)
 
 
-def compute_diff(baseline: Snapshot, current: Snapshot) -> dict[str, Any]:
+def compute_diff(baseline: Snapshot, current: Snapshot) -> DiffReport:
     """Compute per-component score deltas plus added/resolved cycles & violations.
 
     Cycle identity = the frozenset of member modules; violation identity =
-    (rule.from, rule.to, source, target). These mean a cycle that gains an
-    extra module reads as "resolved + added" rather than "modified", which
-    is fine for a first-pass agent signal.
+    (rule.from_layer, rule.to_layer, source, target). These mean a cycle
+    that gains an extra module reads as "resolved + added" rather than
+    "modified", which is fine for a first-pass agent signal.
     """
-    return {
-        "score_delta": _score_delta(baseline.score, current.score),
-        "cycles": _set_diff(
-            baseline.cycles,
-            current.cycles,
-            key=lambda c: frozenset(c["modules"]),
-        ),
-        "violations": _set_diff(
-            baseline.violations,
-            current.violations,
-            key=lambda v: (v["rule"]["from"], v["rule"]["to"], v["source"], v["target"]),
-        ),
-    }
+    return DiffReport(
+        score_delta=_score_delta(baseline.score, current.score),
+        cycles=_cycle_set_diff(baseline.cycles, current.cycles),
+        violations=_violation_set_diff(baseline.violations, current.violations),
+    )
 
 
 # --- internals ----------------------------------------------------------------
@@ -110,7 +141,7 @@ def discover_config_for(path: Path) -> Path | None:
     return discover_config(path)
 
 
-def _cycle_to_dict(cycle) -> dict[str, Any]:
+def _cycle_to_dict(cycle: Cycle) -> dict[str, object]:
     return {
         "modules": list(cycle.modules),
         "edges": [
@@ -119,7 +150,7 @@ def _cycle_to_dict(cycle) -> dict[str, Any]:
     }
 
 
-def _violation_to_dict(v) -> dict[str, Any]:
+def _violation_to_dict(v: Violation) -> dict[str, object]:
     return {
         "rule": {"from": v.rule.from_layer, "to": v.rule.to_layer},
         "source": v.source,
@@ -128,7 +159,7 @@ def _violation_to_dict(v) -> dict[str, Any]:
     }
 
 
-def _score_to_dict(s: Score) -> dict[str, Any]:
+def _score_to_dict(s: Score) -> dict[str, object]:
     return {
         "overall": s.overall,
         "components": {
@@ -141,49 +172,106 @@ def _score_to_dict(s: Score) -> dict[str, Any]:
     }
 
 
-def _snapshot_from_dict(payload: dict[str, Any]) -> Snapshot:
-    from archy.score import ScoreInputs
-
-    score_dict = payload["score"]
-    components = score_dict["components"]
-    raw_inputs = dict(score_dict["inputs"])
+def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
+    score_dict = _expect_dict(payload["score"])
+    components = _expect_dict(score_dict["components"])
+    raw_inputs = dict(_expect_dict(score_dict["inputs"]))
     # tangle_ratio added post-tangle-ratio rollout; default for old snapshots.
     raw_inputs.setdefault("tangle_ratio", 0.0)
-    inputs = ScoreInputs(**raw_inputs)
+    # ScoreInputs.model_validate handles per-field type coercion and raises a
+    # clear ValidationError if a key is missing or wrongly typed.
+    inputs = ScoreInputs.model_validate(raw_inputs)
     score = Score(
-        overall=score_dict["overall"],
-        modularity=components["modularity"],
-        acyclicity=components["acyclicity"],
-        depth=components["depth"],
-        equality=components["equality"],
+        overall=_expect_float(score_dict["overall"]),
+        modularity=_expect_float(components["modularity"]),
+        acyclicity=_expect_float(components["acyclicity"]),
+        depth=_expect_float(components["depth"]),
+        equality=_expect_float(components["equality"]),
         inputs=inputs,
     )
-    return Snapshot(
-        score=score,
-        cycles=tuple(payload.get("cycles", ())),
-        violations=tuple(payload.get("violations", ())),
+    cycles = tuple(
+        _cycle_from_dict(_expect_dict(c)) for c in _expect_list(payload.get("cycles", []))
+    )
+    violations = tuple(
+        _violation_from_dict(_expect_dict(v)) for v in _expect_list(payload.get("violations", []))
+    )
+    return Snapshot(score=score, cycles=cycles, violations=violations)
+
+
+def _cycle_from_dict(d: dict[str, object]) -> Cycle:
+    edges = tuple(
+        CycleEdge(
+            source=str(_expect_dict(e)["source"]),
+            target=str(_expect_dict(e)["target"]),
+            lines=tuple(_expect_int(x) for x in _expect_list(_expect_dict(e)["lines"])),
+        )
+        for e in _expect_list(d["edges"])
+    )
+    return Cycle(modules=tuple(str(m) for m in _expect_list(d["modules"])), edges=edges)
+
+
+def _violation_from_dict(d: dict[str, object]) -> Violation:
+    rule = _expect_dict(d["rule"])
+    return Violation(
+        rule=ForbidRule(from_layer=str(rule["from"]), to_layer=str(rule["to"])),
+        source=str(d["source"]),
+        target=str(d["target"]),
+        lines=tuple(_expect_int(x) for x in _expect_list(d["lines"])),
     )
 
 
-def _score_delta(baseline: Score, current: Score) -> dict[str, float]:
-    return {
-        "overall": current.overall - baseline.overall,
-        "modularity": current.modularity - baseline.modularity,
-        "acyclicity": current.acyclicity - baseline.acyclicity,
-        "depth": current.depth - baseline.depth,
-        "equality": current.equality - baseline.equality,
-    }
+def _score_delta(baseline: Score, current: Score) -> ScoreDelta:
+    return ScoreDelta(
+        overall=current.overall - baseline.overall,
+        modularity=current.modularity - baseline.modularity,
+        acyclicity=current.acyclicity - baseline.acyclicity,
+        depth=current.depth - baseline.depth,
+        equality=current.equality - baseline.equality,
+    )
 
 
-def _set_diff(
-    baseline: tuple[dict[str, Any], ...],
-    current: tuple[dict[str, Any], ...],
-    *,
-    key,
-) -> dict[str, list[dict[str, Any]]]:
-    baseline_keys = {key(item) for item in baseline}
-    current_keys = {key(item) for item in current}
-    return {
-        "added": [item for item in current if key(item) not in baseline_keys],
-        "resolved": [item for item in baseline if key(item) not in current_keys],
-    }
+def _cycle_set_diff(baseline: tuple[Cycle, ...], current: tuple[Cycle, ...]) -> CycleSetDiff:
+    baseline_keys = {frozenset(c.modules) for c in baseline}
+    current_keys = {frozenset(c.modules) for c in current}
+    return CycleSetDiff(
+        added=tuple(c for c in current if frozenset(c.modules) not in baseline_keys),
+        resolved=tuple(c for c in baseline if frozenset(c.modules) not in current_keys),
+    )
+
+
+def _violation_set_diff(
+    baseline: tuple[Violation, ...], current: tuple[Violation, ...]
+) -> ViolationSetDiff:
+    def _key(v: Violation) -> tuple[str, str, str, str]:
+        return (v.rule.from_layer, v.rule.to_layer, v.source, v.target)
+
+    baseline_keys = {_key(v) for v in baseline}
+    current_keys = {_key(v) for v in current}
+    return ViolationSetDiff(
+        added=tuple(v for v in current if _key(v) not in baseline_keys),
+        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
+    )
+
+
+def _expect_dict(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"expected mapping, got {type(value).__name__}")
+    return {str(k): v for k, v in value.items()}
+
+
+def _expect_list(value: object) -> list[object]:
+    if not isinstance(value, list):
+        raise ValueError(f"expected list, got {type(value).__name__}")
+    return list(value)
+
+
+def _expect_float(value: object) -> float:
+    if not isinstance(value, (int, float)):
+        raise ValueError(f"expected number, got {type(value).__name__}")
+    return float(value)
+
+
+def _expect_int(value: object) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise ValueError(f"expected int, got {type(value).__name__}")
+    return value

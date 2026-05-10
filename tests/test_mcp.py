@@ -69,12 +69,11 @@ def test_run_score_payload_shape(acyclic_project: Path):
         strict=False,
         strict_tolerance=0.02,
     )
-    assert "overall" in payload
-    assert set(payload["components"]) == {"modularity", "acyclicity", "depth", "equality"}
-    assert {"module_count", "edge_count", "cycle_count", "max_depth", "community_count"} <= set(
-        payload["inputs"]
-    )
-    assert "gate" not in payload
+    assert payload.overall > 0
+    assert payload.components.modularity is not None
+    assert payload.components.acyclicity is not None
+    assert payload.inputs.module_count >= 0
+    assert payload.gate is None
 
 
 def test_run_score_strict_includes_gate_block(acyclic_project: Path):
@@ -85,8 +84,8 @@ def test_run_score_strict_includes_gate_block(acyclic_project: Path):
         strict=True,
         strict_tolerance=0.02,
     )
-    gate = payload["gate"]
-    assert {"previous", "current", "delta", "tolerance", "passed"} <= set(gate)
+    assert payload.gate is not None
+    assert payload.gate.tolerance == 0.02
 
 
 def test_run_cycles_payload_shape(tmp_path: Path):
@@ -96,9 +95,9 @@ def test_run_cycles_payload_shape(tmp_path: Path):
     (pkg / "a.py").write_text("from pkg.b import thing\n")
     (pkg / "b.py").write_text("from pkg.a import other\n")
     [cycle] = _run_cycles(tmp_path, min_size=2, internal_only=True)
-    assert sorted(cycle["modules"]) == ["pkg.a", "pkg.b"]
-    edge = cycle["edges"][0]
-    assert {"source", "target", "lines"} <= set(edge)
+    assert sorted(cycle.modules) == ["pkg.a", "pkg.b"]
+    edge = cycle.edges[0]
+    assert edge.source and edge.target
 
 
 def test_run_check_payload_shape(tmp_path: Path):
@@ -121,10 +120,10 @@ def test_run_check_payload_shape(tmp_path: Path):
         "  - {from: core, to: cli}\n"
     )
     result = _run_check(tmp_path, config_path=None)
-    assert result["passed"] is False
-    [violation] = result["violations"]
-    assert violation["rule"] == {"from": "core", "to": "cli"}
-    assert {"source", "target", "lines"} <= set(violation)
+    assert result.passed is False
+    [violation] = result.violations
+    assert violation.rule.from_layer == "core"
+    assert violation.rule.to_layer == "cli"
 
 
 def test_run_trend_payload_shape(acyclic_project: Path):
@@ -136,8 +135,8 @@ def test_run_trend_payload_shape(acyclic_project: Path):
         strict_tolerance=0.02,
     )
     [row] = _run_trend(acyclic_project, last_n=10)
-    assert {"timestamp", "commit", "branch", "score", "inputs"} <= set(row)
-    assert "overall" in row["score"]
+    assert row.timestamp
+    assert row.score.overall > 0
 
 
 def test_run_impact_payload_shape(tmp_path: Path):
@@ -147,27 +146,34 @@ def test_run_impact_payload_shape(tmp_path: Path):
     (pkg / "lib.py").write_text("")
     (pkg / "main.py").write_text("from app.lib import x\n")
     result = _run_impact(tmp_path, files=[Path("app/lib.py")])
-    assert {"changed", "unresolved", "impacted"} == set(result)
-    assert result["changed"] == ["app.lib"]
-    assert result["impacted"] == ["app.main"]
+    assert result.changed == ("app.lib",)
+    assert result.impacted == ("app.main",)
 
 
 def test_run_snapshot_writes_baseline_and_returns_payload(acyclic_project: Path):
     payload = _run_snapshot(acyclic_project)
-    assert {"score", "cycles", "violations", "baseline_path"} <= set(payload)
+    assert payload.baseline_path.endswith("baseline.json")
+    assert payload.score.overall > 0
     assert (acyclic_project / ".archy" / "baseline.json").exists()
 
 
 def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
+    from archy.mcp import DiffErrorPayload
+
     result = _run_diff(acyclic_project)
-    assert "error" in result
+    assert isinstance(result, DiffErrorPayload)
+    assert "no baseline" in result.error
 
 
 def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
+    from archy.diff import DiffReport
+
     _run_snapshot(acyclic_project)
     result = _run_diff(acyclic_project)
-    assert result["score_delta"]["overall"] == 0.0
-    assert result["cycles"] == {"added": [], "resolved": []}
+    assert isinstance(result, DiffReport)
+    assert result.score_delta.overall == 0.0
+    assert result.cycles.added == ()
+    assert result.cycles.resolved == ()
 
 
 def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):

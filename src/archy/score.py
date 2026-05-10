@@ -130,9 +130,10 @@ def compute_equality(graph: nx.DiGraph) -> tuple[float, float]:
 
 
 def _gini(values: list[int]) -> float:
-    # Standard sorted formula:
-    #   G = sum_{i=1..n} (2i - n - 1) * x_i / (n * sum(x_i))
-    # Returns a value in [0, 1) for non-degenerate inputs (i.e., sum > 0).
+    # Sorted-rank form (O(n log n)) rather than the canonical pairwise-
+    # difference definition (O(n^2)); call sites pass per-module out-degrees
+    # which can run into the hundreds, and the score recomputes on every
+    # snapshot/diff in the agent loop.
     sorted_v = sorted(values)
     n = len(sorted_v)
     total = sum(sorted_v)

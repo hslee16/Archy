@@ -9,20 +9,25 @@ way the README pitches.
 
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.
+
+Tool returns are pydantic models; FastMCP serializes them to JSON for
+the MCP client. The model shapes are the public wire contract for any
+agent calling these tools.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any  # noqa: TID251  # pydantic conversion in follow-up PR
 
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict
 
-from archy.cycles import find_cycles
+from archy.contracts import ContractCheck
+from archy.cycles import Cycle, find_cycles
 from archy.diff import (
+    DiffReport,
     compute_diff,
     read_snapshot,
-    snapshot_to_dict,
     take_snapshot,
     write_snapshot,
 )
@@ -30,14 +35,15 @@ from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
-from archy.impact import find_impact
+from archy.impact import Impact, find_impact
 from archy.layers import (
     LayerConfigError,
+    Violation,
     discover_config,
     find_violations,
     load_config,
 )
-from archy.score import compute_score
+from archy.score import Score, ScoreInputs, compute_score
 
 _AGENT_LOOP_PROMPT = """\
 # archy agent loop
@@ -63,6 +69,109 @@ between edits. The loop is:
 recorded run; it's lighter than the snapshot/diff loop and useful as
 the final pre-commit check.
 """
+
+
+# --- response models ----------------------------------------------------------
+#
+# These shape the MCP wire format. Each tool returns one of these; FastMCP
+# turns the model into JSON for the client.
+
+
+class ScoreComponents(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    modularity: float
+    acyclicity: float
+    depth: float
+    equality: float
+
+
+class ScoreGate(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    previous: float | None
+    previous_commit: str | None = None
+    previous_timestamp: str | None = None
+    current: float
+    delta: float | None
+    tolerance: float
+    passed: bool
+
+
+class ScorePayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    overall: float
+    components: ScoreComponents
+    inputs: ScoreInputs
+    gate: ScoreGate | None = None
+
+
+class CheckPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    config_path: str
+    violations: tuple[Violation, ...]
+    passed: bool
+
+
+class ContractsPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    available: bool
+    error: str | None = None
+    all_kept: bool | None = None
+    kept: int | None = None
+    broken: int | None = None
+    module_count: int | None = None
+    import_count: int | None = None
+    contracts: tuple[ContractCheck, ...] = ()
+
+
+class SnapshotPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    score: Score
+    cycles: tuple[Cycle, ...]
+    violations: tuple[Violation, ...]
+    baseline_path: str
+
+
+class DiffErrorPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    error: str
+
+
+class TrendRowScore(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    overall: float
+    modularity: float
+    acyclicity: float
+    depth: float
+    equality: float
+
+
+class TrendRowInputs(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module_count: int
+    edge_count: int
+    cycle_count: int
+    tangle_ratio: float
+    max_depth: int
+    community_count: int
+
+
+class TrendRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    timestamp: str
+    commit: str | None
+    branch: str | None
+    score: TrendRowScore
+    inputs: TrendRowInputs
 
 
 def create_server() -> FastMCP:
@@ -101,7 +210,7 @@ def _register_tools(server: FastMCP) -> None:
         record: bool = False,
         strict: bool = False,
         strict_tolerance: float = 0.02,
-    ) -> dict[str, Any]:
+    ) -> ScorePayload:
         return _run_score(
             Path(path),
             internal_only=internal_only,
@@ -121,7 +230,7 @@ def _register_tools(server: FastMCP) -> None:
         path: str,
         min_size: int = 2,
         internal_only: bool = True,
-    ) -> list[dict[str, Any]]:
+    ) -> list[Cycle]:
         return _run_cycles(Path(path), min_size=min_size, internal_only=internal_only)
 
     @server.tool(
@@ -137,7 +246,7 @@ def _register_tools(server: FastMCP) -> None:
     def archy_check(
         path: str,
         config_path: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> CheckPayload:
         return _run_check(Path(path), config_path=Path(config_path) if config_path else None)
 
     @server.tool(
@@ -156,7 +265,7 @@ def _register_tools(server: FastMCP) -> None:
     def archy_contracts(
         path: str,
         config_path: str | None = None,
-    ) -> dict[str, Any]:
+    ) -> ContractsPayload:
         return _run_contracts(
             Path(path),
             config_filename=Path(config_path) if config_path else None,
@@ -170,7 +279,7 @@ def _register_tools(server: FastMCP) -> None:
             "can compare deltas."
         ),
     )
-    def archy_trend(path: str, last_n: int = 10) -> list[dict[str, Any]]:
+    def archy_trend(path: str, last_n: int = 10) -> list[TrendRow]:
         return _run_trend(Path(path), last_n=last_n)
 
     @server.tool(
@@ -186,7 +295,7 @@ def _register_tools(server: FastMCP) -> None:
     def archy_impact(
         path: str,
         files: list[str],
-    ) -> dict[str, Any]:
+    ) -> Impact:
         return _run_impact(Path(path), files=[Path(f) for f in files])
 
     @server.tool(
@@ -197,7 +306,7 @@ def _register_tools(server: FastMCP) -> None:
             "start of an editing session. See the `loop` prompt for full usage."
         ),
     )
-    def archy_snapshot(path: str) -> dict[str, Any]:
+    def archy_snapshot(path: str) -> SnapshotPayload:
         return _run_snapshot(Path(path))
 
     @server.tool(
@@ -209,7 +318,7 @@ def _register_tools(server: FastMCP) -> None:
             "edits to localize regressions; see the `loop` prompt."
         ),
     )
-    def archy_diff(path: str) -> dict[str, Any]:
+    def archy_diff(path: str) -> DiffReport | DiffErrorPayload:
         return _run_diff(Path(path))
 
     @server.tool(
@@ -221,7 +330,7 @@ def _register_tools(server: FastMCP) -> None:
             "can detect degradation."
         ),
     )
-    def archy_record_baseline(path: str, internal_only: bool = True) -> dict[str, Any]:
+    def archy_record_baseline(path: str, internal_only: bool = True) -> ScorePayload:
         return _run_score(
             Path(path),
             internal_only=internal_only,
@@ -231,7 +340,7 @@ def _register_tools(server: FastMCP) -> None:
         )
 
 
-# --- thin internals - the same shapes the CLI emits as JSON. ------------------
+# --- thin internals ----------------------------------------------------------
 
 
 def _run_score(
@@ -241,77 +350,58 @@ def _run_score(
     record: bool,
     strict: bool,
     strict_tolerance: float,
-) -> dict[str, Any]:
+) -> ScorePayload:
     graph = _load_graph(path, internal_only=internal_only)
     score = compute_score(graph)
     history_path = path / ".archy" / "history.jsonl"
 
-    gate: dict[str, Any] | None = None
+    gate: ScoreGate | None = None
     if strict:
         rows = read_history(history_path)
         if rows:
             previous = rows[-1]
             delta = score.overall - previous.overall
-            gate = {
-                "previous": previous.overall,
-                "previous_commit": previous.commit,
-                "previous_timestamp": previous.timestamp,
-                "current": score.overall,
-                "delta": delta,
-                "tolerance": strict_tolerance,
-                "passed": delta >= -strict_tolerance,
-            }
+            gate = ScoreGate(
+                previous=previous.overall,
+                previous_commit=previous.commit,
+                previous_timestamp=previous.timestamp,
+                current=score.overall,
+                delta=delta,
+                tolerance=strict_tolerance,
+                passed=delta >= -strict_tolerance,
+            )
         else:
-            gate = {
-                "previous": None,
-                "current": score.overall,
-                "delta": None,
-                "tolerance": strict_tolerance,
-                "passed": True,
-            }
+            gate = ScoreGate(
+                previous=None,
+                current=score.overall,
+                delta=None,
+                tolerance=strict_tolerance,
+                passed=True,
+            )
 
     if record:
         commit, branch = git_metadata(path)
         append_history(history_path, row_from_score(score, commit=commit, branch=branch))
 
-    payload: dict[str, Any] = {
-        "overall": score.overall,
-        "components": {
-            "modularity": score.modularity,
-            "acyclicity": score.acyclicity,
-            "depth": score.depth,
-            "equality": score.equality,
-        },
-        "inputs": {
-            "module_count": score.inputs.module_count,
-            "edge_count": score.inputs.edge_count,
-            "cycle_count": score.inputs.cycle_count,
-            "tangle_ratio": score.inputs.tangle_ratio,
-            "max_depth": score.inputs.max_depth,
-            "community_count": score.inputs.community_count,
-            "raw_modularity": score.inputs.raw_modularity,
-            "raw_gini": score.inputs.raw_gini,
-        },
-    }
-    if gate is not None:
-        payload["gate"] = gate
-    return payload
+    return ScorePayload(
+        overall=score.overall,
+        components=ScoreComponents(
+            modularity=score.modularity,
+            acyclicity=score.acyclicity,
+            depth=score.depth,
+            equality=score.equality,
+        ),
+        inputs=score.inputs,
+        gate=gate,
+    )
 
 
-def _run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[dict[str, Any]]:
+def _run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[Cycle]:
     graph = _load_graph(path, internal_only=internal_only)
-    return [
-        {
-            "modules": list(c.modules),
-            "edges": [
-                {"source": e.source, "target": e.target, "lines": list(e.lines)} for e in c.edges
-            ],
-        }
-        for c in find_cycles(graph, min_size=min_size)
-    ]
+    return list(find_cycles(graph, min_size=min_size))
 
 
-def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
+def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload:
     if config_path is None:
         discovered = discover_config(path)
         if discovered is None:
@@ -326,22 +416,14 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
         extra_roots=config.roots,
     )
     violations = find_violations(graph, config)
-    return {
-        "config_path": str(config_path),
-        "violations": [
-            {
-                "rule": {"from": v.rule.from_layer, "to": v.rule.to_layer},
-                "source": v.source,
-                "target": v.target,
-                "lines": list(v.lines),
-            }
-            for v in violations
-        ],
-        "passed": not violations,
-    }
+    return CheckPayload(
+        config_path=str(config_path),
+        violations=tuple(violations),
+        passed=not violations,
+    )
 
 
-def _run_contracts(path: Path, *, config_filename: Path | None) -> dict[str, Any]:
+def _run_contracts(path: Path, *, config_filename: Path | None) -> ContractsPayload:
     from archy.contracts import (
         ContractsConfigError,
         ContractsNotAvailable,
@@ -351,86 +433,77 @@ def _run_contracts(path: Path, *, config_filename: Path | None) -> dict[str, Any
     try:
         result = run_contracts(path, config_filename=config_filename)
     except ContractsNotAvailable as exc:
-        return {"available": False, "error": str(exc)}
+        return ContractsPayload(available=False, error=str(exc))
     except ContractsConfigError as exc:
-        return {"available": True, "error": str(exc)}
+        return ContractsPayload(available=True, error=str(exc))
 
-    return {
-        "available": True,
-        "all_kept": result.all_kept,
-        "kept": result.kept,
-        "broken": result.broken,
-        "module_count": result.module_count,
-        "import_count": result.import_count,
-        "contracts": [
-            {
-                "name": c.name,
-                "type": c.contract_type,
-                "kept": c.kept,
-                "metadata": c.metadata,
-                "warnings": list(c.warnings),
-            }
-            for c in result.contracts
-        ],
-    }
+    return ContractsPayload(
+        available=True,
+        all_kept=result.all_kept,
+        kept=result.kept,
+        broken=result.broken,
+        module_count=result.module_count,
+        import_count=result.import_count,
+        contracts=result.contracts,
+    )
 
 
-def _run_snapshot(path: Path) -> dict[str, Any]:
+def _run_snapshot(path: Path) -> SnapshotPayload:
     graph = _load_graph(path, internal_only=True)
     config_path = discover_config(path)
     snap = take_snapshot(graph, config_path=config_path)
     target = path / ".archy" / "baseline.json"
     write_snapshot(snap, target)
-    payload = snapshot_to_dict(snap)
-    payload["baseline_path"] = str(target)
-    return payload
+    return SnapshotPayload(
+        score=snap.score,
+        cycles=snap.cycles,
+        violations=snap.violations,
+        baseline_path=str(target),
+    )
 
 
-def _run_diff(path: Path) -> dict[str, Any]:
+def _run_diff(path: Path) -> DiffReport | DiffErrorPayload:
     target = path / ".archy" / "baseline.json"
     baseline = read_snapshot(target)
     if baseline is None:
-        return {"error": (f"no baseline at {target}; call archy_snapshot first to capture one.")}
+        return DiffErrorPayload(
+            error=f"no baseline at {target}; call archy_snapshot first to capture one."
+        )
     graph = _load_graph(path, internal_only=True)
     current = take_snapshot(graph, config_path=discover_config(path))
     return compute_diff(baseline, current)
 
 
-def _run_impact(path: Path, *, files: list[Path]) -> dict[str, Any]:
+def _run_impact(path: Path, *, files: list[Path]) -> Impact:
     graph = _load_graph(path, internal_only=True)
     resolved = [path / f if not f.is_absolute() else f for f in files]
-    result = find_impact(graph, resolved)
-    return {
-        "changed": list(result.changed),
-        "unresolved": list(result.unresolved),
-        "impacted": list(result.impacted),
-    }
+    return find_impact(graph, resolved)
 
 
-def _run_trend(path: Path, *, last_n: int) -> list[dict[str, Any]]:
+def _run_trend(path: Path, *, last_n: int) -> list[TrendRow]:
     rows = read_history(path / ".archy" / "history.jsonl")
     window = rows[-last_n:] if last_n > 0 else rows
     return [
-        {
-            "timestamp": r.timestamp,
-            "commit": r.commit,
-            "branch": r.branch,
-            "score": {
-                "overall": r.overall,
-                "modularity": r.modularity,
-                "acyclicity": r.acyclicity,
-                "depth": r.depth,
-                "equality": r.equality,
-            },
-            "inputs": {
-                "module_count": r.module_count,
-                "edge_count": r.edge_count,
-                "cycle_count": r.cycle_count,
-                "tangle_ratio": r.tangle_ratio,
-                "max_depth": r.max_depth,
-                "community_count": r.community_count,
-            },
-        }
+        TrendRow(
+            timestamp=r.timestamp,
+            commit=r.commit,
+            branch=r.branch,
+            score=TrendRowScore(
+                overall=r.overall,
+                modularity=r.modularity,
+                acyclicity=r.acyclicity,
+                depth=r.depth,
+                equality=r.equality,
+            ),
+            inputs=TrendRowInputs(
+                module_count=r.module_count,
+                edge_count=r.edge_count,
+                cycle_count=r.cycle_count,
+                tangle_ratio=r.tangle_ratio,
+                max_depth=r.max_depth,
+                community_count=r.community_count,
+            ),
+        )
         for r in window
     ]
 

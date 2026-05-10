@@ -19,6 +19,7 @@ from archy.contracts import (
 )
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
+    DiffReport,
     Snapshot,
     compute_diff,
     read_snapshot,
@@ -397,7 +398,7 @@ def diff(path: Path, baseline_path: Path | None, fmt: str) -> None:
     current = take_snapshot(g, config_path=discover_config(path))
     result = compute_diff(baseline, current)
     if fmt == "json":
-        click.echo(json.dumps(result, indent=2, sort_keys=True))
+        click.echo(result.model_dump_json(indent=2))
     else:
         click.echo(_diff_to_text(result))
 
@@ -604,30 +605,28 @@ def _snapshot_to_text(snap: Snapshot) -> str:
     )
 
 
-def _diff_to_text(result: dict) -> str:
-    deltas = result["score_delta"]
+def _diff_to_text(result: DiffReport) -> str:
+    deltas = result.score_delta
     lines = ["# score deltas (current - baseline):"]
     for name in ("overall", "modularity", "acyclicity", "depth", "equality"):
-        lines.append(f"  {name:11s} {deltas[name]:+.3f}")
-    cycles = result["cycles"]
+        lines.append(f"  {name:11s} {getattr(deltas, name):+.3f}")
+    cycles = result.cycles
     lines.append("")
-    lines.append(f"# cycles: +{len(cycles['added'])} added, -{len(cycles['resolved'])} resolved")
-    for c in cycles["added"]:
-        lines.append(f"  + cycle: {', '.join(c['modules'])}")
-    for c in cycles["resolved"]:
-        lines.append(f"  - cycle (resolved): {', '.join(c['modules'])}")
-    violations = result["violations"]
+    lines.append(f"# cycles: +{len(cycles.added)} added, -{len(cycles.resolved)} resolved")
+    for c in cycles.added:
+        lines.append(f"  + cycle: {', '.join(c.modules)}")
+    for c in cycles.resolved:
+        lines.append(f"  - cycle (resolved): {', '.join(c.modules)}")
+    violations = result.violations
     lines.append("")
     lines.append(
-        f"# violations: +{len(violations['added'])} added, -{len(violations['resolved'])} resolved"
+        f"# violations: +{len(violations.added)} added, -{len(violations.resolved)} resolved"
     )
-    for v in violations["added"]:
-        lines.append(
-            f"  + {v['source']} -> {v['target']}  ({v['rule']['from']} -> {v['rule']['to']})"
-        )
-    for v in violations["resolved"]:
-        rule = f"{v['rule']['from']} -> {v['rule']['to']}"
-        lines.append(f"  - {v['source']} -> {v['target']}  resolved ({rule})")
+    for v in violations.added:
+        lines.append(f"  + {v.source} -> {v.target}  ({v.rule.from_layer} -> {v.rule.to_layer})")
+    for v in violations.resolved:
+        rule = f"{v.rule.from_layer} -> {v.rule.to_layer}"
+        lines.append(f"  - {v.source} -> {v.target}  resolved ({rule})")
     return "\n".join(lines)
 
 

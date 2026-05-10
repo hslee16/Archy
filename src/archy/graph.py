@@ -132,7 +132,7 @@ def _find_package_roots(
     """Return absolute paths to top-level package directories under root."""
     package_dirs: set[Path] = set()
     for path in root.rglob("__init__.py"):
-        if any(part in ignored for part in path.parts):
+        if _is_ignored(path, ignored):
             continue
         package_dirs.add(path.parent.resolve())
 
@@ -156,9 +156,13 @@ def _find_package_roots(
 
 def _iter_python_files(root: Path, ignored: frozenset[str]) -> Iterable[Path]:
     for path in sorted(root.rglob("*.py")):
-        if any(part in ignored for part in path.parts):
+        if _is_ignored(path, ignored):
             continue
         yield path
+
+
+def _is_ignored(path: Path, ignored: frozenset[str]) -> bool:
+    return any(part in ignored for part in path.parts)
 
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:

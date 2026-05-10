@@ -33,9 +33,11 @@ def test_diff_clean_baseline_clean_current_is_zero(tmp_path: Path):
     g = build_graph(project)
     snap = take_snapshot(g)
     result = compute_diff(snap, snap)
-    assert result["score_delta"]["overall"] == 0.0
-    assert result["cycles"] == {"added": [], "resolved": []}
-    assert result["violations"] == {"added": [], "resolved": []}
+    assert result.score_delta.overall == 0.0
+    assert result.cycles.added == ()
+    assert result.cycles.resolved == ()
+    assert result.violations.added == ()
+    assert result.violations.resolved == ()
 
 
 def test_diff_flags_newly_introduced_cycle(tmp_path: Path):
@@ -46,10 +48,10 @@ def test_diff_flags_newly_introduced_cycle(tmp_path: Path):
     (project / "pkg" / "b.py").write_text("from pkg.a import thing\n")
     current = take_snapshot(build_graph(project))
     result = compute_diff(baseline, current)
-    assert result["score_delta"]["acyclicity"] < 0
-    assert len(result["cycles"]["added"]) == 1
-    assert set(result["cycles"]["added"][0]["modules"]) == {"pkg.a", "pkg.b"}
-    assert result["cycles"]["resolved"] == []
+    assert result.score_delta.acyclicity < 0
+    assert len(result.cycles.added) == 1
+    assert set(result.cycles.added[0].modules) == {"pkg.a", "pkg.b"}
+    assert result.cycles.resolved == ()
 
 
 def test_diff_flags_resolved_cycle(tmp_path: Path):
@@ -62,8 +64,8 @@ def test_diff_flags_resolved_cycle(tmp_path: Path):
     (project / "pkg" / "b.py").write_text("")
     current = take_snapshot(build_graph(project))
     result = compute_diff(baseline, current)
-    assert result["cycles"]["added"] == []
-    assert len(result["cycles"]["resolved"]) == 1
+    assert result.cycles.added == ()
+    assert len(result.cycles.resolved) == 1
 
 
 def test_diff_flags_newly_introduced_violation(tmp_path: Path):
@@ -93,7 +95,8 @@ def test_diff_flags_newly_introduced_violation(tmp_path: Path):
     (core / "api.py").write_text("from myapp.cli.runner import go\n")
     current = take_snapshot(build_graph(tmp_path), config_path=config_path)
     result = compute_diff(baseline, current)
-    assert len(result["violations"]["added"]) == 1
-    [added] = result["violations"]["added"]
-    assert added["rule"] == {"from": "core", "to": "cli"}
-    assert result["violations"]["resolved"] == []
+    assert len(result.violations.added) == 1
+    [added] = result.violations.added
+    assert added.rule.from_layer == "core"
+    assert added.rule.to_layer == "cli"
+    assert result.violations.resolved == ()
