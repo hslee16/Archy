@@ -2,16 +2,22 @@
 
 archy.yaml ships direct-edge layer rules; import-linter ships transitive
 contracts (Layers, Forbidden, Independence, Protected, AcyclicSiblings).
-This module loads an `.importlinter` config and surfaces the result as
-plain dataclasses, ready for `archy contracts` (CLI) or `archy_contracts`
-(MCP) to consume.
+This module surfaces import-linter results as plain dataclasses, ready
+for `archy contracts` (CLI) or `archy_contracts` (MCP) to consume.
+
+Config resolution order:
+  1. Explicit `config_filename` argument (.importlinter or pyproject.toml).
+  2. `.importlinter` in the project root.
+  3. `archy.yaml` in the project root, translated to a list of Forbidden
+     contracts (one per `forbid` rule). This lets a project enforce its
+     existing layer rules transitively without duplicating them.
 
 import-linter is an optional dependency. Without it installed, the public
 functions raise `ContractsNotAvailable` with an actionable message. The
 wrap depends on a non-public entry point (`_register_contract_types`)
-which has been stable across the 2.x series; an integration test in
-`tests/test_contracts.py` exercises the wrap end-to-end so we catch
-breakage on import-linter upgrades.
+and on the `UserOptions` shape; both are pinned to a single import-linter
+minor in `pyproject.toml`, and `tests/test_contracts.py` exercises the
+surface end-to-end so a pin override breaks loudly.
 """
 
 from __future__ import annotations
@@ -21,7 +27,12 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
+
+from archy.layers import LayerConfig, LayerConfigError, load_config
+
+if TYPE_CHECKING:
+    from importlinter.application.user_options import UserOptions
 
 
 @dataclass(frozen=True)
@@ -33,7 +44,7 @@ class ContractCheck:
     name: str
     contract_type: str
     kept: bool
-    metadata: dict[str, Any]
+    metadata: dict[str, object]
     warnings: tuple[str, ...]
 
 
@@ -65,11 +76,13 @@ def run_contracts(
     """Run import-linter against `project_dir` and return a structured result.
 
     `project_dir` must contain (or be the parent of) an importable copy of
-    the package(s) named in the `.importlinter` config; import-linter's
-    graph builder uses runtime `import` resolution.
+    the package(s) named in the config; import-linter's graph builder uses
+    runtime `import` resolution.
 
-    `config_filename` defaults to `.importlinter` in `project_dir`. INI and
-    TOML formats are both supported by import-linter.
+    Config resolution: `config_filename` (if given) wins; otherwise prefers
+    `.importlinter` in `project_dir`; otherwise falls back to translating
+    `archy.yaml` into Forbidden contracts. Raises `ContractsConfigError`
+    if none are present.
     """
     try:
         from importlinter import configuration as _configuration  # noqa: F401
@@ -80,21 +93,47 @@ def run_contracts(
         ) from exc
 
     project_dir = project_dir.resolve()
-    config_path = (
-        Path(config_filename).resolve() if config_filename else project_dir / ".importlinter"
+
+    if config_filename is not None:
+        config_path = Path(config_filename).resolve()
+        if not config_path.exists():
+            raise ContractsConfigError(f"contracts config not found: {config_path}")
+        with _ProjectOnSysPath(project_dir):
+            return _drive_import_linter(config_path=config_path)
+
+    importlinter_path = project_dir / ".importlinter"
+    if importlinter_path.exists():
+        with _ProjectOnSysPath(project_dir):
+            return _drive_import_linter(config_path=importlinter_path)
+
+    archy_yaml_path = project_dir / "archy.yaml"
+    if archy_yaml_path.exists():
+        try:
+            user_options = _archy_yaml_to_user_options(archy_yaml_path)
+        except LayerConfigError as exc:
+            raise ContractsConfigError(
+                f"could not derive contracts from {archy_yaml_path}: {exc}"
+            ) from exc
+        with _ProjectOnSysPath(project_dir):
+            return _drive_import_linter(user_options=user_options)
+
+    raise ContractsConfigError(
+        f"no contracts config found in {project_dir}: expected .importlinter "
+        "or archy.yaml"
     )
-    if not config_path.exists():
-        raise ContractsConfigError(f"contracts config not found: {config_path}")
-
-    with _ProjectOnSysPath(project_dir):
-        return _drive_import_linter(config_path)
 
 
-def _drive_import_linter(config_path: Path) -> ContractsResult:
+def _drive_import_linter(
+    *,
+    config_path: Path | None = None,
+    user_options: UserOptions | None = None,
+) -> ContractsResult:
     """The narrow surface we depend on inside import-linter.
 
-    We import inside the function so the optional-dep guard in run_contracts
-    runs first and gives a clean error before this triggers.
+    Either pass `config_path` (we delegate reading to import-linter's
+    INI/TOML readers) or pass pre-built `user_options` (used when we
+    derive contracts from archy.yaml). Imports are deferred so the
+    optional-dep guard in `run_contracts` triggers first.
     """
     from importlinter import configuration
     from importlinter.application.use_cases import (
@@ -104,13 +143,15 @@ def _drive_import_linter(config_path: Path) -> ContractsResult:
     )
 
     configuration.configure()
-    # import-linter's INI reader resolves config_filename relative to cwd, so
-    # the simplest robust call is to chdir into the config's directory for
-    # the duration of read+report. We restore cwd afterwards.
     prior_cwd = Path.cwd()
     try:
-        os.chdir(config_path.parent)
-        user_options = read_user_options(config_filename=config_path.name)
+        if user_options is None:
+            assert config_path is not None
+            # import-linter's INI reader resolves config_filename relative to
+            # cwd; chdir into the config's directory for the duration of
+            # read+report, then restore.
+            os.chdir(config_path.parent)
+            user_options = read_user_options(config_filename=config_path.name)
         _register_contract_types(user_options)
         report = create_report(user_options, cache_dir=None)
     finally:
@@ -134,6 +175,53 @@ def _drive_import_linter(config_path: Path) -> ContractsResult:
         import_count=int(report.import_count),
         contracts=tuple(contracts),
     )
+
+
+def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
+    """Translate archy.yaml's `forbid` rules into import-linter UserOptions.
+
+    Each `{from: A, to: B}` rule becomes one Forbidden contract whose
+    source_modules are layer A's patterns and forbidden_modules are layer
+    B's. Forbidden checks transitively, so the resulting contracts are a
+    strictness upgrade over `archy check` (direct edges only).
+
+    Root packages are inferred from the top-level dotted token of every
+    layer pattern, deduplicated. Multi-root projects are handled via
+    `root_packages = ...` rather than `root_package = ...`.
+    """
+    from importlinter.application.user_options import UserOptions
+
+    config: LayerConfig = load_config(archy_yaml_path)
+    layer_modules = {layer.name: list(layer.patterns) for layer in config.layers}
+
+    roots = sorted(
+        {pattern.split(".", 1)[0] for layer in config.layers for pattern in layer.patterns}
+    )
+    if not roots:
+        raise LayerConfigError(
+            f"could not infer root_package from {archy_yaml_path}: no layer patterns"
+        )
+
+    # Always emit `root_packages` (list). import-linter normalizes singular
+    # `root_package` → list inside `read_user_options`, but we bypass that
+    # path when building UserOptions directly, so `create_report` would
+    # KeyError on the missing list. Plural-list works in both shapes.
+    session_options: dict[str, object] = {"root_packages": roots}
+
+    contracts_options: list[dict[str, object]] = []
+    for rule in config.forbid:
+        contract_id = f"{rule.from_layer}-must-not-reach-{rule.to_layer}"
+        contracts_options.append(
+            {
+                "id": contract_id,
+                "name": f"{rule.from_layer} layer must not reach {rule.to_layer} layer",
+                "type": "forbidden",
+                "source_modules": list(layer_modules.get(rule.from_layer, ())),
+                "forbidden_modules": list(layer_modules.get(rule.to_layer, ())),
+            }
+        )
+
+    return UserOptions(session_options=session_options, contracts_options=contracts_options)
 
 
 class _ProjectOnSysPath:

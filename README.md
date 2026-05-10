@@ -76,39 +76,21 @@ uv run archy check path/to/project --config custom.yaml
 
 ### Transitive contracts (`archy contracts`)
 
-`archy check` only sees direct edges. `archy contracts` wraps [import-linter](https://import-linter.readthedocs.io/) so the same layer story is enforced *transitively* (A → B → C still counts as A reaching C). Reads `.importlinter` from the repo root by default.
-
-Install the optional dependency, then author a config:
+`archy check` only sees direct edges. `archy contracts` wraps [import-linter](https://import-linter.readthedocs.io/) so the same layer story is enforced *transitively* (A → B → C still counts as A reaching C). It is the strictness upgrade for projects whose layers leak through indirect paths.
 
 ```bash
 uv sync --extra contracts        # or: pip install 'archy[contracts]'
-```
-
-Minimal `.importlinter` (one Forbidden contract: the parser layer must never reach the CLI layer, even transitively):
-
-```ini
-[importlinter]
-root_package = your_package
-include_external_packages = False
-
-[importlinter:contract:parser-must-not-reach-cli]
-name = parser must not reach cli
-type = forbidden
-source_modules =
-    your_package.parser
-forbidden_modules =
-    your_package.cli
-```
-
-Then run:
-
-```bash
 uv run archy contracts path/to/project
 uv run archy contracts path/to/project --format json
-uv run archy contracts path/to/project --config custom.importlinter
 ```
 
-See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar (Layers, Forbidden, Independence, etc.).
+**Config resolution.** `archy contracts` reads, in order:
+
+1. The `--config` argument if passed.
+2. `.importlinter` in the project root.
+3. `archy.yaml`: each `forbid` rule becomes one Forbidden contract checked transitively. **No additional config required**: a project that already has `archy.yaml` can run `archy contracts` immediately to upgrade direct-edge enforcement to transitive.
+
+Reach for `.importlinter` only when you need contract types `archy.yaml` does not express: Independence, Protected, AcyclicSiblings, or hand-tuned Layers. See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar.
 
 ### Compute a quality score
 
