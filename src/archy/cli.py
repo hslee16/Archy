@@ -10,6 +10,12 @@ import click
 import networkx as nx
 
 from archy import __version__
+from archy.contracts import (
+    ContractsConfigError,
+    ContractsNotAvailable,
+    ContractsResult,
+    run_contracts,
+)
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     Snapshot,
@@ -396,6 +402,48 @@ def diff(path: Path, baseline_path: Path | None, fmt: str) -> None:
 
 
 @main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--config",
+    "config_filename",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to .importlinter or pyproject.toml. Defaults to PATH/.importlinter.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
+    """Run import-linter contracts via archy and report violations.
+
+    Wraps import-linter so contract findings flow through the same channel
+    as `archy check` / `archy score`. Requires `pip install archy[contracts]`.
+    """
+    try:
+        result = run_contracts(path, config_filename=config_filename)
+    except ContractsNotAvailable as exc:
+        click.echo(str(exc), err=True)
+        sys.exit(2)
+    except ContractsConfigError as exc:
+        click.echo(str(exc), err=True)
+        sys.exit(2)
+
+    if fmt == "json":
+        click.echo(json.dumps(_contracts_to_dict(result), indent=2, sort_keys=True))
+    else:
+        click.echo(_contracts_to_text(result))
+    sys.exit(0 if result.all_kept else 1)
+
+
+@main.command()
 def mcp() -> None:
     """Run archy as an MCP server on stdio for AI agent integration."""
     from archy.mcp import create_server
@@ -579,6 +627,53 @@ def _diff_to_text(result: dict) -> str:
     for v in violations["resolved"]:
         rule = f"{v['rule']['from']} -> {v['rule']['to']}"
         lines.append(f"  - {v['source']} -> {v['target']}  resolved ({rule})")
+    return "\n".join(lines)
+
+
+def _contracts_to_dict(result: ContractsResult) -> dict:
+    return {
+        "kept": result.kept,
+        "broken": result.broken,
+        "module_count": result.module_count,
+        "import_count": result.import_count,
+        "all_kept": result.all_kept,
+        "contracts": [
+            {
+                "name": c.name,
+                "type": c.contract_type,
+                "kept": c.kept,
+                "metadata": c.metadata,
+                "warnings": list(c.warnings),
+            }
+            for c in result.contracts
+        ],
+    }
+
+
+def _contracts_to_text(result: ContractsResult) -> str:
+    lines = [
+        f"# contracts: {result.kept} kept, {result.broken} broken "
+        f"({result.module_count} modules, {result.import_count} imports)"
+    ]
+    for c in result.contracts:
+        marker = "OK " if c.kept else "X  "
+        lines.append(f"{marker}{c.name}  [{c.contract_type}]")
+        for w in c.warnings:
+            lines.append(f"    ! {w}")
+        if not c.kept:
+            chains = c.metadata.get("invalid_chains") or []
+            for chain in chains:
+                upstream = chain.get("upstream_module", "?")
+                downstream = chain.get("downstream_module", "?")
+                lines.append(f"    {downstream} -> {upstream}")
+                for path in chain.get("chains", []):
+                    # Multi-step paths are worth showing; single-step paths
+                    # are already in the line above.
+                    if len(path) <= 1:
+                        continue
+                    nodes = [path[0].get("importer", "?")]
+                    nodes.extend(step.get("imported", "?") for step in path)
+                    lines.append(f"      via {' -> '.join(nodes)}")
     return "\n".join(lines)
 
 

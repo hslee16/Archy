@@ -1,0 +1,49 @@
+[importlinter]
+root_package = archy
+include_external_packages = False
+
+# These contracts mirror archy.yaml's `forbid` rules using import-linter's
+# Forbidden contract type. They check transitive reachability (not just
+# direct edges, which is what archy.yaml currently checks).
+
+[importlinter:contract:parser-must-not-reach-graph-policy-cli]
+name = parser must not reach graph/policy/cli layers
+type = forbidden
+source_modules =
+    archy.parser
+forbidden_modules =
+    archy.graph
+    archy.cycles
+    archy.score
+    archy.history
+    archy.trend
+    archy.diff
+    archy.impact
+    archy.layers
+    archy.cli
+    archy.mcp
+
+[importlinter:contract:graph-must-not-reach-policy-cli]
+name = graph layer must not reach policy/cli layers
+type = forbidden
+source_modules =
+    archy.graph
+    archy.cycles
+    archy.score
+    archy.history
+    archy.trend
+    archy.diff
+    archy.impact
+forbidden_modules =
+    archy.layers
+    archy.cli
+    archy.mcp
+
+[importlinter:contract:policy-must-not-reach-cli]
+name = policy layer must not reach cli layer
+type = forbidden
+source_modules =
+    archy.layers
+forbidden_modules =
+    archy.cli
+    archy.mcp

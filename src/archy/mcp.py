@@ -138,6 +138,26 @@ def _register_tools(server: FastMCP) -> None:
         return _run_check(Path(path), config_path=Path(config_path) if config_path else None)
 
     @server.tool(
+        name="archy_contracts",
+        description=(
+            "Run import-linter contracts against a Python project (transitive "
+            "Layers, Forbidden, Independence, Protected, AcyclicSiblings). "
+            "Stricter than archy_check, which only flags direct edges between "
+            "layers in archy.yaml. Reads .importlinter (or pyproject.toml). "
+            "Returns per-contract `kept` flag plus violation chains. Requires "
+            "import-linter to be installed (`pip install archy[contracts]`)."
+        ),
+    )
+    def archy_contracts(
+        path: str,
+        config_path: str | None = None,
+    ) -> dict[str, Any]:
+        return _run_contracts(
+            Path(path),
+            config_filename=Path(config_path) if config_path else None,
+        )
+
+    @server.tool(
         name="archy_trend",
         description=(
             "Read the recent score history (.archy/history.jsonl) for a Python "
@@ -313,6 +333,40 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
             for v in violations
         ],
         "passed": not violations,
+    }
+
+
+def _run_contracts(path: Path, *, config_filename: Path | None) -> dict[str, Any]:
+    from archy.contracts import (
+        ContractsConfigError,
+        ContractsNotAvailable,
+        run_contracts,
+    )
+
+    try:
+        result = run_contracts(path, config_filename=config_filename)
+    except ContractsNotAvailable as exc:
+        return {"available": False, "error": str(exc)}
+    except ContractsConfigError as exc:
+        return {"available": True, "error": str(exc)}
+
+    return {
+        "available": True,
+        "all_kept": result.all_kept,
+        "kept": result.kept,
+        "broken": result.broken,
+        "module_count": result.module_count,
+        "import_count": result.import_count,
+        "contracts": [
+            {
+                "name": c.name,
+                "type": c.contract_type,
+                "kept": c.kept,
+                "metadata": c.metadata,
+                "warnings": list(c.warnings),
+            }
+            for c in result.contracts
+        ],
     }
 
 

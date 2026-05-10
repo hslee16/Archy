@@ -46,6 +46,7 @@ def test_create_server_registers_expected_tools():
         "archy_score",
         "archy_cycles",
         "archy_check",
+        "archy_contracts",
         "archy_trend",
         "archy_impact",
         "archy_snapshot",
