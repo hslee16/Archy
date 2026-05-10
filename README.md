@@ -14,7 +14,7 @@
 |---|---|
 | Inspection | `archy graph`, `archy cycles` |
 | CI governance | `archy check` (reads `archy.yaml`) |
-| Transitive contracts | `archy contracts` (reads `.importlinter`; requires `archy[contracts]`) |
+| Transitive contracts | `archy contracts` (reads `.importlinter` or `archy.yaml`; requires `archy[contracts]`) |
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | MCP server | `archy mcp` |
