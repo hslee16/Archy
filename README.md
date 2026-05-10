@@ -53,7 +53,7 @@ uv run archy graph path/to/project --format dot | dot -Tsvg > graph.svg
 
 ### Find import cycles
 
-Tarjan SCCs of size >= 2. Use `--strict` in CI to fail on any cycle.
+Tarjan SCCs of size >= 2, plus self-loops (a module importing itself). Use `--strict` in CI to fail on any cycle.
 
 ```bash
 uv run archy cycles path/to/project

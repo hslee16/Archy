@@ -59,8 +59,8 @@ def load_config(path: Path) -> LayerConfig:
 
     layers = _parse_layers(raw.get("layers", {}), path)
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
-    exclude = _parse_exclude(raw.get("exclude", []), path)
-    roots = _parse_roots(raw.get("roots", []), path)
+    exclude = _parse_str_list(raw.get("exclude", []), "exclude", path)
+    roots = _parse_str_list(raw.get("roots", []), "roots", path)
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
@@ -173,29 +173,16 @@ def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[Forbi
     return out
 
 
-def _parse_exclude(raw: object, path: Path) -> list[str]:
-    # `exclude` is an optional list of directory basenames added to archy's
-    # built-in ignore set (caches, .venv, node_modules, ...). Each entry
-    # matches any directory in the project tree with that exact name. Useful
-    # for codegen output (baml_client/, generated/) and vendored code.
+def _parse_str_list(raw: object, field: str, path: Path) -> list[str]:
+    # Shared shape check for the optional list-of-strings keys (`exclude`,
+    # `roots`). `exclude` adds directory basenames to the built-in ignore set
+    # (.venv, node_modules, ...) for codegen and vendored trees. `roots`
+    # declares PEP 420 namespace-package roots so descendants get rooted
+    # qualnames without forcing __init__.py markers into the source tree.
     if not raw:
         return []
     if not isinstance(raw, list) or not all(isinstance(d, str) and d for d in raw):
-        raise LayerConfigError(f"`exclude` must be a list of non-empty strings in {path}")
-    return [d for d in raw if isinstance(d, str)]
-
-
-def _parse_roots(raw: object, path: Path) -> list[str]:
-    # `roots` is an optional list of project-relative directory paths that
-    # archy should treat as top-level packages even when they don't contain
-    # __init__.py. Supports PEP 420 namespace-package layouts (no __init__.py)
-    # without forcing the user to add empty markers to their tree. Each entry
-    # becomes a package root whose name is the final path segment, so
-    # `src/app` produces qualnames like `app.libs.db`.
-    if not raw:
-        return []
-    if not isinstance(raw, list) or not all(isinstance(d, str) and d for d in raw):
-        raise LayerConfigError(f"`roots` must be a list of non-empty strings in {path}")
+        raise LayerConfigError(f"`{field}` must be a list of non-empty strings in {path}")
     return [d for d in raw if isinstance(d, str)]
 
 

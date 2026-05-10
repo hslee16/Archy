@@ -1,6 +1,17 @@
+"""MCP-specific tests.
+
+Underlying analysis behavior (cycle detection, score computation, layer
+violations, etc.) is covered by test_cli.py and the per-module unit
+suites. This file only verifies what the MCP layer adds:
+
+- the registered tool surface (names) the agent sees
+- the dict shapes each tool returns, since agents read them by key
+- exclude/roots config plumbing through the MCP path (not just CLI)
+"""
+
 from __future__ import annotations
 
-import json
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -15,16 +26,6 @@ from archy.mcp import (
 
 
 @pytest.fixture
-def cyclic_project(tmp_path: Path) -> Path:
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg.b import thing\n")
-    (pkg / "b.py").write_text("from pkg.a import other\n")
-    return tmp_path
-
-
-@pytest.fixture
 def acyclic_project(tmp_path: Path) -> Path:
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -34,38 +35,7 @@ def acyclic_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-@pytest.fixture
-def layered_project(tmp_path: Path):
-    def build(core_api_src: str = "", cli_runner_src: str = "") -> Path:
-        pkg = tmp_path / "myapp"
-        pkg.mkdir()
-        (pkg / "__init__.py").write_text("")
-        core = pkg / "core"
-        core.mkdir()
-        (core / "__init__.py").write_text("")
-        (core / "api.py").write_text(core_api_src)
-        cli = pkg / "cli"
-        cli.mkdir()
-        (cli / "__init__.py").write_text("")
-        (cli / "runner.py").write_text(cli_runner_src)
-        (tmp_path / "archy.yaml").write_text(
-            "layers:\n"
-            "  core: {modules: [myapp.core.**]}\n"
-            "  cli: {modules: [myapp.cli.**]}\n"
-            "forbid:\n"
-            "  - {from: core, to: cli}\n"
-        )
-        return tmp_path
-
-    return build
-
-
-# --- create_server ----------------------------------------------------------
-
-
 def test_create_server_registers_expected_tools():
-    import asyncio
-
     server = create_server()
     tools = asyncio.run(server.list_tools())
     names = {t.name for t in tools}
@@ -78,10 +48,7 @@ def test_create_server_registers_expected_tools():
     }
 
 
-# --- _run_score -------------------------------------------------------------
-
-
-def test_run_score_returns_full_payload(acyclic_project: Path):
+def test_run_score_payload_shape(acyclic_project: Path):
     payload = _run_score(
         acyclic_project,
         internal_only=True,
@@ -91,26 +58,13 @@ def test_run_score_returns_full_payload(acyclic_project: Path):
     )
     assert "overall" in payload
     assert set(payload["components"]) == {"modularity", "acyclicity", "depth", "equality"}
-    assert "gate" not in payload
-    assert not (acyclic_project / ".archy" / "history.jsonl").exists()
-
-
-def test_run_score_with_record_appends_history(acyclic_project: Path):
-    _run_score(
-        acyclic_project,
-        internal_only=True,
-        record=True,
-        strict=False,
-        strict_tolerance=0.02,
+    assert {"module_count", "edge_count", "cycle_count", "max_depth", "community_count"} <= set(
+        payload["inputs"]
     )
-    history = acyclic_project / ".archy" / "history.jsonl"
-    assert history.exists()
-    [line] = history.read_text().splitlines()
-    row = json.loads(line)
-    assert "score" in row
+    assert "gate" not in payload
 
 
-def test_run_score_strict_no_history_passes(acyclic_project: Path):
+def test_run_score_strict_includes_gate_block(acyclic_project: Path):
     payload = _run_score(
         acyclic_project,
         internal_only=True,
@@ -119,90 +73,48 @@ def test_run_score_strict_no_history_passes(acyclic_project: Path):
         strict_tolerance=0.02,
     )
     gate = payload["gate"]
-    assert gate["previous"] is None
-    assert gate["passed"] is True
+    assert {"previous", "current", "delta", "tolerance", "passed"} <= set(gate)
 
 
-def test_run_score_strict_against_seeded_history(acyclic_project: Path):
-    history = acyclic_project / ".archy" / "history.jsonl"
-    history.parent.mkdir(parents=True, exist_ok=True)
-    history.write_text(
-        json.dumps(
-            {
-                "timestamp": "2026-05-09T10:00:00Z",
-                "commit": "deadbee",
-                "branch": "main",
-                "score": {
-                    "overall": 0.95,
-                    "modularity": 0.5,
-                    "acyclicity": 1.0,
-                    "depth": 0.5,
-                    "equality": 0.5,
-                },
-                "inputs": {
-                    "module_count": 3,
-                    "edge_count": 1,
-                    "cycle_count": 0,
-                    "max_depth": 1,
-                    "community_count": 2,
-                },
-            }
-        )
-        + "\n"
-    )
-    payload = _run_score(
-        acyclic_project,
-        internal_only=True,
-        record=False,
-        strict=True,
-        strict_tolerance=0.05,
-    )
-    assert payload["gate"]["passed"] is False
-    assert payload["gate"]["previous"] == 0.95
-
-
-# --- _run_cycles ------------------------------------------------------------
-
-
-def test_run_cycles_finds_cycle(cyclic_project: Path):
-    cycles = _run_cycles(cyclic_project, min_size=2, internal_only=True)
-    assert len(cycles) == 1
-    [cycle] = cycles
+def test_run_cycles_payload_shape(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import thing\n")
+    (pkg / "b.py").write_text("from pkg.a import other\n")
+    [cycle] = _run_cycles(tmp_path, min_size=2, internal_only=True)
     assert sorted(cycle["modules"]) == ["pkg.a", "pkg.b"]
-    pairs = {(e["source"], e["target"]) for e in cycle["edges"]}
-    assert pairs == {("pkg.a", "pkg.b"), ("pkg.b", "pkg.a")}
+    edge = cycle["edges"][0]
+    assert {"source", "target", "lines"} <= set(edge)
 
 
-def test_run_cycles_clean(acyclic_project: Path):
-    assert _run_cycles(acyclic_project, min_size=2, internal_only=True) == []
-
-
-# --- _run_check -------------------------------------------------------------
-
-
-def test_run_check_with_layered_project_clean(layered_project):
-    project = layered_project(cli_runner_src="from myapp.core import api\n")
-    result = _run_check(project, config_path=None)
-    assert result["passed"] is True
-    assert result["violations"] == []
-
-
-def test_run_check_with_violation(layered_project):
-    project = layered_project(core_api_src="from myapp.cli.runner import go\n")
-    result = _run_check(project, config_path=None)
+def test_run_check_payload_shape(tmp_path: Path):
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    core = pkg / "core"
+    core.mkdir()
+    (core / "__init__.py").write_text("")
+    (core / "api.py").write_text("from myapp.cli.runner import go\n")
+    cli = pkg / "cli"
+    cli.mkdir()
+    (cli / "__init__.py").write_text("")
+    (cli / "runner.py").write_text("")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  core: {modules: [myapp.core.**]}\n"
+        "  cli: {modules: [myapp.cli.**]}\n"
+        "forbid:\n"
+        "  - {from: core, to: cli}\n"
+    )
+    result = _run_check(tmp_path, config_path=None)
     assert result["passed"] is False
-    assert len(result["violations"]) == 1
-    assert result["violations"][0]["rule"] == {"from": "core", "to": "cli"}
+    [violation] = result["violations"]
+    assert violation["rule"] == {"from": "core", "to": "cli"}
+    assert {"source", "target", "lines"} <= set(violation)
 
 
-# --- _run_trend -------------------------------------------------------------
-
-
-def test_run_trend_empty_history(acyclic_project: Path):
-    assert _run_trend(acyclic_project, last_n=10) == []
-
-
-def test_run_trend_returns_recorded_rows(acyclic_project: Path):
+def test_run_trend_payload_shape(acyclic_project: Path):
     _run_score(
         acyclic_project,
         internal_only=True,
@@ -210,36 +122,14 @@ def test_run_trend_returns_recorded_rows(acyclic_project: Path):
         strict=False,
         strict_tolerance=0.02,
     )
-    _run_score(
-        acyclic_project,
-        internal_only=True,
-        record=True,
-        strict=False,
-        strict_tolerance=0.02,
-    )
-    rows = _run_trend(acyclic_project, last_n=10)
-    assert len(rows) == 2
-    assert "score" in rows[0]
-    assert "overall" in rows[0]["score"]
+    [row] = _run_trend(acyclic_project, last_n=10)
+    assert {"timestamp", "commit", "branch", "score", "inputs"} <= set(row)
+    assert "overall" in row["score"]
 
 
-def test_run_trend_last_n_truncates(acyclic_project: Path):
-    for _ in range(5):
-        _run_score(
-            acyclic_project,
-            internal_only=True,
-            record=True,
-            strict=False,
-            strict_tolerance=0.02,
-        )
-    rows = _run_trend(acyclic_project, last_n=3)
-    assert len(rows) == 3
-
-
-# --- exclude config plumbed through MCP --------------------------------------
-
-
-def test_run_cycles_honors_archy_yaml_exclude(tmp_path: Path):
+def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
+    # Verifies the MCP path honors `exclude:` (CLI tests cover the same
+    # config for the CLI path; this protects the agent-facing surface).
     pkg = tmp_path / "myapp"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")

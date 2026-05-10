@@ -24,6 +24,17 @@ def _g(*edges: tuple[str, str, tuple[int, ...]]) -> nx.DiGraph:
     return g
 
 
+@pytest.fixture
+def core_cli_config() -> LayerConfig:
+    return LayerConfig(
+        layers=(
+            LayerSpec("core", ("myapp.core.**",)),
+            LayerSpec("cli", ("myapp.cli.**",)),
+        ),
+        forbid=(ForbidRule("core", "cli"),),
+    )
+
+
 # --- pattern matching ---------------------------------------------------------
 
 
@@ -170,32 +181,18 @@ def test_discover_returns_none_when_absent(tmp_path: Path):
 # --- find_violations ----------------------------------------------------------
 
 
-def test_violations_reports_forbidden_edge():
+def test_violations_reports_forbidden_edge(core_cli_config: LayerConfig):
     g = _g(("myapp.core.user", "myapp.cli.runner", (12,)))
-    config = LayerConfig(
-        layers=(
-            LayerSpec("core", ("myapp.core.**",)),
-            LayerSpec("cli", ("myapp.cli.**",)),
-        ),
-        forbid=(ForbidRule("core", "cli"),),
-    )
-    [violation] = find_violations(g, config)
+    [violation] = find_violations(g, core_cli_config)
     assert violation.rule == ForbidRule("core", "cli")
     assert violation.source == "myapp.core.user"
     assert violation.target == "myapp.cli.runner"
     assert violation.lines == (12,)
 
 
-def test_violations_ignores_allowed_edge():
+def test_violations_ignores_allowed_edge(core_cli_config: LayerConfig):
     g = _g(("myapp.cli.runner", "myapp.core.user", (1,)))
-    config = LayerConfig(
-        layers=(
-            LayerSpec("core", ("myapp.core.**",)),
-            LayerSpec("cli", ("myapp.cli.**",)),
-        ),
-        forbid=(ForbidRule("core", "cli"),),
-    )
-    assert find_violations(g, config) == []
+    assert find_violations(g, core_cli_config) == []
 
 
 def test_violations_ignores_unlayered_endpoints():
@@ -207,33 +204,19 @@ def test_violations_ignores_unlayered_endpoints():
     assert find_violations(g, config) == []
 
 
-def test_violations_aggregates_per_edge_lines():
+def test_violations_aggregates_per_edge_lines(core_cli_config: LayerConfig):
     g = _g(("myapp.core.user", "myapp.cli.runner", (2, 5, 9)))
-    config = LayerConfig(
-        layers=(
-            LayerSpec("core", ("myapp.core.**",)),
-            LayerSpec("cli", ("myapp.cli.**",)),
-        ),
-        forbid=(ForbidRule("core", "cli"),),
-    )
-    [violation] = find_violations(g, config)
+    [violation] = find_violations(g, core_cli_config)
     assert violation.lines == (2, 5, 9)
 
 
-def test_violations_sorted_by_rule_then_endpoints():
+def test_violations_sorted_by_rule_then_endpoints(core_cli_config: LayerConfig):
     g = _g(
         ("myapp.core.b", "myapp.cli.x", (1,)),
         ("myapp.core.a", "myapp.cli.y", (2,)),
         ("myapp.core.a", "myapp.cli.x", (3,)),
     )
-    config = LayerConfig(
-        layers=(
-            LayerSpec("core", ("myapp.core.**",)),
-            LayerSpec("cli", ("myapp.cli.**",)),
-        ),
-        forbid=(ForbidRule("core", "cli"),),
-    )
-    pairs = [(v.source, v.target) for v in find_violations(g, config)]
+    pairs = [(v.source, v.target) for v in find_violations(g, core_cli_config)]
     assert pairs == [
         ("myapp.core.a", "myapp.cli.x"),
         ("myapp.core.a", "myapp.cli.y"),
