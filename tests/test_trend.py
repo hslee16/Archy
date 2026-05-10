@@ -19,6 +19,7 @@ def _row(
         module_count=10,
         edge_count=20,
         cycle_count=1,
+        tangle_ratio=0.2,
         max_depth=2,
         community_count=3,
     )

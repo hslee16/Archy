@@ -76,23 +76,50 @@ def test_modularity_clamps_to_zero_on_negative_q():
 
 def test_acyclicity_no_cycles_is_one():
     g = _g(("a", "b"), ("b", "c"))
-    score, n = compute_acyclicity(g)
+    score, n, tangle = compute_acyclicity(g)
     assert score == 1.0
     assert n == 0
+    assert tangle == 0.0
 
 
-def test_acyclicity_one_cycle_is_one_half():
+def test_acyclicity_full_graph_in_cycle_is_zero():
+    # All 2 nodes inside one SCC: tangle_ratio = 1.0, score = 0.
     g = _g(("a", "b"), ("b", "a"))
-    score, n = compute_acyclicity(g)
+    score, n, tangle = compute_acyclicity(g)
+    assert score == 0.0
+    assert n == 1
+    assert tangle == 1.0
+
+
+def test_acyclicity_partial_tangle():
+    # 2 of 4 nodes inside a cycle: tangle_ratio = 0.5, score = 0.5.
+    g = _g(("a", "b"), ("b", "a"), ("c", "d"))
+    score, n, tangle = compute_acyclicity(g)
     assert score == 0.5
     assert n == 1
+    assert tangle == 0.5
 
 
-def test_acyclicity_two_cycles_is_one_third():
+def test_acyclicity_two_small_cycles():
+    # 4 of 4 nodes inside cycles (two 2-node SCCs): tangle_ratio = 1.0.
     g = _g(("a", "b"), ("b", "a"), ("x", "y"), ("y", "x"))
-    score, n = compute_acyclicity(g)
-    assert score == pytest.approx(1.0 / 3)
+    score, n, tangle = compute_acyclicity(g)
+    assert score == 0.0
     assert n == 2
+    assert tangle == 1.0
+
+
+def test_acyclicity_small_cycle_in_large_graph():
+    # 9-node DAG chain (n0..n8) plus a 2-node cycle ({a, b}).
+    # Tangle ratio = 2/11; the headline win over the old 1/(1+N)
+    # formula, which would have given 0.5 regardless of graph size.
+    edges = [(f"n{i}", f"n{i + 1}") for i in range(8)]
+    edges.extend([("a", "b"), ("b", "a")])
+    g = _g(*edges)
+    score, n, tangle = compute_acyclicity(g)
+    assert tangle == pytest.approx(2 / 11)
+    assert score == pytest.approx(1 - 2 / 11)
+    assert n == 1
 
 
 # --- depth --------------------------------------------------------------------
@@ -177,20 +204,19 @@ def test_compute_score_with_cycle_is_lower():
     # Use big enough graphs that greedy modularity returns positive Q on
     # both, so a non-zero baseline is comparable.
     edges_clean = [("a", "b"), ("b", "c"), ("d", "e"), ("e", "f"), ("g", "h")]
-    edges_cyclic = [*edges_clean, ("c", "a")]  # introduces one cycle
+    edges_cyclic = [*edges_clean, ("c", "a")]  # introduces one 3-node cycle
     clean = compute_score(_g(*edges_clean))
     cyclic = compute_score(_g(*edges_cyclic))
-    assert cyclic.acyclicity == 0.5
+    # 3 of 8 nodes inside the cycle: tangle_ratio = 0.375, acyclicity = 0.625.
+    assert cyclic.acyclicity == pytest.approx(0.625)
     assert clean.acyclicity == 1.0
     # Cycles definitely lower the overall score because acyclicity drops.
     assert cyclic.overall < clean.overall
 
 
-def test_compute_score_geometric_mean_zero_on_any_zero_metric():
-    # Manufacture a pathological graph: one giant cycle would still yield
-    # acyclicity 0.5 (one cycle), not zero. The geometric-mean property is
-    # already covered analytically by the formula; this just sanity-checks
-    # that the four sub-metrics combine multiplicatively.
+def test_compute_score_geometric_mean_combines_multiplicatively():
+    # Sanity check that overall is the geometric mean of the four
+    # sub-metrics, not their arithmetic mean.
     s = compute_score(_g(("a", "b")))
     assert s.overall == pytest.approx((s.modularity * s.acyclicity * s.depth * s.equality) ** 0.25)
 

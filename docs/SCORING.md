@@ -88,36 +88,51 @@ This maps the canonical `[-0.5, 1.0]` range onto `[0, 1]`.
 
 ### Acyclicity
 
-> **What it measures:** whether the graph is a DAG.
+> **What it measures:** what fraction of the codebase sits inside a
+> cycle.
 
 archy detects cycles via NetworkX's strongly-connected-components
 machinery, which uses [Tarjan's SCC algorithm][tarjan-scc] (linear
 time, single DFS). Any SCC of size ≥ 2 is, by definition, a cycle:
 every node in an SCC reaches every other node, so any pair forms a
-loop.[^scc-cycle] archy counts those SCCs.
+loop.[^scc-cycle] A self-looped singleton (a module that imports
+itself) is also counted as a cycle.
 
 ```
-acyclicity = 1 / (1 + cycle_count)
+tangle_ratio = nodes_in_cycles / total_nodes
+acyclicity   = 1 - tangle_ratio
 ```
 
-This is a sigmoid in `(0, 1]`: zero cycles gives 1.0, one cycle gives
-0.5, two gives 0.33, etc. The penalty is steep on purpose - cycles
-make build order undefined and change propagation unpredictable, so
-even one cycle should visibly dent the score.
+This is the [Structure101 "Tangle"][structure101-xs] formulation:
+the metric reads as a *fraction of code in cyclic regions*, not a
+count of cycles. It has the property that a small isolated cycle in a
+50-module codebase reads very differently from the same cycle in a
+5-module codebase, which the older `1 / (1 + cycle_count)` form did
+not capture (it gave 0.5 either way).
 
 **What moves it:**
 
 - **Up:** breaking a cycle, usually by extracting a shared interface
   module that both cyclic participants depend on instead of each
-  other.
-- **Down:** introducing any edge that closes a loop.
+  other; or growing the codebase with cycle-free additions, which
+  shrinks the existing tangle's share.
+- **Down:** introducing any edge that closes a loop, or pulling more
+  modules into an existing SCC (a 3-node SCC becoming 5 nodes is a
+  bigger tangle).
 
 **Caveats:**
 
 - archy counts SCCs, not elementary cycles. One SCC containing five
-  modules is one cycle in this score, even though it may contain many
-  elementary cycles. This is intentional: an SCC is the unit you have
-  to break to restore acyclicity.
+  modules counts as one cycle for `cycle_count`, but those five
+  modules contribute 5 to the tangle ratio's numerator, so larger
+  SCCs do dent the score more.
+- The metric is sensitive to graph size by construction. This is the
+  intended behavior, but it does mean the same architectural pattern
+  scores differently in a small codebase than a large one - see the
+  empirical correlation results below.
+- The diagnostic `cycle_count` is preserved on `Score.inputs` for
+  backwards compatibility and as a quick "how many independent
+  groups need fixing" stat.
 
 ### Depth
 
@@ -224,39 +239,52 @@ testing this empirically: pairwise correlation between sub-indicators
 above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
 
 Pairwise Pearson correlations on the 9-library benchmark plus archy
-itself (10 projects, fresh HEADs at 2026-05-10):
+itself (10 projects, fresh HEADs at 2026-05-10, post tangle-ratio
+formula change):
 
 | Pair                    |    `r` |
 | ----------------------- | -----: |
-| modularity ↔ acyclicity | +0.117 |
+| modularity ↔ acyclicity | +0.166 |
 | modularity ↔ depth      | -0.198 |
 | modularity ↔ equality   | -0.441 |
-| acyclicity ↔ depth      | +0.058 |
-| acyclicity ↔ equality   | -0.063 |
+| acyclicity ↔ depth      | -0.627 |
+| acyclicity ↔ equality   | -0.653 |
 | depth ↔ equality        | +0.526 |
 
-Five of six pairs are below `|r| = 0.5`, comfortably under the OECD
-redundancy threshold. The exception is **depth ↔ equality at
-`r = +0.526`**, a moderate positive correlation. Recall that both
-archy axes are inverted so that 1.0 is best: a low `depth` score
-means a long chain, and a low `equality` score means concentrated
-fan-out. So `r = +0.526` says: in this benchmark, graphs with longer
-chains also tend to have more concentrated fan-out, and graphs with
-shorter chains tend to have more even fan-out. The two axes are
-*not* strictly independent - they're moderately coupled in real
-Python code.
+All six pairs are below `|r| = 0.7`, the OECD-conventional threshold
+for treating sub-indicators as redundant. Three of six are at
+"moderate" coupling (`|r| ∈ [0.5, 0.7]`). Two of the three involve
+acyclicity and date from the v0.7 tangle-ratio rollout: the new
+acyclicity formula is graph-size-sensitive by construction (it
+divides by total node count), and that introduces a structural
+relationship with depth and equality which were previously near-zero.
+Concretely:
 
-This doesn't break the geometric-mean argument (the OECD threshold
-for double-counting is `|r| > 0.7`), but it's a real empirical
-finding worth honest disclosure. Two axes at `r ≈ 0.5` partially
-overlap, which means improving one nudges the other in the same
-direction, which means the score is slightly easier to move via
-single-axis optimization than the design language in
-[`docs/LEARNINGS.md`](LEARNINGS.md) implies. Anyone using the
-breakdown to localize regressions should keep this coupling in mind:
-a `depth` regression with no `equality` movement is a stronger
-signal than the same `depth` regression alongside an `equality`
-regression.
+- **acyclicity ↔ depth at `-0.627`**: codebases with low `acyclicity`
+  scores (high tangle ratio) also tend to have low `depth` scores
+  (long chains). A graph that's mostly inside a few SCCs has fewer
+  free DAG hops to extend, but the SCC condensation it does have
+  tends to be deep when the tangled mass dominates.
+- **acyclicity ↔ equality at `-0.653`**: high tangle tends to coexist
+  with concentrated fan-out. A few hub modules participating in a
+  large SCC pull both axes down at once.
+- **depth ↔ equality at `+0.526`** (unchanged from pre-rollout):
+  graphs with longer chains tend to have more concentrated fan-out.
+
+These don't break the geometric-mean argument - none cross the OECD
+threshold - but the design language in
+[`docs/LEARNINGS.md`](LEARNINGS.md) ("the only way to game the score
+is to actually improve every dimension") is stronger than the data
+supports. The honest reading is: improving any axis tends to nudge
+its moderately-coupled neighbors in the same direction, which means
+the geometric mean is slightly easier to move via single-axis
+optimization than a strict-independence design would predict.
+
+The flip side is that this couples the *diagnostic* signal usefully:
+a regression in just one axis is a stronger localized signal than a
+regression that smears across moderately-coupled axes. When using
+the breakdown to localize a drop, a single-axis movement is the
+sharpest pointer.
 
 ## Interpreting a score
 
@@ -271,37 +299,39 @@ fresh HEADs:
 
 | Project   | SHA       | Overall | Modularity | Acyclicity | Depth | Equality |
 | --------- | --------- | ------: | ---------: | ---------: | ----: | -------: |
-| archy     | `02ce8f3` |   0.620 |      0.553 |      1.000 | 0.615 |    0.433 |
-| flask     | `7374c85` |   0.576 |      0.484 |      0.500 | 0.800 |    0.569 |
-| starlette | `7793b92` |   0.549 |      0.458 |      0.500 | 0.727 |    0.547 |
-| click     | `fc6c7c4` |   0.513 |      0.451 |      0.333 | 0.800 |    0.575 |
-| pydantic  | `bd8e63e` |   0.495 |      0.636 |      0.333 | 0.615 |    0.459 |
-| httpx     | `b5addb6` |   0.493 |      0.482 |      0.333 | 0.667 |    0.550 |
-| requests  | `e8d2c01` |   0.490 |      0.429 |      0.500 | 0.571 |    0.469 |
-| rich      | `46cebbb` |   0.473 |      0.524 |      0.333 | 0.667 |    0.431 |
-| fastapi   | `622b635` |   0.423 |      0.522 |      0.333 | 0.615 |    0.300 |
-| pytest    | `09f969f` |   0.408 |      0.479 |      0.250 | 0.471 |    0.490 |
+| archy     | `e118c28` |   0.620 |      0.553 |      1.000 | 0.615 |    0.433 |
+| starlette | `7793b92` |   0.572 |      0.458 |      0.588 | 0.727 |    0.547 |
+| pytest    | `09f969f` |   0.529 |      0.479 |      0.710 | 0.471 |    0.490 |
+| fastapi   | `622b635` |   0.522 |      0.522 |      0.771 | 0.615 |    0.300 |
+| pydantic  | `bd8e63e` |   0.513 |      0.636 |      0.385 | 0.615 |    0.459 |
+| rich      | `46cebbb` |   0.510 |      0.524 |      0.450 | 0.667 |    0.431 |
+| requests  | `e8d2c01` |   0.508 |      0.429 |      0.579 | 0.571 |    0.469 |
+| click     | `fc6c7c4` |   0.470 |      0.451 |      0.235 | 0.800 |    0.575 |
+| flask     | `7374c85` |   0.463 |      0.484 |      0.208 | 0.800 |    0.569 |
+| httpx     | `b5addb6` |   0.463 |      0.482 |      0.261 | 0.667 |    0.550 |
 
 Bands derived from this distribution:
 
-| Overall     | What's typically true at this score                                                                                      | Examples from the benchmark                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `≥ 0.60`    | Zero or one cycle, distributed fan-out. Hard to reach without deliberate architectural discipline.                       | archy (0.620)                              |
-| `0.50–0.60` | Strong on three axes; usually one weak axis (typically acyclicity).                                                      | flask (0.576), starlette (0.549), click (0.513) |
-| `0.40–0.50` | "Typical mature library." One or two cycles plus some fan-out concentration. Most production libraries land here.        | pydantic, httpx, requests, rich, fastapi, pytest (0.41–0.50) |
-| `0.30–0.40` | At least one axis collapsing - 3+ cycles, severe god-module, or a 12+ deep chain.                                        | None in the benchmark.                     |
-| `< 0.30`    | Multiple axes weak simultaneously. Worth investigating before adding features.                                           | None in the benchmark.                     |
+| Overall     | What's typically true at this score                                                                                                  | Examples from the benchmark                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `≥ 0.60`    | Zero cycles, distributed fan-out, shallow tree. Hard to reach without deliberate architectural discipline.                           | archy (0.620)                              |
+| `0.50–0.60` | Healthy. Usually a small tangle (high acyclicity) plus reasonable equality. Typical of mature, modular libraries.                    | starlette, pytest, fastapi, pydantic, rich, requests (0.51–0.57) |
+| `0.40–0.50` | "Typical small / focused library." Acyclicity score below 0.3 (a meaningful fraction of the codebase is in cycles) is the usual cause. | click, flask, httpx (0.46–0.47)            |
+| `0.30–0.40` | At least one axis collapsing - large tangle relative to codebase, severe god-module, or a 12+ deep chain.                            | None in the benchmark.                     |
+| `< 0.30`    | Multiple axes weak simultaneously. Worth investigating before adding features.                                                       | None in the benchmark.                     |
 
 Two things to note when reading these bands:
 
-1. **Acyclicity dominates variance** in real-world Python code. From
-   the benchmark, eight of nine libraries lose 0.5 or more on this
-   axis to a single SCC. Adding one cycle drops acyclicity from 1.0 to
-   0.5, which through the geometric mean caps the overall around
-   `0.84 × (other axes)^(3/4)`. This is a deliberate design choice -
-   cycles are the highest-signal pathology - but it means cross-
-   project comparisons should always look at the breakdown, not just
-   the overall.
+1. **Acyclicity is the highest-variance axis** across the benchmark,
+   spanning 0.21 (flask, where most of the codebase is in one SCC) to
+   1.0 (archy, no cycles at all). Whether a project lands in the
+   "healthy" or "typical small library" band is largely determined by
+   how concentrated its cycles are: pytest at 0.71 is in the healthy
+   band despite having three SCCs, because those SCCs cover only a
+   small fraction of its 156 modules; flask at 0.21 falls into the
+   lower band because its SCCs cover a large share of its 69 modules.
+   The metric correctly penalizes tangle-relative-to-size rather than
+   raw cycle count.
 2. **Modularity has its own well-established literature band.** Newman
    (2006) and follow-up work on real-world networks consistently find
    that raw `Q ∈ [0.3, 0.7]` indicates strong community
@@ -376,6 +406,7 @@ Handbook's guidance.[^oecd-handbook]
 [nash-bargaining]: https://en.wikipedia.org/wiki/Nash_bargaining_game
 [mazziotta-pareto]: https://www.istat.it/en/files/2013/12/Rivista2013_Mazziotta_Pareto.pdf
 [resolution-limit]: https://en.wikipedia.org/wiki/Modularity_(networks)#Resolution_limit
+[structure101-xs]: https://structure101.com/static-content/pages/resources/documents/XS-MeasurementFramework.pdf
 
 [^q-range]: Newman's Q is bounded above by 1 and below by `-1/2` for any partition; positive values indicate intra-community density above the random-graph null model. See [Modularity (networks)][modularity-wiki].
 [^scc-cycle]: An SCC of size ≥ 2 is a cycle by definition: every vertex reaches every other, so any pair forms a directed loop. Tarjan's algorithm finds all SCCs in `O(V + E)`.

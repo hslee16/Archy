@@ -29,6 +29,7 @@ class HistoryRow:
     module_count: int
     edge_count: int
     cycle_count: int
+    tangle_ratio: float
     max_depth: int
     community_count: int
 
@@ -80,6 +81,7 @@ def row_from_score(
         module_count=score.inputs.module_count,
         edge_count=score.inputs.edge_count,
         cycle_count=score.inputs.cycle_count,
+        tangle_ratio=score.inputs.tangle_ratio,
         max_depth=score.inputs.max_depth,
         community_count=score.inputs.community_count,
     )
@@ -133,6 +135,7 @@ def _row_to_dict(row: HistoryRow) -> dict:
             "module_count": row.module_count,
             "edge_count": row.edge_count,
             "cycle_count": row.cycle_count,
+            "tangle_ratio": row.tangle_ratio,
             "max_depth": row.max_depth,
             "community_count": row.community_count,
         },
@@ -161,6 +164,10 @@ def _row_from_dict(data: object) -> HistoryRow | None:
             module_count=_as_int(inputs["module_count"]),
             edge_count=_as_int(inputs["edge_count"]),
             cycle_count=_as_int(inputs["cycle_count"]),
+            # tangle_ratio added in the v0.7.x post-tangle-ratio rollout;
+            # rows from earlier archy versions don't have it and we just
+            # default to 0.0 for trend display purposes.
+            tangle_ratio=_as_float(inputs.get("tangle_ratio", 0.0)),
             max_depth=_as_int(inputs["max_depth"]),
             community_count=_as_int(inputs["community_count"]),
         )

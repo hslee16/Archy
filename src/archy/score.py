@@ -5,7 +5,11 @@ weak score on any axis pulls the overall down hard:
 
 * modularity: Newman's Q over a greedy community partition,
               normalized as (Q + 0.5) / 1.5 to map [-0.5, 1.0] -> [0, 1].
-* acyclicity: 1 / (1 + cycle_count) where cycle_count counts SCCs of size >= 2.
+* acyclicity: 1 - tangle_ratio, where tangle_ratio is the fraction of nodes
+              that sit inside an SCC of size >= 2 (or a self-looped singleton).
+              A small isolated cycle in a large codebase is a smaller pathology
+              than the same cycle dominating a small codebase; the ratio
+              captures that. cycle_count is preserved as a diagnostic.
 * depth:      1 / (1 + max_depth / 8) where max_depth is the longest path
               through the SCC condensation.
 * equality:   1 - Gini(out-degree). Penalizes god-module topology.
@@ -31,6 +35,7 @@ class ScoreInputs:
     module_count: int
     edge_count: int
     cycle_count: int
+    tangle_ratio: float
     max_depth: int
     community_count: int
     raw_modularity: float
@@ -49,7 +54,7 @@ class Score:
 
 def compute_score(graph: nx.DiGraph) -> Score:
     mod, communities, raw_q = compute_modularity(graph)
-    acy, cycle_count = compute_acyclicity(graph)
+    acy, cycle_count, tangle_ratio = compute_acyclicity(graph)
     dep, max_depth = compute_depth(graph)
     eq, raw_gini = compute_equality(graph)
     overall = (mod * acy * dep * eq) ** 0.25
@@ -63,6 +68,7 @@ def compute_score(graph: nx.DiGraph) -> Score:
             module_count=graph.number_of_nodes(),
             edge_count=graph.number_of_edges(),
             cycle_count=cycle_count,
+            tangle_ratio=tangle_ratio,
             max_depth=max_depth,
             community_count=communities,
             raw_modularity=raw_q,
@@ -86,9 +92,21 @@ def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
     return normalized, len(communities), raw_q
 
 
-def compute_acyclicity(graph: nx.DiGraph) -> tuple[float, int]:
+def compute_acyclicity(graph: nx.DiGraph) -> tuple[float, int, float]:
+    """Return (score, cycle_count, tangle_ratio).
+
+    score = 1 - tangle_ratio, where tangle_ratio is the fraction of graph
+    nodes that sit inside a cycle (an SCC of size >= 2 or a self-looped
+    singleton). cycle_count is the number of such SCCs and is preserved
+    as a diagnostic.
+    """
     cycles = find_cycles(graph, min_size=2)
-    return 1.0 / (1 + len(cycles)), len(cycles)
+    n = graph.number_of_nodes()
+    if n == 0:
+        return 1.0, 0, 0.0
+    tangled = sum(len(c.modules) for c in cycles)
+    tangle_ratio = tangled / n
+    return 1.0 - tangle_ratio, len(cycles), tangle_ratio
 
 
 def compute_depth(graph: nx.DiGraph) -> tuple[float, int]:
