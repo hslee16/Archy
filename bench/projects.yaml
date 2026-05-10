@@ -142,6 +142,12 @@ projects:
     src_dir: lib/ansible
     why: legacy devops tool, dynamic-loading plugin patterns
 
+  - name: dagster
+    repo: dagster-io/dagster
+    sha: "50915f9"
+    src_dir: python_modules/dagster/dagster
+    why: modern workflow orchestrator, asset-based DAG, integration plugin pattern
+
   # --- self -----------------------------------------------------------------
   - name: archy
     repo: hslee16/archy
