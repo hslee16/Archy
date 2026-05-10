@@ -149,8 +149,12 @@ projects:
     why: modern workflow orchestrator, asset-based DAG, integration plugin pattern
 
   # --- self -----------------------------------------------------------------
+  # Pin to a release tag, not HEAD: every merged commit was silently
+  # shifting archy's row in the score table and propagating into the
+  # correlation matrix, since archy is one of the data points.
+  # Bump deliberately when refreshing the benchmark.
   - name: archy
     repo: hslee16/archy
-    sha: HEAD
+    sha: "v0.8.2"
     src_dir: src/archy
     why: dogfooding

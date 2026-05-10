@@ -34,7 +34,11 @@ def load_manifest() -> list[dict]:
 def clone_or_update(proj: dict) -> Path:
     name = proj["name"]
     sha = proj["sha"]
-    if name == "archy":
+    if name == "archy" and sha == "HEAD":
+        # Dev convenience: when the manifest deliberately tracks HEAD, use
+        # the working tree so iterating on archy itself doesn't require
+        # repeated clones. Anything else (a tag or commit SHA) goes through
+        # the normal clone+checkout path so the result is reproducible.
         return REPO_ROOT
     target = WORKDIR / name
     if not target.exists():
@@ -43,7 +47,7 @@ def clone_or_update(proj: dict) -> Path:
             ["git", "clone", "--quiet", f"https://github.com/{proj['repo']}.git", str(target)],
             check=True,
         )
-    # Pin the SHA. Fetch first in case it's not in shallow clone.
+    # Fetch first in case the pinned commit isn't present in a shallow clone.
     res = subprocess.run(
         ["git", "-C", str(target), "cat-file", "-e", sha],
         capture_output=True,
@@ -207,7 +211,8 @@ def main() -> int:
         print("## Vulture findings\n")
         print("| project | sha | LOC | vulture @60% | vulture @90% |")
         print("| --- | --- | ---: | ---: | ---: |")
-        # Re-sort by LOC descending for the vulture table.
+        # Vulture findings scale with project size, so LOC ordering is more
+        # informative for this table than the score-derived sort above.
         for r in sorted(rows, key=lambda r: -r["loc"]):
             print(
                 f"| {r['name']} | `{r['sha']}` | {r['loc']:,} | "

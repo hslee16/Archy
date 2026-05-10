@@ -1,10 +1,11 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The five
-tools mirror the CLI surface (`archy_score`, `archy_cycles`,
-`archy_check`, `archy_trend`, `archy_record_baseline`) so an agent can
-treat archy as a structural sensor in its own feedback loop, the way
-the README pitches.
+Built on the official Python `mcp` SDK using its FastMCP API. The
+nine tools mirror the CLI surface (`archy_score`, `archy_cycles`,
+`archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
+`archy_snapshot`, `archy_diff`, `archy_record_baseline`) so an agent
+can treat archy as a structural sensor in its own feedback loop, the
+way the README pitches.
 
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.

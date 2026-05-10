@@ -4,6 +4,11 @@ Real-world runs of archy. Useful as regression evidence and as a place to point 
 
 ## archy on archy (dogfooding, v0.1.0)
 
+> Historical, retained for reference. Module counts and CLI output below
+> reflect the v0.1.0 surface; current archy is larger. For a current
+> archy-on-archy snapshot see the score table in
+> [`docs/SCORING.md`](SCORING.md).
+
 archy enforces its own architecture in CI via `archy check .` against
 [`archy.yaml`](../archy.yaml). The intended layering is a pure dependency
 tree:
@@ -15,7 +20,8 @@ policy  →  graph
 cli     →  parser, graph, policy
 ```
 
-`graph` covers `archy.graph` and `archy.cycles`; `policy` covers
+`graph` covers the analysis primitives (`archy.graph`, `archy.cycles`,
+`archy.score`, `archy.history`, `archy.trend`); `policy` covers
 `archy.layers` (the rule engine). `cli` is the only layer allowed to
 depend on every lower layer. Lower layers must not depend on higher
 ones - six `forbid` rules encode the full anti-set.
@@ -236,6 +242,12 @@ Notes:
 - Numbers are not directly comparable to sentrux's display because archy reports floats in `[0, 1]` and sentrux reports integers `0-10000`; multiply archy's `overall` by 10000 for parity.
 
 ### archy on archy (v0.2.0)
+
+> Historical, retained for reference. The v0.2.0 acyclicity formula was
+> `1/(1+cycle_count)`, which v0.7.x replaced with `1 - tangle_ratio`;
+> the v0.2.0 score below (0.677) is not directly comparable to current
+> output. Current archy-on-archy numbers in
+> [`docs/SCORING.md`](SCORING.md).
 
 `archy score .` on the archy repo:
 
