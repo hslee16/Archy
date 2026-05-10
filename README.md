@@ -271,6 +271,16 @@ Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is eith
 
 archy enforces its own architecture this way; see [`archy.yaml`](archy.yaml) at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
 
+**Stability check (`sdp:`).** Optionally enable Robert Martin's Stable Dependencies Principle: a module should not import one that is *less stable* than itself. Stability is `I = Ce / (Ce + Ca)` where `Ce` is outgoing internal imports and `Ca` is incoming, so `I = 0` means "depended on, depends on nothing" (most stable) and `I = 1` means "depends on lots, nothing depends on this" (least stable).
+
+```yaml
+sdp:
+  enabled: true
+  tolerance: 0.0   # ignore violations within this I gap; default 0
+```
+
+When enabled, `archy check` flags every internal import edge whose target's `I` strictly exceeds the source's (plus tolerance). Per-module `I` is also surfaced in `archy graph --format json` whether or not `sdp:` is enabled, so you can audit before turning enforcement on.
+
 ## Development
 
 ```bash

@@ -31,10 +31,13 @@ from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.impact import Impact, find_impact
+from archy.instability import compute_instability
 from archy.layers import (
     LayerConfigError,
+    SdpViolation,
     Violation,
     discover_config,
+    find_sdp_violations,
     find_violations,
     load_config,
 )
@@ -170,12 +173,23 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     except LayerConfigError as exc:
         raise click.ClickException(str(exc)) from exc
 
+    sdp_violations: list[SdpViolation] = []
+    if config.sdp.enabled:
+        sdp_violations = find_sdp_violations(g, tolerance=config.sdp.tolerance)
+
     if fmt == "json":
-        click.echo(json.dumps(_violations_to_json(violations), indent=2, sort_keys=True))
+        payload = {
+            "violations": _violations_to_json(violations),
+            "sdp_violations": _sdp_violations_to_json(sdp_violations),
+        }
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_violations_to_text(violations, config_path))
+        if config.sdp.enabled:
+            click.echo("")
+            click.echo(_sdp_violations_to_text(sdp_violations, config.sdp.tolerance))
 
-    if violations:
+    if violations or sdp_violations:
         sys.exit(1)
 
 
@@ -586,6 +600,33 @@ def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
     return "\n".join(lines)
 
 
+def _sdp_violations_to_json(violations: list[SdpViolation]) -> list[dict]:
+    return [
+        {
+            "source": v.source,
+            "target": v.target,
+            "source_instability": v.source_instability,
+            "target_instability": v.target_instability,
+            "lines": list(v.lines),
+        }
+        for v in violations
+    ]
+
+
+def _sdp_violations_to_text(violations: list[SdpViolation], tolerance: float) -> str:
+    if not violations:
+        return f"# No SDP violations (tolerance: {tolerance})."
+    lines = [f"# {len(violations)} SDP violation(s) (tolerance: {tolerance})"]
+    for v in violations:
+        gap = v.target_instability - v.source_instability
+        lines.append(
+            f"  {v.source} (I={v.source_instability:.2f}) -> "
+            f"{v.target} (I={v.target_instability:.2f}, gap={gap:+.2f})  "
+            f"{_format_lines(v.lines)}"
+        )
+    return "\n".join(lines)
+
+
 def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
     return [
         {
@@ -728,10 +769,16 @@ def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:
 
 
 def _graph_to_dict(g: nx.DiGraph) -> dict:
+    instability = compute_instability(g)
     return {
         "root": g.graph.get("root"),
         "parse_errors": list(g.graph.get("parse_errors", ())),
-        "nodes": [{"id": n, **d} for n, d in sorted(g.nodes(data=True))],
+        "nodes": [
+            # Per-node instability (Martin's I) for internal nodes only;
+            # external modules don't have meaningful Ce/Ca within the project.
+            {"id": n, **d, **({"instability": instability[n]} if n in instability else {})}
+            for n, d in sorted(g.nodes(data=True))
+        ],
         "edges": [
             {"source": u, "target": v, **d}
             for u, v, d in sorted(g.edges(data=True), key=lambda e: (e[0], e[1]))
