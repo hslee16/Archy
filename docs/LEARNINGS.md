@@ -58,7 +58,7 @@ archy's score follows sentrux's [`quality-signal-design.md`](https://github.com/
 | Sub-metric | sentrux | archy v0.2.0 | Notes |
 |---|---|---|---|
 | Modularity | Newman's Q over greedy partition; `(Q + 0.5) / 1.5` mapped onto `[0, 1]` | identical (clamped to `[0, 1]` after the linear map) | We adopted sentrux's normalization explicitly so cross-tool numbers stay comparable. |
-| Acyclicity | `1 / (1 + cycle_count)` from Tarjan SCC of size > 1 | identical | `archy.cycles.find_cycles` is the SCC count source. |
+| Acyclicity | `1 / (1 + cycle_count)` from Tarjan SCC of size > 1 | **diverged in v0.7.x**: `1 - tangle_ratio` where `tangle_ratio = nodes_in_cycles / total_nodes`. Same SCC source via `archy.cycles.find_cycles`. | The new form follows Structure101's "Tangle" metric and reads as fraction-of-codebase-in-cycles rather than a count. See `docs/SCORING.md` §Acyclicity and `docs/RESEARCH_METRICS.md` §6. Cross-tool numbers no longer line up here. |
 | Depth | `1 / (1 + max_depth / 8)` over longest path | identical, computed on `nx.condensation(graph)` so cycles collapse to single nodes first | Sentrux uses iterative DFS from entry points; networkx's `dag_longest_path_length` is equivalent for a DAG. |
 | Equality | `1 - Gini(out-degree)` with `G = Σ (2i - n - 1) x_i / (n * Σ x_i)` | identical | Both projects report `1 - Gini` so a higher number is better. |
 | Redundancy | `1 - (dead + duplicate) / total_functions` | **not implemented** | FUTURE.md keeps it deferred: dynamic dispatch, decorators, and `if __name__ == "__main__":` gates make purely-static dead-code detection too noisy. |

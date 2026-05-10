@@ -144,7 +144,10 @@ def _snapshot_from_dict(payload: dict[str, Any]) -> Snapshot:
 
     score_dict = payload["score"]
     components = score_dict["components"]
-    inputs = ScoreInputs(**score_dict["inputs"])
+    raw_inputs = dict(score_dict["inputs"])
+    # tangle_ratio added post-tangle-ratio rollout; default for old snapshots.
+    raw_inputs.setdefault("tangle_ratio", 0.0)
+    inputs = ScoreInputs(**raw_inputs)
     score = Score(
         overall=score_dict["overall"],
         modularity=components["modularity"],

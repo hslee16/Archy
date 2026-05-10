@@ -203,6 +203,17 @@ This was the trigger for promoting `__init__.py` re-export resolution into the n
 
 ## Composite quality score - multi-library benchmark (v0.2.0)
 
+> **Historical, retained for reference.** The acyclicity formula
+> changed in v0.7.x from `1 / (1 + cycle_count)` to
+> `1 - tangle_ratio`, so the absolute numbers below are not directly
+> comparable to current `archy score` output. For the current
+> benchmark and bands see [`docs/SCORING.md`](SCORING.md). The
+> qualitative observations below (about which axis dominates
+> variance, which libraries score lowest and why) still hold under
+> the new formula, with the caveat that pytest and fastapi rise
+> markedly because their cycles cover only a small fraction of large
+> codebases.
+
 `archy score <path>` reports the four-metric composite (modularity, acyclicity, depth, equality, geometric mean). Same 9 libraries, same checkouts as the cycle benchmark.
 
 | Library | Score | Modularity | Acyclicity | Depth | Equality |

@@ -487,6 +487,7 @@ def _score_to_dict(s: Score) -> dict:
             "module_count": s.inputs.module_count,
             "edge_count": s.inputs.edge_count,
             "cycle_count": s.inputs.cycle_count,
+            "tangle_ratio": s.inputs.tangle_ratio,
             "max_depth": s.inputs.max_depth,
             "community_count": s.inputs.community_count,
             "raw_modularity": s.inputs.raw_modularity,
@@ -500,7 +501,8 @@ def _score_to_text(s: Score) -> str:
         f"# archy score: {s.overall:.3f}",
         f"modularity:  {s.modularity:.3f}  "
         f"({s.inputs.community_count} communities, raw Q={s.inputs.raw_modularity:.3f})",
-        f"acyclicity:  {s.acyclicity:.3f}  ({s.inputs.cycle_count} cycles)",
+        f"acyclicity:  {s.acyclicity:.3f}  "
+        f"({s.inputs.cycle_count} cycles, tangle={s.inputs.tangle_ratio:.3f})",
         f"depth:       {s.depth:.3f}  (max depth {s.inputs.max_depth})",
         f"equality:    {s.equality:.3f}  (Gini={s.inputs.raw_gini:.3f})",
         f"# graph: {s.inputs.module_count} modules, {s.inputs.edge_count} edges",
