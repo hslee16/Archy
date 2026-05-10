@@ -121,7 +121,7 @@ uv run archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes five tools to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes six tools to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|

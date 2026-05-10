@@ -109,14 +109,14 @@ The visited-set + max-depth guard handle the malicious "evil twin" case where tw
 
 archy and sentrux both ship an MCP server so AI agents can call the analyzer directly. The surfaces overlap but trade off scope vs. statefulness.
 
-| | sentrux | archy v0.4.0 |
+| | sentrux | archy |
 |---|---|---|
-| Tools | 9 (`scan`, `health`, `session_start`, `session_end`, `rescan`, `check_rules`, `evolution`, `dsm`, `test_gaps`) | 5 (`archy_score`, `archy_cycles`, `archy_check`, `archy_trend`, `archy_record_baseline`) |
+| Tools | 9 (`scan`, `health`, `session_start`, `session_end`, `rescan`, `check_rules`, `evolution`, `dsm`, `test_gaps`) | 6 (`archy_score`, `archy_cycles`, `archy_check`, `archy_trend`, `archy_impact`, `archy_record_baseline`) |
 | Session model | Stateful: `session_start` saves an in-process baseline; `session_end` compares against it. | Stateless: each tool call is independent. The "baseline" lives in `.archy/history.jsonl`, which any tool can read or extend. |
 | Data behind tools | Snapshot-and-diff against an in-memory baseline. | The CLI's existing JSON shapes - same data agents would read by piping CLI output. |
 | Dependencies | Pure Rust, no Python runtime. | Python `mcp` SDK over stdio. |
 | Distribution | Single binary. | `uv run archy mcp` (or `pipx run archy mcp` once on PyPI). |
 
-Why the smaller surface: archy's CLI primitives are already orthogonal (`graph` is the building block; `cycles`, `check`, `score`, `trend` are projections). Wrapping each as an MCP tool gives the agent the same composable primitives. The five tools cover sentrux's `scan`, `health`, `session_start`, `session_end`, and `check_rules` directly; the other four sentrux tools (`evolution`, `dsm`, `test_gaps`, `rescan`) are either FUTURE.md items (`evolution` ≈ trend deltas, `dsm` ≈ a richer graph projection) or out-of-scope (`test_gaps` requires a coverage source archy doesn't ingest).
+Why the smaller surface: archy's CLI primitives are already orthogonal (`graph` is the building block; `cycles`, `check`, `score`, `trend`, `impact` are projections). Wrapping each as an MCP tool gives the agent the same composable primitives. The six tools cover sentrux's `scan`, `health`, `session_start`, `session_end`, and `check_rules` directly, plus `archy_impact` (forward-looking blast radius, no sentrux equivalent); the remaining sentrux tools (`evolution`, `dsm`, `test_gaps`, `rescan`) are either FUTURE.md items (`evolution` ≈ trend deltas, `dsm` ≈ a richer graph projection) or out-of-scope (`test_gaps` requires a coverage source archy doesn't ingest).
 
 Why stateless: the `.archy/history.jsonl` file is already the source of truth for trend and gating, so making the MCP surface stateless avoids two ways to compare scores. An agent that wants the sentrux session feel calls `archy_record_baseline(path)` at session start and `archy_score(path, strict=True)` at session end - same pattern, different storage shape.
