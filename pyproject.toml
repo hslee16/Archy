@@ -30,9 +30,11 @@ dependencies = [
 [project.optional-dependencies]
 contracts = [
     # Wraps import-linter for `archy contracts` and the `archy_contracts`
-    # MCP tool. Pinned to a tested major; the wrap depends on a non-public
-    # entry point (`_register_contract_types`) that may shift across majors.
-    "import-linter>=2.0,<3",
+    # MCP tool. Pinned to a single minor: the wrap depends on a non-public
+    # entry point (`_register_contract_types`) and on the `UserOptions`
+    # constructor shape, both of which can shift across minors. The
+    # contract test in tests/test_contracts.py is the canary.
+    "import-linter>=2.11,<2.12",
 ]
 
 [project.scripts]
@@ -48,7 +50,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "ty>=0.0.1a1",
-    "import-linter>=2.0,<3",
+    "import-linter>=2.11,<2.12",
 ]
 
 [tool.hatch.build.targets.wheel]
