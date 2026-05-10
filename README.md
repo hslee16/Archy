@@ -111,6 +111,16 @@ uv run archy impact path/to/project --file app/libs/db.py
 uv run archy impact path/to/project --file app/libs/db.py --file app/services/auth.py --format json
 ```
 
+### Snapshot and diff (agent feedback loop)
+
+Capture a baseline at the start of an editing session, then diff after edits to see exactly which cycles or layer rules changed. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the full playbook (also available via the MCP server's `loop` prompt).
+
+```bash
+uv run archy snapshot path/to/project   # writes .archy/baseline.json
+# ... edit code ...
+uv run archy diff path/to/project       # score deltas + added/resolved cycles & violations
+```
+
 ### Run as an MCP server
 
 Stdio transport, so AI agents can call archy directly. See [MCP server](#mcp-server-archy-mcp) below.
@@ -121,7 +131,7 @@ uv run archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes six tools to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes eight tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -130,7 +140,11 @@ uv run archy mcp
 | `archy_check` | Run layer rules from `archy.yaml`. |
 | `archy_trend` | Read recent score history. |
 | `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius). |
+| `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. |
+| `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations and per-component score deltas. |
 | `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
+
+The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
 Wire it into Claude Code with this stanza in your config:
 
@@ -256,7 +270,7 @@ Next up:
 - [ ] Call graph: second edge type alongside imports
 - [ ] Design Structure Matrix (`archy dsm`)
 
-Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact` + `archy_impact` tool).
+Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt).
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
