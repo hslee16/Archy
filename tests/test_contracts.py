@@ -62,11 +62,11 @@ def _purge_top(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_run_contracts_clean_project_all_kept(
-    tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _purge_top(monkeypatch)
-    _write_fixture(Path(tmp_path), with_violation=False)
-    result = run_contracts(Path(tmp_path))
+    _write_fixture(tmp_path, with_violation=False)
+    result = run_contracts(tmp_path)
     assert isinstance(result, ContractsResult)
     assert result.all_kept
     assert result.broken == 0
@@ -77,11 +77,11 @@ def test_run_contracts_clean_project_all_kept(
 
 
 def test_run_contracts_violation_surfaces_chain(
-    tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _purge_top(monkeypatch)
-    _write_fixture(Path(tmp_path), with_violation=True)
-    result = run_contracts(Path(tmp_path))
+    _write_fixture(tmp_path, with_violation=True)
+    result = run_contracts(tmp_path)
     assert not result.all_kept
     assert result.broken == 1
     contract = result.contracts[0]
@@ -95,22 +95,22 @@ def test_run_contracts_violation_surfaces_chain(
 
 
 def test_run_contracts_missing_config_raises(
-    tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _purge_top(monkeypatch)
     # No .importlinter present at the project root: verify the wrap raises
     # the typed error rather than silently passing or surfacing a misleading
     # FileNotFoundError from import-linter's reader.
     with pytest.raises(ContractsConfigError):
-        run_contracts(Path(tmp_path))
+        run_contracts(tmp_path)
 
 
 def test_contracts_not_available_when_module_missing(
-    tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """If `importlinter` import fails, run_contracts should raise the typed
     error so callers (CLI / MCP) can render an actionable message."""
-    _write_fixture(Path(tmp_path), with_violation=False)
+    _write_fixture(tmp_path, with_violation=False)
     monkeypatch.setitem(sys.modules, "importlinter", None)
     with pytest.raises(ContractsNotAvailable):
-        run_contracts(Path(tmp_path))
+        run_contracts(tmp_path)
