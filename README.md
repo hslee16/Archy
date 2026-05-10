@@ -102,6 +102,15 @@ uv run archy score path/to/project --strict --record           # check then reco
 uv run archy score path/to/project --strict --strict-tolerance 0.0
 ```
 
+### Blast radius
+
+List internal modules that transitively depend on a given file. Useful before refactoring or removing a module.
+
+```bash
+uv run archy impact path/to/project --file app/libs/db.py
+uv run archy impact path/to/project --file app/libs/db.py --file app/services/auth.py --format json
+```
+
 ### Run as an MCP server
 
 Stdio transport, so AI agents can call archy directly. See [MCP server](#mcp-server-archy-mcp) below.
@@ -112,7 +121,7 @@ uv run archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes five tools to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes six tools to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -120,6 +129,7 @@ uv run archy mcp
 | `archy_cycles` | Find import cycles. |
 | `archy_check` | Run layer rules from `archy.yaml`. |
 | `archy_trend` | Read recent score history. |
+| `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius). |
 | `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
 
 Wire it into Claude Code with this stanza in your config:
@@ -241,12 +251,12 @@ uv run pytest              # tests
 
 Next up:
 
-- [ ] `archy_impact` MCP tool: blast-radius analysis for a set of changed files
 - [ ] `archy graph` MCP tool: expose the dep graph itself for agent-side reasoning
 - [ ] Score deltas (`archy_evolution`): per-component diffs vs. the last recorded run
+- [ ] Call graph: second edge type alongside imports
 - [ ] Design Structure Matrix (`archy dsm`)
 
-Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks.
+Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact` + `archy_impact` tool).
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 

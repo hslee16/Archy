@@ -22,6 +22,7 @@ from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
+from archy.impact import find_impact
 from archy.layers import (
     LayerConfigError,
     discover_config,
@@ -100,6 +101,22 @@ def _register_tools(server: FastMCP) -> None:
     )
     def archy_trend(path: str, last_n: int = 10) -> list[dict[str, Any]]:
         return _run_trend(Path(path), last_n=last_n)
+
+    @server.tool(
+        name="archy_impact",
+        description=(
+            "Given a list of changed file paths, return the internal modules "
+            "that transitively import any of them (the blast radius). Use "
+            "before refactoring or removing a module to see what would break. "
+            "Files that don't resolve to any module in the graph are returned "
+            "in `unresolved`."
+        ),
+    )
+    def archy_impact(
+        path: str,
+        files: list[str],
+    ) -> dict[str, Any]:
+        return _run_impact(Path(path), files=[Path(f) for f in files])
 
     @server.tool(
         name="archy_record_baseline",
@@ -226,6 +243,17 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
             for v in violations
         ],
         "passed": not violations,
+    }
+
+
+def _run_impact(path: Path, *, files: list[Path]) -> dict[str, Any]:
+    graph = _load_graph(path, internal_only=True)
+    resolved = [path / f if not f.is_absolute() else f for f in files]
+    result = find_impact(graph, resolved)
+    return {
+        "changed": list(result.changed),
+        "unresolved": list(result.unresolved),
+        "impacted": list(result.impacted),
     }
 
 

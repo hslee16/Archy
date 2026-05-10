@@ -15,6 +15,7 @@ from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
+from archy.impact import Impact, find_impact
 from archy.layers import (
     LayerConfigError,
     Violation,
@@ -290,6 +291,42 @@ def trend(path: Path, last_n: int, fmt: str) -> None:
 
 
 @main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--file",
+    "files",
+    type=click.Path(path_type=Path),
+    multiple=True,
+    required=True,
+    help="Changed file path. Repeat for multiple files.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def impact(path: Path, files: tuple[Path, ...], fmt: str) -> None:
+    """List internal modules that depend on the given file(s).
+
+    Resolves each --file to a qualname via the import graph and prints
+    every module that transitively imports any of them.
+    """
+    g = _load_graph(path, internal_only=True)
+    result = find_impact(g, [path / f if not f.is_absolute() else f for f in files])
+
+    if fmt == "json":
+        click.echo(json.dumps(_impact_to_dict(result), indent=2, sort_keys=True))
+    else:
+        click.echo(_impact_to_text(result))
+
+
+@main.command()
 def mcp() -> None:
     """Run archy as an MCP server on stdio for AI agent integration."""
     from archy.mcp import create_server
@@ -438,6 +475,38 @@ def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
         }
         for c in cycles
     ]
+
+
+def _impact_to_dict(result: Impact) -> dict:
+    return {
+        "changed": list(result.changed),
+        "unresolved": list(result.unresolved),
+        "impacted": list(result.impacted),
+    }
+
+
+def _impact_to_text(result: Impact) -> str:
+    lines = [
+        f"# {len(result.impacted)} module(s) depend on {len(result.changed)} changed module(s)"
+    ]
+    if result.unresolved:
+        lines.append(
+            f"# {len(result.unresolved)} file(s) did not resolve to a module "
+            "(non-Python, excluded, or outside any package):"
+        )
+        for f in result.unresolved:
+            lines.append(f"  ? {f}")
+    if result.changed:
+        lines.append("")
+        lines.append("Changed:")
+        for q in result.changed:
+            lines.append(f"  - {q}")
+    if result.impacted:
+        lines.append("")
+        lines.append("Impacted (transitive dependents):")
+        for q in result.impacted:
+            lines.append(f"  - {q}")
+    return "\n".join(lines)
 
 
 def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:

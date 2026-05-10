@@ -19,6 +19,7 @@ import pytest
 from archy.mcp import (
     _run_check,
     _run_cycles,
+    _run_impact,
     _run_score,
     _run_trend,
     create_server,
@@ -44,6 +45,7 @@ def test_create_server_registers_expected_tools():
         "archy_cycles",
         "archy_check",
         "archy_trend",
+        "archy_impact",
         "archy_record_baseline",
     }
 
@@ -125,6 +127,18 @@ def test_run_trend_payload_shape(acyclic_project: Path):
     [row] = _run_trend(acyclic_project, last_n=10)
     assert {"timestamp", "commit", "branch", "score", "inputs"} <= set(row)
     assert "overall" in row["score"]
+
+
+def test_run_impact_payload_shape(tmp_path: Path):
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "lib.py").write_text("")
+    (pkg / "main.py").write_text("from app.lib import x\n")
+    result = _run_impact(tmp_path, files=[Path("app/lib.py")])
+    assert {"changed", "unresolved", "impacted"} == set(result)
+    assert result["changed"] == ["app.lib"]
+    assert result["impacted"] == ["app.main"]
 
 
 def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
