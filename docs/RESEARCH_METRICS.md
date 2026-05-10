@@ -68,7 +68,7 @@ For reference, archy ships these and they're documented in
 | Metric         | What it captures                                |
 | -------------- | ----------------------------------------------- |
 | Modularity     | Newman's Q over greedy community partition     |
-| Acyclicity    | `1 / (1 + cycle_count)` over SCCs of size ≥ 2  |
+| Acyclicity    | `1 - tangle_ratio` (fraction of nodes in SCCs of size ≥ 2) |
 | Depth         | Longest path through the SCC condensation      |
 | Equality      | `1 - Gini(out_degree)`                          |
 
@@ -451,7 +451,7 @@ Sentrux's fifth metric (already discussed in `SCORING.md` as
 deferred). The Python case is *worse* than the general case.
 
 **Empirical validation.** Vulture 2.16 was run with default settings
-(60% confidence) and at 90% confidence on the full 22-project
+(60% confidence) and at 90% confidence on the full 23-project
 benchmark (see [`bench/projects.yaml`](../bench/projects.yaml)),
 captured 2026-05-10:
 
@@ -459,6 +459,7 @@ captured 2026-05-10:
 | -------------- | -----: | ------------: | ------------: |
 | **sqlalchemy** |246,065 |     **1,827** |           415 |
 | scikit-learn   |211,188 |           246 |            31 |
+| dagster        |202,893 |         1,417 |            18 |
 | **django**     |156,666 |     **2,017** |            12 |
 | ansible        |135,915 |           949 |            54 |
 | numpy          |123,708 |           395 |            57 |
@@ -760,7 +761,7 @@ Specific validations referenced above:
    on the original 9-library benchmark plus archy. Pearson correlation
    between NCCD and archy's `max_depth`: `r = 0.000`, indicating the
    metrics are empirically orthogonal. The narrower 10-project sample
-   was used because the NCCD probe predates the 22-project manifest;
+   was used because the NCCD probe predates the 23-project manifest;
    the qualitative finding (orthogonality) is robust to sample-size
    refinements.
 

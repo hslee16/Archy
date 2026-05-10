@@ -26,6 +26,7 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 | click | `fc6c7c4` | 17 | 60 | 0.470 | 0.451 | 0.235 | 0.800 | 0.575 |
 | httpx | `b5addb6` | 23 | 87 | 0.463 | 0.482 | 0.261 | 0.667 | 0.550 |
 | flask | `7374c85` | 24 | 94 | 0.463 | 0.484 | 0.208 | 0.800 | 0.569 |
+| dagster | `50915f9` | 801 | 6254 | 0.461 | 0.577 | 0.400 | 0.471 | 0.416 |
 | scikit-learn | `6e9ef2b` | 637 | 3856 | 0.459 | 0.523 | 0.826 | 0.216 | 0.476 |
 | aiohttp | `bb35b1c` | 54 | 320 | 0.440 | 0.532 | 0.185 | 0.667 | 0.569 |
 | msgspec | `3b2543b` | 10 | 19 | 0.384 | 0.440 | 0.100 | 0.889 | 0.553 |
@@ -34,12 +35,12 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 
 | pair | r |
 | --- | ---: |
-| modularity ↔ acyclicity | +0.281 |
-| modularity ↔ depth | -0.610 |
-| modularity ↔ equality | -0.226 |
-| acyclicity ↔ depth | -0.646 |
-| acyclicity ↔ equality | -0.691 |
-| depth ↔ equality | +0.350 |
+| modularity ↔ acyclicity | +0.247 |
+| modularity ↔ depth | -0.617 |
+| modularity ↔ equality | -0.249 |
+| acyclicity ↔ depth | -0.618 |
+| acyclicity ↔ equality | -0.650 |
+| depth ↔ equality | +0.362 |
 
 ## Vulture findings
 
@@ -47,6 +48,7 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 | --- | --- | ---: | ---: | ---: |
 | sqlalchemy | `3c650ce` | 246,065 | 1827 | 415 |
 | scikit-learn | `6e9ef2b` | 211,188 | 246 | 31 |
+| dagster | `50915f9` | 202,893 | 1417 | 18 |
 | django | `4d455ae` | 156,666 | 2017 | 12 |
 | ansible | `b7c0900` | 135,915 | 949 | 54 |
 | numpy | `3bea241` | 123,708 | 395 | 57 |
