@@ -478,7 +478,7 @@ captured 2026-05-10:
 | mkdocs         |  7,084 |            88 |             8 |
 | starlette      |  6,584 |            67 |             0 |
 | requests       |  6,371 |            54 |             4 |
-| archy          |  2,528 |            16 |             0 |
+| archy          |  2,840 |            16 |             0 |
 | msgspec        |  2,365 |            10 |             4 |
 
 Spot-checking findings on FastAPI, pytest, and Django (15 random
@@ -505,8 +505,8 @@ findings each):
   pattern alone accounts for hundreds of the 2,017 default-confidence
   findings.
 
-The 2,017 / 2,795 figures for Django and SQLAlchemy collapse to
-12 / 527 at `--min-confidence 90`, which is itself nowhere near a
+The 2,017 / 1,827 figures for Django and SQLAlchemy collapse to
+12 / 415 at `--min-confidence 90`, which is itself nowhere near a
 ground-truth dead-function count - vulture's confidence rating
 correlates with how many dynamic-dispatch patterns it can rule out,
 not with whether the code is actually dead. The blog post the doc
@@ -682,7 +682,7 @@ The "Role" column distinguishes:
 | Cross-file co-change (logical coupling)   | Medium | High   | Standalone command  | -                | Defer (skip if hotspots ships) |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
 | Redundancy - duplicate functions          | Medium | Medium | Advisory list       | -                | Maybe     |
-| Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 32–2,795 issues per project, ~all FPs from framework patterns | **No** |
+| Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 
 ---

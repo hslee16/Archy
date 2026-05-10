@@ -245,12 +245,12 @@ SHAs (see [`bench/projects.yaml`](../bench/projects.yaml)):
 
 | Pair                    |    `r` |
 | ----------------------- | -----: |
-| modularity ↔ acyclicity | +0.247 |
+| modularity ↔ acyclicity | +0.257 |
 | modularity ↔ depth      | -0.617 |
-| modularity ↔ equality   | -0.249 |
+| modularity ↔ equality   | -0.234 |
 | acyclicity ↔ depth      | -0.618 |
-| acyclicity ↔ equality   | -0.650 |
-| depth ↔ equality        | +0.362 |
+| acyclicity ↔ equality   | -0.652 |
+| depth ↔ equality        | +0.337 |
 
 All six pairs are below `|r| = 0.7`, the OECD-conventional threshold
 for treating sub-indicators as redundant. **Four of six are at
@@ -259,20 +259,20 @@ for treating sub-indicators as redundant. **Four of six are at
 modularity↔depth coupling that was below detection threshold at
 n=10. Concretely:
 
-- **acyclicity ↔ equality at `-0.691`**: high tangle (low
+- **acyclicity ↔ equality at `-0.652`**: high tangle (low
   acyclicity) tends to coexist with concentrated fan-out (low
   equality). A few hub modules participating in a large SCC pull
   both axes down at once.
-- **acyclicity ↔ depth at `-0.646`**: codebases with low acyclicity
+- **acyclicity ↔ depth at `-0.618`**: codebases with low acyclicity
   also tend to have low depth scores (longer chains). A graph that's
   mostly inside a few SCCs has fewer free DAG hops to extend, but the
   SCC condensation it does have tends to be deep when the tangled
   mass dominates.
-- **modularity ↔ depth at `-0.610`**: deeper graphs tend to have
+- **modularity ↔ depth at `-0.617`**: deeper graphs tend to have
   higher modularity. Plausible: in a deep DAG, communities form
   along the chain naturally, so longer chains give Newman's Q more
   structure to find.
-- **depth ↔ equality at `+0.350`**: weak in the larger benchmark.
+- **depth ↔ equality at `+0.337`**: weak in the larger benchmark.
   Was +0.526 at n=10; the larger sample regresses it to a smaller
   effect. The original "moderate" finding looks like sampling noise
   on the narrower 10-project set.
@@ -314,7 +314,7 @@ Pinned SHAs in
 | scrapy        | `5223dbe` |     172 |   858 |   0.560 |      0.521 |      0.640 | 0.533 |    0.552 |
 | datasette     | `aa84fe0` |      59 |   172 |   0.555 |      0.551 |      0.881 | 0.444 |    0.441 |
 | anyio         | `bcb2db6` |      42 |   158 |   0.555 |      0.499 |      0.643 | 0.615 |    0.480 |
-| archy         | `HEAD`    |      12 |    24 |   0.550 |      0.459 |      1.000 | 0.667 |    0.299 |
+| archy         | `v0.8.2`  |      13 |    26 |   0.536 |      0.466 |      1.000 | 0.667 |    0.266 |
 | pytest        | `09f969f` |      69 |   372 |   0.529 |      0.479 |      0.710 | 0.471 |    0.490 |
 | fastapi       | `622b635` |      48 |   114 |   0.522 |      0.522 |      0.771 | 0.615 |    0.300 |
 | pydantic      | `bd8e63e` |     104 |   496 |   0.513 |      0.636 |      0.385 | 0.615 |    0.459 |
@@ -383,7 +383,7 @@ it.
 The empirical case for omission is documented in
 [`docs/RESEARCH_METRICS.md`](RESEARCH_METRICS.md) §12: vulture 2.16
 was run on 23 popular Python projects in 2026-05; default-confidence
-findings ranged from 32 (click) to 2,795 (sqlalchemy), and 15 random
+findings ranged from 10 (msgspec) to 2,017 (django), and 15 random
 findings spot-checked on FastAPI, pytest, and Django were all
 (15/15) false positives - driven by Python idioms like Pydantic
 validators, pytest fixtures, decorator-registered route handlers,

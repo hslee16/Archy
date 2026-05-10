@@ -13,7 +13,7 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 | scrapy | `5223dbe` | 172 | 858 | 0.560 | 0.521 | 0.640 | 0.533 | 0.552 |
 | datasette | `aa84fe0` | 59 | 172 | 0.555 | 0.551 | 0.881 | 0.444 | 0.441 |
 | anyio | `bcb2db6` | 42 | 158 | 0.555 | 0.499 | 0.643 | 0.615 | 0.480 |
-| archy | `HEAD` | 12 | 24 | 0.550 | 0.459 | 1.000 | 0.667 | 0.299 |
+| archy | `v0.8.2` | 13 | 26 | 0.536 | 0.466 | 1.000 | 0.667 | 0.266 |
 | pytest | `09f969f` | 69 | 372 | 0.529 | 0.479 | 0.710 | 0.471 | 0.490 |
 | fastapi | `622b635` | 48 | 114 | 0.522 | 0.522 | 0.771 | 0.615 | 0.300 |
 | pydantic | `bd8e63e` | 104 | 496 | 0.513 | 0.636 | 0.385 | 0.615 | 0.459 |
@@ -35,12 +35,12 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 
 | pair | r |
 | --- | ---: |
-| modularity ↔ acyclicity | +0.247 |
+| modularity ↔ acyclicity | +0.257 |
 | modularity ↔ depth | -0.617 |
-| modularity ↔ equality | -0.249 |
+| modularity ↔ equality | -0.234 |
 | acyclicity ↔ depth | -0.618 |
-| acyclicity ↔ equality | -0.650 |
-| depth ↔ equality | +0.362 |
+| acyclicity ↔ equality | -0.652 |
+| depth ↔ equality | +0.337 |
 
 ## Vulture findings
 
@@ -67,5 +67,5 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 | mkdocs | `2862536` | 7,084 | 88 | 8 |
 | starlette | `7793b92` | 6,584 | 67 | 0 |
 | requests | `e8d2c01` | 6,371 | 54 | 4 |
-| archy | `HEAD` | 2,528 | 16 | 0 |
+| archy | `v0.8.2` | 2,840 | 16 | 0 |
 | msgspec | `3b2543b` | 2,365 | 10 | 4 |
