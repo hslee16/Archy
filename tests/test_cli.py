@@ -443,6 +443,27 @@ def test_roots_makes_namespace_packages_visible(tmp_path: Path):
     assert "app.libs.db" in qualnames
 
 
+def test_impact_lists_transitive_dependents(tmp_path: Path):
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    libs = pkg / "libs"
+    libs.mkdir()
+    (libs / "__init__.py").write_text("")
+    (libs / "db.py").write_text("")
+    routers = pkg / "routers"
+    routers.mkdir()
+    (routers / "__init__.py").write_text("")
+    (routers / "user.py").write_text("from app.libs.db import x\n")
+    args = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--format", "json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["changed"] == ["app.libs.db"]
+    assert payload["impacted"] == ["app.routers.user"]
+    assert payload["unresolved"] == []
+
+
 def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):
     # Without `roots:`, app.routers.** patterns match nothing because the
     # discovered module is bare `routers.user`. With `roots: [app]`, the layer
