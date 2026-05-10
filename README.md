@@ -74,6 +74,42 @@ uv run archy check path/to/project --format json
 uv run archy check path/to/project --config custom.yaml
 ```
 
+### Transitive contracts (`archy contracts`)
+
+`archy check` only sees direct edges. `archy contracts` wraps [import-linter](https://import-linter.readthedocs.io/) so the same layer story is enforced *transitively* (A → B → C still counts as A reaching C). Reads `.importlinter` from the repo root by default.
+
+Install the optional dependency, then author a config:
+
+```bash
+uv sync --extra contracts        # or: pip install 'archy[contracts]'
+```
+
+Minimal `.importlinter` (one Forbidden contract — the parser layer must never reach the CLI layer, even transitively):
+
+```ini
+[importlinter]
+root_package = your_package
+include_external_packages = False
+
+[importlinter:contract:parser-must-not-reach-cli]
+name = parser must not reach cli
+type = forbidden
+source_modules =
+    your_package.parser
+forbidden_modules =
+    your_package.cli
+```
+
+Then run:
+
+```bash
+uv run archy contracts path/to/project
+uv run archy contracts path/to/project --format json
+uv run archy contracts path/to/project --config custom.importlinter
+```
+
+See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar (Layers, Forbidden, Independence, etc.).
+
 ### Compute a quality score
 
 Composite of modularity, acyclicity, depth, and equality (geometric mean). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown.
