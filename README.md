@@ -14,6 +14,7 @@
 |---|---|
 | Inspection | `archy graph`, `archy cycles` |
 | CI governance | `archy check` (reads `archy.yaml`) |
+| Transitive contracts | `archy contracts` (reads `.importlinter`; requires `archy[contracts]`) |
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | MCP server | `archy mcp` |
@@ -131,13 +132,14 @@ uv run archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes eight tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes nine tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
 | `archy_score` | Compute the four-metric score; optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. |
 | `archy_cycles` | Find import cycles. |
 | `archy_check` | Run layer rules from `archy.yaml`. |
+| `archy_contracts` | Run import-linter contracts (transitive Layers, Forbidden, Independence, Protected, AcyclicSiblings). Stricter than `archy_check`; requires `archy[contracts]`. |
 | `archy_trend` | Read recent score history. |
 | `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius). |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. |
@@ -270,7 +272,7 @@ Next up:
 - [ ] Call graph: second edge type alongside imports
 - [ ] Design Structure Matrix (`archy dsm`)
 
-Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt).
+Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt), import-linter contract wrap (`archy contracts`, `archy[contracts]`).
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
