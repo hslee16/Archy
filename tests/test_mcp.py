@@ -151,31 +151,20 @@ def test_run_impact_payload_shape(tmp_path: Path):
     assert result["impacted"] == ["app.main"]
 
 
-def test_run_snapshot_writes_baseline_and_returns_payload(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("")
-    payload = _run_snapshot(tmp_path)
+def test_run_snapshot_writes_baseline_and_returns_payload(acyclic_project: Path):
+    payload = _run_snapshot(acyclic_project)
     assert {"score", "cycles", "violations", "baseline_path"} <= set(payload)
-    assert (tmp_path / ".archy" / "baseline.json").exists()
+    assert (acyclic_project / ".archy" / "baseline.json").exists()
 
 
-def test_run_diff_without_baseline_returns_error(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    result = _run_diff(tmp_path)
+def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
+    result = _run_diff(acyclic_project)
     assert "error" in result
 
 
-def test_run_diff_after_snapshot_reports_zero_delta(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("")
-    _run_snapshot(tmp_path)
-    result = _run_diff(tmp_path)
+def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
+    _run_snapshot(acyclic_project)
+    result = _run_diff(acyclic_project)
     assert result["score_delta"]["overall"] == 0.0
     assert result["cycles"] == {"added": [], "resolved": []}
 

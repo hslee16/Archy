@@ -41,7 +41,8 @@ def test_diff_clean_baseline_clean_current_is_zero(tmp_path: Path):
 def test_diff_flags_newly_introduced_cycle(tmp_path: Path):
     project = _make_clean(tmp_path)
     baseline = take_snapshot(build_graph(project))
-    # Introduce a cycle: pkg.b -> pkg.a (alongside the existing a -> b).
+    # Adding `from pkg.a` here turns the existing a -> b chain into a 2-cycle,
+    # which is what we want compute_diff to surface as cycles.added.
     (project / "pkg" / "b.py").write_text("from pkg.a import thing\n")
     current = take_snapshot(build_graph(project))
     result = compute_diff(baseline, current)
@@ -53,10 +54,11 @@ def test_diff_flags_newly_introduced_cycle(tmp_path: Path):
 
 def test_diff_flags_resolved_cycle(tmp_path: Path):
     project = _make_clean(tmp_path)
-    # Start from a cycle.
+    # The baseline must already contain the cycle; otherwise compute_diff would
+    # flag the post-edit state as `added` rather than the baseline-only state
+    # as `resolved`.
     (project / "pkg" / "b.py").write_text("from pkg.a import thing\n")
     baseline = take_snapshot(build_graph(project))
-    # Resolve it.
     (project / "pkg" / "b.py").write_text("")
     current = take_snapshot(build_graph(project))
     result = compute_diff(baseline, current)
@@ -86,7 +88,8 @@ def test_diff_flags_newly_introduced_violation(tmp_path: Path):
     )
     baseline = take_snapshot(build_graph(tmp_path), config_path=config_path)
     assert baseline.violations == ()
-    # Introduce a forbidden edge.
+    # core -> cli is the forbidden direction; this edit lets find_violations
+    # report a violation that compute_diff should flag as violations.added.
     (core / "api.py").write_text("from myapp.cli.runner import go\n")
     current = take_snapshot(build_graph(tmp_path), config_path=config_path)
     result = compute_diff(baseline, current)
