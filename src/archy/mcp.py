@@ -18,6 +18,13 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from archy.cycles import find_cycles
+from archy.diff import (
+    compute_diff,
+    read_snapshot,
+    snapshot_to_dict,
+    take_snapshot,
+    write_snapshot,
+)
 from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
@@ -31,11 +38,50 @@ from archy.layers import (
 )
 from archy.score import compute_score
 
+_AGENT_LOOP_PROMPT = """\
+# archy agent loop
+
+archy turns the project's structural health into a number you can act on
+between edits. The loop is:
+
+1. **Snapshot** at session start so you have a baseline:
+   `archy_snapshot(path)`
+2. **Look up impact** before editing a module so you know who breaks if
+   the change is wrong:
+   `archy_impact(path, files=[<file you plan to edit>])`
+3. **Edit** the code as you normally would.
+4. **Diff** after the edit to see what got better, what got worse, and
+   exactly which cycles or layer rules changed:
+   `archy_diff(path)`
+5. If `score_delta.overall` dropped or `cycles.added` / `violations.added`
+   are non-empty, the change introduced regressions. Inspect the named
+   modules, fix or revert, then loop back to step 4. Recurse until the
+   diff is clean.
+
+`archy_score(path, strict=True)` is a one-shot gate against the last
+recorded run; it's lighter than the snapshot/diff loop and useful as
+the final pre-commit check.
+"""
+
 
 def create_server() -> FastMCP:
     server: FastMCP = FastMCP("archy")
     _register_tools(server)
+    _register_prompts(server)
     return server
+
+
+def _register_prompts(server: FastMCP) -> None:
+    @server.prompt(
+        name="loop",
+        description=(
+            "How to use archy as an architectural feedback loop while editing code. "
+            "Read this at session start so subsequent tool calls follow the right "
+            "snapshot -> edit -> diff cadence."
+        ),
+    )
+    def loop() -> str:
+        return _AGENT_LOOP_PROMPT
 
 
 def _register_tools(server: FastMCP) -> None:
@@ -117,6 +163,29 @@ def _register_tools(server: FastMCP) -> None:
         files: list[str],
     ) -> dict[str, Any]:
         return _run_impact(Path(path), files=[Path(f) for f in files])
+
+    @server.tool(
+        name="archy_snapshot",
+        description=(
+            "Capture score, cycles, and layer violations to .archy/baseline.json "
+            "as a baseline that archy_diff will compare against. Call at the "
+            "start of an editing session. See the `loop` prompt for full usage."
+        ),
+    )
+    def archy_snapshot(path: str) -> dict[str, Any]:
+        return _run_snapshot(Path(path))
+
+    @server.tool(
+        name="archy_diff",
+        description=(
+            "Compare the current project state to the last snapshot. Returns "
+            "per-component score deltas plus the cycles and layer violations "
+            "that have been added or resolved since the baseline. Use after "
+            "edits to localize regressions; see the `loop` prompt."
+        ),
+    )
+    def archy_diff(path: str) -> dict[str, Any]:
+        return _run_diff(Path(path))
 
     @server.tool(
         name="archy_record_baseline",
@@ -244,6 +313,27 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
         ],
         "passed": not violations,
     }
+
+
+def _run_snapshot(path: Path) -> dict[str, Any]:
+    graph = _load_graph(path, internal_only=True)
+    config_path = discover_config(path)
+    snap = take_snapshot(graph, config_path=config_path)
+    target = path / ".archy" / "baseline.json"
+    write_snapshot(snap, target)
+    payload = snapshot_to_dict(snap)
+    payload["baseline_path"] = str(target)
+    return payload
+
+
+def _run_diff(path: Path) -> dict[str, Any]:
+    target = path / ".archy" / "baseline.json"
+    baseline = read_snapshot(target)
+    if baseline is None:
+        return {"error": (f"no baseline at {target}; call archy_snapshot first to capture one.")}
+    graph = _load_graph(path, internal_only=True)
+    current = take_snapshot(graph, config_path=discover_config(path))
+    return compute_diff(baseline, current)
 
 
 def _run_impact(path: Path, *, files: list[Path]) -> dict[str, Any]:

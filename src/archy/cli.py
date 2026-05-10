@@ -11,6 +11,13 @@ import networkx as nx
 
 from archy import __version__
 from archy.cycles import Cycle, find_cycles
+from archy.diff import (
+    Snapshot,
+    compute_diff,
+    read_snapshot,
+    take_snapshot,
+    write_snapshot,
+)
 from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
@@ -327,6 +334,68 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str) -> None:
 
 
 @main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Where to write the snapshot. Defaults to PATH/.archy/baseline.json.",
+)
+def snapshot(path: Path, out_path: Path | None) -> None:
+    """Capture score, cycles, and layer violations as a baseline for `archy diff`."""
+    g = _load_graph(path, internal_only=True)
+    snap = take_snapshot(g, config_path=discover_config(path))
+    target = out_path or (path / ".archy" / "baseline.json")
+    write_snapshot(snap, target)
+    click.echo(f"# baseline written to {target}")
+    click.echo(_snapshot_to_text(snap))
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--baseline",
+    "baseline_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to a baseline JSON. Defaults to PATH/.archy/baseline.json.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def diff(path: Path, baseline_path: Path | None, fmt: str) -> None:
+    """Compare current state against a baseline snapshot.
+
+    Reports per-component score deltas, newly added cycles/violations,
+    and any cycles/violations that have been resolved since the baseline.
+    """
+    target = baseline_path or (path / ".archy" / "baseline.json")
+    baseline = read_snapshot(target)
+    if baseline is None:
+        raise click.ClickException(f"no baseline at {target}; run `archy snapshot {path}` first.")
+    g = _load_graph(path, internal_only=True)
+    current = take_snapshot(g, config_path=discover_config(path))
+    result = compute_diff(baseline, current)
+    if fmt == "json":
+        click.echo(json.dumps(result, indent=2, sort_keys=True))
+    else:
+        click.echo(_diff_to_text(result))
+
+
+@main.command()
 def mcp() -> None:
     """Run archy as an MCP server on stdio for AI agent integration."""
     from archy.mcp import create_server
@@ -475,6 +544,40 @@ def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
         }
         for c in cycles
     ]
+
+
+def _snapshot_to_text(snap: Snapshot) -> str:
+    return (
+        f"# score: {snap.score.overall:.3f}  "
+        f"cycles: {len(snap.cycles)}  violations: {len(snap.violations)}"
+    )
+
+
+def _diff_to_text(result: dict) -> str:
+    deltas = result["score_delta"]
+    lines = ["# score deltas (current - baseline):"]
+    for name in ("overall", "modularity", "acyclicity", "depth", "equality"):
+        lines.append(f"  {name:11s} {deltas[name]:+.3f}")
+    cycles = result["cycles"]
+    lines.append("")
+    lines.append(f"# cycles: +{len(cycles['added'])} added, -{len(cycles['resolved'])} resolved")
+    for c in cycles["added"]:
+        lines.append(f"  + cycle: {', '.join(c['modules'])}")
+    for c in cycles["resolved"]:
+        lines.append(f"  - cycle (resolved): {', '.join(c['modules'])}")
+    violations = result["violations"]
+    lines.append("")
+    lines.append(
+        f"# violations: +{len(violations['added'])} added, -{len(violations['resolved'])} resolved"
+    )
+    for v in violations["added"]:
+        lines.append(
+            f"  + {v['source']} -> {v['target']}  ({v['rule']['from']} -> {v['rule']['to']})"
+        )
+    for v in violations["resolved"]:
+        rule = f"{v['rule']['from']} -> {v['rule']['to']}"
+        lines.append(f"  - {v['source']} -> {v['target']}  resolved ({rule})")
+    return "\n".join(lines)
 
 
 def _impact_to_dict(result: Impact) -> dict:

@@ -19,8 +19,10 @@ import pytest
 from archy.mcp import (
     _run_check,
     _run_cycles,
+    _run_diff,
     _run_impact,
     _run_score,
+    _run_snapshot,
     _run_trend,
     create_server,
 )
@@ -46,8 +48,16 @@ def test_create_server_registers_expected_tools():
         "archy_check",
         "archy_trend",
         "archy_impact",
+        "archy_snapshot",
+        "archy_diff",
         "archy_record_baseline",
     }
+
+
+def test_create_server_registers_loop_prompt():
+    server = create_server()
+    prompts = asyncio.run(server.list_prompts())
+    assert any(p.name == "loop" for p in prompts)
 
 
 def test_run_score_payload_shape(acyclic_project: Path):
@@ -139,6 +149,24 @@ def test_run_impact_payload_shape(tmp_path: Path):
     assert {"changed", "unresolved", "impacted"} == set(result)
     assert result["changed"] == ["app.lib"]
     assert result["impacted"] == ["app.main"]
+
+
+def test_run_snapshot_writes_baseline_and_returns_payload(acyclic_project: Path):
+    payload = _run_snapshot(acyclic_project)
+    assert {"score", "cycles", "violations", "baseline_path"} <= set(payload)
+    assert (acyclic_project / ".archy" / "baseline.json").exists()
+
+
+def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
+    result = _run_diff(acyclic_project)
+    assert "error" in result
+
+
+def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
+    _run_snapshot(acyclic_project)
+    result = _run_diff(acyclic_project)
+    assert result["score_delta"]["overall"] == 0.0
+    assert result["cycles"] == {"added": [], "resolved": []}
 
 
 def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
