@@ -237,11 +237,14 @@ itself (10 projects, fresh HEADs at 2026-05-10):
 
 Five of six pairs are below `|r| = 0.5`, comfortably under the OECD
 redundancy threshold. The exception is **depth ↔ equality at
-`r = +0.526`**, a moderate positive correlation: in this benchmark,
-graphs with longer chains (low `depth` score) also tend to have more
-concentrated fan-out (low `equality` score). The two axes are *not*
-strictly independent - they're moderately coupled in real Python
-code.
+`r = +0.526`**, a moderate positive correlation. Recall that both
+archy axes are inverted so that 1.0 is best: a low `depth` score
+means a long chain, and a low `equality` score means concentrated
+fan-out. So `r = +0.526` says: in this benchmark, graphs with longer
+chains also tend to have more concentrated fan-out, and graphs with
+shorter chains tend to have more even fan-out. The two axes are
+*not* strictly independent - they're moderately coupled in real
+Python code.
 
 This doesn't break the geometric-mean argument (the OECD threshold
 for double-counting is `|r| > 0.7`), but it's a real empirical
