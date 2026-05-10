@@ -1,11 +1,21 @@
 # Future Features
 
-Concrete things to build next, with rough order. Items in brackets cite where the idea came from.
+Concrete things to build next, with rough order. Items in brackets cite where the idea came from. Items annotated `[RESEARCH_METRICS.md §N]` are validated against the survey in [`RESEARCH_METRICS.md`](RESEARCH_METRICS.md).
+
+## Pre-call-graph wins (validated, low cost)
+
+These are essentially free - no new edge type, no AST work, no git mining - and would substantially widen archy's signal surface before the call-graph PR lands.
+
+- **Tangle ratio** - replace `acyclicity = 1/(1+cycle_count)` with `1 - tangle_ratio` (fraction of nodes inside SCCs of size ≥ 2). One large SCC reads very differently from one small one; the count form treats them identically. Best done after the `__init__.py` re-export resolver lands so phantom cycles are gone. [RESEARCH_METRICS.md §6]
+- **`archy.yaml` Forbidden + Independence contracts** - close the parity gap with import-linter. Layers contracts already exist; Forbidden ("A must not depend on B") and Independence ("A and B must be mutually independent, even indirectly") are graph-reachability checks on the existing edge type. Pure additive to `archy check`. [RESEARCH_METRICS.md §10]
+- **NCCD as fifth score axis** - validated empirically orthogonal to depth (Pearson r=0.000 on the 9-library benchmark). Captures average-case reach where depth captures worst-case chain. Adding it shifts the geometric-mean exponent 1/4 → 1/5, which breaks cross-version score comparisons - flag explicitly per the OECD comparability-over-time guidance in `SCORING.md`. [RESEARCH_METRICS.md §3]
+- **Martin's `I` per module + SDP-violation check rule** - `I = Ce/(Ce+Ca)` is a single-pass ratio on the existing graph. Surface per-module in `archy graph --format json`; add a Stable Dependencies Principle violation check ("a module imports one with strictly higher `I`") as a new rule type for `archy check`. [RESEARCH_METRICS.md §2]
+- **PageRank + core size as diagnostics** - per-module PageRank weights "importance by importance of dependents." Core size = largest SCC fraction. Both are NetworkX one-liners. Surface in `archy graph --format json` and `archy_impact` output; not score axes. [RESEARCH_METRICS.md §3, §5]
 
 ## Near-term (next 2–3 PRs)
 
-- **Call graph** - second edge type alongside imports. Tree-sitter query for `(call function: ...)`, resolve callee to its defining module. Doubles the signal for modularity/coupling because two modules can be independent by imports but tightly coupled by calls. [sentrux: uses both import and call edges in Q]
-- **Cyclomatic complexity per function** - branch-node counts via tree-sitter. Feeds the equality (Gini) metric and the redundancy proxy. [sentrux: `[semantics.complexity]` config]
+- **Call graph** - second edge type alongside imports. Tree-sitter query for `(call function: ...)`, resolve callee to its defining module. Doubles the signal for modularity/coupling because two modules can be independent by imports but tightly coupled by calls. Also raises NCCD/propagation cost resolution. [sentrux: uses both import and call edges in Q]
+- **Cyclomatic complexity per function** - branch-node counts via tree-sitter. Feeds the equality (Gini) metric and unblocks hotspot analysis. Cognitive complexity rides along free in the same AST pass. [sentrux: `[semantics.complexity]` config; RESEARCH_METRICS.md §9]
 
 ## Scoring (the headline feature)
 
@@ -13,11 +23,14 @@ Concrete things to build next, with rough order. Items in brackets cite where th
 - ~~**Per-commit JSONL history** in `.archy/history.jsonl`~~ shipped in v0.3.0 (`archy score --record`).
 - ~~**`archy trend`**~~ shipped in v0.3.0 - ASCII sparkline + last-N table.
 - **Static HTML trend report** - the original stretch goal. Render `.archy/history.jsonl` as a self-contained HTML page with Chart.js so trend can be linked from a CI artifact or dashboard.
-- **Equality based on per-function CC** - we currently compute Gini over module out-degrees as a proxy. The eventual signal is `gini(per_function_cyclomatic_complexity)`, which requires the cyclomatic-complexity metric below.
+- **Equality based on per-function CC** - we currently compute Gini over module out-degrees as a proxy. The eventual signal is `gini(per_function_cyclomatic_complexity)`, which requires the cyclomatic-complexity metric above.
+- **Type-hint coverage as sub-stat or sixth axis** - percentage of public functions with full parameter and return annotations. Differentiated Python signal that no graph-level metric captures. Tree-sitter pass over `FunctionDef` nodes; rides on the same AST scope as cyclomatic complexity. Could ship first as a sub-stat and promote to a score axis if the signal proves load-bearing. [RESEARCH_METRICS.md §13]
+- **Hotspots = CC × per-file churn** - standalone `archy hotspots` command once CC ships. Needs only a one-pass `git log --name-only` parser, not a full cross-file co-change matrix. Produces a prioritized list ("refactor these three files first") rather than a single number. [RESEARCH_METRICS.md §8]
 
 ## Deferred - needs more thought
 
-- **Redundancy metric** - dead functions (no inbound call edges) and duplicate functions (AST-shape hash). Hard to do without false positives because of dynamic dispatch, decorators, and entry points (`if __name__ == "__main__"`). [sentrux: `redundancy_ratio`]
+- **Duplicate-function detection** - AST-shape hashing (normalize identifiers, hash structure, cluster) over a length threshold. Lower empirical FP rate than dead-function detection. Ship as an advisory list, not a score axis. [sentrux: `redundancy_ratio`; RESEARCH_METRICS.md §12]
+- ~~**Dead-function detection**~~ - **deferred indefinitely.** Empirical 14-project vulture run in 2026-05 confirmed FP rates from 32 (click) to 2,795 (sqlalchemy) at default confidence; 15-finding spot-checks on FastAPI / pytest / Django were 15/15 false positives, dominated by Pydantic validators, pytest fixtures, decorator-registered route handlers, and Django's `global_settings.py` string-lookup pattern. Static dead-code detection on real Python is too noisy to fold into a quality signal. Revisit only if archy can ingest a runtime-coverage source. [RESEARCH_METRICS.md §12]
 - **Type reference edges** - function parameter and return annotations as a third edge type. Useful for catching layer violations that hide behind `if TYPE_CHECKING:` imports. [sentrux: `tags.scm` type-reference query]
 - **Treemap visualization** - D3 or Observable Plot, wrapped in a static HTML report. Sentrux's signature feature; valuable but not load-bearing for governance use.
 - ~~**Pre-commit hook + GitHub Action**~~ shipped in v0.4.1/v0.4.2 - see `README.md` for usage.
