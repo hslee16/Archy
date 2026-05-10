@@ -220,7 +220,7 @@ def test_run_contracts_no_config_raises(
 def test_importlinter_user_options_surface() -> None:
     """`UserOptions(session_options=..., contracts_options=...)` is the
     constructor we call from `_archy_yaml_to_user_options`. If import-linter
-    renames either kwarg, the YAML fallback breaks silently — assert the
+    renames either kwarg, the YAML fallback breaks silently; assert the
     contract here."""
     from importlinter.application.user_options import UserOptions
 

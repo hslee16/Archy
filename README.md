@@ -88,9 +88,9 @@ uv run archy contracts path/to/project --format json
 
 1. The `--config` argument if passed.
 2. `.importlinter` in the project root.
-3. `archy.yaml` — each `forbid` rule becomes one Forbidden contract checked transitively. **No additional config required**: a project that already has `archy.yaml` can run `archy contracts` immediately to upgrade direct-edge enforcement to transitive.
+3. `archy.yaml`: each `forbid` rule becomes one Forbidden contract checked transitively. **No additional config required**: a project that already has `archy.yaml` can run `archy contracts` immediately to upgrade direct-edge enforcement to transitive.
 
-Reach for `.importlinter` only when you need contract types `archy.yaml` does not express — Independence, Protected, AcyclicSiblings, or hand-tuned Layers. See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar.
+Reach for `.importlinter` only when you need contract types `archy.yaml` does not express: Independence, Protected, AcyclicSiblings, or hand-tuned Layers. See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar.
 
 ### Compute a quality score
 
