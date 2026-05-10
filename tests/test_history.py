@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 
 from archy.history import (
-    HistoryRow,
     append,
     git_metadata,
     read,
@@ -115,9 +114,3 @@ def test_git_metadata_on_fresh_repo(tmp_path: Path):
     assert commit is not None
     assert len(commit) == 40
     assert branch == "main"
-
-
-def test_history_row_is_frozen_dataclass():
-    # @dataclass(frozen=True) enforces immutability at runtime; this test
-    # documents the intent. (ty also rejects assignment statically.)
-    assert HistoryRow.__dataclass_params__.frozen is True

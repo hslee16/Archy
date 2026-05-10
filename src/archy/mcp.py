@@ -208,7 +208,11 @@ def _run_check(path: Path, *, config_path: Path | None) -> dict[str, Any]:
             )
         config_path = discovered
     config = load_config(config_path)
-    graph = build_graph(path, ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude))
+    graph = build_graph(
+        path,
+        ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
+        extra_roots=config.roots,
+    )
     violations = find_violations(graph, config)
     return {
         "config_path": str(config_path),
@@ -253,18 +257,21 @@ def _run_trend(path: Path, *, last_n: int) -> list[dict[str, Any]]:
 
 
 def _load_graph(path: Path, *, internal_only: bool):
-    graph = build_graph(path, ignored_dirs=_ignored_dirs_for(path))
+    graph = build_graph(path, **_graph_kwargs(path))
     if internal_only:
         external = {n for n, d in graph.nodes(data=True) if d.get("external")}
         graph.remove_nodes_from(external)
     return graph
 
 
-def _ignored_dirs_for(path: Path) -> frozenset[str]:
-    # Best-effort archy.yaml discovery so MCP tools honor user `exclude:`
-    # entries the same way the CLI does. See cli._ignored_dirs_for.
+def _graph_kwargs(path: Path) -> dict:
+    # Best-effort archy.yaml discovery so MCP tools honor `exclude:` and
+    # `roots:` the same way the CLI does. See cli._graph_kwargs.
     config_path = discover_config(path)
     if config_path is None:
-        return DEFAULT_IGNORED_DIRS
+        return {}
     config = load_config(config_path)
-    return DEFAULT_IGNORED_DIRS | frozenset(config.exclude)
+    return {
+        "ignored_dirs": DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
+        "extra_roots": config.roots,
+    }

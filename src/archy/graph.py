@@ -47,6 +47,7 @@ def build_graph(
     root: Path,
     *,
     ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
+    extra_roots: Iterable[str] = (),
 ) -> nx.DiGraph:
     """Discover modules under `root` and build their import graph.
 
@@ -60,7 +61,7 @@ def build_graph(
     occur on multiple lines).
     """
     ignored = frozenset(ignored_dirs)
-    modules = _discover_modules(root, ignored)
+    modules = _discover_modules(root, ignored, tuple(extra_roots))
     qualname_set = {m.qualname for m in modules}
 
     graph: nx.DiGraph = nx.DiGraph()
@@ -91,14 +92,18 @@ def build_graph(
     return graph
 
 
-def _discover_modules(root: Path, ignored: frozenset[str]) -> list[Module]:
+def _discover_modules(
+    root: Path,
+    ignored: frozenset[str],
+    extra_roots: tuple[str, ...],
+) -> list[Module]:
     """Find Python source files and assign dotted module qualnames.
 
     Package roots are directories containing __init__.py whose parent
     directory does NOT contain one. The conventional `src/<pkg>/__init__.py`
     layout is supported because `src` itself is not a package.
     """
-    package_roots = _find_package_roots(root, ignored)
+    package_roots = _find_package_roots(root, ignored, extra_roots)
     modules: list[Module] = []
 
     for py_file in _iter_python_files(root, ignored):
@@ -118,13 +123,27 @@ def _discover_modules(root: Path, ignored: frozenset[str]) -> list[Module]:
     return modules
 
 
-def _find_package_roots(root: Path, ignored: frozenset[str]) -> list[Path]:
+def _find_package_roots(
+    root: Path,
+    ignored: frozenset[str],
+    extra_roots: tuple[str, ...],
+) -> list[Path]:
     """Return absolute paths to top-level package directories under root."""
     package_dirs: set[Path] = set()
     for path in root.rglob("__init__.py"):
         if any(part in ignored for part in path.parts):
             continue
         package_dirs.add(path.parent.resolve())
+
+    # User-declared namespace package roots: treat the directory as a package
+    # even without __init__.py, so descendants get qualnames rooted there.
+    # Adding it to package_dirs also demotes any already-discovered child
+    # packages (their parent is now a package_dir, so they stop being roots),
+    # which is exactly the nesting we want.
+    for r in extra_roots:
+        candidate = (root / r).resolve()
+        if candidate.is_dir():
+            package_dirs.add(candidate)
 
     roots: list[Path] = []
     for pkg in package_dirs:

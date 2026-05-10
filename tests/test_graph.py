@@ -258,3 +258,49 @@ def test_reexport_chain_does_not_resolve_different_names(tmp_path: Path):
     # Foo doesn't chain through pkg.sub because pkg.sub doesn't re-export Foo.
     assert g.has_edge("pkg.consumer", "pkg.sub")
     assert not g.has_edge("pkg.consumer", "pkg.sub.impl")
+
+
+# --- extra_roots (PEP 420 namespace packages) ---------------------------------
+
+
+def test_extra_roots_treats_directory_without_init_as_package(tmp_path: Path):
+    # No __init__.py anywhere. Without extra_roots, archy sees nothing.
+    app = tmp_path / "app"
+    libs = app / "libs"
+    libs.mkdir(parents=True)
+    (libs / "db.py").write_text("import os\n")
+    (app / "main.py").write_text("from app.libs.db import x\n")
+    assert build_graph(tmp_path).number_of_nodes() == 0
+    g = build_graph(tmp_path, extra_roots=("app",))
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+    assert "app.main" in internal
+    assert "app.libs.db" in internal
+    assert g.has_edge("app.main", "app.libs.db")
+
+
+def test_extra_roots_demotes_inner_init_packages(tmp_path: Path):
+    # `app/` is namespace; `app/routers/` has __init__.py. Without extra_roots
+    # archy sees a top-level `routers` package. With extra_roots=("app",) the
+    # routers package nests under app, matching how Python actually imports it.
+    app = tmp_path / "app"
+    routers = app / "routers"
+    routers.mkdir(parents=True)
+    (routers / "__init__.py").write_text("")
+    (routers / "user.py").write_text("")
+
+    g_default = build_graph(tmp_path)
+    assert "routers.user" in g_default.nodes
+    assert "app.routers.user" not in g_default.nodes
+
+    g_rooted = build_graph(tmp_path, extra_roots=("app",))
+    assert "app.routers.user" in g_rooted.nodes
+    assert "routers.user" not in g_rooted.nodes
+
+
+def test_extra_roots_missing_directory_is_skipped(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("")
+    g = build_graph(tmp_path, extra_roots=("nonexistent",))
+    assert "pkg.a" in g.nodes
