@@ -61,7 +61,13 @@ line-length = 100
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ANN401", "TID251"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# `Any` defeats type-checking. Prefer `object`, a TypedDict, or a Protocol.
+# ANN401 alone only catches Any in parameter annotations; banning the import
+# closes the loophole for return types, dataclass fields, and locals.
+"typing.Any".msg = "Use a specific type instead of Any (object, TypedDict, or Protocol)."
 
 [tool.ty.src]
 include = ["src", "tests"]

@@ -14,7 +14,7 @@ it from the CLI via `archy mcp`.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: TID251  # pydantic conversion in follow-up PR
 
 from mcp.server.fastmcp import FastMCP
 

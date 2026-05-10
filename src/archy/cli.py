@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from typing import cast
 
 import click
 import networkx as nx
@@ -661,18 +662,22 @@ def _contracts_to_text(result: ContractsResult) -> str:
         for w in c.warnings:
             lines.append(f"    ! {w}")
         if not c.kept:
-            chains = c.metadata.get("invalid_chains") or []
+            # `metadata` is `dict[str, object]` (import-linter's per-contract-
+            # type shape); cast each level explicitly at the read sites rather
+            # than typing the import-linter wire format.
+            chains = cast(list[dict[str, object]], c.metadata.get("invalid_chains") or [])
             for chain in chains:
                 upstream = chain.get("upstream_module", "?")
                 downstream = chain.get("downstream_module", "?")
                 lines.append(f"    {downstream} -> {upstream}")
-                for path in chain.get("chains", []):
+                paths = cast(list[list[dict[str, object]]], chain.get("chains") or [])
+                for path in paths:
                     # Multi-step paths are worth showing; single-step paths
                     # are already in the line above.
                     if len(path) <= 1:
                         continue
-                    nodes = [path[0].get("importer", "?")]
-                    nodes.extend(step.get("imported", "?") for step in path)
+                    nodes = [str(path[0].get("importer", "?"))]
+                    nodes.extend(str(step.get("imported", "?")) for step in path)
                     lines.append(f"      via {' -> '.join(nodes)}")
     return "\n".join(lines)
 

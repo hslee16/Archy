@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: TID251  # pydantic conversion in follow-up PR
 
 from archy.cycles import find_cycles
 from archy.layers import (

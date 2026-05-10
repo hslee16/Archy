@@ -118,8 +118,7 @@ def run_contracts(
             return _drive_import_linter(user_options=user_options)
 
     raise ContractsConfigError(
-        f"no contracts config found in {project_dir}: expected .importlinter "
-        "or archy.yaml"
+        f"no contracts config found in {project_dir}: expected .importlinter or archy.yaml"
     )
 
 
