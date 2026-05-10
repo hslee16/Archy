@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import networkx as nx
+import pytest
 
 from archy.instability import compute_instability
+from archy.layers import find_sdp_violations
 
 
 def _g(*edges: tuple[str, str], external: tuple[str, ...] = ()) -> nx.DiGraph:
@@ -56,14 +58,13 @@ def test_mixed_module_partial_instability():
 # --- SDP violations -----------------------------------------------------------
 
 
-def test_find_sdp_violations_flags_strict_violation():
-    from archy.layers import find_sdp_violations
-
+@pytest.fixture
+def sdp_violation_graph() -> nx.DiGraph:
     # `a` is heavily depended on (Ca=3, Ce=1) -> I(a) = 1/4 = 0.25
     # `b` depends on a lot (Ce=3, Ca=1) -> I(b) = 3/4 = 0.75
     # The edge `a -> b` is from a stable module to a less-stable one;
     # SDP says that's backwards.
-    g = _g(
+    return _g(
         ("x1", "a"),
         ("x2", "a"),
         ("x3", "a"),
@@ -72,31 +73,21 @@ def test_find_sdp_violations_flags_strict_violation():
         ("b", "y2"),
         ("b", "y3"),
     )
-    findings = find_sdp_violations(g)
+
+
+def test_find_sdp_violations_flags_strict_violation(sdp_violation_graph: nx.DiGraph):
+    findings = find_sdp_violations(sdp_violation_graph)
     [violation] = [v for v in findings if v.source == "a" and v.target == "b"]
     assert violation.source_instability == 0.25
     assert violation.target_instability == 0.75
 
 
-def test_find_sdp_violations_respects_tolerance():
-    from archy.layers import find_sdp_violations
-
-    g = _g(
-        ("x1", "a"),
-        ("x2", "a"),
-        ("x3", "a"),
-        ("a", "b"),
-        ("b", "y1"),
-        ("b", "y2"),
-        ("b", "y3"),
-    )
+def test_find_sdp_violations_respects_tolerance(sdp_violation_graph: nx.DiGraph):
     # The a->b gap is 0.5; tolerance >= 0.5 silences it.
-    assert all(v.source != "a" for v in find_sdp_violations(g, tolerance=0.5))
+    assert all(v.source != "a" for v in find_sdp_violations(sdp_violation_graph, tolerance=0.5))
 
 
 def test_find_sdp_violations_ignores_external_targets():
-    from archy.layers import find_sdp_violations
-
     # External targets have no I, so the SDP comparison cannot be made
     # and the edge is skipped.
     g = _g(("a", "ext"), external=("ext",))

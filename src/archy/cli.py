@@ -445,10 +445,7 @@ def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
     """
     try:
         result = run_contracts(path, config_filename=config_filename)
-    except ContractsNotAvailable as exc:
-        click.echo(str(exc), err=True)
-        sys.exit(2)
-    except ContractsConfigError as exc:
+    except (ContractsNotAvailable, ContractsConfigError) as exc:
         click.echo(str(exc), err=True)
         sys.exit(2)
 
