@@ -29,6 +29,22 @@ class ForbidRule(BaseModel):
     to_layer: str
 
 
+class SdpConfig(BaseModel):
+    """Stable Dependencies Principle: a module should not depend on one
+    that is *strictly less stable* (higher Martin's I).
+
+    `tolerance` is the slack: an edge from a module with I=Is to one
+    with I=It is flagged only if `It > Is + tolerance`. Default 0.0
+    (any strict violation flagged); raise it to ignore borderline
+    cases in noisy graphs.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = False
+    tolerance: float = 0.0
+
+
 class LayerConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -36,6 +52,7 @@ class LayerConfig(BaseModel):
     forbid: tuple[ForbidRule, ...]
     exclude: tuple[str, ...] = ()
     roots: tuple[str, ...] = ()
+    sdp: SdpConfig = SdpConfig()
 
 
 class Violation(BaseModel):
@@ -44,6 +61,22 @@ class Violation(BaseModel):
     rule: ForbidRule
     source: str
     target: str
+    lines: tuple[int, ...]
+
+
+class SdpViolation(BaseModel):
+    """An import edge where the target is less stable than the source.
+
+    `source_instability` and `target_instability` are reported so
+    callers can show the gap that triggered the finding.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    target: str
+    source_instability: float
+    target_instability: float
     lines: tuple[int, ...]
 
 
@@ -65,11 +98,13 @@ def load_config(path: Path) -> LayerConfig:
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
     exclude = _parse_str_list(raw.get("exclude", []), "exclude", path)
     roots = _parse_str_list(raw.get("roots", []), "roots", path)
+    sdp = _parse_sdp(raw.get("sdp"), path)
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
         exclude=tuple(exclude),
         roots=tuple(roots),
+        sdp=sdp,
     )
 
 
@@ -125,6 +160,38 @@ def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
     return violations
 
 
+def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[SdpViolation]:
+    """Edges where the target is strictly less stable than the source.
+
+    "Less stable" means higher Martin's I. The Stable Dependencies
+    Principle says modules should depend in the direction of stability,
+    so an edge from `Is = 0.2` to `It = 0.8` (target depends on more
+    things, more likely to change) is a violation. Only internal-to-
+    internal edges are considered; external dependencies have no I.
+    """
+    from archy.instability import compute_instability
+
+    instability = compute_instability(graph)
+    violations: list[SdpViolation] = []
+    for source, target, data in graph.edges(data=True):
+        if source not in instability or target not in instability:
+            continue
+        i_src = instability[source]
+        i_tgt = instability[target]
+        if i_tgt > i_src + tolerance:
+            violations.append(
+                SdpViolation(
+                    source=source,
+                    target=target,
+                    source_instability=i_src,
+                    target_instability=i_tgt,
+                    lines=tuple(data.get("lines", ())),
+                )
+            )
+    violations.sort(key=lambda v: (v.source, v.target))
+    return violations
+
+
 # --- internals ----------------------------------------------------------------
 
 
@@ -175,6 +242,19 @@ def _check_known_layer(name: str, field: str, known: set[str], path: Path) -> No
             f"forbid `{field}` references unknown layer {name!r} in {path}; "
             f"known layers: {sorted(known)}"
         )
+
+
+def _parse_sdp(raw: object, path: Path) -> SdpConfig:
+    if raw is None:
+        return SdpConfig()
+    body = _as_str_dict(raw, "`sdp`", path)
+    enabled = body.get("enabled", False)
+    tolerance = body.get("tolerance", 0.0)
+    if not isinstance(enabled, bool):
+        raise LayerConfigError(f"`sdp.enabled` must be a bool in {path}")
+    if not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool):
+        raise LayerConfigError(f"`sdp.tolerance` must be a number in {path}")
+    return SdpConfig(enabled=enabled, tolerance=float(tolerance))
 
 
 def _parse_str_list(raw: object, field: str, path: Path) -> list[str]:

@@ -122,12 +122,12 @@ def test_check_json_output(tmp_path: Path):
     result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
     assert result.exit_code == 1
     payload = json.loads(result.output)
-    assert isinstance(payload, list)
-    assert len(payload) == 1
-    [violation] = payload
+    assert isinstance(payload, dict)
+    [violation] = payload["violations"]
     assert violation["rule"] == {"from": "core", "to": "cli"}
     assert violation["source"] == "myapp.core.api"
     assert violation["target"] == "myapp.cli.runner"
+    assert payload["sdp_violations"] == []
 
 
 def test_check_no_config_gives_clear_error(tmp_path: Path):
