@@ -166,8 +166,15 @@ def main() -> int:
     print()
     print("## Score table\n")
     cols = [
-        "name", "sha", "modules", "edges",
-        "overall", "modularity", "acyclicity", "depth", "equality",
+        "name",
+        "sha",
+        "modules",
+        "edges",
+        "overall",
+        "modularity",
+        "acyclicity",
+        "depth",
+        "equality",
     ]
     print("| " + " | ".join(cols) + " |")
     print("| " + " | ".join("---:" if c not in {"name", "sha"} else "---" for c in cols) + " |")
