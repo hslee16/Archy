@@ -106,7 +106,7 @@ def pearson(xs: list[float], ys: list[float]) -> float:
         return float("nan")
     mx = sum(xs) / m
     my = sum(ys) / m
-    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    num = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
     dx = math.sqrt(sum((x - mx) ** 2 for x in xs))
     dy = math.sqrt(sum((y - my) ** 2 for y in ys))
     if dx == 0 or dy == 0:
