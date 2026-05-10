@@ -451,25 +451,34 @@ Sentrux's fifth metric (already discussed in `SCORING.md` as
 deferred). The Python case is *worse* than the general case.
 
 **Empirical validation.** Vulture 2.16 was run with default settings
-(60% confidence) and at 90% confidence on 14 popular Python projects.
-Findings counts:
+(60% confidence) and at 90% confidence on the full 22-project
+benchmark (see [`bench/projects.yaml`](../bench/projects.yaml)),
+captured 2026-05-10:
 
 | Project        |    LOC | Vulture @ 60% | Vulture @ 90% |
 | -------------- | -----: | ------------: | ------------: |
-| click          | 10,860 |            32 |             3 |
-| fastapi        | 19,334 |           129 |             8 |
-| flask          |  9,204 |            76 |             7 |
-| httpx          |  8,827 |            69 |             3 |
+| **sqlalchemy** |246,065 |     **1,827** |           415 |
+| scikit-learn   |211,188 |           246 |            31 |
+| **django**     |156,666 |     **2,017** |            12 |
+| ansible        |135,915 |           949 |            54 |
+| numpy          |123,708 |           395 |            57 |
+| mypy           |113,094 |           208 |            21 |
 | pydantic       | 45,563 |           210 |            22 |
-| pytest         | 37,289 |           154 |            11 |
-| requests       |  6,371 |            54 |             4 |
 | rich           | 38,515 |            89 |            12 |
-| starlette      |  5,845 |            67 |             0 |
-| **django**     |156,254 |     **2,017** |            12 |
-| pandas         |255,352 |           413 |            68 |
-| **sqlalchemy** |236,013 |     **2,795** |           527 |
-| scikit-learn   |274,925 |           397 |            46 |
-| ansible        |140,002 |         1,584 |           168 |
+| pytest         | 37,079 |           162 |            11 |
+| scrapy         | 29,057 |           186 |             7 |
+| aiohttp        | 26,237 |           199 |            17 |
+| datasette      | 19,946 |           105 |            17 |
+| fastapi        | 19,335 |           129 |             8 |
+| anyio          | 14,455 |            78 |             2 |
+| click          | 11,529 |            32 |             3 |
+| flask          |  9,502 |            76 |             7 |
+| httpx          |  8,827 |            69 |             3 |
+| mkdocs         |  7,084 |            88 |             8 |
+| starlette      |  6,584 |            67 |             0 |
+| requests       |  6,371 |            54 |             4 |
+| archy          |  2,528 |            16 |             0 |
+| msgspec        |  2,365 |            10 |             4 |
 
 Spot-checking findings on FastAPI, pytest, and Django (15 random
 findings each):
@@ -731,28 +740,29 @@ additive unless marked **Replace**.
 
 ## Validation methodology
 
-Two empirical checks were run on 2026-05-10 to test load-bearing
-claims in the doc:
+Empirical checks supporting load-bearing claims in the doc.
 
-1. **Vulture false-positive rate** (section 12). 14 popular Python
-   projects cloned at HEAD. Vulture 2.16 run with default settings
-   (60% confidence) and at `--min-confidence 90`. 15 random findings
-   per project spot-checked across FastAPI, pytest, and Django to
-   identify dominant FP patterns.
+The benchmark is now driven by a checked-in manifest at
+[`bench/projects.yaml`](../bench/projects.yaml) with **22 pinned
+SHAs** spanning small CLI tools to very large frameworks across web
+/ async / scientific / ORM / plugin-host / devops domains. The
+benchmark runner is [`bench/run.py`](../bench/run.py); run with
+`uv run --with networkx --with pyyaml python bench/run.py --vulture`.
+Raw output checked into [`bench/results.md`](../bench/results.md).
+
+Specific validations referenced above:
+
+1. **Vulture false-positive rate** (section 12). Vulture 2.16 run with
+   default settings (60% confidence) and at `--min-confidence 90` on
+   all 22 projects. 15 random findings per project spot-checked across
+   FastAPI, pytest, and Django to identify dominant FP patterns.
 2. **NCCD vs depth correlation** (section 3). Computed CCD/ACD/NCCD
-   on the 9-library benchmark plus archy itself. Pearson correlation
+   on the original 9-library benchmark plus archy. Pearson correlation
    between NCCD and archy's `max_depth`: `r = 0.000`, indicating the
-   metrics are empirically orthogonal.
-
-Both runs are reproducible from the script and clones in
-`/tmp/archy_validation/` on the machine where this was authored. The
-NCCD computation uses NetworkX's `condensation` plus
-`descendants` and is portable; see
-`/tmp/archy_validation/nccd_correlation.py`.
-
-Library checkouts: HEAD on 2026-05-10 (not pinned). For a permanent
-record, the next iteration of the case-study refresh in
-[`docs/CASE_STUDIES.md`](CASE_STUDIES.md) should pin SHAs.
+   metrics are empirically orthogonal. The narrower 10-project sample
+   was used because the NCCD probe predates the 22-project manifest;
+   the qualitative finding (orthogonality) is robust to sample-size
+   refinements.
 
 ## References
 

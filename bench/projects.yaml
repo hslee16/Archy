@@ -1,0 +1,150 @@
+# Benchmark project manifest for archy.
+#
+# Used by `bench/run.py` to clone, pin, and analyze a curated set of
+# Python projects. SHAs are pinned so benchmark numbers in `docs/SCORING.md`
+# and `docs/RESEARCH_METRICS.md` stay reproducible.
+#
+# To refresh SHAs: edit by hand or run `bench/run.py --update-shas`.
+# To add a project: append below with a one-line `why` rationale so the
+# diversity claim stays auditable.
+
+# Captured 2026-05-10.
+
+projects:
+  # --- 9-library popular set (preserved from prior benchmarks) -------------
+  - name: starlette
+    repo: encode/starlette
+    sha: "7793b92"
+    src_dir: starlette
+    why: small async web framework
+
+  - name: httpx
+    repo: encode/httpx
+    sha: "b5addb6"
+    src_dir: httpx
+    why: async HTTP client
+
+  - name: click
+    repo: pallets/click
+    sha: "fc6c7c4"
+    src_dir: src/click
+    why: CLI framework
+
+  - name: rich
+    repo: Textualize/rich
+    sha: "46cebbb"
+    src_dir: rich
+    why: terminal rendering
+
+  - name: flask
+    repo: pallets/flask
+    sha: "7374c85"
+    src_dir: src/flask
+    why: classic sync web framework
+
+  - name: requests
+    repo: psf/requests
+    sha: "e8d2c01"
+    src_dir: src/requests
+    why: classic sync HTTP client
+
+  - name: pytest
+    repo: pytest-dev/pytest
+    sha: "09f969f"
+    src_dir: src/_pytest
+    why: pluggy-based test framework
+
+  - name: pydantic
+    repo: pydantic/pydantic
+    sha: "bd8e63e"
+    src_dir: pydantic
+    why: validation / serialization
+
+  - name: fastapi
+    repo: fastapi/fastapi
+    sha: "622b635"
+    src_dir: fastapi
+    why: layered web framework on starlette
+
+  # --- size and domain coverage --------------------------------------------
+  - name: django
+    repo: django/django
+    sha: "4d455ae"
+    src_dir: django
+    why: very large web framework, app-plugin pattern, older codebase
+
+  - name: sqlalchemy
+    repo: sqlalchemy/sqlalchemy
+    sha: "3c650ce"
+    src_dir: lib/sqlalchemy
+    why: very large ORM, deep inheritance, dialect plugins
+
+  - name: scrapy
+    repo: scrapy/scrapy
+    sha: "5223dbe"
+    src_dir: scrapy
+    why: signals/middleware/pipeline plugin patterns
+
+  - name: scikit-learn
+    repo: scikit-learn/scikit-learn
+    sha: "6e9ef2b"
+    src_dir: sklearn
+    why: scientific, distinctive estimator/transformer pattern
+
+  - name: numpy
+    repo: numpy/numpy
+    sha: "3bea241"
+    src_dir: numpy
+    why: namespace package, mostly C with Python orchestration
+
+  # --- async / modern-typed ------------------------------------------------
+  - name: aiohttp
+    repo: aio-libs/aiohttp
+    sha: "bb35b1c"
+    src_dir: aiohttp
+    why: async web (server + client)
+
+  - name: anyio
+    repo: agronholm/anyio
+    sha: "bcb2db6"
+    src_dir: src/anyio
+    why: small, modern-typed async-abstraction layer
+
+  - name: msgspec
+    repo: jcrist/msgspec
+    sha: "3b2543b"
+    src_dir: src/msgspec
+    why: pydantic alternative, smaller surface
+
+  # --- plugin host / orchestration -----------------------------------------
+  - name: datasette
+    repo: simonw/datasette
+    sha: "aa84fe0"
+    src_dir: datasette
+    why: pluggy host where plugins dominate the surface
+
+  - name: mkdocs
+    repo: mkdocs/mkdocs
+    sha: "2862536"
+    src_dir: mkdocs
+    why: smaller pluggy host, docs ecosystem
+
+  # --- tooling / devops ----------------------------------------------------
+  - name: mypy
+    repo: python/mypy
+    sha: "82fb613"
+    src_dir: mypy
+    why: type checker internals, lots of layered abstractions
+
+  - name: ansible
+    repo: ansible/ansible
+    sha: "b7c0900"
+    src_dir: lib/ansible
+    why: legacy devops tool, dynamic-loading plugin patterns
+
+  # --- self -----------------------------------------------------------------
+  - name: archy
+    repo: hslee16/archy
+    sha: HEAD
+    src_dir: src/archy
+    why: dogfooding
