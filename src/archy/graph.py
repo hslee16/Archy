@@ -8,10 +8,10 @@ root. External imports (stdlib, third-party) appear as nodes with
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
 
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 from archy.parser import ImportRef, ParseResult, parse_file
 
@@ -34,9 +34,10 @@ DEFAULT_IGNORED_DIRS = frozenset(
 )
 
 
-@dataclass(frozen=True)
-class Module:
+class Module(BaseModel):
     """An internal Python module discovered in the project."""
+
+    model_config = ConfigDict(frozen=True)
 
     qualname: str  # e.g. "archy.parser"
     path: Path  # absolute path to the .py file

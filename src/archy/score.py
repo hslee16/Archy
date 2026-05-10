@@ -23,15 +23,15 @@ gates. See docs/LEARNINGS.md for the comparison.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 from archy.cycles import find_cycles
 
 
-@dataclass(frozen=True)
-class ScoreInputs:
+class ScoreInputs(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     module_count: int
     edge_count: int
     cycle_count: int
@@ -42,8 +42,9 @@ class ScoreInputs:
     raw_gini: float
 
 
-@dataclass(frozen=True)
-class Score:
+class Score(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     overall: float
     modularity: float
     acyclicity: float

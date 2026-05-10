@@ -25,9 +25,10 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, ConfigDict
 
 from archy.layers import LayerConfig, LayerConfigError, load_config
 
@@ -35,11 +36,12 @@ if TYPE_CHECKING:
     from importlinter.application.user_options import UserOptions
 
 
-@dataclass(frozen=True)
-class ContractCheck:
+class ContractCheck(BaseModel):
     """One contract's result. `metadata` is the import-linter contract-type-
     specific shape (e.g., `invalid_chains` for ForbiddenContract); kept opaque
     here so the wrap doesn't need to know every contract type's schema."""
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     contract_type: str
@@ -48,13 +50,14 @@ class ContractCheck:
     warnings: tuple[str, ...]
 
 
-@dataclass(frozen=True)
-class ContractsResult:
+class ContractsResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     kept: int
     broken: int
     module_count: int
     import_count: int
-    contracts: tuple[ContractCheck, ...] = field(default_factory=tuple)
+    contracts: tuple[ContractCheck, ...] = ()
 
     @property
     def all_kept(self) -> bool:

@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True)
-class CycleEdge:
+class CycleEdge(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     source: str
     target: str
     lines: tuple[int, ...]
 
 
-@dataclass(frozen=True)
-class Cycle:
+class Cycle(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     modules: tuple[str, ...]
     edges: tuple[CycleEdge, ...]
 

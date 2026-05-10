@@ -25,6 +25,9 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.1",
     "mcp>=1.27.1",
+    # Pydantic is already pulled in transitively by `mcp`; declared
+    # explicitly because all archy value types are pydantic models.
+    "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]

@@ -16,9 +16,10 @@ and so the baseline shape is the same one the CLI emits.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any  # noqa: TID251  # pydantic conversion in follow-up PR
+from typing import Any  # noqa: TID251  # phase B follow-up types compute_diff outputs
+
+from pydantic import BaseModel, ConfigDict
 
 from archy.cycles import find_cycles
 from archy.layers import (
@@ -30,8 +31,9 @@ from archy.layers import (
 from archy.score import Score, compute_score
 
 
-@dataclass(frozen=True)
-class Snapshot:
+class Snapshot(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     score: Score
     cycles: tuple[dict[str, Any], ...]
     violations: tuple[dict[str, Any], ...]
@@ -135,7 +137,7 @@ def _score_to_dict(s: Score) -> dict[str, Any]:
             "depth": s.depth,
             "equality": s.equality,
         },
-        "inputs": asdict(s.inputs),
+        "inputs": s.inputs.model_dump(),
     }
 
 

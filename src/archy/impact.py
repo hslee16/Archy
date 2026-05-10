@@ -15,14 +15,15 @@ dropped, so callers can tell why a file produced no impact.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True)
-class Impact:
+class Impact(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     changed: tuple[str, ...]
     unresolved: tuple[str, ...]
     impacted: tuple[str, ...]
