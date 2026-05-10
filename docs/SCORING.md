@@ -380,7 +380,7 @@ it.
 
 The empirical case for omission is documented in
 [`docs/RESEARCH_METRICS.md`](RESEARCH_METRICS.md) §12: vulture 2.16
-was run on 14 popular Python projects in 2026-05; default-confidence
+was run on 22 popular Python projects in 2026-05; default-confidence
 findings ranged from 32 (click) to 2,795 (sqlalchemy), and 15 random
 findings spot-checked on FastAPI, pytest, and Django were all
 (15/15) false positives - driven by Python idioms like Pydantic

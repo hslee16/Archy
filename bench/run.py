@@ -158,13 +158,17 @@ def main() -> int:
             row["vulture_60"] = vulture_count(src, 60)
             row["vulture_90"] = vulture_count(src, 90)
         rows.append(row)
-        print(f"  overall={score['overall']:.3f}  modules={inputs['module_count']}", file=sys.stderr)
+        msg = f"  overall={score['overall']:.3f}  modules={inputs['module_count']}"
+        print(msg, file=sys.stderr)
 
     rows.sort(key=lambda r: -r["overall"])
 
     print()
     print("## Score table\n")
-    cols = ["name", "sha", "modules", "edges", "overall", "modularity", "acyclicity", "depth", "equality"]
+    cols = [
+        "name", "sha", "modules", "edges",
+        "overall", "modularity", "acyclicity", "depth", "equality",
+    ]
     print("| " + " | ".join(cols) + " |")
     print("| " + " | ".join("---:" if c not in {"name", "sha"} else "---" for c in cols) + " |")
     for r in rows:
