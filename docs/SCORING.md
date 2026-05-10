@@ -238,38 +238,44 @@ The OECD Handbook on Constructing Composite Indicators recommends
 testing this empirically: pairwise correlation between sub-indicators
 above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
 
-Pairwise Pearson correlations on the 9-library benchmark plus archy
-itself (10 projects, fresh HEADs at 2026-05-10, post tangle-ratio
-formula change):
+Pairwise Pearson correlations on a 22-project benchmark spanning
+small CLI tools to very large frameworks (msgspec at 10 modules,
+django at 902), captured 2026-05-10 against pinned SHAs (see
+[`bench/projects.yaml`](../bench/projects.yaml)):
 
 | Pair                    |    `r` |
 | ----------------------- | -----: |
-| modularity ↔ acyclicity | +0.166 |
-| modularity ↔ depth      | -0.198 |
-| modularity ↔ equality   | -0.441 |
-| acyclicity ↔ depth      | -0.627 |
-| acyclicity ↔ equality   | -0.653 |
-| depth ↔ equality        | +0.526 |
+| modularity ↔ acyclicity | +0.281 |
+| modularity ↔ depth      | -0.610 |
+| modularity ↔ equality   | -0.226 |
+| acyclicity ↔ depth      | -0.646 |
+| acyclicity ↔ equality   | -0.691 |
+| depth ↔ equality        | +0.350 |
 
 All six pairs are below `|r| = 0.7`, the OECD-conventional threshold
-for treating sub-indicators as redundant. Three of six are at
-"moderate" coupling (`|r| ∈ [0.5, 0.7]`). Two of the three involve
-acyclicity and date from the v0.7 tangle-ratio rollout: the new
-acyclicity formula is graph-size-sensitive by construction (it
-divides by total node count), and that introduces a structural
-relationship with depth and equality which were previously near-zero.
-Concretely:
+for treating sub-indicators as redundant. **Four of six are at
+"moderate" coupling (`|r| ∈ [0.5, 0.7]`)**, up from three at the
+10-project sample. The expanded benchmark surfaces a moderate
+modularity↔depth coupling that was below detection threshold at
+n=10. Concretely:
 
-- **acyclicity ↔ depth at `-0.627`**: codebases with low `acyclicity`
-  scores (high tangle ratio) also tend to have low `depth` scores
-  (long chains). A graph that's mostly inside a few SCCs has fewer
-  free DAG hops to extend, but the SCC condensation it does have
-  tends to be deep when the tangled mass dominates.
-- **acyclicity ↔ equality at `-0.653`**: high tangle tends to coexist
-  with concentrated fan-out. A few hub modules participating in a
-  large SCC pull both axes down at once.
-- **depth ↔ equality at `+0.526`** (unchanged from pre-rollout):
-  graphs with longer chains tend to have more concentrated fan-out.
+- **acyclicity ↔ equality at `-0.691`**: high tangle (low
+  acyclicity) tends to coexist with concentrated fan-out (low
+  equality). A few hub modules participating in a large SCC pull
+  both axes down at once.
+- **acyclicity ↔ depth at `-0.646`**: codebases with low acyclicity
+  also tend to have low depth scores (longer chains). A graph that's
+  mostly inside a few SCCs has fewer free DAG hops to extend, but the
+  SCC condensation it does have tends to be deep when the tangled
+  mass dominates.
+- **modularity ↔ depth at `-0.610`**: deeper graphs tend to have
+  higher modularity. Plausible: in a deep DAG, communities form
+  along the chain naturally, so longer chains give Newman's Q more
+  structure to find.
+- **depth ↔ equality at `+0.350`**: weak in the larger benchmark.
+  Was +0.526 at n=10; the larger sample regresses it to a smaller
+  effect. The original "moderate" finding looks like sampling noise
+  on the narrower 10-project set.
 
 These don't break the geometric-mean argument - none cross the OECD
 threshold - but the design language in
@@ -292,46 +298,60 @@ There is no universal "good architecture score." The systematic-
 mapping literature on software-metric thresholds is explicit that
 thresholds must be derived empirically from a benchmark population
 rather than asserted from intuition.[^thresholds-empirical] The bands
-below are derived from archy's own benchmark - nine widely-used Python
-libraries (pydantic, fastapi, flask, pytest, requests, click, rich,
-httpx, starlette) plus archy on archy, re-run 2026-05-10 against
-fresh HEADs:
+below are derived from archy's 22-project benchmark spanning small
+CLI tools (click, msgspec) to very large frameworks (django, numpy,
+sqlalchemy), with diversity across web / async / scientific / ORM /
+plugin-host / devops domains. Pinned SHAs in
+[`bench/projects.yaml`](../bench/projects.yaml); raw output in
+[`bench/results.md`](../bench/results.md). Captured 2026-05-10:
 
-| Project   | SHA       | Overall | Modularity | Acyclicity | Depth | Equality |
-| --------- | --------- | ------: | ---------: | ---------: | ----: | -------: |
-| archy     | `e118c28` |   0.620 |      0.553 |      1.000 | 0.615 |    0.433 |
-| starlette | `7793b92` |   0.572 |      0.458 |      0.588 | 0.727 |    0.547 |
-| pytest    | `09f969f` |   0.529 |      0.479 |      0.710 | 0.471 |    0.490 |
-| fastapi   | `622b635` |   0.522 |      0.522 |      0.771 | 0.615 |    0.300 |
-| pydantic  | `bd8e63e` |   0.513 |      0.636 |      0.385 | 0.615 |    0.459 |
-| rich      | `46cebbb` |   0.510 |      0.524 |      0.450 | 0.667 |    0.431 |
-| requests  | `e8d2c01` |   0.508 |      0.429 |      0.579 | 0.571 |    0.469 |
-| click     | `fc6c7c4` |   0.470 |      0.451 |      0.235 | 0.800 |    0.575 |
-| flask     | `7374c85` |   0.463 |      0.484 |      0.208 | 0.800 |    0.569 |
-| httpx     | `b5addb6` |   0.463 |      0.482 |      0.261 | 0.667 |    0.550 |
+| Project       | SHA       | Modules | Edges | Overall | Modularity | Acyclicity | Depth | Equality |
+| ------------- | --------- | ------: | ----: | ------: | ---------: | ---------: | ----: | -------: |
+| numpy         | `3bea241` |     424 |  1191 |   0.611 |      0.609 |      0.745 | 0.571 |    0.538 |
+| mkdocs        | `2862536` |      61 |   175 |   0.589 |      0.526 |      0.787 | 0.615 |    0.472 |
+| starlette     | `7793b92` |      34 |   114 |   0.572 |      0.458 |      0.588 | 0.727 |    0.547 |
+| scrapy        | `5223dbe` |     172 |   858 |   0.560 |      0.521 |      0.640 | 0.533 |    0.552 |
+| datasette     | `aa84fe0` |      59 |   172 |   0.555 |      0.551 |      0.881 | 0.444 |    0.441 |
+| anyio         | `bcb2db6` |      42 |   158 |   0.555 |      0.499 |      0.643 | 0.615 |    0.480 |
+| archy         | `HEAD`    |      12 |    24 |   0.550 |      0.459 |      1.000 | 0.667 |    0.299 |
+| pytest        | `09f969f` |      69 |   372 |   0.529 |      0.479 |      0.710 | 0.471 |    0.490 |
+| fastapi       | `622b635` |      48 |   114 |   0.522 |      0.522 |      0.771 | 0.615 |    0.300 |
+| pydantic      | `bd8e63e` |     104 |   496 |   0.513 |      0.636 |      0.385 | 0.615 |    0.459 |
+| rich          | `46cebbb` |     100 |   420 |   0.510 |      0.524 |      0.450 | 0.667 |    0.431 |
+| requests      | `e8d2c01` |      19 |    73 |   0.508 |      0.429 |      0.579 | 0.571 |    0.469 |
+| mypy          | `82fb613` |     195 |  1104 |   0.499 |      0.571 |      0.815 | 0.286 |    0.465 |
+| sqlalchemy    | `3c650ce` |     255 |  2536 |   0.492 |      0.565 |      0.388 | 0.471 |    0.568 |
+| ansible       | `b7c0900` |     583 |  2148 |   0.477 |      0.614 |      0.770 | 0.286 |    0.383 |
+| django        | `4d455ae` |     902 |  3234 |   0.477 |      0.641 |      0.754 | 0.267 |    0.401 |
+| click         | `fc6c7c4` |      17 |    60 |   0.470 |      0.451 |      0.235 | 0.800 |    0.575 |
+| httpx         | `b5addb6` |      23 |    87 |   0.463 |      0.482 |      0.261 | 0.667 |    0.550 |
+| flask         | `7374c85` |      24 |    94 |   0.463 |      0.484 |      0.208 | 0.800 |    0.569 |
+| scikit-learn  | `6e9ef2b` |     637 |  3856 |   0.459 |      0.523 |      0.826 | 0.216 |    0.476 |
+| aiohttp       | `bb35b1c` |      54 |   320 |   0.440 |      0.532 |      0.185 | 0.667 |    0.569 |
+| msgspec       | `3b2543b` |      10 |    19 |   0.384 |      0.440 |      0.100 | 0.889 |    0.553 |
 
-Bands derived from this distribution:
+Bands derived from this distribution (median 0.510, IQR roughly
+0.47–0.55):
 
-| Overall     | What's typically true at this score                                                                                                  | Examples from the benchmark                |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `≥ 0.60`    | Zero cycles, distributed fan-out, shallow tree. Hard to reach without deliberate architectural discipline.                           | archy (0.620)                              |
-| `0.50–0.60` | Healthy. Usually a small tangle (high acyclicity) plus reasonable equality. Typical of mature, modular libraries.                    | starlette, pytest, fastapi, pydantic, rich, requests (0.51–0.57) |
-| `0.40–0.50` | "Typical small / focused library." Acyclicity score below 0.3 (a meaningful fraction of the codebase is in cycles) is the usual cause. | click, flask, httpx (0.46–0.47)            |
-| `0.30–0.40` | At least one axis collapsing - large tangle relative to codebase, severe god-module, or a 12+ deep chain.                            | None in the benchmark.                     |
-| `< 0.30`    | Multiple axes weak simultaneously. Worth investigating before adding features.                                                       | None in the benchmark.                     |
+| Overall     | What's typically true at this score                                                                                                                | Examples from the benchmark                                       |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `≥ 0.58`    | Top tier. Usually a deliberate architectural pattern: layered scientific code (numpy), pluggy-driven decomposition (mkdocs), focused ASGI surface (starlette). | numpy, mkdocs, starlette                                          |
+| `0.50–0.58` | Healthy. The bulk of mature Python libraries. Usually one weak axis, often acyclicity below 0.5.                                                   | scrapy, datasette, anyio, archy, pytest, fastapi, pydantic, rich, requests |
+| `0.45–0.50` | "Typical." Often one of: many small cycles (high tangle), or a long chain pulling depth low. Most very-large frameworks land here.                | mypy, sqlalchemy, ansible, django, click, httpx, flask, scikit-learn |
+| `0.40–0.45` | At least one axis severely weak. Examine the breakdown.                                                                                            | aiohttp                                                           |
+| `< 0.40`    | Multiple axes weak, or one axis below 0.15. Worth investigating before adding features.                                                            | msgspec (acyclicity 0.10 dominates a 10-module surface)           |
 
 Two things to note when reading these bands:
 
 1. **Acyclicity is the highest-variance axis** across the benchmark,
-   spanning 0.21 (flask, where most of the codebase is in one SCC) to
-   1.0 (archy, no cycles at all). Whether a project lands in the
-   "healthy" or "typical small library" band is largely determined by
-   how concentrated its cycles are: pytest at 0.71 is in the healthy
-   band despite having three SCCs, because those SCCs cover only a
-   small fraction of its 156 modules; flask at 0.21 falls into the
-   lower band because its SCCs cover a large share of its 69 modules.
-   The metric correctly penalizes tangle-relative-to-size rather than
-   raw cycle count.
+   spanning 0.10 (msgspec, where most of the 10-module surface is in
+   one SCC) to 1.0 (archy, no cycles at all). Whether a project lands
+   in the "healthy" or "typical" band is largely determined by how
+   concentrated its cycles are: datasette at 0.881 sits high because
+   its cycles cover only a small fraction of its 59 modules; flask at
+   0.208 falls into the lower band because a large share of its 24
+   modules are in cycles. The metric correctly penalizes
+   tangle-relative-to-size rather than raw cycle count.
 2. **Modularity has its own well-established literature band.** Newman
    (2006) and follow-up work on real-world networks consistently find
    that raw `Q ∈ [0.3, 0.7]` indicates strong community
