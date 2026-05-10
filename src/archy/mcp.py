@@ -126,9 +126,11 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool(
         name="archy_check",
         description=(
-            "Check a Python project against the layer rules in archy.yaml. "
-            "Returns a list of forbidden inter-layer edges. An empty list means "
-            "the architecture is intact."
+            "**Call after any Python edit that adds, removes, or changes an "
+            "import statement.** Returns forbidden direct edges between layers "
+            "declared in archy.yaml. An empty list means no direct boundary "
+            "crossings; pair with archy_contracts for transitive (multi-hop) "
+            "checks."
         ),
     )
     def archy_check(
@@ -140,12 +142,14 @@ def _register_tools(server: FastMCP) -> None:
     @server.tool(
         name="archy_contracts",
         description=(
-            "Run import-linter contracts against a Python project (transitive "
-            "Layers, Forbidden, Independence, Protected, AcyclicSiblings). "
-            "Stricter than archy_check, which only flags direct edges between "
-            "layers in archy.yaml. Reads .importlinter (or pyproject.toml). "
-            "Returns per-contract `kept` flag plus violation chains. Requires "
-            "import-linter to be installed (`pip install archy[contracts]`)."
+            "**Call after any Python edit that adds, removes, or changes an "
+            "import statement, especially across package boundaries.** A "
+            "failed contract means the new import violates the architecture - "
+            "revert or restructure before continuing. Runs import-linter "
+            "contracts (transitive Layers, Forbidden, Independence, Protected, "
+            "AcyclicSiblings); stricter than archy_check, which only catches "
+            "direct edges between layers in archy.yaml. Reads .importlinter "
+            "(or pyproject.toml). Requires `pip install archy[contracts]`."
         ),
     )
     def archy_contracts(
