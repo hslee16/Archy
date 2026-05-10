@@ -97,7 +97,7 @@ but the *interpretation* of `A` (Abstractness) needs Python care.
     `@abc.abstractmethod`-decorated method;
   - subclasses of `typing.Protocol`;
   - dataclass-only modules (`@dataclass` with no behavior) arguably
-    don't count as "abstractions" — they're concrete data.
+    don't count as "abstractions" - they're concrete data.
   Without including Protocols, Python codebases that use structural
   typing read as universally concrete (`A ≈ 0`), which is misleading.
 - **Distance from main sequence** `D = |A + I - 1|`. The "main
@@ -108,13 +108,13 @@ Two derived rules from Clean Architecture:
 
 - **Stable Dependencies Principle (SDP):** dependencies should flow
   toward stability. Violations: a module with low `I` importing one
-  with high `I`. **Python translation:** clean — the rule is purely
+  with high `I`. **Python translation:** clean - the rule is purely
   graph-theoretic.
 - **Stable Abstractions Principle (SAP):** stable components should
   be abstract. **Python translation:** depends on the abstractness
   definition above; useful with the Protocol-aware version.
 
-**Feasibility for archy:** `I` and SDP are essentially free —
+**Feasibility for archy:** `I` and SDP are essentially free -
 single-pass ratios on the current graph. `A` requires AST work
 (tree-sitter pass to count `ABC`/`Protocol` subclasses and
 `@abstractmethod`); already on the roadmap as part of the
@@ -130,10 +130,10 @@ SDP first, treat `A`/`D`/SAP as an experiment.
 
 ## 3. Average reach: Lakos NCCD / MacCormack propagation cost
 
-These two metrics — Lakos's CCD/ACD/NCCD
+These two metrics - Lakos's CCD/ACD/NCCD
 ([summary][swiftalyzer-ccd], [Lattix docs][lattix-metrics]) and
 MacCormack's propagation cost
-([HBS working paper][maccormack-hbs], [overview][dsm-overview]) —
+([HBS working paper][maccormack-hbs], [overview][dsm-overview]) -
 were originally treated separately in this doc. They turn out to be
 the same metric family with different normalizations:
 
@@ -181,13 +181,13 @@ NCCD and ACD are essentially the same (`r = 0.997`), as expected.
 earlier draft's worry that NCCD might be redundant with archy's
 existing depth axis. They capture different things:
 
-- `max_depth` is the *worst case* — one long chain.
-- `NCCD/ACD` is the *average case* — typical reach of a random
+- `max_depth` is the *worst case* - one long chain.
+- `NCCD/ACD` is the *average case* - typical reach of a random
   module.
 
-A graph can be shallow but wide (`rich`: depth 4, NCCD 7.92 — most
+A graph can be shallow but wide (`rich`: depth 4, NCCD 7.92 - most
 modules reach most others through short paths) or deep but narrow
-(`requests`: depth 7, NCCD 2.18 — one long chain but most modules
+(`requests`: depth 7, NCCD 2.18 - one long chain but most modules
 don't reach much). archy's current depth metric catches the first
 pathology weakly and the second well; NCCD/ACD inverts that.
 
@@ -331,7 +331,7 @@ Two simple inputs (per-file CC and churn over a window) multiplied;
 rank the result. Empirical claim: the top ~10 hotspots account for
 the majority of defect risk and refactoring leverage.
 
-**Python translation:** the CC half is clean — radon's CC computation
+**Python translation:** the CC half is clean - radon's CC computation
 is the de-facto Python standard, and archy can compute it natively
 once the AST pass for cyclomatic complexity (already in
 [`FUTURE.md`](FUTURE.md)) lands. The churn half reuses the git-mining
@@ -343,11 +343,11 @@ complexity of a function without changing its CC count. Treat these
 as a known limitation rather than try to model them.
 
 **Feasibility:** Medium, but cheap if both git-mining (section 7) and
-cyclomatic complexity ([`FUTURE.md`](FUTURE.md)) ship — this comes
+cyclomatic complexity ([`FUTURE.md`](FUTURE.md)) ship - this comes
 nearly free on top of those.
 
 **Signal:** Very strong, and very actionable. Produces a *prioritized
-list* rather than a single number — "refactor these three files
+list* rather than a single number - "refactor these three files
 first." Pairs well with the AI-agent loop
 (`docs/AGENT_LOOP.md`): "before you start work, here are the
 highest-risk files you might be touching."
@@ -367,7 +367,7 @@ unintuitive control structures
 
 **Python translation:** the metric is defined for procedural code and
 applies cleanly to Python functions. Python-specific subtlety: list /
-dict / generator comprehensions count as "loops" — a deeply nested
+dict / generator comprehensions count as "loops" - a deeply nested
 comprehension `[x for ... for ... for ...]` is high cognitive
 complexity per the standard rules.
 
@@ -376,7 +376,7 @@ cyclomatic complexity computes cognitive complexity. Marginal cost on
 top of CC.
 
 **Signal:** Strong for human-developer audiences. For archy's
-AI-agent positioning, slightly weaker — LLMs may not have the same
+AI-agent positioning, slightly weaker - LLMs may not have the same
 nesting-depth bottlenecks as humans, though limited evidence either
 way.
 
@@ -385,7 +385,7 @@ Essentially free.
 
 ---
 
-## 10. Architecture conformance — reflexion model (Murphy & Notkin, 1995)
+## 10. Architecture conformance - reflexion model (Murphy & Notkin, 1995)
 
 The reflexion-model approach
 ([original paper][reflexion-paper]):
@@ -407,7 +407,7 @@ indirectly).
 
 archy.yaml today supports Layers contracts only. Adding **Forbidden**
 and **Independence** contract types would close the gap with
-import-linter and is straightforward — both are graph-reachability
+import-linter and is straightforward - both are graph-reachability
 checks on the existing edge type. Absence detection (an edge declared
 but never instantiated) is a third, complementary check.
 
@@ -433,7 +433,7 @@ a complexity measure
 (out-degree, in-degree, community sizes) admits an entropy
 computation.
 
-**Feasibility:** Trivial — `H(p) = -Σ p_i log p_i` is one line.
+**Feasibility:** Trivial - `H(p) = -Σ p_i log p_i` is one line.
 
 **Signal:** Mixed and unclear. The literature is split on whether
 graph entropy correlates with anything actionable; many proposed
@@ -483,13 +483,13 @@ findings each):
   `content_type`), and `__init__.py` re-exports
   (`RequestErrorModel`, `WebSocketErrorModel`).
 - **pytest 15/15 false positives.** All 15 fall in
-  `_pytest/_py/path.py` — a vendored copy of the `py.path.local`
+  `_pytest/_py/path.py` - a vendored copy of the `py.path.local`
   public API kept for backwards compatibility. Vulture sees no
   internal callers because pytest users (not pytest itself) call
   these methods.
 - **Django 15/15 false positives.** All 15 are module-level
   variables in `django/conf/global_settings.py` (`DATE_FORMAT`,
-  `DATETIME_FORMAT`, `MANAGERS`, etc.) — the canonical default-
+  `DATETIME_FORMAT`, `MANAGERS`, etc.) - the canonical default-
   settings pattern. Django consumes these by string lookup at runtime
   via `from django.conf import settings; settings.DATE_FORMAT`. This
   pattern alone accounts for hundreds of the 2,017 default-confidence
@@ -497,7 +497,7 @@ findings each):
 
 The 2,017 / 2,795 figures for Django and SQLAlchemy collapse to
 12 / 527 at `--min-confidence 90`, which is itself nowhere near a
-ground-truth dead-function count — vulture's confidence rating
+ground-truth dead-function count - vulture's confidence rating
 correlates with how many dynamic-dispatch patterns it can rule out,
 not with whether the code is actually dead. The blog post the doc
 originally cited (59 on httpx, 260 on Flask) is in the right
@@ -506,23 +506,23 @@ diagnosis is broadly correct.
 
 The dominant FP patterns are the same across every spot-check:
 
-- **pytest fixtures and conftest hooks** — referenced by name,
+- **pytest fixtures and conftest hooks** - referenced by name,
   never imported.
-- **Flask/FastAPI/Django route handlers** — referenced by URL
+- **Flask/FastAPI/Django route handlers** - referenced by URL
   pattern strings.
-- **Django default settings** — module-level constants consumed by
+- **Django default settings** - module-level constants consumed by
   attribute lookup at runtime.
-- **Pluggy / setuptools entry-point implementations** — registered
+- **Pluggy / setuptools entry-point implementations** - registered
   at install time, no static caller.
-- **Pydantic validators** — invoked by the framework via decorator
+- **Pydantic validators** - invoked by the framework via decorator
   metadata.
-- **`Protocol` and ABC method implementations** — no explicit
+- **`Protocol` and ABC method implementations** - no explicit
   caller; satisfied structurally.
 - **Vendored backwards-compatibility surface** (e.g., pytest's
-  `_pytest/_py/path.py`) — public API for downstream code, no
+  `_pytest/_py/path.py`) - public API for downstream code, no
   internal caller.
 
-These are not edge cases — they cover the dominant patterns in modern
+These are not edge cases - they cover the dominant patterns in modern
 Python application code. A naive vulture-style scan in archy would
 generate so many false positives that ignoring them would become the
 default workflow, which is the opposite of what a quality signal
@@ -531,7 +531,7 @@ should do.
 **Duplicate-function detection** is a different story. Tree-sitter
 ASTs can be normalized (rename identifiers consistently, hash the
 shape) and clustered. False-positive rate is empirically much lower
-than dead-function detection — duplicates are duplicates regardless
+than dead-function detection - duplicates are duplicates regardless
 of dynamic dispatch. Caveat: short generated stubs (e.g., Pydantic
 `@validator` boilerplate, Django model `Meta` classes) cluster
 together by shape but are not "duplication" in the refactor-this
@@ -540,14 +540,14 @@ sense, so the heuristic needs a length threshold.
 **Recommendation:** if any redundancy work ships, scope it tightly to
 duplicate-function detection above some length threshold. Skip
 dead-function detection until and unless archy can ingest a
-runtime-coverage source — at which point vulture's
+runtime-coverage source - at which point vulture's
 `--make-whitelist` workflow becomes optional.
 
 ---
 
 ## 13. Type-hint coverage (Python-specific)
 
-Not a classical architecture metric — but a measurable Python-quality
+Not a classical architecture metric - but a measurable Python-quality
 signal that no language-neutral metric captures. PEP 484 type hints
 plus a checker (mypy, pyright) act as a per-module contract. Coverage
 and strictness are quantifiable:
@@ -598,7 +598,7 @@ Two AI-specific framings worth noting, both Python-relevant:
 roughly 40% of their context window
 ([Martin Fowler on context engineering][fowler-context]). A useful
 agent-facing metric: "to safely modify this module, how much context
-is needed?" — the size of its transitive forward+reverse closure.
+is needed?" - the size of its transitive forward+reverse closure.
 This is **propagation cost framed for cognition**.
 
 For Python specifically, the `__init__.py` re-export issue matters
@@ -613,7 +613,7 @@ across an agent's PRs is a measurable signal of how well the agent
 respects the architecture. Already computable from `archy check` plus
 git history.
 
-**Feasibility:** both are derivative — they reuse existing inputs in
+**Feasibility:** both are derivative - they reuse existing inputs in
 a new framing. Mostly a documentation and presentation concern.
 
 **Recommendation:** repackage existing outputs under explicit
@@ -636,7 +636,7 @@ archy's value is the integrated graph + score + governance surface.
 | [xenon][xenon-repo]        | radon-based CI gate                          | archy's `--strict` gate is a generalization across multiple metrics, not just CC. |
 | [vulture][vulture-fp]      | Dead-code detection                          | False-positive rate (section 12) makes this hard to beat without runtime-coverage input. |
 | [pyright][pyright-doc] / [mypy][mypy-doc] | Type checking                | Type-hint coverage (section 13) builds on these without re-implementing them. |
-| [ruff][ruff-doc]           | Lint + format                                | Orthogonal — ruff is rule-based on individual files; archy reasons about the dependency graph. |
+| [ruff][ruff-doc]           | Lint + format                                | Orthogonal - ruff is rule-based on individual files; archy reasons about the dependency graph. |
 
 ---
 
@@ -648,13 +648,13 @@ marked ✓.
 
 The "Role" column distinguishes:
 
-- **Score axis** — folds into the geometric-mean overall, must be
+- **Score axis** - folds into the geometric-mean overall, must be
   independent of existing axes.
-- **Sub-stat** — reported on the breakdown but not aggregated;
+- **Sub-stat** - reported on the breakdown but not aggregated;
   diagnostic only.
-- **Check rule** — extends `archy.yaml` / `archy check`, not the
+- **Check rule** - extends `archy.yaml` / `archy check`, not the
   score.
-- **Replace** — supersedes an existing sub-metric rather than adding
+- **Replace** - supersedes an existing sub-metric rather than adding
   alongside.
 
 | Candidate                                 | Signal | Cost   | Role                | Validation       | Recommend |
@@ -671,8 +671,8 @@ The "Role" column distinguishes:
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
 | Cross-file co-change (logical coupling)   | Medium | High   | Standalone command  | -                | Defer (skip if hotspots ships) |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
-| Redundancy — duplicate functions          | Medium | Medium | Advisory list       | -                | Maybe     |
-| Redundancy — dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 32–2,795 issues per project, ~all FPs from framework patterns | **No** |
+| Redundancy - duplicate functions          | Medium | Medium | Advisory list       | -                | Maybe     |
+| Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 32–2,795 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 
 ---
@@ -684,16 +684,16 @@ The validation results clarify the order considerably. Group A is
 new infrastructure (CC AST pass, git mining). Items below are
 additive unless marked **Replace**.
 
-### Group A — pre-call-graph, low cost
+### Group A - pre-call-graph, low cost
 
-1. **Tangle ratio** — *Replace* the current `acyclicity = 1/(1+N)`
+1. **Tangle ratio** - *Replace* the current `acyclicity = 1/(1+N)`
    normalization with `acyclicity = 1 - tangle_ratio`. Five-line
    change. Best done after the `__init__.py` re-export resolver
    lands so the input graph is clean ([`FUTURE.md`](FUTURE.md)).
 2. **Reflexion: Forbidden + Independence contracts** in
    `archy.yaml`. Closes the gap with import-linter; purely additive
    to `archy check`. No score impact.
-3. **NCCD / ACD / propagation cost** — *Add* as a fifth score axis.
+3. **NCCD / ACD / propagation cost** - *Add* as a fifth score axis.
    Validated to be orthogonal to depth (Pearson r=0.000 on the
    9-library benchmark), so it earns its place in the geometric
    mean. Note: adding a fifth axis shifts absolute scores; document
@@ -704,12 +704,12 @@ additive unless marked **Replace**.
 5. **PageRank per module + core size.** Diagnostics only; expose in
    `archy graph --format json` and `archy_impact` output.
 
-### Group B — depends on AST or git infrastructure
+### Group B - depends on AST or git infrastructure
 
 6. **Per-function cyclomatic + cognitive complexity** (already in
    [`FUTURE.md`](FUTURE.md)). Both come from the same tree-sitter
    pass; cognitive is free given CC.
-7. **Type-hint coverage** — same tree-sitter pass scope. Could be
+7. **Type-hint coverage** - same tree-sitter pass scope. Could be
    added as a sub-stat or eventually promoted to a sixth score axis
    if the signal proves load-bearing.
 8. **Call-graph edges** ([`FUTURE.md`](FUTURE.md)). Once shipped,
@@ -719,12 +719,12 @@ additive unless marked **Replace**.
 
 ### Deferred
 
-- **Cross-file co-change** — hotspots covers the high-leverage
+- **Cross-file co-change** - hotspots covers the high-leverage
   subset with much less infrastructure (per-file churn vs full
   co-change matrix). Defer unless a specific use case requires it.
-- **Reflexion: absences** — evolve `archy.yaml` once users with
+- **Reflexion: absences** - evolve `archy.yaml` once users with
   authored architecture documents ask for it.
-- **Duplicate-function detection** — useful but off-positioning;
+- **Duplicate-function detection** - useful but off-positioning;
   cede to existing tools unless explicitly requested.
 
 ---
@@ -764,18 +764,18 @@ record, the next iteration of the case-study refresh in
 - Ford, N., Parsons, R., Kua, P. *Building Evolutionary Architectures.* O'Reilly, 2017. [Fitness functions overview][fitness-functions-infoq].
 - Campbell, G. A. *Cognitive Complexity: A New Way of Measuring Understandability.* Sonar, 2017. [Whitepaper][sonar-cognitive].
 - Heitlager, I., Kuipers, T., Visser, J. *A Practical Model for Measuring Maintainability.* QUATIC 2007 (the SIG model).
-- Baldwin, C., Clark, K. *Design Rules, Vol. 1: The Power of Modularity.* MIT Press, 2000 — theoretical foundation for *why* modularity carries option value.
-- Gall, H., Hajek, K., Jazayeri, M. *Detection of Logical Coupling Based on Product Release History.* ICSM 1998 — origin of co-change analysis.
+- Baldwin, C., Clark, K. *Design Rules, Vol. 1: The Power of Modularity.* MIT Press, 2000 - theoretical foundation for *why* modularity carries option value.
+- Gall, H., Hajek, K., Jazayeri, M. *Detection of Logical Coupling Based on Product Release History.* ICSM 1998 - origin of co-change analysis.
 - D'Ambros, M., Lanza, M., Robbes, R. *On the Relationship Between Change Coupling and Software Defects.* WCRE 2009.
-- Murphy-Hill, E. et al. *What Predicts Software Developers' Productivity?* IEEE TSE 2019 — cited for the modern view that single-metric quality is insufficient.
+- Murphy-Hill, E. et al. *What Predicts Software Developers' Productivity?* IEEE TSE 2019 - cited for the modern view that single-metric quality is insufficient.
 
 ### Python tools and ecosystem
 
 - import-linter contracts (Layers, Forbidden, Independence): [docs][import-linter-docs]
 - pluggy plugin architecture: [docs][pluggy-doc]
-- pydeps, pyan, radon, xenon, vulture, pyright, mypy, ruff — see section 15 table.
+- pydeps, pyan, radon, xenon, vulture, pyright, mypy, ruff - see section 15 table.
 - PEP 544 (Protocol structural typing): [PEP 544][pep-544]
-- PEP 562 (`__getattr__` on modules — used for lazy `__init__.py` re-exports): [PEP 562][pep-562]
+- PEP 562 (`__getattr__` on modules - used for lazy `__init__.py` re-exports): [PEP 562][pep-562]
 
 [martin-paper]: https://linux.ime.usp.br/~joaomm/mac499/arquivos/referencias/oodmetrics.pdf
 [sw-pkg-metrics]: https://en.wikipedia.org/wiki/Software_package_metrics
