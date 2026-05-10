@@ -163,18 +163,18 @@ def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[Forbi
         tgt_raw = entry["to"]
         if not isinstance(src_raw, str) or not isinstance(tgt_raw, str):
             raise LayerConfigError(f"forbid `from`/`to` values must be strings in {path}")
-        if src_raw not in known_layers:
-            raise LayerConfigError(
-                f"forbid `from` references unknown layer {src_raw!r} in {path}; "
-                f"known layers: {sorted(known_layers)}"
-            )
-        if tgt_raw not in known_layers:
-            raise LayerConfigError(
-                f"forbid `to` references unknown layer {tgt_raw!r} in {path}; "
-                f"known layers: {sorted(known_layers)}"
-            )
+        _check_known_layer(src_raw, "from", known_layers, path)
+        _check_known_layer(tgt_raw, "to", known_layers, path)
         out.append(ForbidRule(from_layer=src_raw, to_layer=tgt_raw))
     return out
+
+
+def _check_known_layer(name: str, field: str, known: set[str], path: Path) -> None:
+    if name not in known:
+        raise LayerConfigError(
+            f"forbid `{field}` references unknown layer {name!r} in {path}; "
+            f"known layers: {sorted(known)}"
+        )
 
 
 def _parse_str_list(raw: object, field: str, path: Path) -> list[str]:
