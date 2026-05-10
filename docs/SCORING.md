@@ -216,6 +216,48 @@ This is the property that makes the score hard to game. Improving
 boost one sub-metric will tend to degrade another (e.g., bridging
 communities to flatten depth lowers modularity).
 
+### Empirical axis independence
+
+The geometric-mean argument assumes the four axes are independent.
+The OECD Handbook on Constructing Composite Indicators recommends
+testing this empirically: pairwise correlation between sub-indicators
+above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
+
+Pairwise Pearson correlations on the 9-library benchmark plus archy
+itself (10 projects, fresh HEADs at 2026-05-10):
+
+| Pair                    |    `r` |
+| ----------------------- | -----: |
+| modularity ↔ acyclicity | +0.117 |
+| modularity ↔ depth      | -0.198 |
+| modularity ↔ equality   | -0.441 |
+| acyclicity ↔ depth      | +0.058 |
+| acyclicity ↔ equality   | -0.063 |
+| depth ↔ equality        | +0.526 |
+
+Five of six pairs are below `|r| = 0.5`, comfortably under the OECD
+redundancy threshold. The exception is **depth ↔ equality at
+`r = +0.526`**, a moderate positive correlation. Recall that both
+archy axes are inverted so that 1.0 is best: a low `depth` score
+means a long chain, and a low `equality` score means concentrated
+fan-out. So `r = +0.526` says: in this benchmark, graphs with longer
+chains also tend to have more concentrated fan-out, and graphs with
+shorter chains tend to have more even fan-out. The two axes are
+*not* strictly independent - they're moderately coupled in real
+Python code.
+
+This doesn't break the geometric-mean argument (the OECD threshold
+for double-counting is `|r| > 0.7`), but it's a real empirical
+finding worth honest disclosure. Two axes at `r ≈ 0.5` partially
+overlap, which means improving one nudges the other in the same
+direction, which means the score is slightly easier to move via
+single-axis optimization than the design language in
+[`docs/LEARNINGS.md`](LEARNINGS.md) implies. Anyone using the
+breakdown to localize regressions should keep this coupling in mind:
+a `depth` regression with no `equality` movement is a stronger
+signal than the same `depth` regression alongside an `equality`
+regression.
+
 ## Interpreting a score
 
 There is no universal "good architecture score." The systematic-
@@ -224,14 +266,29 @@ thresholds must be derived empirically from a benchmark population
 rather than asserted from intuition.[^thresholds-empirical] The bands
 below are derived from archy's own benchmark - nine widely-used Python
 libraries (pydantic, fastapi, flask, pytest, requests, click, rich,
-httpx, starlette) plus archy on archy. Full numbers in
-[`docs/CASE_STUDIES.md`](CASE_STUDIES.md).
+httpx, starlette) plus archy on archy, re-run 2026-05-10 against
+fresh HEADs:
+
+| Project   | SHA       | Overall | Modularity | Acyclicity | Depth | Equality |
+| --------- | --------- | ------: | ---------: | ---------: | ----: | -------: |
+| archy     | `02ce8f3` |   0.620 |      0.553 |      1.000 | 0.615 |    0.433 |
+| flask     | `7374c85` |   0.576 |      0.484 |      0.500 | 0.800 |    0.569 |
+| starlette | `7793b92` |   0.549 |      0.458 |      0.500 | 0.727 |    0.547 |
+| click     | `fc6c7c4` |   0.513 |      0.451 |      0.333 | 0.800 |    0.575 |
+| pydantic  | `bd8e63e` |   0.495 |      0.636 |      0.333 | 0.615 |    0.459 |
+| httpx     | `b5addb6` |   0.493 |      0.482 |      0.333 | 0.667 |    0.550 |
+| requests  | `e8d2c01` |   0.490 |      0.429 |      0.500 | 0.571 |    0.469 |
+| rich      | `46cebbb` |   0.473 |      0.524 |      0.333 | 0.667 |    0.431 |
+| fastapi   | `622b635` |   0.423 |      0.522 |      0.333 | 0.615 |    0.300 |
+| pytest    | `09f969f` |   0.408 |      0.479 |      0.250 | 0.471 |    0.490 |
+
+Bands derived from this distribution:
 
 | Overall     | What's typically true at this score                                                                                      | Examples from the benchmark                |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `≥ 0.65`    | Zero cycles, shallow tree (depth ≤ 4), distributed fan-out. Hard to reach without deliberate architectural discipline.   | archy (0.677)                              |
-| `0.50–0.65` | Strong on three axes; usually one weak axis (typically equality or acyclicity).                                          | starlette (0.546)                          |
-| `0.40–0.50` | "Typical mature library." One or two cycles plus some fan-out concentration. Most production libraries land here.        | httpx, click, rich, flask, requests, pytest, pydantic, fastapi (0.42–0.49) |
+| `≥ 0.60`    | Zero or one cycle, distributed fan-out. Hard to reach without deliberate architectural discipline.                       | archy (0.620)                              |
+| `0.50–0.60` | Strong on three axes; usually one weak axis (typically acyclicity).                                                      | flask (0.576), starlette (0.549), click (0.513) |
+| `0.40–0.50` | "Typical mature library." One or two cycles plus some fan-out concentration. Most production libraries land here.        | pydantic, httpx, requests, rich, fastapi, pytest (0.41–0.50) |
 | `0.30–0.40` | At least one axis collapsing - 3+ cycles, severe god-module, or a 12+ deep chain.                                        | None in the benchmark.                     |
 | `< 0.30`    | Multiple axes weak simultaneously. Worth investigating before adding features.                                           | None in the benchmark.                     |
 
@@ -269,16 +326,32 @@ what `archy score --record` and `archy trend` are for.
 
 sentrux ships a fifth sub-metric, **redundancy**: dead functions plus
 duplicate functions over total functions. archy intentionally omits
-it for now - static dead-code detection is fragile under dynamic
-dispatch, decorators, and entry-point guards (`if __name__ ==
-"__main__":`), and a noisy redundancy signal would degrade the
-aggregate it's meant to improve. Tracked in
-[`docs/FUTURE.md`](FUTURE.md).
+it.
 
-When `archy redundancy` ships, the geometric mean exponent will
-widen from 1/4 to 1/5 and absolute scores will shift downward; trends
-within a single project will remain comparable, but cross-version
-comparisons will need a note.
+The empirical case for omission is documented in
+[`docs/RESEARCH_METRICS.md`](RESEARCH_METRICS.md) §12: vulture 2.16
+was run on 14 popular Python projects in 2026-05; default-confidence
+findings ranged from 32 (click) to 2,795 (sqlalchemy), and 15 random
+findings spot-checked on FastAPI, pytest, and Django were all
+(15/15) false positives - driven by Python idioms like Pydantic
+validators, pytest fixtures, decorator-registered route handlers,
+and Django's `global_settings.py` string-lookup pattern. Static
+dead-code detection in Python produces too much noise to fold into a
+quality score without inverting the signal.
+
+Duplicate-function detection (AST-shape hashing) has lower
+empirical FP rates and remains a candidate, but is similarly
+deferred until evidence on real codebases is available.
+
+If `archy redundancy` does ship, the geometric mean exponent will
+widen from 1/4 to 1/5 and absolute scores will shift downward;
+trends within a single project will remain comparable via
+`archy score --record`, but cross-version comparisons will need a
+note. The same caveat applies to any future axis (e.g., a NCCD or
+type-hint-coverage axis) - a published scoring model that adds
+indicators over time has to either pin a baseline or accept that
+absolute scores aren't comparable across versions, per the OECD
+Handbook's guidance.[^oecd-handbook]
 
 ## References
 
@@ -313,3 +386,4 @@ comparisons will need a note.
 [^non-compensatory]: "Non-compensatory" means a deficit on one indicator cannot be fully offset by surplus on another - the property that prevents gaming a single dimension. Arithmetic mean is fully compensatory; geometric mean is partially non-compensatory; the lexicographic minimum is fully non-compensatory.
 [^thresholds-empirical]: See *Techniques for Calculating Software Product Metrics Threshold Values: A Systematic Mapping Study*, [Applied Sciences, 2021](https://www.mdpi.com/2076-3417/11/23/11377). The literature consensus is that universal thresholds across projects are unreliable; thresholds derived from a benchmark population (e.g., Mori et al., >3000 systems) outperform expert-asserted ones in fault detection.
 [^modularity-band]: Newman, *Modularity and community structure in networks*, [PNAS 2006](https://www.pnas.org/doi/10.1073/pnas.0601602103). The `Q ∈ [0.3, 0.7]` band has been replicated across biological networks (e.g., E. coli transcription `Qm = 0.54`, C. elegans synaptic network `Qm = 0.54`, human signal-transduction `Qm = 0.58`).
+[^oecd-handbook]: OECD / JRC, [*Handbook on Constructing Composite Indicators: Methodology and User Guide*](https://www.oecd.org/content/dam/oecd/en/publications/reports/2008/08/handbook-on-constructing-composite-indicators-methodology-and-user-guide_g1gh9301/9789264043466-en.pdf), 2008. Recommends pairwise correlation analysis as a redundancy / double-counting check on sub-indicators; the `|r| > 0.7` rule of thumb is widely used in this literature. Also covers the geometric-mean rationale and the comparability-over-time caveats when adding indicators to an existing index.
