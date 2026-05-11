@@ -425,11 +425,12 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload:
     sdp_violations: list[SdpViolation] = []
     if config.sdp.enabled:
         sdp_violations = find_sdp_violations(graph, tolerance=config.sdp.tolerance)
+    sdp_fails_gate = bool(sdp_violations) and config.sdp.mode == "error"
     return CheckPayload(
         config_path=str(config_path),
         violations=tuple(violations),
         sdp_violations=tuple(sdp_violations),
-        passed=not violations and not sdp_violations,
+        passed=not violations and not sdp_fails_gate,
     )
 
 

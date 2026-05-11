@@ -130,6 +130,61 @@ def test_check_json_output(tmp_path: Path):
     assert payload["sdp_violations"] == []
 
 
+def _make_sdp_violating_project(tmp_path: Path) -> Path:
+    # See test_run_check_reports_sdp_violations_when_enabled in test_mcp.py
+    # for the I calculation; the a -> b edge is the SDP violation.
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from myapp.b import thing\n")
+    (pkg / "b.py").write_text("from myapp import y1, y2, y3\n")
+    for name in ("y1", "y2", "y3"):
+        (pkg / f"{name}.py").write_text("")
+    for name in ("x1", "x2", "x3"):
+        (pkg / f"{name}.py").write_text("from myapp.a import thing\n")
+    return tmp_path
+
+
+def test_check_sdp_error_mode_fails_gate(tmp_path: Path):
+    project = _make_sdp_violating_project(tmp_path)
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\nsdp:\n  enabled: true\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 1
+    assert "SDP violation" in result.output
+
+
+def test_check_sdp_warn_mode_reports_but_passes(tmp_path: Path):
+    project = _make_sdp_violating_project(tmp_path)
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  mode: warn\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 0
+    assert "SDP violation" in result.output
+    assert "sdp.mode=warn" in result.output
+
+
+def test_check_sdp_warn_mode_still_fails_on_layer_violation(tmp_path: Path):
+    # warn mode must not soften unrelated layer-rule failures.
+    project = _make_layered_project(tmp_path, with_violation=True)
+    cfg = project / "archy.yaml"
+    cfg.write_text(cfg.read_text() + "sdp:\n  enabled: true\n  mode: warn\n")
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 1
+
+
+def test_check_sdp_invalid_mode_clear_error(tmp_path: Path):
+    project = _make_sdp_violating_project(tmp_path)
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  mode: lenient\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code != 0
+    assert "sdp.mode" in result.output
+
+
 def test_check_no_config_gives_clear_error(tmp_path: Path):
     pkg = tmp_path / "myapp"
     pkg.mkdir()

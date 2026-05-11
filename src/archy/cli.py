@@ -181,6 +181,7 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
         payload = {
             "violations": _violations_to_json(violations),
             "sdp_violations": _sdp_violations_to_json(sdp_violations),
+            "sdp_mode": config.sdp.mode,
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -188,8 +189,11 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
         if config.sdp.enabled:
             click.echo("")
             click.echo(_sdp_violations_to_text(sdp_violations, config.sdp.tolerance))
+            if sdp_violations and config.sdp.mode == "warn":
+                click.echo("# (sdp.mode=warn; not failing the gate)")
 
-    if violations or sdp_violations:
+    sdp_fails = bool(sdp_violations) and config.sdp.mode == "error"
+    if violations or sdp_fails:
         sys.exit(1)
 
 
