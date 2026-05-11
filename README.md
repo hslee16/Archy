@@ -277,9 +277,12 @@ archy enforces its own architecture this way; see [`archy.yaml`](archy.yaml) at 
 sdp:
   enabled: true
   tolerance: 0.0   # ignore violations within this I gap; default 0
+  mode: error      # 'error' fails the gate (default); 'warn' reports but exits 0
 ```
 
 When enabled, `archy check` flags every internal import edge whose target's `I` strictly exceeds the source's (plus tolerance). Per-module `I` is also surfaced in `archy graph --format json` whether or not `sdp:` is enabled, so you can audit before turning enforcement on.
+
+**Gradual adoption.** Existing codebases will often have SDP violations on day one. Set `mode: warn` to report violations in the output (and `archy_check`'s `sdp_violations` payload) without failing the gate, then flip to `mode: error` once the count is at zero. Layer-rule violations always fail the gate regardless of `sdp.mode`.
 
 ## Development
 

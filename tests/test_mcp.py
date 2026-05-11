@@ -164,6 +164,18 @@ def test_run_check_skips_sdp_when_disabled(tmp_path: Path):
     assert result.sdp_violations == ()
 
 
+def test_run_check_warn_mode_reports_violations_but_passes(tmp_path: Path):
+    project = _make_sdp_violating_project(tmp_path)
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  mode: warn\n"
+    )
+    result = _run_check(project, config_path=None)
+    # Violations still reported, but passed=True so CI/agents can adopt SDP
+    # without it being a hard gate yet.
+    assert result.passed is True
+    assert any(v.source == "myapp.a" for v in result.sdp_violations)
+
+
 def test_run_trend_payload_shape(acyclic_project: Path):
     _run_score(
         acyclic_project,

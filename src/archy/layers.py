@@ -37,12 +37,21 @@ class SdpConfig(BaseModel):
     with I=It is flagged only if `It > Is + tolerance`. Default 0.0
     (any strict violation flagged); raise it to ignore borderline
     cases in noisy graphs.
+
+    `mode` controls how violations affect `archy check`'s exit code:
+    `error` (default) makes any SDP violation fail the gate, matching
+    forbid-rule behavior; `warn` reports violations to stdout but
+    leaves the exit code clean so existing layer rules stay the only
+    hard gate. Useful for adopting SDP on a codebase that already has
+    violations: turn warn on, watch the count, then flip to error
+    once the floor is at zero.
     """
 
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = False
     tolerance: float = 0.0
+    mode: str = "error"
 
 
 class LayerConfig(BaseModel):
@@ -250,11 +259,16 @@ def _parse_sdp(raw: object, path: Path) -> SdpConfig:
     body = _as_str_dict(raw, "`sdp`", path)
     enabled = body.get("enabled", False)
     tolerance = body.get("tolerance", 0.0)
+    mode = body.get("mode", "error")
     if not isinstance(enabled, bool):
         raise LayerConfigError(f"`sdp.enabled` must be a bool in {path}")
     if not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool):
         raise LayerConfigError(f"`sdp.tolerance` must be a number in {path}")
-    return SdpConfig(enabled=enabled, tolerance=float(tolerance))
+    if mode not in ("error", "warn"):
+        raise LayerConfigError(
+            f"`sdp.mode` must be 'error' or 'warn' in {path} (got {mode!r})"
+        )
+    return SdpConfig(enabled=enabled, tolerance=float(tolerance), mode=mode)
 
 
 def _parse_str_list(raw: object, field: str, path: Path) -> list[str]:
