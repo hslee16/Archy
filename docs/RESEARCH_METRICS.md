@@ -467,21 +467,21 @@ captured 2026-05-11:
 
 | Project        |    LOC | Vulture @ 60% | Vulture @ 90% |
 | -------------- | -----: | ------------: | ------------: |
-| **sqlalchemy** |246,065 |     **1,827** |           415 |
+| **sqlalchemy** |246,049 |     **1,827** |           415 |
 | scikit-learn   |211,188 |           246 |            31 |
-| dagster        |202,893 |         1,417 |            18 |
+| dagster        |202,927 |         1,417 |            18 |
 | **django**     |156,666 |     **2,017** |            12 |
 | ansible        |135,915 |           949 |            54 |
 | pygments       |125,868 |            84 |             5 |
-| numpy          |123,708 |           395 |            57 |
-| mypy           |113,094 |           208 |            21 |
+| numpy          |123,753 |           396 |            57 |
+| mypy           |113,108 |           208 |            21 |
 | setuptools     | 59,153 |           409 |            20 |
 | pydantic       | 45,563 |           210 |            22 |
 | botocore       | 39,075 |           320 |            17 |
 | rich           | 38,515 |            89 |            12 |
-| pytest         | 37,079 |           162 |            11 |
+| pytest         | 37,089 |           162 |            11 |
 | scrapy         | 29,057 |           186 |             7 |
-| aiohttp        | 26,237 |           199 |            17 |
+| aiohttp        | 25,800 |           188 |            17 |
 | datasette      | 19,946 |           105 |            17 |
 | fastapi        | 19,335 |           129 |             8 |
 | anyio          | 14,455 |            78 |             2 |
@@ -491,8 +491,8 @@ captured 2026-05-11:
 | boto3          |  8,619 |            72 |             6 |
 | mkdocs         |  7,084 |            88 |             8 |
 | starlette      |  6,584 |            67 |             0 |
-| requests       |  6,371 |            54 |             4 |
-| archy          |  2,840 |            16 |             0 |
+| requests       |  6,369 |            54 |             4 |
+| archy          |  3,279 |            55 |             0 |
 | msgspec        |  2,365 |            10 |             4 |
 
 Spot-checking findings on FastAPI, pytest, and Django (15 random

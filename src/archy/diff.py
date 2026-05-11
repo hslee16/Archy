@@ -24,8 +24,10 @@ from archy.cycles import Cycle, CycleEdge, find_cycles
 from archy.layers import (
     ForbidRule,
     LayerConfig,
+    SdpViolation,
     Violation,
     discover_config,
+    find_sdp_violations,
     find_violations,
     load_config,
 )
@@ -38,6 +40,7 @@ class Snapshot(BaseModel):
     score: Score
     cycles: tuple[Cycle, ...]
     violations: tuple[Violation, ...]
+    sdp_violations: tuple[SdpViolation, ...] = ()
 
 
 class ScoreDelta(BaseModel):
@@ -64,23 +67,39 @@ class ViolationSetDiff(BaseModel):
     resolved: tuple[Violation, ...] = ()
 
 
+class SdpViolationSetDiff(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    added: tuple[SdpViolation, ...] = ()
+    resolved: tuple[SdpViolation, ...] = ()
+
+
 class DiffReport(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     score_delta: ScoreDelta
     cycles: CycleSetDiff
     violations: ViolationSetDiff
+    sdp_violations: SdpViolationSetDiff = SdpViolationSetDiff()
 
 
 def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
-    """Capture score, cycles, and layer violations from a single graph build."""
+    """Capture score, cycles, layer violations, and SDP violations from a graph."""
     score = compute_score(graph)
     cycles = tuple(find_cycles(graph, min_size=2))
     violations: tuple[Violation, ...] = ()
+    sdp_violations: tuple[SdpViolation, ...] = ()
     config = _load_config_if_present(config_path)
     if config is not None:
         violations = tuple(find_violations(graph, config))
-    return Snapshot(score=score, cycles=cycles, violations=violations)
+        if config.sdp.enabled:
+            sdp_violations = tuple(find_sdp_violations(graph, tolerance=config.sdp.tolerance))
+    return Snapshot(
+        score=score,
+        cycles=cycles,
+        violations=violations,
+        sdp_violations=sdp_violations,
+    )
 
 
 def snapshot_to_dict(snap: Snapshot) -> dict[str, object]:
@@ -94,6 +113,7 @@ def snapshot_to_dict(snap: Snapshot) -> dict[str, object]:
         "score": _score_to_dict(snap.score),
         "cycles": [_cycle_to_dict(c) for c in snap.cycles],
         "violations": [_violation_to_dict(v) for v in snap.violations],
+        "sdp_violations": [_sdp_violation_to_dict(v) for v in snap.sdp_violations],
     }
 
 
@@ -121,6 +141,7 @@ def compute_diff(baseline: Snapshot, current: Snapshot) -> DiffReport:
         score_delta=_score_delta(baseline.score, current.score),
         cycles=_cycle_set_diff(baseline.cycles, current.cycles),
         violations=_violation_set_diff(baseline.violations, current.violations),
+        sdp_violations=_sdp_violation_set_diff(baseline.sdp_violations, current.sdp_violations),
     )
 
 
@@ -155,6 +176,16 @@ def _violation_to_dict(v: Violation) -> dict[str, object]:
         "rule": {"from": v.rule.from_layer, "to": v.rule.to_layer},
         "source": v.source,
         "target": v.target,
+        "lines": list(v.lines),
+    }
+
+
+def _sdp_violation_to_dict(v: SdpViolation) -> dict[str, object]:
+    return {
+        "source": v.source,
+        "target": v.target,
+        "source_instability": v.source_instability,
+        "target_instability": v.target_instability,
         "lines": list(v.lines),
     }
 
@@ -195,7 +226,16 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
     violations = tuple(
         _violation_from_dict(_expect_dict(v)) for v in _expect_list(payload.get("violations", []))
     )
-    return Snapshot(score=score, cycles=cycles, violations=violations)
+    sdp_violations = tuple(
+        _sdp_violation_from_dict(_expect_dict(v))
+        for v in _expect_list(payload.get("sdp_violations", []))
+    )
+    return Snapshot(
+        score=score,
+        cycles=cycles,
+        violations=violations,
+        sdp_violations=sdp_violations,
+    )
 
 
 def _cycle_from_dict(d: dict[str, object]) -> Cycle:
@@ -216,6 +256,16 @@ def _violation_from_dict(d: dict[str, object]) -> Violation:
         rule=ForbidRule(from_layer=str(rule["from"]), to_layer=str(rule["to"])),
         source=str(d["source"]),
         target=str(d["target"]),
+        lines=tuple(_expect_int(x) for x in _expect_list(d["lines"])),
+    )
+
+
+def _sdp_violation_from_dict(d: dict[str, object]) -> SdpViolation:
+    return SdpViolation(
+        source=str(d["source"]),
+        target=str(d["target"]),
+        source_instability=_expect_float(d["source_instability"]),
+        target_instability=_expect_float(d["target_instability"]),
         lines=tuple(_expect_int(x) for x in _expect_list(d["lines"])),
     )
 
@@ -248,6 +298,20 @@ def _violation_set_diff(
     baseline_keys = {_key(v) for v in baseline}
     current_keys = {_key(v) for v in current}
     return ViolationSetDiff(
+        added=tuple(v for v in current if _key(v) not in baseline_keys),
+        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
+    )
+
+
+def _sdp_violation_set_diff(
+    baseline: tuple[SdpViolation, ...], current: tuple[SdpViolation, ...]
+) -> SdpViolationSetDiff:
+    def _key(v: SdpViolation) -> tuple[str, str]:
+        return (v.source, v.target)
+
+    baseline_keys = {_key(v) for v in baseline}
+    current_keys = {_key(v) for v in current}
+    return SdpViolationSetDiff(
         added=tuple(v for v in current if _key(v) not in baseline_keys),
         resolved=tuple(v for v in baseline if _key(v) not in current_keys),
     )

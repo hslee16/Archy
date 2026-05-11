@@ -68,6 +68,50 @@ def test_diff_flags_resolved_cycle(tmp_path: Path):
     assert len(result.cycles.resolved) == 1
 
 
+def _make_sdp_pattern(tmp_path: Path, *, a_imports_b: bool) -> Path:
+    # See test_run_check_reports_sdp_violations_when_enabled in test_mcp for
+    # the I-calculation of this pattern; a -> b is the violation edge.
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from myapp.b import thing\n" if a_imports_b else "")
+    (pkg / "b.py").write_text("from myapp import y1, y2, y3\n")
+    for name in ("y1", "y2", "y3"):
+        (pkg / f"{name}.py").write_text("")
+    for name in ("x1", "x2", "x3"):
+        (pkg / f"{name}.py").write_text("from myapp.a import thing\n")
+    return tmp_path
+
+
+def test_snapshot_captures_sdp_violations_when_enabled(tmp_path: Path):
+    project = _make_sdp_pattern(tmp_path, a_imports_b=True)
+    config_path = project / "archy.yaml"
+    config_path.write_text("layers: {}\nforbid: []\nsdp:\n  enabled: true\n  tolerance: 0.0\n")
+    snap = take_snapshot(build_graph(project), config_path=config_path)
+    [sdp_v] = [v for v in snap.sdp_violations if v.source == "myapp.a"]
+    assert sdp_v.target == "myapp.b"
+    target = project / ".archy" / "baseline.json"
+    write_snapshot(snap, target)
+    loaded = read_snapshot(target)
+    assert loaded is not None
+    [loaded_v] = [v for v in loaded.sdp_violations if v.source == "myapp.a"]
+    assert loaded_v.target == "myapp.b"
+
+
+def test_diff_flags_newly_introduced_sdp_violation(tmp_path: Path):
+    project = _make_sdp_pattern(tmp_path, a_imports_b=False)
+    config_path = project / "archy.yaml"
+    config_path.write_text("layers: {}\nforbid: []\nsdp:\n  enabled: true\n  tolerance: 0.0\n")
+    baseline = take_snapshot(build_graph(project), config_path=config_path)
+    assert baseline.sdp_violations == ()
+    (project / "myapp" / "a.py").write_text("from myapp.b import thing\n")
+    current = take_snapshot(build_graph(project), config_path=config_path)
+    result = compute_diff(baseline, current)
+    [added] = [v for v in result.sdp_violations.added if v.source == "myapp.a"]
+    assert added.target == "myapp.b"
+    assert result.sdp_violations.resolved == ()
+
+
 def test_diff_flags_newly_introduced_violation(tmp_path: Path):
     pkg = tmp_path / "myapp"
     pkg.mkdir()

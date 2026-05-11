@@ -51,14 +51,16 @@ def clone_or_update(proj: dict) -> Path:
             ["git", "clone", "--quiet", f"https://github.com/{proj['repo']}.git", str(target)],
             check=True,
         )
-    # Fetch first in case the pinned commit isn't present in a shallow clone.
+    # Fetch first in case the pinned commit isn't present locally. GitHub
+    # rejects fetches of short SHAs as a refspec, so fetch all refs and
+    # rely on the post-fetch checkout to resolve the short SHA.
     res = subprocess.run(
         ["git", "-C", str(target), "cat-file", "-e", sha],
         capture_output=True,
     )
     if res.returncode != 0:
         subprocess.run(
-            ["git", "-C", str(target), "fetch", "--quiet", "origin", sha],
+            ["git", "-C", str(target), "fetch", "--quiet", "origin"],
             check=False,
         )
     subprocess.run(
@@ -108,6 +110,53 @@ def loc(src: Path) -> int:
     return total
 
 
+def fetch_head_sha(repo: str) -> str | None:
+    """Return the short SHA of the remote HEAD, or None on failure.
+
+    Uses git ls-remote so no clone is required.
+    """
+    res = subprocess.run(
+        ["git", "ls-remote", f"https://github.com/{repo}", "HEAD"],
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        return None
+    line = res.stdout.strip().split("\n", 1)[0]
+    if not line:
+        return None
+    return line.split()[0][:7]
+
+
+def update_shas() -> int:
+    """Refresh the `sha:` field of every non-tag-pinned project in the manifest.
+
+    Tag-pinned entries (sha starts with "v") are deliberate and skipped so a
+    refresh can't silently turn archy's self-pin into a moving HEAD again.
+    """
+    manifest = load_manifest()
+    text = MANIFEST.read_text()
+    updated = 0
+    for proj in manifest:
+        old_sha = proj["sha"]
+        if old_sha.startswith("v"):
+            print(f"# {proj['name']:13s}  skipped (tag-pinned: {old_sha})", file=sys.stderr)
+            continue
+        new_sha = fetch_head_sha(proj["repo"])
+        if new_sha is None:
+            print(f"# {proj['name']:13s}  FETCH FAILED", file=sys.stderr)
+            continue
+        if new_sha == old_sha:
+            print(f"# {proj['name']:13s}  unchanged ({old_sha})", file=sys.stderr)
+            continue
+        text = text.replace(f'sha: "{old_sha}"', f'sha: "{new_sha}"', 1)
+        updated += 1
+        print(f"# {proj['name']:13s}  {old_sha} -> {new_sha}", file=sys.stderr)
+    MANIFEST.write_text(text)
+    print(f"# updated {updated} SHA(s)", file=sys.stderr)
+    return 0
+
+
 def pearson(xs: list[float], ys: list[float]) -> float:
     m = len(xs)
     if m < 2:
@@ -130,7 +179,15 @@ def main() -> int:
         action="store_true",
         help="write the markdown report to stdout instead of bench/results.md",
     )
+    parser.add_argument(
+        "--update-shas",
+        action="store_true",
+        help="refresh non-tag-pinned project SHAs to remote HEAD and exit",
+    )
     args = parser.parse_args()
+
+    if args.update_shas:
+        return update_shas()
 
     out_lines: list[str] = []
 

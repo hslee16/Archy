@@ -38,8 +38,10 @@ from archy.history import read as read_history
 from archy.impact import Impact, find_impact
 from archy.layers import (
     LayerConfigError,
+    SdpViolation,
     Violation,
     discover_config,
+    find_sdp_violations,
     find_violations,
     load_config,
 )
@@ -112,6 +114,7 @@ class CheckPayload(BaseModel):
 
     config_path: str
     violations: tuple[Violation, ...]
+    sdp_violations: tuple[SdpViolation, ...] = ()
     passed: bool
 
 
@@ -134,6 +137,7 @@ class SnapshotPayload(BaseModel):
     score: Score
     cycles: tuple[Cycle, ...]
     violations: tuple[Violation, ...]
+    sdp_violations: tuple[SdpViolation, ...] = ()
     baseline_path: str
 
 
@@ -238,7 +242,9 @@ def _register_tools(server: FastMCP) -> None:
         description=(
             "**Call after any Python edit that adds, removes, or changes an "
             "import statement.** Returns forbidden direct edges between layers "
-            "declared in archy.yaml. An empty list means no direct boundary "
+            "declared in archy.yaml under `violations`, plus Stable Dependencies "
+            "Principle violations (when `sdp.enabled: true` in archy.yaml) under "
+            "`sdp_violations`. Empty lists on both mean no direct boundary "
             "crossings; pair with archy_contracts for transitive (multi-hop) "
             "checks."
         ),
@@ -416,10 +422,14 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload:
         extra_roots=config.roots,
     )
     violations = find_violations(graph, config)
+    sdp_violations: list[SdpViolation] = []
+    if config.sdp.enabled:
+        sdp_violations = find_sdp_violations(graph, tolerance=config.sdp.tolerance)
     return CheckPayload(
         config_path=str(config_path),
         violations=tuple(violations),
-        passed=not violations,
+        sdp_violations=tuple(sdp_violations),
+        passed=not violations and not sdp_violations,
     )
 
 
@@ -458,6 +468,7 @@ def _run_snapshot(path: Path) -> SnapshotPayload:
         score=snap.score,
         cycles=snap.cycles,
         violations=snap.violations,
+        sdp_violations=snap.sdp_violations,
         baseline_path=str(target),
     )
 
