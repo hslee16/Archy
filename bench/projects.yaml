@@ -8,7 +8,7 @@
 # To add a project: append below with a one-line `why` rationale so the
 # diversity claim stays auditable.
 
-# Captured 2026-05-10.
+# Last SHA refresh: 2026-05-11.
 
 projects:
   # --- 9-library popular set (preserved from prior benchmarks) -------------
@@ -44,25 +44,25 @@ projects:
 
   - name: requests
     repo: psf/requests
-    sha: "e8d2c01"
+    sha: "b684dcb"
     src_dir: src/requests
     why: classic sync HTTP client
 
   - name: pytest
     repo: pytest-dev/pytest
-    sha: "09f969f"
+    sha: "856da14"
     src_dir: src/_pytest
     why: pluggy-based test framework
 
   - name: pydantic
     repo: pydantic/pydantic
-    sha: "bd8e63e"
+    sha: "5c63f86"
     src_dir: pydantic
     why: validation / serialization
 
   - name: fastapi
     repo: fastapi/fastapi
-    sha: "622b635"
+    sha: "e89a37e"
     src_dir: fastapi
     why: layered web framework on starlette
 
@@ -75,7 +75,7 @@ projects:
 
   - name: sqlalchemy
     repo: sqlalchemy/sqlalchemy
-    sha: "3c650ce"
+    sha: "1e1c008"
     src_dir: lib/sqlalchemy
     why: very large ORM, deep inheritance, dialect plugins
 
@@ -87,20 +87,20 @@ projects:
 
   - name: scikit-learn
     repo: scikit-learn/scikit-learn
-    sha: "6e9ef2b"
+    sha: "13f20d7"
     src_dir: sklearn
     why: scientific, distinctive estimator/transformer pattern
 
   - name: numpy
     repo: numpy/numpy
-    sha: "3bea241"
+    sha: "0a1ed72"
     src_dir: numpy
     why: namespace package, mostly C with Python orchestration
 
   # --- async / modern-typed ------------------------------------------------
   - name: aiohttp
     repo: aio-libs/aiohttp
-    sha: "bb35b1c"
+    sha: "e8f4371"
     src_dir: aiohttp
     why: async web (server + client)
 
@@ -132,7 +132,7 @@ projects:
   # --- tooling / devops ----------------------------------------------------
   - name: mypy
     repo: python/mypy
-    sha: "82fb613"
+    sha: "e53693b"
     src_dir: mypy
     why: type checker internals, lots of layered abstractions
 
@@ -144,7 +144,7 @@ projects:
 
   - name: dagster
     repo: dagster-io/dagster
-    sha: "50915f9"
+    sha: "8e7f318"
     src_dir: python_modules/dagster/dagster
     why: modern workflow orchestrator, asset-based DAG, integration plugin pattern
 
@@ -180,6 +180,6 @@ projects:
   # Bump deliberately when refreshing the benchmark.
   - name: archy
     repo: hslee16/archy
-    sha: "v0.8.2"
+    sha: "v0.11.0"
     src_dir: src/archy
     why: dogfooding

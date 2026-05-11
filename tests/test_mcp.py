@@ -126,6 +126,44 @@ def test_run_check_payload_shape(tmp_path: Path):
     assert violation.rule.to_layer == "cli"
 
 
+def _make_sdp_violating_project(tmp_path: Path) -> Path:
+    # a is depended on by x1/x2/x3 (Ca=3) and depends on b (Ce=1) -> I(a)=0.25.
+    # b is depended on by a (Ca=1) and depends on y1/y2/y3 (Ce=3) -> I(b)=0.75.
+    # The a -> b edge is stable importing less-stable: an SDP violation.
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from myapp.b import thing\n")
+    (pkg / "b.py").write_text("from myapp import y1, y2, y3\n")
+    (pkg / "y1.py").write_text("")
+    (pkg / "y2.py").write_text("")
+    (pkg / "y3.py").write_text("")
+    (pkg / "x1.py").write_text("from myapp.a import thing\n")
+    (pkg / "x2.py").write_text("from myapp.a import thing\n")
+    (pkg / "x3.py").write_text("from myapp.a import thing\n")
+    return tmp_path
+
+
+def test_run_check_reports_sdp_violations_when_enabled(tmp_path: Path):
+    project = _make_sdp_violating_project(tmp_path)
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  tolerance: 0.0\n"
+    )
+    result = _run_check(project, config_path=None)
+    assert result.passed is False
+    assert result.violations == ()
+    [violation] = [v for v in result.sdp_violations if v.source == "myapp.a"]
+    assert violation.target == "myapp.b"
+
+
+def test_run_check_skips_sdp_when_disabled(tmp_path: Path):
+    project = _make_sdp_violating_project(tmp_path)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\n")
+    result = _run_check(project, config_path=None)
+    assert result.passed is True
+    assert result.sdp_violations == ()
+
+
 def test_run_trend_payload_shape(acyclic_project: Path):
     _run_score(
         acyclic_project,

@@ -2,6 +2,53 @@
 
 Real-world runs of archy. Useful as regression evidence and as a place to point new contributors at "what does the output actually look like."
 
+## archy across its own releases (v0.8.2 → v0.11.0)
+
+`archy score` run by the v0.11.0 binary against each tagged version of
+archy's own source tree. Same scoring methodology end-to-end, so the
+numbers are directly comparable.
+
+| Release | Modules | Edges | Overall | Modularity | Acyclicity | Depth | Equality |
+| ------- | ------: | ----: | ------: | ---------: | ---------: | ----: | -------: |
+| v0.8.2  |      13 |    26 |   0.536 |      0.466 |      1.000 | 0.667 |    0.266 |
+| v0.9.0  |      13 |    27 |   0.550 |      0.459 |      1.000 | 0.667 |    0.299 |
+| v0.10.0 |      14 |    29 |   0.555 |      0.470 |      1.000 | 0.667 |    0.303 |
+| v0.11.0 |      14 |    29 |   0.555 |      0.470 |      1.000 | 0.667 |    0.303 |
+
+What moved:
+
+- **v0.8.2 → v0.9.0 (+0.014)**: equality went from 0.266 to 0.299
+  while modularity dropped slightly. The release added the
+  archy.yaml-as-contracts-config reader (#42) and converted all
+  internal dataclasses to pydantic models (#44); the structural
+  effect on the graph was a redistribution of fan-out (one new
+  internal edge but a wider spread), which is exactly the kind of
+  change the equality axis is meant to reward.
+- **v0.9.0 → v0.10.0 (+0.005)**: the instability metric + SDP
+  violation check shipped (#48). One new module (`instability.py`)
+  and two new internal edges. Modularity ticks back up because the
+  new module is a clean leaf (high I), and equality moves a hair
+  because fan-out gets one more sink.
+- **v0.10.0 → v0.11.0 (+0.000)**: no source changes - the v0.11.0
+  release was entirely benchmark + docs refresh, which is the
+  expected null result. A useful baseline: a release that's
+  *supposed* to be docs-only and that doesn't accidentally drift
+  the score is a quiet success.
+
+Acyclicity has been pinned at 1.000 across all four releases because
+the layer rules in `archy.yaml` are enforced in CI - any commit that
+would introduce a cycle fails the `archy check` gate before merging.
+Depth is also constant at 0.667 (max chain length 3 through the
+SCC condensation), which is the natural ceiling for a 14-module
+project organized as parser → graph → policy → cli.
+
+Equality stays the weakest axis - `archy.cli` aggregates all user-
+facing surfaces and naturally has the highest fan-out. That's
+expected for a CLI app, and explicit acceptance of it is why the
+score uses geometric mean rather than minimum: a deliberately
+weak axis shouldn't tank the composite if every other axis is
+strong.
+
 ## archy on archy (dogfooding, v0.1.0)
 
 > Historical, retained for reference. Module counts and CLI output below
