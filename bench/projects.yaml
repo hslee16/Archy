@@ -165,7 +165,7 @@ projects:
     repo: pygments/pygments
     sha: "6fe2c31"
     src_dir: pygments
-    why: wide-and-shallow: hundreds of parallel lexer modules over a small core
+    why: "wide-and-shallow: hundreds of parallel lexer modules over a small core"
 
   - name: setuptools
     repo: pypa/setuptools
