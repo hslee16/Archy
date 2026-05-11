@@ -71,6 +71,8 @@ For reference, archy ships these and they're documented in
 | Acyclicity    | `1 - tangle_ratio` (fraction of nodes in SCCs of size ≥ 2) |
 | Depth         | Longest path through the SCC condensation      |
 | Equality      | `1 - Gini(out_degree)`                          |
+| Martin's `I` (instability) | Per-module `Ce / (Ce + Ca)`; exposed per-node in `archy graph --format json` (`compute_instability` in `instability.py`) |
+| SDP violation check | Edges from stable to less-stable modules; enabled via `sdp:` in `archy.yaml`, reported by `archy check` (`find_sdp_violations` in `layers.py`) |
 
 Plus rule-based fitness functions: layer rules and exclusion patterns
 in `archy.yaml`, checked by `archy check`.
@@ -114,17 +116,20 @@ Two derived rules from Clean Architecture:
   be abstract. **Python translation:** depends on the abstractness
   definition above; useful with the Protocol-aware version.
 
-**Feasibility for archy:** `I` and SDP are essentially free -
-single-pass ratios on the current graph. `A` requires AST work
-(tree-sitter pass to count `ABC`/`Protocol` subclasses and
-`@abstractmethod`); already on the roadmap as part of the
-cyclomatic-complexity AST work.
+**Status:** `I` and SDP are **shipped** - `compute_instability` in
+`src/archy/instability.py`, exposed via `archy graph --format json`,
+and `find_sdp_violations` in `src/archy/layers.py`, wired into
+`archy check` (enable with `sdp:` in `archy.yaml`). `A`/`D`/SAP
+remain deferred: `A` requires AST work (tree-sitter pass to count
+`ABC`/`Protocol` subclasses and `@abstractmethod`), on the roadmap
+as part of the cyclomatic-complexity AST work.
 
-**Signal:** Strong for `I` and SDP. Weaker for `A`/`D`/SAP in Python
-specifically because Python's structural typing means many
-"abstractions" never appear as `Protocol` subclasses at all (e.g.,
-file-like objects passed by convention). Reasonable to ship `I` and
-SDP first, treat `A`/`D`/SAP as an experiment.
+**Signal:** Strong for `I` and SDP (confirmed in practice). Weaker
+for `A`/`D`/SAP in Python specifically because Python's structural
+typing means many "abstractions" never appear as `Protocol`
+subclasses at all (e.g., file-like objects passed by convention).
+The "ship `I` and SDP first, treat `A`/`D`/SAP as an experiment"
+plan turned out right.
 
 ---
 
@@ -255,9 +260,13 @@ scoring.
 - **Tangle:** percentage of the codebase inside cyclic regions.
 
 Tangle is **a percentage of code, not a count of cycles**. archy's
-current `acyclicity = 1 / (1 + N)` treats one big SCC the same as
-one small SCC, which understates the problem when 60% of the codebase
-is in a single tangled component.
+acyclicity score is **already** computed as `1 - tangle_ratio`,
+where `tangle_ratio = |nodes in SCCs of size ≥ 2| / N`
+(`compute_acyclicity` in `src/archy/score.py`). The earlier
+`acyclicity = 1 / (1 + N)` normalization treated one big SCC the
+same as one small SCC and understated the problem when 60% of the
+codebase was in a single tangled component; the tangle-ratio
+replacement is what's running today.
 
 **Python translation:** clean and especially relevant. Python
 codebases tend to acquire one of two cycle profiles:
@@ -269,12 +278,13 @@ codebases tend to acquire one of two cycle profiles:
    module type-imports another at module top level instead of guarded
    by `TYPE_CHECKING`). Tangle ratio captures these accurately.
 
-**Feasibility:** Trivial. After the SCC condensation archy already
-computes, sum `|nodes in SCCs of size ≥ 2| / N`.
+**Status:** Shipped. Tangle ratio is computed after SCC
+condensation as `|nodes in SCCs of size ≥ 2| / N` and exposed in
+`ScoreInputs`; the acyclicity sub-metric is `1 - tangle_ratio`.
 
-**Signal:** Strong, complementary to existing acyclicity. Replacing
-or supplementing the cycle-count normalization with tangle ratio is
-the smallest-cost improvement on the list.
+**Signal:** Strong, complementary to the prior cycle-count
+normalization. The replacement was the smallest-cost improvement on
+the list when this section was written.
 
 ---
 
@@ -673,13 +683,13 @@ The "Role" column distinguishes:
 
 | Candidate                                 | Signal | Cost   | Role                | Validation       | Recommend |
 | ----------------------------------------- | ------ | ------ | ------------------- | ---------------- | --------- |
-| Tangle ratio                              | High   | Trivial| **Replace** acyclicity normalization | -                | **Yes**   |
+| Tangle ratio                              | High   | Trivial| **Shipped** (acyclicity = 1 - tangle_ratio) | ✓ shipped: `score.compute_acyclicity` | **Shipped** |
 | Reflexion: Forbidden + Independence       | High   | Low    | Check rule          | -                | **Yes**   |
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
 | Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |
 | Cognitive complexity                      | Medium | Trivial| Sub-stat (free with CC) | -            | **Yes (free)** |
 | Hotspots (CC × per-file churn)            | High   | Medium | Standalone command  | -                | **Yes (after CC)** |
-| Martin's `I` + SDP-violation rule         | Medium | Low    | Sub-stat + check rule | -              | **Yes**   |
+| Martin's `I` + SDP-violation rule         | Medium | Low    | Sub-stat + check rule | ✓ shipped: `instability.py`, `layers.find_sdp_violations`, surfaced in `archy graph --format json` and `archy check` | **Shipped** |
 | PageRank per module                       | Medium | Low    | Sub-stat (diagnostic) | -              | **Yes**   |
 | Core/periphery size                       | Medium | Trivial| Sub-stat (diagnostic) | -              | **Yes**   |
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
@@ -700,10 +710,9 @@ additive unless marked **Replace**.
 
 ### Group A - pre-call-graph, low cost
 
-1. **Tangle ratio** - *Replace* the current `acyclicity = 1/(1+N)`
-   normalization with `acyclicity = 1 - tangle_ratio`. Five-line
-   change. Best done after the `__init__.py` re-export resolver
-   lands so the input graph is clean ([`FUTURE.md`](FUTURE.md)).
+1. **Tangle ratio** - *Done.* Shipped: `acyclicity = 1 - tangle_ratio`
+   in `src/archy/score.py` (`compute_acyclicity`); `tangle_ratio`
+   exposed as a diagnostic in `ScoreInputs`.
 2. **Reflexion: Forbidden + Independence contracts** in
    `archy.yaml`. Closes the gap with import-linter; purely additive
    to `archy check`. No score impact.
@@ -712,9 +721,11 @@ additive unless marked **Replace**.
    9-library benchmark), so it earns its place in the geometric
    mean. Note: adding a fifth axis shifts absolute scores; document
    the change.
-4. **Martin's `I` per-module + SDP-violation check rule.** Sub-stat
-   in `archy graph --format json` plus a new rule type for
-   `archy check`.
+4. **Martin's `I` per-module + SDP-violation check rule.** *Done.*
+   Shipped in `src/archy/instability.py` and
+   `src/archy/layers.find_sdp_violations`; surfaced in
+   `archy graph --format json` and `archy check` (enable via `sdp:`
+   in `archy.yaml`).
 5. **PageRank per module + core size.** Diagnostics only; expose in
    `archy graph --format json` and `archy_impact` output.
 
