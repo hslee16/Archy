@@ -1,6 +1,9 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.6.9
+    # Keep this in sync with the ruff version in uv.lock so pre-commit and CI
+    # use the same formatter; an older pre-commit rev silently let two
+    # ruff-format-clean-locally / ruff-format-dirty-in-CI commits through #54.
+    rev: v0.15.12
     hooks:
       - id: ruff
       - id: ruff-format

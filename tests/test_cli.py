@@ -147,9 +147,7 @@ def _make_sdp_violating_project(tmp_path: Path) -> Path:
 
 def test_check_sdp_error_mode_fails_gate(tmp_path: Path):
     project = _make_sdp_violating_project(tmp_path)
-    (project / "archy.yaml").write_text(
-        "layers: {}\nforbid: []\nsdp:\n  enabled: true\n"
-    )
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nsdp:\n  enabled: true\n")
     result = CliRunner().invoke(main, ["check", str(project)])
     assert result.exit_code == 1
     assert "SDP violation" in result.output
