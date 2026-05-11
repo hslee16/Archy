@@ -238,44 +238,46 @@ The OECD Handbook on Constructing Composite Indicators recommends
 testing this empirically: pairwise correlation between sub-indicators
 above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
 
-Pairwise Pearson correlations on a 23-project benchmark spanning
+Pairwise Pearson correlations on a 27-project benchmark spanning
 small CLI tools to very large frameworks (msgspec at 10 modules,
-django at 902, dagster at 801), captured 2026-05-10 against pinned
+django at 902, dagster at 801), captured 2026-05-11 against pinned
 SHAs (see [`bench/projects.yaml`](../bench/projects.yaml)):
 
 | Pair                    |    `r` |
 | ----------------------- | -----: |
-| modularity ↔ acyclicity | +0.257 |
-| modularity ↔ depth      | -0.617 |
-| modularity ↔ equality   | -0.234 |
-| acyclicity ↔ depth      | -0.618 |
-| acyclicity ↔ equality   | -0.652 |
-| depth ↔ equality        | +0.337 |
+| modularity ↔ acyclicity | +0.419 |
+| modularity ↔ depth      | -0.580 |
+| modularity ↔ equality   | -0.303 |
+| acyclicity ↔ depth      | -0.639 |
+| acyclicity ↔ equality   | -0.464 |
+| depth ↔ equality        | +0.322 |
 
 All six pairs are below `|r| = 0.7`, the OECD-conventional threshold
-for treating sub-indicators as redundant. **Four of six are at
-"moderate" coupling (`|r| ∈ [0.5, 0.7]`)**, up from three at the
-10-project sample. The expanded benchmark surfaces a moderate
-modularity↔depth coupling that was below detection threshold at
-n=10. Concretely:
+for treating sub-indicators as redundant. **Two of six sit at
+"moderate" coupling (`|r| ∈ [0.5, 0.7]`)**, down from four at the
+23-project sample: adding boto3, botocore, pygments, and setuptools
+(several with very high acyclicity but middling equality) regressed
+the acyclicity↔equality coupling out of the moderate band. Concretely:
 
-- **acyclicity ↔ equality at `-0.652`**: high tangle (low
-  acyclicity) tends to coexist with concentrated fan-out (low
-  equality). A few hub modules participating in a large SCC pull
-  both axes down at once.
-- **acyclicity ↔ depth at `-0.618`**: codebases with low acyclicity
+- **acyclicity ↔ depth at `-0.639`**: codebases with low acyclicity
   also tend to have low depth scores (longer chains). A graph that's
   mostly inside a few SCCs has fewer free DAG hops to extend, but the
   SCC condensation it does have tends to be deep when the tangled
   mass dominates.
-- **modularity ↔ depth at `-0.617`**: deeper graphs tend to have
+- **modularity ↔ depth at `-0.580`**: deeper graphs tend to have
   higher modularity. Plausible: in a deep DAG, communities form
   along the chain naturally, so longer chains give Newman's Q more
   structure to find.
-- **depth ↔ equality at `+0.337`**: weak in the larger benchmark.
-  Was +0.526 at n=10; the larger sample regresses it to a smaller
-  effect. The original "moderate" finding looks like sampling noise
-  on the narrower 10-project set.
+- **acyclicity ↔ equality at `-0.464`**: regressed from `-0.652` at
+  n=23. The four new projects break the "hub modules in large SCC
+  pull both axes down" pattern - boto3/botocore/pygments/setuptools
+  are largely acyclic but still have concentrated fan-out, so the
+  coupling looks weaker once they're in the sample.
+- **modularity ↔ acyclicity at `+0.419`**: strengthened from
+  `+0.257`. The wide-and-shallow plugin shapes (pygments, setuptools)
+  score high on both, pulling the correlation up.
+- **depth ↔ equality at `+0.322`**: weak and stable across sample
+  expansions.
 
 These don't break the geometric-mean argument - none cross the OECD
 threshold - but the design language in
@@ -298,23 +300,27 @@ There is no universal "good architecture score." The systematic-
 mapping literature on software-metric thresholds is explicit that
 thresholds must be derived empirically from a benchmark population
 rather than asserted from intuition.[^thresholds-empirical] The bands
-below are derived from archy's 23-project benchmark spanning small
+below are derived from archy's 27-project benchmark spanning small
 CLI tools (click, msgspec) to very large frameworks (django, numpy,
 sqlalchemy, dagster), with diversity across web / async / scientific
-/ ORM / plugin-host / devops / workflow-orchestration domains.
-Pinned SHAs in
+/ ORM / plugin-host / devops / workflow-orchestration / build-tooling
+/ syntax-highlighting / generated-SDK domains. Pinned SHAs in
 [`bench/projects.yaml`](../bench/projects.yaml); raw output in
-[`bench/results.md`](../bench/results.md). Captured 2026-05-10:
+[`bench/results.md`](../bench/results.md). Captured 2026-05-11:
 
 | Project       | SHA       | Modules | Edges | Overall | Modularity | Acyclicity | Depth | Equality |
 | ------------- | --------- | ------: | ----: | ------: | ---------: | ---------: | ----: | -------: |
+| pygments      | `6fe2c31` |     342 |   834 |   0.661 |      0.565 |      1.000 | 0.500 |    0.676 |
 | numpy         | `3bea241` |     424 |  1191 |   0.611 |      0.609 |      0.745 | 0.571 |    0.538 |
+| boto3         | `81a86c9` |      39 |    71 |   0.609 |      0.689 |      0.897 | 0.533 |    0.417 |
 | mkdocs        | `2862536` |      61 |   175 |   0.589 |      0.526 |      0.787 | 0.615 |    0.472 |
 | starlette     | `7793b92` |      34 |   114 |   0.572 |      0.458 |      0.588 | 0.727 |    0.547 |
 | scrapy        | `5223dbe` |     172 |   858 |   0.560 |      0.521 |      0.640 | 0.533 |    0.552 |
 | datasette     | `aa84fe0` |      59 |   172 |   0.555 |      0.551 |      0.881 | 0.444 |    0.441 |
 | anyio         | `bcb2db6` |      42 |   158 |   0.555 |      0.499 |      0.643 | 0.615 |    0.480 |
+| setuptools    | `84ed591` |     317 |   592 |   0.549 |      0.766 |      0.931 | 0.348 |    0.367 |
 | archy         | `v0.8.2`  |      13 |    26 |   0.536 |      0.466 |      1.000 | 0.667 |    0.266 |
+| botocore      | `2b64927` |      76 |   255 |   0.534 |      0.566 |      0.934 | 0.348 |    0.443 |
 | pytest        | `09f969f` |      69 |   372 |   0.529 |      0.479 |      0.710 | 0.471 |    0.490 |
 | fastapi       | `622b635` |      48 |   114 |   0.522 |      0.522 |      0.771 | 0.615 |    0.300 |
 | pydantic      | `bd8e63e` |     104 |   496 |   0.513 |      0.636 |      0.385 | 0.615 |    0.459 |
@@ -332,13 +338,13 @@ Pinned SHAs in
 | aiohttp       | `bb35b1c` |      54 |   320 |   0.440 |      0.532 |      0.185 | 0.667 |    0.569 |
 | msgspec       | `3b2543b` |      10 |    19 |   0.384 |      0.440 |      0.100 | 0.889 |    0.553 |
 
-Bands derived from this distribution (median 0.510, IQR roughly
+Bands derived from this distribution (median 0.513, IQR roughly
 0.47–0.55):
 
 | Overall     | What's typically true at this score                                                                                                                | Examples from the benchmark                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `≥ 0.58`    | Top tier. Usually a deliberate architectural pattern: layered scientific code (numpy), pluggy-driven decomposition (mkdocs), focused ASGI surface (starlette). | numpy, mkdocs, starlette                                          |
-| `0.50–0.58` | Healthy. The bulk of mature Python libraries. Usually one weak axis, often acyclicity below 0.5.                                                   | scrapy, datasette, anyio, archy, pytest, fastapi, pydantic, rich, requests |
+| `≥ 0.58`    | Top tier. Usually a deliberate architectural pattern: wide-and-shallow lexer registry over a small core (pygments), layered scientific code (numpy), thin hand-written layer over an auto-generated SDK surface (boto3), pluggy-driven decomposition (mkdocs). | pygments, numpy, boto3, mkdocs                                    |
+| `0.50–0.58` | Healthy. The bulk of mature Python libraries. Usually one weak axis, often acyclicity below 0.5. setuptools is interesting here: highest modularity in the benchmark (0.766) and very high acyclicity (0.931), but middling depth (0.348) and weak equality (0.367) keep it mid-band. | starlette, scrapy, datasette, anyio, setuptools, archy, botocore, pytest, fastapi, pydantic, rich, requests |
 | `0.45–0.50` | "Typical." Often one of: many small cycles (high tangle), or a long chain pulling depth low. Most very-large frameworks land here. dagster is a notable exception within the band: high modularity (0.577) and the highest edge density in the benchmark (7.8 edges/module), but acyclicity 0.400 and equality 0.416 pull it down. | mypy, sqlalchemy, ansible, django, click, httpx, flask, dagster, scikit-learn |
 | `0.40–0.45` | At least one axis severely weak. Examine the breakdown.                                                                                            | aiohttp                                                           |
 | `< 0.40`    | Multiple axes weak, or one axis below 0.15. Worth investigating before adding features.                                                            | msgspec (acyclicity 0.10 dominates a 10-module surface)           |
@@ -382,7 +388,7 @@ it.
 
 The empirical case for omission is documented in
 [`docs/RESEARCH_METRICS.md`](RESEARCH_METRICS.md) §12: vulture 2.16
-was run on 23 popular Python projects in 2026-05; default-confidence
+was run on 27 popular Python projects in 2026-05; default-confidence
 findings ranged from 10 (msgspec) to 2,017 (django), and 15 random
 findings spot-checked on FastAPI, pytest, and Django were all
 (15/15) false positives - driven by Python idioms like Pydantic

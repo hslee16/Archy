@@ -148,6 +148,31 @@ projects:
     src_dir: python_modules/dagster/dagster
     why: modern workflow orchestrator, asset-based DAG, integration plugin pattern
 
+  # --- distinctive surface shapes -----------------------------------------
+  - name: boto3
+    repo: boto/boto3
+    sha: "81a86c9"
+    src_dir: boto3
+    why: thin hand-written layer over a code-generated SDK
+
+  - name: botocore
+    repo: boto/botocore
+    sha: "2b64927"
+    src_dir: botocore
+    why: auto-generated client surface for thousands of AWS services
+
+  - name: pygments
+    repo: pygments/pygments
+    sha: "6fe2c31"
+    src_dir: pygments
+    why: wide-and-shallow — hundreds of parallel lexer modules over a small core
+
+  - name: setuptools
+    repo: pypa/setuptools
+    sha: "84ed591"
+    src_dir: setuptools
+    why: legacy build tooling, vendored distutils, long-lived layering
+
   # --- self -----------------------------------------------------------------
   # Pin to a release tag, not HEAD: every merged commit was silently
   # shifting archy's row in the score table and propagating into the

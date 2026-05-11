@@ -451,9 +451,9 @@ Sentrux's fifth metric (already discussed in `SCORING.md` as
 deferred). The Python case is *worse* than the general case.
 
 **Empirical validation.** Vulture 2.16 was run with default settings
-(60% confidence) and at 90% confidence on the full 23-project
+(60% confidence) and at 90% confidence on the full 27-project
 benchmark (see [`bench/projects.yaml`](../bench/projects.yaml)),
-captured 2026-05-10:
+captured 2026-05-11:
 
 | Project        |    LOC | Vulture @ 60% | Vulture @ 90% |
 | -------------- | -----: | ------------: | ------------: |
@@ -462,9 +462,12 @@ captured 2026-05-10:
 | dagster        |202,893 |         1,417 |            18 |
 | **django**     |156,666 |     **2,017** |            12 |
 | ansible        |135,915 |           949 |            54 |
+| pygments       |125,868 |            84 |             5 |
 | numpy          |123,708 |           395 |            57 |
 | mypy           |113,094 |           208 |            21 |
+| setuptools     | 59,153 |           409 |            20 |
 | pydantic       | 45,563 |           210 |            22 |
+| botocore       | 39,075 |           320 |            17 |
 | rich           | 38,515 |            89 |            12 |
 | pytest         | 37,079 |           162 |            11 |
 | scrapy         | 29,057 |           186 |             7 |
@@ -475,6 +478,7 @@ captured 2026-05-10:
 | click          | 11,529 |            32 |             3 |
 | flask          |  9,502 |            76 |             7 |
 | httpx          |  8,827 |            69 |             3 |
+| boto3          |  8,619 |            72 |             6 |
 | mkdocs         |  7,084 |            88 |             8 |
 | starlette      |  6,584 |            67 |             0 |
 | requests       |  6,371 |            54 |             4 |
@@ -744,9 +748,10 @@ additive unless marked **Replace**.
 Empirical checks supporting load-bearing claims in the doc.
 
 The benchmark is now driven by a checked-in manifest at
-[`bench/projects.yaml`](../bench/projects.yaml) with **23 pinned
+[`bench/projects.yaml`](../bench/projects.yaml) with **27 pinned
 SHAs** spanning small CLI tools to very large frameworks across web
-/ async / scientific / ORM / plugin-host / devops domains. The
+/ async / scientific / ORM / plugin-host / devops / build-tooling /
+syntax-highlighting / generated-SDK domains. The
 benchmark runner is [`bench/run.py`](../bench/run.py); run with
 `uv run --with networkx --with pyyaml python bench/run.py --vulture`.
 Raw output checked into [`bench/results.md`](../bench/results.md).
@@ -755,13 +760,13 @@ Specific validations referenced above:
 
 1. **Vulture false-positive rate** (section 12). Vulture 2.16 run with
    default settings (60% confidence) and at `--min-confidence 90` on
-   all 23 projects. 15 random findings per project spot-checked across
+   all 27 projects. 15 random findings per project spot-checked across
    FastAPI, pytest, and Django to identify dominant FP patterns.
 2. **NCCD vs depth correlation** (section 3). Computed CCD/ACD/NCCD
    on the original 9-library benchmark plus archy. Pearson correlation
    between NCCD and archy's `max_depth`: `r = 0.000`, indicating the
    metrics are empirically orthogonal. The narrower 10-project sample
-   was used because the NCCD probe predates the 23-project manifest;
+   was used because the NCCD probe predates the 27-project manifest;
    the qualitative finding (orthogonality) is robust to sample-size
    refinements.
 
