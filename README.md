@@ -94,7 +94,7 @@ Reach for `.importlinter` only when you need contract types `archy.yaml` does no
 
 ### Compute a quality score
 
-Composite of modularity, acyclicity, depth, and equality (geometric mean). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown.
+Composite of modularity, acyclicity, depth, and equality (geometric mean). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown. These four axes were chosen after surveying ~15 alternatives from the package-metrics literature (Martin's `I`/`A`/`D`, Lakos's NCCD, MacCormack propagation cost, Structure101 fat/tangle, reflexion models, cognitive complexity, hotspots, logical coupling, dead/duplicate-code detection); Martin's `I` and the Stable Dependencies Principle check are also shipped as a per-module diagnostic and an `archy check` rule. See [`docs/RESEARCH_METRICS.md`](docs/RESEARCH_METRICS.md) for the full validation, what was shipped, and what was deferred and why.
 
 ```bash
 uv run archy score path/to/project

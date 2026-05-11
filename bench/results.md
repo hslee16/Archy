@@ -1,19 +1,23 @@
 # Benchmark results
 
 Output of `uv run --with networkx --with pyyaml python bench/run.py --vulture`.
-SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
+SHAs pinned in `bench/projects.yaml`. Captured 2026-05-11.
 
 ## Score table
 
 | name | sha | modules | edges | overall | modularity | acyclicity | depth | equality |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| pygments | `6fe2c31` | 342 | 834 | 0.661 | 0.565 | 1.000 | 0.500 | 0.676 |
 | numpy | `3bea241` | 424 | 1191 | 0.611 | 0.609 | 0.745 | 0.571 | 0.538 |
+| boto3 | `81a86c9` | 39 | 71 | 0.609 | 0.689 | 0.897 | 0.533 | 0.417 |
 | mkdocs | `2862536` | 61 | 175 | 0.589 | 0.526 | 0.787 | 0.615 | 0.472 |
 | starlette | `7793b92` | 34 | 114 | 0.572 | 0.458 | 0.588 | 0.727 | 0.547 |
 | scrapy | `5223dbe` | 172 | 858 | 0.560 | 0.521 | 0.640 | 0.533 | 0.552 |
 | datasette | `aa84fe0` | 59 | 172 | 0.555 | 0.551 | 0.881 | 0.444 | 0.441 |
 | anyio | `bcb2db6` | 42 | 158 | 0.555 | 0.499 | 0.643 | 0.615 | 0.480 |
+| setuptools | `84ed591` | 317 | 592 | 0.549 | 0.766 | 0.931 | 0.348 | 0.367 |
 | archy | `v0.8.2` | 13 | 26 | 0.536 | 0.466 | 1.000 | 0.667 | 0.266 |
+| botocore | `2b64927` | 76 | 255 | 0.534 | 0.566 | 0.934 | 0.348 | 0.443 |
 | pytest | `09f969f` | 69 | 372 | 0.529 | 0.479 | 0.710 | 0.471 | 0.490 |
 | fastapi | `622b635` | 48 | 114 | 0.522 | 0.522 | 0.771 | 0.615 | 0.300 |
 | pydantic | `bd8e63e` | 104 | 496 | 0.513 | 0.636 | 0.385 | 0.615 | 0.459 |
@@ -35,12 +39,12 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 
 | pair | r |
 | --- | ---: |
-| modularity ↔ acyclicity | +0.257 |
-| modularity ↔ depth | -0.617 |
-| modularity ↔ equality | -0.234 |
-| acyclicity ↔ depth | -0.618 |
-| acyclicity ↔ equality | -0.652 |
-| depth ↔ equality | +0.337 |
+| modularity ↔ acyclicity | +0.419 |
+| modularity ↔ depth | -0.580 |
+| modularity ↔ equality | -0.303 |
+| acyclicity ↔ depth | -0.639 |
+| acyclicity ↔ equality | -0.464 |
+| depth ↔ equality | +0.322 |
 
 ## Vulture findings
 
@@ -51,9 +55,12 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 | dagster | `50915f9` | 202,893 | 1417 | 18 |
 | django | `4d455ae` | 156,666 | 2017 | 12 |
 | ansible | `b7c0900` | 135,915 | 949 | 54 |
+| pygments | `6fe2c31` | 125,868 | 84 | 5 |
 | numpy | `3bea241` | 123,708 | 395 | 57 |
 | mypy | `82fb613` | 113,094 | 208 | 21 |
+| setuptools | `84ed591` | 59,153 | 409 | 20 |
 | pydantic | `bd8e63e` | 45,563 | 210 | 22 |
+| botocore | `2b64927` | 39,075 | 320 | 17 |
 | rich | `46cebbb` | 38,515 | 89 | 12 |
 | pytest | `09f969f` | 37,079 | 162 | 11 |
 | scrapy | `5223dbe` | 29,057 | 186 | 7 |
@@ -64,6 +71,7 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-10.
 | click | `fc6c7c4` | 11,529 | 32 | 3 |
 | flask | `7374c85` | 9,502 | 76 | 7 |
 | httpx | `b5addb6` | 8,827 | 69 | 3 |
+| boto3 | `81a86c9` | 8,619 | 72 | 6 |
 | mkdocs | `2862536` | 7,084 | 88 | 8 |
 | starlette | `7793b92` | 6,584 | 67 | 0 |
 | requests | `e8d2c01` | 6,371 | 54 | 4 |
