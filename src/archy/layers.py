@@ -264,10 +264,8 @@ def _parse_sdp(raw: object, path: Path) -> SdpConfig:
         raise LayerConfigError(f"`sdp.enabled` must be a bool in {path}")
     if not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool):
         raise LayerConfigError(f"`sdp.tolerance` must be a number in {path}")
-    if mode not in ("error", "warn"):
-        raise LayerConfigError(
-            f"`sdp.mode` must be 'error' or 'warn' in {path} (got {mode!r})"
-        )
+    if not isinstance(mode, str) or mode not in ("error", "warn"):
+        raise LayerConfigError(f"`sdp.mode` must be 'error' or 'warn' in {path} (got {mode!r})")
     return SdpConfig(enabled=enabled, tolerance=float(tolerance), mode=mode)
 
 
