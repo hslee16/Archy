@@ -368,6 +368,32 @@ Two things to note when reading these bands:
    **0.53–0.80**. Scores in that band are healthy; below ~0.50
    suggests the graph has no clear community structure, above ~0.80
    is unusual outside very small or already-decomposed codebases.
+3. **The top scorers are shape-driven, not size-driven.** pygments
+   (0.661, the benchmark high) and setuptools (0.766 modularity, the
+   benchmark high on that axis) both score the way they do because of
+   their *layout*, not their quality per se. pygments is a wide-and-
+   shallow registry: a small core (`pygments.lexer`,
+   `pygments.formatter`, `pygments.token`) and ~300 nearly-independent
+   lexer modules that import from the core but rarely from each other.
+   That structure is acyclic by construction (acyclicity 1.000),
+   spreads fan-out evenly (equality 0.676, the benchmark high), and
+   produces tight communities (one per language family). setuptools
+   gets a similar boost from its `command/` plugin directory plus
+   vendored distutils: each command module is a near-leaf, so
+   modularity is high but depth (0.348) and equality (0.367) suffer
+   because the few core modules carry disproportionate fan-in. The
+   takeaway: scores in the `0.55+` band often reflect a deliberate
+   plugin/registry pattern, and "improving" a non-plugin codebase by
+   chasing pygments-like numbers is the wrong inference.
+4. **Auto-generated SDKs score well on archy's axes for trivial
+   reasons.** boto3 (0.609) and botocore (0.534) both rank above
+   average. The bulk of botocore is JSON-driven at runtime, so the
+   *static* Python surface archy sees is small and orderly: a handful
+   of generic client/session/serializer modules. boto3 is even more
+   extreme - 39 modules of hand-written facade over botocore. archy's
+   import graph correctly says "this Python source is well-organized,"
+   but that's a property of the code-generation strategy, not a
+   judgment to generalize to non-generated codebases.
 
 When reading the breakdown, look at the **lowest** sub-metric first -
 geometric mean means that's the one bottlenecking the overall. The

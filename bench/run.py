@@ -1,17 +1,20 @@
 """Run the archy benchmark across the projects pinned in projects.yaml.
 
-Outputs a markdown table of per-project scores plus pairwise Pearson
-correlations of the four sub-metrics. Used to refresh SCORING.md after
-formula changes; and `--vulture` to refresh RESEARCH_METRICS.md §12.
+Writes a markdown table of per-project scores plus pairwise Pearson
+correlations of the four sub-metrics to bench/results.md. Used to
+refresh SCORING.md after formula changes; and `--vulture` to refresh
+RESEARCH_METRICS.md §12.
 
 Usage:
     uv run --with networkx --with pyyaml python bench/run.py
     uv run --with networkx --with pyyaml python bench/run.py --vulture
+    uv run --with networkx --with pyyaml python bench/run.py --stdout
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import math
 import shutil
@@ -24,6 +27,7 @@ import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "bench" / "projects.yaml"
+RESULTS = REPO_ROOT / "bench" / "results.md"
 WORKDIR = Path("/tmp/archy_bench")
 
 
@@ -121,7 +125,17 @@ def pearson(xs: list[float], ys: list[float]) -> float:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--vulture", action="store_true", help="also run vulture")
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="write the markdown report to stdout instead of bench/results.md",
+    )
     args = parser.parse_args()
+
+    out_lines: list[str] = []
+
+    def emit(line: str = "") -> None:
+        out_lines.append(line)
 
     manifest = load_manifest()
     rows: list[dict] = []
@@ -167,8 +181,17 @@ def main() -> int:
 
     rows.sort(key=lambda r: -r["overall"])
 
-    print()
-    print("## Score table\n")
+    today = dt.date.today().isoformat()
+    cmd = "uv run --with networkx --with pyyaml python bench/run.py"
+    if args.vulture:
+        cmd += " --vulture"
+    emit("# Benchmark results")
+    emit()
+    emit(f"Output of `{cmd}`.")
+    emit(f"SHAs pinned in `bench/projects.yaml`. Captured {today}.")
+    emit()
+    emit("## Score table")
+    emit()
     cols = [
         "name",
         "sha",
@@ -180,8 +203,8 @@ def main() -> int:
         "depth",
         "equality",
     ]
-    print("| " + " | ".join(cols) + " |")
-    print("| " + " | ".join("---:" if c not in {"name", "sha"} else "---" for c in cols) + " |")
+    emit("| " + " | ".join(cols) + " |")
+    emit("| " + " | ".join("---:" if c not in {"name", "sha"} else "---" for c in cols) + " |")
     for r in rows:
         cells = [
             r["name"],
@@ -194,30 +217,39 @@ def main() -> int:
             f"{r['depth']:.3f}",
             f"{r['equality']:.3f}",
         ]
-        print("| " + " | ".join(cells) + " |")
+        emit("| " + " | ".join(cells) + " |")
 
-    print()
-    print("## Pairwise Pearson correlations\n")
+    emit()
+    emit("## Pairwise Pearson correlations")
+    emit()
     axes = ["modularity", "acyclicity", "depth", "equality"]
     cols2 = {a: [r[a] for r in rows] for a in axes}
-    print("| pair | r |")
-    print("| --- | ---: |")
+    emit("| pair | r |")
+    emit("| --- | ---: |")
     for a, b in combinations(axes, 2):
         r = pearson(cols2[a], cols2[b])
-        print(f"| {a} ↔ {b} | {r:+.3f} |")
+        emit(f"| {a} ↔ {b} | {r:+.3f} |")
 
     if args.vulture:
-        print()
-        print("## Vulture findings\n")
-        print("| project | sha | LOC | vulture @60% | vulture @90% |")
-        print("| --- | --- | ---: | ---: | ---: |")
+        emit()
+        emit("## Vulture findings")
+        emit()
+        emit("| project | sha | LOC | vulture @60% | vulture @90% |")
+        emit("| --- | --- | ---: | ---: | ---: |")
         # Vulture findings scale with project size, so LOC ordering is more
         # informative for this table than the score-derived sort above.
         for r in sorted(rows, key=lambda r: -r["loc"]):
-            print(
+            emit(
                 f"| {r['name']} | `{r['sha']}` | {r['loc']:,} | "
                 f"{r.get('vulture_60', '?')} | {r.get('vulture_90', '?')} |"
             )
+
+    report = "\n".join(out_lines) + "\n"
+    if args.stdout:
+        sys.stdout.write(report)
+    else:
+        RESULTS.write_text(report)
+        print(f"# wrote {RESULTS.relative_to(REPO_ROOT)}", file=sys.stderr)
 
     return 0
 

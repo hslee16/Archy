@@ -201,6 +201,8 @@ Two SCCs found:
 
 This was the trigger for promoting `__init__.py` re-export resolution into the near-term roadmap (see `docs/FUTURE.md`). After that PR lands, this case study should be re-run; the expected outcome is the second SCC dropping to 0–1 modules and only the `_compat` cycle remaining as a real finding.
 
+**Update:** re-export resolution shipped in v0.0.2 (see case study above). The prediction was *partly* right: 9 phantom `_compat` edges did get redirected, but the core 7-module SCC (`fastapi ↔ applications ↔ dependencies.utils ↔ exception_handlers ↔ openapi.utils ↔ routing ↔ utils`) survived as a real cycle (see the v0.0.3 cycle benchmark above). The "entirely a re-export artifact" framing was too optimistic.
+
 ### Why this case study matters
 
 - **Validates the parser on a non-toy codebase** - 0 parse errors across the FastAPI source tree, sub-second runtime.
