@@ -43,6 +43,20 @@ def acyclic_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+@pytest.fixture
+def project_with_caller(tmp_path: Path) -> Path:
+    # Shared by direction='in'/'out' tests: pkg.a imports pkg.b (so pkg.a has
+    # a downstream dependency), and pkg.c imports pkg.a (so pkg.a has an
+    # upstream caller). Anchoring focus on pkg.a then exercises both halves.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import thing\n")
+    (pkg / "b.py").write_text("")
+    (pkg / "c.py").write_text("from pkg.a import other\n")
+    return tmp_path
+
+
 def test_create_server_registers_expected_tools():
     server = create_server()
     tools = asyncio.run(server.list_tools())
@@ -235,7 +249,6 @@ def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
 
 
 def test_graph_focus_default_returns_local_neighborhood(acyclic_project: Path):
-    # Default direction='both', depth=1, seeded on pkg.a (which imports pkg.b).
     payload = _run_graph_focus(
         acyclic_project,
         modules=["pkg.a"],
@@ -253,16 +266,9 @@ def test_graph_focus_default_returns_local_neighborhood(acyclic_project: Path):
     assert ("pkg.a", "pkg.b") in edge_pairs
 
 
-def test_graph_focus_direction_out_excludes_callers(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg.b import thing\n")
-    (pkg / "b.py").write_text("")
-    (pkg / "c.py").write_text("from pkg.a import other\n")
-
+def test_graph_focus_direction_out_excludes_callers(project_with_caller: Path):
     payload = _run_graph_focus(
-        tmp_path,
+        project_with_caller,
         modules=["pkg.a"],
         depth=1,
         direction="out",
@@ -273,16 +279,9 @@ def test_graph_focus_direction_out_excludes_callers(tmp_path: Path):
     assert "pkg.c" not in ids  # c imports a, but direction='out' ignores callers
 
 
-def test_graph_focus_direction_in_excludes_dependencies(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg.b import thing\n")
-    (pkg / "b.py").write_text("")
-    (pkg / "c.py").write_text("from pkg.a import other\n")
-
+def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Path):
     payload = _run_graph_focus(
-        tmp_path,
+        project_with_caller,
         modules=["pkg.a"],
         depth=1,
         direction="in",

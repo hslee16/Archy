@@ -81,9 +81,6 @@ the final pre-commit check.
 
 
 # --- response models ----------------------------------------------------------
-#
-# These shape the MCP wire format. Each tool returns one of these; FastMCP
-# turns the model into JSON for the client.
 
 
 class ScoreComponents(BaseModel):
