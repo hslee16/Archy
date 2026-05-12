@@ -26,12 +26,11 @@ from archy.diff import (
     take_snapshot,
     write_snapshot,
 )
-from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
+from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.impact import Impact, find_impact
-from archy.instability import compute_instability
 from archy.layers import (
     LayerConfigError,
     SdpViolation,
@@ -70,7 +69,7 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
     g = _load_graph(path, internal_only=internal_only)
 
     if fmt == "json":
-        click.echo(json.dumps(_graph_to_dict(g), indent=2, sort_keys=True))
+        click.echo(json.dumps(graph_to_dict(g), indent=2, sort_keys=True))
     elif fmt == "dot":
         click.echo(_graph_to_dot(g))
     else:
@@ -767,24 +766,6 @@ def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:
         for e in c.edges:
             lines.append(f"  {e.source} -> {e.target}  {_format_lines(e.lines)}")
     return "\n".join(lines)
-
-
-def _graph_to_dict(g: nx.DiGraph) -> dict:
-    instability = compute_instability(g)
-    return {
-        "root": g.graph.get("root"),
-        "parse_errors": list(g.graph.get("parse_errors", ())),
-        "nodes": [
-            # Per-node instability (Martin's I) for internal nodes only;
-            # external modules don't have meaningful Ce/Ca within the project.
-            {"id": n, **d, **({"instability": instability[n]} if n in instability else {})}
-            for n, d in sorted(g.nodes(data=True))
-        ],
-        "edges": [
-            {"source": u, "target": v, **d}
-            for u, v, d in sorted(g.edges(data=True), key=lambda e: (e[0], e[1]))
-        ],
-    }
 
 
 def _graph_to_dot(g: nx.DiGraph) -> str:

@@ -1,11 +1,12 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
 Built on the official Python `mcp` SDK using its FastMCP API. The
-nine tools mirror the CLI surface (`archy_score`, `archy_cycles`,
+twelve tools mirror the CLI surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
-`archy_snapshot`, `archy_diff`, `archy_record_baseline`) so an agent
-can treat archy as a structural sensor in its own feedback loop, the
-way the README pitches.
+`archy_snapshot`, `archy_diff`, `archy_record_baseline`) plus three
+graph-navigation tools (`archy_graph_focus`, `archy_graph_summary`,
+`archy_graph`) so an agent can treat archy as a structural sensor in
+its own feedback loop, the way the README pitches.
 
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.
@@ -31,11 +32,12 @@ from archy.diff import (
     take_snapshot,
     write_snapshot,
 )
-from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
+from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict, resolve_modules
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.impact import Impact, find_impact
+from archy.instability import compute_instability
 from archy.layers import (
     LayerConfigError,
     SdpViolation,
@@ -58,6 +60,11 @@ between edits. The loop is:
 2. **Look up impact** before editing a module so you know who breaks if
    the change is wrong:
    `archy_impact(path, files=[<file you plan to edit>])`
+
+   For a bounded, bidirectional neighborhood with edge line numbers,
+   use `archy_graph_focus(path, modules=[<file or qualname>])` instead.
+   `archy_graph_summary(path)` gives a top-N overview when you don't yet
+   know which module to look at.
 3. **Edit** the code as you normally would.
 4. **Diff** after the edit to see what got better, what got worse, and
    exactly which cycles or layer rules changed:
@@ -74,9 +81,6 @@ the final pre-commit check.
 
 
 # --- response models ----------------------------------------------------------
-#
-# These shape the MCP wire format. Each tool returns one of these; FastMCP
-# turns the model into JSON for the client.
 
 
 class ScoreComponents(BaseModel):
@@ -176,6 +180,64 @@ class TrendRow(BaseModel):
     branch: str | None
     score: TrendRowScore
     inputs: TrendRowInputs
+
+
+class GraphNode(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    external: bool
+    path: str | None = None
+    is_package: bool | None = None
+    instability: float | None = None
+
+
+class GraphEdge(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    target: str
+    is_relative: bool
+    lines: tuple[int, ...]
+
+
+class GraphPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    root: str | None
+    parse_errors: tuple[str, ...]
+    nodes: tuple[GraphNode, ...]
+    edges: tuple[GraphEdge, ...]
+    unresolved: tuple[str, ...] = ()
+
+
+class GraphTooLargePayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    error: str
+    node_count: int
+    max_nodes: int
+
+
+class GraphSummaryEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    value: float
+    instability: float | None = None
+
+
+class GraphSummaryPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module_count: int
+    internal_edge_count: int
+    external_edge_count: int
+    parse_errors: tuple[str, ...]
+    top_fan_in: tuple[GraphSummaryEntry, ...]
+    top_fan_out: tuple[GraphSummaryEntry, ...]
+    top_pagerank: tuple[GraphSummaryEntry, ...]
+    external_deps: tuple[GraphSummaryEntry, ...]
 
 
 def create_server() -> FastMCP:
@@ -343,6 +405,69 @@ def _register_tools(server: FastMCP) -> None:
             record=True,
             strict=False,
             strict_tolerance=0.02,
+        )
+
+    @server.tool(
+        name="archy_graph_focus",
+        description=(
+            "Return a subgraph centered on one or more modules. Pass qualnames "
+            "(e.g. 'archy.parser') or file paths. `depth` caps hop distance; "
+            "`direction` is 'in' (who depends on me), 'out' (my dependencies), "
+            "or 'both'. Each node carries instability (Martin's I); each edge "
+            "carries the source line numbers of the import statements. Prefer "
+            "this over archy_impact when you want forward dependencies, "
+            "edge-level detail, or a bounded blast radius."
+        ),
+    )
+    def archy_graph_focus(
+        path: str,
+        modules: list[str],
+        depth: int = 1,
+        direction: str = "both",
+        internal_only: bool = True,
+    ) -> GraphPayload:
+        return _run_graph_focus(
+            Path(path),
+            modules=modules,
+            depth=depth,
+            direction=direction,
+            internal_only=internal_only,
+        )
+
+    @server.tool(
+        name="archy_graph_summary",
+        description=(
+            "Whole-project structural overview sized for LLM context. Returns "
+            "top-N modules by fan-in, fan-out, and PageRank (importance "
+            "weighted by importance of dependents), plus the top external "
+            "dependencies. Cheaper than dumping the full graph; use for "
+            "'where is the gravity in this codebase' questions. Call "
+            "archy_cycles separately for cycle detail."
+        ),
+    )
+    def archy_graph_summary(path: str, top_n: int = 20) -> GraphSummaryPayload:
+        return _run_graph_summary(Path(path), top_n=top_n)
+
+    @server.tool(
+        name="archy_graph",
+        description=(
+            "Full dependency-graph dump matching `archy graph --format json`. "
+            "Refuses to serialize graphs larger than `max_nodes` (default 500) "
+            "to avoid blowing the agent's context; bump the limit explicitly "
+            "if you really want everything. For most reasoning, prefer "
+            "archy_graph_focus (local neighborhood) or archy_graph_summary "
+            "(top-N overview)."
+        ),
+    )
+    def archy_graph(
+        path: str,
+        internal_only: bool = True,
+        max_nodes: int = 500,
+    ) -> GraphPayload | GraphTooLargePayload:
+        return _run_graph_dump(
+            Path(path),
+            internal_only=internal_only,
+            max_nodes=max_nodes,
         )
 
 
@@ -518,6 +643,187 @@ def _run_trend(path: Path, *, last_n: int) -> list[TrendRow]:
         )
         for r in window
     ]
+
+
+def _run_graph_focus(
+    path: Path,
+    *,
+    modules: list[str],
+    depth: int,
+    direction: str,
+    internal_only: bool,
+) -> GraphPayload:
+    import networkx as nx
+
+    if direction not in ("in", "out", "both"):
+        raise ValueError(f"direction must be 'in', 'out', or 'both'; got {direction!r}")
+    if depth < 0:
+        raise ValueError(f"depth must be >= 0; got {depth}")
+
+    graph = _load_graph(path, internal_only=internal_only)
+    resolved, unresolved = resolve_modules(graph, modules, project_root=path)
+    if not resolved:
+        return _graph_payload_from(_empty_subgraph(graph), unresolved=tuple(unresolved))
+
+    reachable: set[str] = set(resolved)
+    if direction in ("out", "both"):
+        for seed in resolved:
+            reachable |= set(nx.ego_graph(graph, seed, radius=depth).nodes())
+    if direction in ("in", "both"):
+        reverse = graph.reverse(copy=False)
+        for seed in resolved:
+            reachable |= set(nx.ego_graph(reverse, seed, radius=depth).nodes())
+
+    sub = graph.subgraph(reachable).copy()
+    sub.graph["root"] = graph.graph.get("root")
+    sub.graph["parse_errors"] = graph.graph.get("parse_errors", ())
+    return _graph_payload_from(sub, unresolved=tuple(unresolved))
+
+
+def _pagerank(graph, *, damping: float = 0.85, iterations: int = 50, tol: float = 1e-6) -> dict:
+    # NetworkX 3.x's pagerank requires numpy/scipy. archy stays dependency-light,
+    # so we hand-roll the power iteration. Identical formulation to the standard
+    # damped random-walk PageRank with dangling-node redistribution.
+    nodes = list(graph.nodes())
+    n = len(nodes)
+    if n == 0:
+        return {}
+    out_degree = {v: graph.out_degree(v) for v in nodes}
+    pr = dict.fromkeys(nodes, 1.0 / n)
+    teleport = (1.0 - damping) / n
+    for _ in range(iterations):
+        dangling_mass = damping * sum(pr[v] for v in nodes if out_degree[v] == 0) / n
+        new_pr = {v: teleport + dangling_mass for v in nodes}
+        for u in nodes:
+            if out_degree[u]:
+                share = damping * pr[u] / out_degree[u]
+                for v in graph.successors(u):
+                    new_pr[v] += share
+        if sum(abs(new_pr[v] - pr[v]) for v in nodes) < tol:
+            return new_pr
+        pr = new_pr
+    return pr
+
+
+def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
+    if top_n <= 0:
+        raise ValueError(f"top_n must be >= 1; got {top_n}")
+
+    graph = _load_graph(path, internal_only=False)
+    internal = [n for n, d in graph.nodes(data=True) if not d.get("external")]
+    internal_set = set(internal)
+
+    internal_subgraph = graph.subgraph(internal)
+    instability = compute_instability(internal_subgraph)
+
+    internal_edge_count = internal_subgraph.number_of_edges()
+    external_edge_count = sum(
+        1 for u, v in graph.edges() if u in internal_set and v not in internal_set
+    )
+
+    fan_in = sorted(
+        ((n, internal_subgraph.in_degree(n)) for n in internal),
+        key=lambda t: (-t[1], t[0]),
+    )
+    fan_out = sorted(
+        ((n, internal_subgraph.out_degree(n)) for n in internal),
+        key=lambda t: (-t[1], t[0]),
+    )
+
+    pagerank = _pagerank(internal_subgraph)
+    pr_sorted = sorted(pagerank.items(), key=lambda t: (-t[1], t[0]))
+
+    external_counts: dict[str, int] = {}
+    for _, v in graph.edges():
+        if v not in internal_set and graph.nodes[v].get("external"):
+            external_counts[v] = external_counts.get(v, 0) + 1
+    ext_sorted = sorted(external_counts.items(), key=lambda t: (-t[1], t[0]))
+
+    def _entries(
+        pairs: list[tuple[str, float | int]],
+        *,
+        with_instability: bool,
+    ) -> tuple[GraphSummaryEntry, ...]:
+        return tuple(
+            GraphSummaryEntry(
+                module=name,
+                value=float(value),
+                instability=instability.get(name) if with_instability else None,
+            )
+            for name, value in pairs[:top_n]
+        )
+
+    return GraphSummaryPayload(
+        module_count=len(internal),
+        internal_edge_count=internal_edge_count,
+        external_edge_count=external_edge_count,
+        parse_errors=tuple(graph.graph.get("parse_errors", ())),
+        top_fan_in=_entries(list(fan_in), with_instability=True),
+        top_fan_out=_entries(list(fan_out), with_instability=True),
+        top_pagerank=_entries(list(pr_sorted), with_instability=True),
+        external_deps=_entries(list(ext_sorted), with_instability=False),
+    )
+
+
+def _run_graph_dump(
+    path: Path,
+    *,
+    internal_only: bool,
+    max_nodes: int,
+) -> GraphPayload | GraphTooLargePayload:
+    graph = _load_graph(path, internal_only=internal_only)
+    node_count = graph.number_of_nodes()
+    if node_count > max_nodes:
+        return GraphTooLargePayload(
+            error=(
+                f"graph has {node_count} nodes (> max_nodes={max_nodes}). "
+                "Use archy_graph_focus for a local slice or archy_graph_summary "
+                "for a top-N overview, or call archy_graph again with a higher "
+                "max_nodes if you really want the full dump."
+            ),
+            node_count=node_count,
+            max_nodes=max_nodes,
+        )
+    return _graph_payload_from(graph)
+
+
+def _empty_subgraph(graph):
+    import networkx as nx
+
+    empty: nx.DiGraph = nx.DiGraph()
+    empty.graph["root"] = graph.graph.get("root")
+    empty.graph["parse_errors"] = graph.graph.get("parse_errors", ())
+    return empty
+
+
+def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayload:
+    data = graph_to_dict(graph)
+    nodes = tuple(
+        GraphNode(
+            id=n["id"],
+            external=bool(n.get("external", False)),
+            path=n.get("path"),
+            is_package=n.get("is_package"),
+            instability=n.get("instability"),
+        )
+        for n in data["nodes"]
+    )
+    edges = tuple(
+        GraphEdge(
+            source=e["source"],
+            target=e["target"],
+            is_relative=bool(e.get("is_relative", False)),
+            lines=tuple(e.get("lines", ())),
+        )
+        for e in data["edges"]
+    )
+    return GraphPayload(
+        root=data["root"],
+        parse_errors=tuple(data["parse_errors"]),
+        nodes=nodes,
+        edges=edges,
+        unresolved=unresolved,
+    )
 
 
 def _load_graph(path: Path, *, internal_only: bool):

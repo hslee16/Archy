@@ -55,6 +55,14 @@ dev = [
     "ty>=0.0.1a1",
     "import-linter>=2.11,<2.12",
 ]
+# Optional group that pulls in numpy/scipy so the PageRank parity test in
+# tests/test_mcp.py can compare our hand-rolled `_pagerank` against
+# `nx.pagerank`. Kept separate from `dev` so the default install stays
+# scientific-stack free. Run with: `uv sync --group parity`.
+parity = [
+    "numpy",
+    "scipy",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/archy"]

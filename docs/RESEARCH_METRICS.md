@@ -226,11 +226,12 @@ NCCD; report as a diagnostic, not a score axis.
 
 ## 5. PageRank-style importance (applied to code)
 
-NetworkX has `pagerank` built in. Applied to the import graph, each
-module's PageRank captures "importance weighted by the importance of
-things that depend on me." Used by NDepend's "rank" for type
-popularity ([NDepend metrics][ndepend-metrics]); used in academic
-work to identify ["key classes"][pagerank-key-classes].
+NetworkX exposes `pagerank`, though as of NetworkX 3.x the
+implementation requires `numpy`/`scipy`. Applied to the import
+graph, each module's PageRank captures "importance weighted by the
+importance of things that depend on me." Used by NDepend's "rank"
+for type popularity ([NDepend metrics][ndepend-metrics]); used in
+academic work to identify ["key classes"][pagerank-key-classes].
 
 **Python translation:** pure graph computation, language-neutral. One
 specific Python quirk: `__init__.py` re-exports inflate PageRank for
@@ -238,16 +239,21 @@ package roots that re-export everything (because every importer of a
 sub-name pulls in `__init__.py`). archy's planned re-export-aware
 resolver ([`FUTURE.md`](FUTURE.md), already noted) cleans this up.
 
-**Feasibility:** One NetworkX call. Linear per iteration, fast.
+**Feasibility:** ~15-line hand-rolled power iteration (archy avoids
+the numpy dependency `nx.pagerank` now pulls in). Linear per
+iteration, fast. Live in `archy_graph_summary`'s `top_pagerank`
+field; see [`SPEC_GRAPH_MCP.md`](SPEC_GRAPH_MCP.md).
 
 **Signal:** Useful as a per-module *diagnostic*, weak as a
 graph-level summary. Better than raw in-degree because it weights by
 importance recursively (a utility imported only by `__main__` looks
 less important than one imported by core modules).
 
-**Fit:** expose per-module PageRank in `archy graph --format json`
-and in `archy_impact`. Use it for navigation and diagnostics, not
-scoring.
+**Fit:** shipped in `archy_graph_summary` as `top_pagerank`. Still
+open as a `FUTURE.md` item: surface per-module PageRank in
+`archy graph --format json` and in `archy_impact` so CLI and
+blast-radius callers get the same diagnostic. Use it for navigation
+and diagnostics, not scoring.
 
 ---
 

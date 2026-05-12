@@ -26,6 +26,18 @@ as the `loop` prompt on the MCP server, so an agent connected to
    Returns the set of internal modules that transitively import the
    given file(s). Useful for sizing a refactor before you commit to it.
 
+   For a bounded, bidirectional neighborhood that also includes the
+   module's *forward* dependencies (and import line numbers on each
+   edge), reach for `archy_graph_focus` instead:
+
+   - CLI: not exposed; use `archy graph` and grep
+   - MCP: `archy_graph_focus(path, modules=[<file or qualname>])`
+
+   And when you don't yet know which module to look at, the top-N
+   overview tool answers "where is the gravity in this codebase":
+
+   - MCP: `archy_graph_summary(path)`
+
 3. **Edit** the code as you normally would.
 
 4. **Diff** after editing to see what got better, what got worse, and

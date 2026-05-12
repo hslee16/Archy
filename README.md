@@ -150,7 +150,7 @@ uv run archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes nine tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes twelve tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -163,6 +163,9 @@ uv run archy mcp
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations and per-component score deltas. |
 | `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
+| `archy_graph_focus` | Bounded subgraph around one or more modules (qualnames or file paths). `depth` caps hops; `direction` is `in`/`out`/`both`. Each edge carries import line numbers. Use before editing for a richer view than `archy_impact`. |
+| `archy_graph_summary` | Top-N modules by fan-in, fan-out, and PageRank, plus top external dependencies. Whole-project overview sized for LLM context. |
+| `archy_graph` | Full dependency-graph dump matching `archy graph --format json`. Refuses graphs larger than `max_nodes` (default 500) to avoid blowing context; bump the limit explicitly when you really want everything. |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
@@ -294,15 +297,21 @@ uv run ty check            # type check
 uv run pytest              # tests
 ```
 
+One pytest case (`test_pagerank_matches_networkx_when_available`) compares archy's hand-rolled `_pagerank` against `nx.pagerank`, which needs numpy/scipy. The dependency is intentionally not in the default install (archy stays scientific-stack free); to run that test locally, sync the optional `parity` group:
+
+```bash
+uv sync --group parity     # pulls in numpy + scipy for the parity test
+uv run pytest              # the test now runs instead of being skipped
+```
+
 ## Roadmap
 
 Next up:
 
-- [ ] `archy graph` MCP tool: expose the dep graph itself for agent-side reasoning
 - [ ] Call graph: second edge type alongside imports
 - [ ] Design Structure Matrix (`archy dsm`)
 
-Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt), import-linter contract wrap (`archy contracts`, `archy[contracts]`).
+Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt), import-linter contract wrap (`archy contracts`, `archy[contracts]`), graph-navigation MCP tools (`archy_graph_focus`, `archy_graph_summary`, `archy_graph`; design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)).
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
