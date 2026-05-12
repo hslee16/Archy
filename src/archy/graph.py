@@ -13,6 +13,7 @@ from pathlib import Path
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from archy.instability import compute_instability
 from archy.parser import ImportRef, ParseResult, parse_file
 
 DEFAULT_IGNORED_DIRS = frozenset(
@@ -91,6 +92,72 @@ def build_graph(
     graph.graph["root"] = str(root)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
     return graph
+
+
+def graph_to_dict(graph: nx.DiGraph) -> dict:
+    """Serialize a graph to the JSON shape emitted by `archy graph --format json`.
+
+    Per-node instability (Martin's `I`) is attached to internal nodes only;
+    external modules don't have meaningful Ce/Ca within the project.
+    """
+    instability = compute_instability(graph)
+    return {
+        "root": graph.graph.get("root"),
+        "parse_errors": list(graph.graph.get("parse_errors", ())),
+        "nodes": [
+            {"id": n, **d, **({"instability": instability[n]} if n in instability else {})}
+            for n, d in sorted(graph.nodes(data=True))
+        ],
+        "edges": [
+            {"source": u, "target": v, **d}
+            for u, v, d in sorted(graph.edges(data=True), key=lambda e: (e[0], e[1]))
+        ],
+    }
+
+
+def resolve_modules(
+    graph: nx.DiGraph,
+    refs: Iterable[str],
+    *,
+    project_root: Path | None = None,
+) -> tuple[list[str], list[str]]:
+    """Resolve qualname-or-path strings to internal qualnames in `graph`.
+
+    Each `refs` entry is treated as a qualname if it matches an internal node
+    directly; otherwise as a filesystem path (relative paths are resolved
+    against `project_root`, which defaults to `graph.graph["root"]`). Returns
+    `(resolved, unresolved)` where `resolved` preserves first-seen order
+    deduplicated and `unresolved` lists the original strings that matched
+    nothing.
+    """
+    internal_nodes = {n for n, d in graph.nodes(data=True) if not d.get("external")}
+    path_index: dict[Path, str] = {}
+    for n in internal_nodes:
+        raw = graph.nodes[n].get("path")
+        if raw:
+            path_index[Path(raw).resolve()] = n
+
+    base = project_root or (Path(graph.graph["root"]) if graph.graph.get("root") else Path.cwd())
+
+    resolved: list[str] = []
+    seen: set[str] = set()
+    unresolved: list[str] = []
+    for ref in refs:
+        if ref in internal_nodes:
+            if ref not in seen:
+                resolved.append(ref)
+                seen.add(ref)
+            continue
+        candidate = Path(ref)
+        if not candidate.is_absolute():
+            candidate = base / candidate
+        qualname = path_index.get(candidate.resolve())
+        if qualname is None:
+            unresolved.append(ref)
+        elif qualname not in seen:
+            resolved.append(qualname)
+            seen.add(qualname)
+    return resolved, unresolved
 
 
 def _discover_modules(

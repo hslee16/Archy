@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from archy.graph import build_graph
+from archy.graph import build_graph, graph_to_dict, resolve_modules
 
 
 @pytest.fixture
@@ -304,3 +304,118 @@ def test_extra_roots_missing_directory_is_skipped(tmp_path: Path):
     (pkg / "a.py").write_text("")
     g = build_graph(tmp_path, extra_roots=("nonexistent",))
     assert "pkg.a" in g.nodes
+
+
+def test_graph_to_dict_preserves_edge_line_numbers(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # Three import statements at known lines targeting pkg.b. Edge attribute
+    # `lines` must collect all three so agents can pinpoint import sites.
+    (pkg / "a.py").write_text(
+        "from pkg.b import x\n# noise\nfrom pkg.b import y\nfrom pkg.b import z\n"
+    )
+    (pkg / "b.py").write_text("")
+
+    data = graph_to_dict(build_graph(tmp_path))
+    edge = next(e for e in data["edges"] if e["source"] == "pkg.a" and e["target"] == "pkg.b")
+    assert edge["lines"] == (1, 3, 4)
+
+
+def test_graph_to_dict_emits_instability_only_for_internal(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("import requests\n")
+
+    data = graph_to_dict(build_graph(tmp_path))
+    by_id = {n["id"]: n for n in data["nodes"]}
+    # Internal nodes carry instability; the external `requests` node must not,
+    # since Ce/Ca aren't meaningful for nodes outside the project.
+    assert "instability" in by_id["pkg.a"]
+    assert "instability" not in by_id["requests"]
+    assert by_id["requests"]["external"] is True
+
+
+def test_graph_to_dict_is_deterministic(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.c import x\nfrom pkg.b import y\n")
+    (pkg / "b.py").write_text("")
+    (pkg / "c.py").write_text("")
+
+    data = graph_to_dict(build_graph(tmp_path))
+    node_ids = [n["id"] for n in data["nodes"]]
+    assert node_ids == sorted(node_ids)
+    edges = [(e["source"], e["target"]) for e in data["edges"]]
+    assert edges == sorted(edges)
+
+
+def test_resolve_modules_routes_qualnames_and_paths(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("")
+    (pkg / "b.py").write_text("")
+    graph = build_graph(tmp_path)
+
+    resolved, unresolved = resolve_modules(
+        graph,
+        ["pkg.a", str(pkg / "b.py")],
+        project_root=tmp_path,
+    )
+    assert resolved == ["pkg.a", "pkg.b"]
+    assert unresolved == []
+
+
+def test_resolve_modules_deduplicates_preserving_order(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("")
+    (pkg / "b.py").write_text("")
+    graph = build_graph(tmp_path)
+
+    # pkg.a appears three times via two surface forms (qualname + path).
+    # Dedup must keep first-seen order, so the path repetition does not push
+    # pkg.b in front of the duplicate-but-already-seen pkg.a.
+    resolved, _ = resolve_modules(
+        graph,
+        ["pkg.a", str(pkg / "a.py"), "pkg.a", "pkg.b"],
+        project_root=tmp_path,
+    )
+    assert resolved == ["pkg.a", "pkg.b"]
+
+
+def test_resolve_modules_accepts_absolute_path(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("")
+    graph = build_graph(tmp_path)
+
+    # Absolute paths bypass project_root resolution entirely.
+    resolved, unresolved = resolve_modules(
+        graph,
+        [str((pkg / "a.py").resolve())],
+        project_root=tmp_path / "wrong",  # deliberately wrong; abs path wins
+    )
+    assert resolved == ["pkg.a"]
+    assert unresolved == []
+
+
+def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("import requests\n")
+    graph = build_graph(tmp_path)
+    assert "requests" in graph.nodes  # sanity: the external node exists
+
+    # External qualnames aren't legal focus targets; they should fall through
+    # to the path-resolution branch and end up in `unresolved` (since
+    # 'requests' isn't a real file path under the project either).
+    resolved, unresolved = resolve_modules(graph, ["requests"], project_root=tmp_path)
+    assert resolved == []
+    assert unresolved == ["requests"]
