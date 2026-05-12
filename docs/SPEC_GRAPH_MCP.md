@@ -25,12 +25,12 @@ Takeaway: a `graph` namespace with three tools, not one.
 
 ## Proposed tools
 
-### 1. `archy_graph_focus(path, module, depth=1, direction="both")`
+### 1. `archy_graph_focus(path, modules, depth=1, direction="both")`
 
-The primary tool. Returns a slice of the graph centered on a module.
+The primary tool. Returns a slice of the graph centered on one or more modules.
 
 **Parameters**
-- `module: str` - qualname (e.g. `"archy.parser"`) **or** a file path that resolves to one (reuse `find_impact`'s resolution path so agents can pass `src/archy/parser.py`)
+- `modules: list[str]` - qualnames (e.g. `["archy.parser"]`) **or** file paths that resolve to internal modules (uses the shared `resolve_modules` helper, same path resolution as `find_impact`). Multi-seed: ego graphs are unioned across all resolved seeds; unresolved entries are returned in the `unresolved` field instead of erroring.
 - `depth: int = 1` - how many hops to expand
 - `direction: "in" | "out" | "both" = "both"` - `in` = who depends on me (callers), `out` = my dependencies, `both` = bidirectional neighborhood
 - `internal_only: bool = True`
@@ -85,11 +85,20 @@ class GraphEdge(BaseModel):
     lines: tuple[int, ...]
 
 class GraphPayload(BaseModel):
-    root: str
+    root: str | None
     parse_errors: tuple[str, ...]
     nodes: tuple[GraphNode, ...]
     edges: tuple[GraphEdge, ...]
-    truncated: bool = False          # True only from archy_graph hitting max_nodes
+    unresolved: tuple[str, ...] = ()  # from focus(): refs that matched no internal module
+
+# Separate model rather than a `truncated: bool` flag so the typed union
+# (`GraphPayload | GraphTooLargePayload`) forces callers to handle the
+# refusal case explicitly instead of silently treating a truncated graph
+# as complete.
+class GraphTooLargePayload(BaseModel):
+    error: str
+    node_count: int
+    max_nodes: int
 
 class GraphSummaryEntry(BaseModel):
     module: str
@@ -111,7 +120,7 @@ Reuse `_graph_to_dict` from `cli.py` for the full-dump path - extract it into `g
 
 ## Implementation notes
 
-- **PageRank** - `nx.pagerank(graph)`; cache nothing, it's microseconds on these graphs.
+- **PageRank** - hand-rolled power iteration (~15 lines) in `mcp.py::_pagerank`. NetworkX 3.x's `pagerank` requires numpy/scipy, which archy keeps out of the runtime install. A `parity` dependency group + `pytest.importorskip("numpy")` test gates the comparison against `nx.pagerank` so we can validate correctness locally without making numpy a hard dep.
 - **Module resolution for `focus`** - extract the `find_impact` file-to-qualname helper into a shared util; the focus tool needs the same logic.
 - **Subgraph extraction** - `nx.ego_graph(g, module, radius=depth, undirected=False)` for `out`; reverse the graph for `in`; union the two for `both`. Don't roll your own BFS.
 - **Touch tests for parity** - every shape returned by `archy_graph` must round-trip against `_graph_to_dict` output for a fixture project; this is the contract that lets agents and the CLI agree.
