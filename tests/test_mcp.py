@@ -25,12 +25,24 @@ from archy.mcp import (
     _run_graph_dump,
     _run_graph_focus,
     _run_graph_summary,
+    _run_high_risk_modules,
     _run_impact,
     _run_score,
     _run_snapshot,
     _run_trend,
     create_server,
 )
+
+
+def _internal_graph(root: Path):
+    # Build the same internal-only graph the MCP layer hands to callers,
+    # for parity assertions against graph_to_dict.
+    from archy.graph import build_graph
+
+    g = build_graph(root)
+    external = {n for n, d in g.nodes(data=True) if d.get("external")}
+    g.remove_nodes_from(external)
+    return g
 
 
 @pytest.fixture
@@ -74,6 +86,7 @@ def test_create_server_registers_expected_tools():
         "archy_graph_focus",
         "archy_graph_summary",
         "archy_graph",
+        "archy_high_risk_modules",
     }
 
 
@@ -276,7 +289,7 @@ def test_graph_focus_direction_out_excludes_callers(project_with_caller: Path):
     )
     ids = {n.id for n in payload.nodes}
     assert "pkg.a" in ids and "pkg.b" in ids
-    assert "pkg.c" not in ids  # c imports a, but direction='out' ignores callers
+    assert "pkg.c" not in ids
 
 
 def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Path):
@@ -289,7 +302,7 @@ def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Pat
     )
     ids = {n.id for n in payload.nodes}
     assert "pkg.a" in ids and "pkg.c" in ids
-    assert "pkg.b" not in ids  # a imports b, but direction='in' ignores dependencies
+    assert "pkg.b" not in ids
 
 
 def test_graph_focus_resolves_file_paths(acyclic_project: Path):
@@ -389,11 +402,9 @@ def test_graph_summary_validates_top_n(acyclic_project: Path):
 def test_graph_dump_matches_cli_json(acyclic_project: Path):
     # Parity contract: the MCP dump must be value-equal to graph_to_dict
     # (which the CLI uses for `archy graph --format json`).
-    from archy.graph import build_graph, graph_to_dict
+    from archy.graph import graph_to_dict
 
-    g = build_graph(acyclic_project)
-    external = {n for n, d in g.nodes(data=True) if d.get("external")}
-    g.remove_nodes_from(external)
+    g = _internal_graph(acyclic_project)
     expected = graph_to_dict(g)
 
     payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=500)
@@ -411,6 +422,45 @@ def test_graph_dump_refuses_oversized_graph(acyclic_project: Path):
     assert payload.max_nodes == 1
     assert payload.node_count > 1
     assert "archy_graph_focus" in payload.error
+
+
+def test_high_risk_modules_ranks_central_volatile_first(tmp_path: Path):
+    # `pkg.hub` is imported by three peers (high fan-in) AND itself imports a
+    # downstream dep (non-zero instability), so it dominates the composite.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
+    (pkg / "a.py").write_text("from pkg.hub import x\n")
+    (pkg / "b.py").write_text("from pkg.hub import y\n")
+    (pkg / "c.py").write_text("from pkg.hub import z\n")
+
+    payload = _run_high_risk_modules(tmp_path, top_n=5)
+    assert payload.modules[0].module == "pkg.hub"
+    top = payload.modules[0]
+    assert 0.0 < top.edit_risk <= 1.0
+    assert top.fan_in == 3
+    assert top.instability > 0.0
+    assert top.propagation_cost > 0.0
+
+
+def test_high_risk_modules_validates_top_n(acyclic_project: Path):
+    with pytest.raises(ValueError, match="top_n"):
+        _run_high_risk_modules(acyclic_project, top_n=0)
+
+
+def test_high_risk_modules_top_n_caps_results(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for name in ("a", "b", "c", "d"):
+        (pkg / f"{name}.py").write_text("")
+
+    payload = _run_high_risk_modules(tmp_path, top_n=2)
+    assert len(payload.modules) <= 2
+    # module_count reports the size of the candidate pool, not the slice.
+    assert payload.module_count >= len(payload.modules)
 
 
 def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
@@ -431,7 +481,6 @@ def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
         internal_only=True,
     )
     edge = next(e for e in payload.edges if e.source == "pkg.a" and e.target == "pkg.b")
-    # The two import statements collapse into one edge with both line numbers.
     assert edge.lines == (2, 3)
     # `is_relative` is True iff *any* of the contributing imports was relative;
     # the parser records the last-seen flag, so the assertion is just "tracked".
@@ -482,12 +531,7 @@ def test_graph_focus_multi_seed_with_overlap_dedups_nodes(tmp_path: Path):
 def test_graph_dump_at_max_nodes_boundary_succeeds(acyclic_project: Path):
     # `> max_nodes` errors; `== max_nodes` must succeed. This guards the
     # off-by-one risk in the guardrail condition.
-    from archy.graph import build_graph
-
-    g = build_graph(acyclic_project)
-    external = {n for n, d in g.nodes(data=True) if d.get("external")}
-    g.remove_nodes_from(external)
-    exact = g.number_of_nodes()
+    exact = _internal_graph(acyclic_project).number_of_nodes()
 
     payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=exact)
     assert isinstance(payload, GraphPayload)

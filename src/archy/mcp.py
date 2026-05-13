@@ -48,6 +48,7 @@ from archy.layers import (
     load_config,
 )
 from archy.reach import compute_propagation_cost
+from archy.risk import compute_edit_risk
 from archy.score import Score, ScoreInputs, compute_score
 
 _AGENT_LOOP_PROMPT = """\
@@ -65,7 +66,10 @@ between edits. The loop is:
    For a bounded, bidirectional neighborhood with edge line numbers,
    use `archy_graph_focus(path, modules=[<file or qualname>])` instead.
    `archy_graph_summary(path)` gives a top-N overview when you don't yet
-   know which module to look at.
+   know which module to look at. Before a non-trivial edit, call
+   `archy_high_risk_modules(path)` to see whether your target sits in
+   the project's central-and-fragile zone (high blast radius combined
+   with high instability); if it does, scope down or pause for review.
 3. **Edit** the code as you normally would.
 4. **Diff** after the edit to see what got better, what got worse, and
    exactly which cycles or layer rules changed:
@@ -192,6 +196,7 @@ class GraphNode(BaseModel):
     is_package: bool | None = None
     instability: float | None = None
     propagation_cost: float | None = None
+    edit_risk: float | None = None
 
 
 class GraphEdge(BaseModel):
@@ -228,6 +233,7 @@ class GraphSummaryEntry(BaseModel):
     value: float
     instability: float | None = None
     propagation_cost: float | None = None
+    edit_risk: float | None = None
 
 
 class GraphSummaryPayload(BaseModel):
@@ -240,7 +246,25 @@ class GraphSummaryPayload(BaseModel):
     top_fan_in: tuple[GraphSummaryEntry, ...]
     top_fan_out: tuple[GraphSummaryEntry, ...]
     top_pagerank: tuple[GraphSummaryEntry, ...]
+    top_edit_risk: tuple[GraphSummaryEntry, ...]
     external_deps: tuple[GraphSummaryEntry, ...]
+
+
+class HighRiskEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    edit_risk: float
+    propagation_cost: float
+    instability: float
+    fan_in: int
+
+
+class HighRiskPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module_count: int
+    modules: tuple[HighRiskEntry, ...]
 
 
 def create_server() -> FastMCP:
@@ -476,6 +500,23 @@ def _register_tools(server: FastMCP) -> None:
             internal_only=internal_only,
             max_nodes=max_nodes,
         )
+
+    @server.tool(
+        name="archy_high_risk_modules",
+        description=(
+            "Return the top-N internal modules ranked by edit-risk: the "
+            "geometric mean of MacCormack propagation cost, normalized "
+            "fan-in, and Martin's instability. High score means editing is "
+            "both expensive (wide blast radius, many direct importers) and "
+            "likely to need iteration (the module itself depends on many "
+            "things). Call before a non-trivial edit to decide whether to "
+            "scope down, snapshot more aggressively, or pause for human "
+            "review. Each entry breaks the composite back out into its "
+            "components so you can see *why* a module ranks high."
+        ),
+    )
+    def archy_high_risk_modules(path: str, top_n: int = 10) -> HighRiskPayload:
+        return _run_high_risk_modules(Path(path), top_n=top_n)
 
 
 # --- thin internals ----------------------------------------------------------
@@ -723,6 +764,7 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
     internal_subgraph = graph.subgraph(internal)
     instability = compute_instability(internal_subgraph)
     _, propagation_cost = compute_propagation_cost(internal_subgraph)
+    edit_risk = compute_edit_risk(internal_subgraph)
 
     internal_edge_count = internal_subgraph.number_of_edges()
     external_edge_count = sum(
@@ -741,6 +783,8 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
     pagerank = _pagerank(internal_subgraph)
     pr_sorted = sorted(pagerank.items(), key=lambda t: (-t[1], t[0]))
 
+    risk_sorted = sorted(edit_risk.items(), key=lambda t: (-t[1], t[0]))
+
     external_counts: dict[str, int] = {}
     for _, v in graph.edges():
         if v not in internal_set and graph.nodes[v].get("external"):
@@ -758,6 +802,7 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
                 value=float(value),
                 instability=instability.get(name) if with_internal_metrics else None,
                 propagation_cost=propagation_cost.get(name) if with_internal_metrics else None,
+                edit_risk=edit_risk.get(name) if with_internal_metrics else None,
             )
             for name, value in pairs[:top_n]
         )
@@ -770,6 +815,7 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
         top_fan_in=_entries(list(fan_in), with_internal_metrics=True),
         top_fan_out=_entries(list(fan_out), with_internal_metrics=True),
         top_pagerank=_entries(list(pr_sorted), with_internal_metrics=True),
+        top_edit_risk=_entries(list(risk_sorted), with_internal_metrics=True),
         external_deps=_entries(list(ext_sorted), with_internal_metrics=False),
     )
 
@@ -815,6 +861,7 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
             is_package=n.get("is_package"),
             instability=n.get("instability"),
             propagation_cost=n.get("propagation_cost"),
+            edit_risk=n.get("edit_risk"),
         )
         for n in data["nodes"]
     )
@@ -834,6 +881,29 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
         edges=edges,
         unresolved=unresolved,
     )
+
+
+def _run_high_risk_modules(path: Path, *, top_n: int) -> HighRiskPayload:
+    if top_n <= 0:
+        raise ValueError(f"top_n must be >= 1; got {top_n}")
+
+    graph = _load_graph(path, internal_only=True)
+    instability = compute_instability(graph)
+    _, propagation_cost = compute_propagation_cost(graph)
+    edit_risk = compute_edit_risk(graph)
+
+    ranked = sorted(edit_risk.items(), key=lambda t: (-t[1], t[0]))
+    entries = tuple(
+        HighRiskEntry(
+            module=name,
+            edit_risk=risk,
+            propagation_cost=propagation_cost.get(name, 0.0),
+            instability=instability.get(name, 0.0),
+            fan_in=graph.in_degree(name),
+        )
+        for name, risk in ranked[:top_n]
+    )
+    return HighRiskPayload(module_count=len(edit_risk), modules=entries)
 
 
 def _load_graph(path: Path, *, internal_only: bool):

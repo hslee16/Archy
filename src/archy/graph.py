@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict
 from archy.instability import compute_instability
 from archy.parser import ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
+from archy.risk import compute_edit_risk
 
 DEFAULT_IGNORED_DIRS = frozenset(
     {
@@ -98,15 +99,18 @@ def build_graph(
 def graph_to_dict(graph: nx.DiGraph) -> dict:
     """Serialize a graph to the JSON shape emitted by `archy graph --format json`.
 
-    Per-node `instability` (Martin's `I`) and `propagation_cost` (MacCormack
-    reverse-reach fraction) are attached to internal nodes only; external
-    modules have no meaningful values within the project. When called on
-    a subgraph (e.g. by `archy_graph_focus`), values are computed relative
-    to that subgraph's scope, not the full project. For the canonical
-    project-wide propagation cost, read `archy score`'s `inputs.propagation_cost`.
+    Per-node `instability` (Martin's `I`), `propagation_cost` (MacCormack
+    reverse-reach fraction), and `edit_risk` (geometric-mean composite of
+    propagation cost, normalized fan-in, and instability) are attached to
+    internal nodes only; external modules have no meaningful values within
+    the project. When called on a subgraph (e.g. by `archy_graph_focus`),
+    values are computed relative to that subgraph's scope, not the full
+    project. For the canonical project-wide propagation cost, read
+    `archy score`'s `inputs.propagation_cost`.
     """
     instability = compute_instability(graph)
     _, propagation_cost = compute_propagation_cost(graph)
+    edit_risk = compute_edit_risk(graph)
     return {
         "root": graph.graph.get("root"),
         "parse_errors": list(graph.graph.get("parse_errors", ())),
@@ -116,6 +120,7 @@ def graph_to_dict(graph: nx.DiGraph) -> dict:
                 **d,
                 **({"instability": instability[n]} if n in instability else {}),
                 **({"propagation_cost": propagation_cost[n]} if n in propagation_cost else {}),
+                **({"edit_risk": edit_risk[n]} if n in edit_risk else {}),
             }
             for n, d in sorted(graph.nodes(data=True))
         ],
