@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.hslee16/archy -->
+
 # archy
 
 [![PyPI](https://img.shields.io/pypi/v/archy.svg)](https://pypi.org/project/archy/)
@@ -9,7 +11,7 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.13.1. Usable today via:
+**Status:** v0.13.2. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -205,7 +207,7 @@ If you're running from a checkout instead of an install, use:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.13.1
+- uses: hslee16/archy@v0.13.2
   with:
     command: score      # score | check | cycles
     path: .
@@ -231,7 +233,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.13.1
+    rev: v0.13.2
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score

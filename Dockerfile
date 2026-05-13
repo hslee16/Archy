@@ -16,7 +16,7 @@
 
 FROM python:3.11-slim
 
-ARG ARCHY_VERSION=0.13.1
+ARG ARCHY_VERSION=0.13.2
 
 RUN pip install --no-cache-dir "archy==${ARCHY_VERSION}"
 
