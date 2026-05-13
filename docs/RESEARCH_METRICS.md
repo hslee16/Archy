@@ -619,8 +619,11 @@ is additive.
 ## 14. AI-agent-specific framing
 
 archy positions itself as architecture-feedback for AI agents
-(`docs/AGENT_LOOP.md`). The agent-era literature is still forming, so
-this section is more speculative.
+(`docs/AGENT_LOOP.md`). As of mid-2026 this is no longer entirely
+speculative: a small but growing empirical literature directly
+validates the structural-graph-feedback thesis for coding agents.
+See §14c below for the citations. The §14a and §14b framings
+predate that literature and now have empirical grounding.
 
 Two AI-specific framings worth noting, both Python-relevant:
 
@@ -648,6 +651,81 @@ a new framing. Mostly a documentation and presentation concern.
 
 **Recommendation:** repackage existing outputs under explicit
 agent-facing names in `AGENT_LOOP.md` and the MCP tool descriptions.
+
+### 14c. Empirical validation from the 2025-2026 coding-agent literature
+
+When this section was first written, the agent-feedback-loop framing
+was a positioning bet. As of mid-2026 there are three converging
+empirical results worth citing as direct support.
+
+**c.1. The Navigation Paradox (Feb 2026)**
+([arxiv:2602.20048][nav-paradox]). The paper introduces an
+MCP-based graph navigation tool (CodeCompass) shaped almost
+identically to archy's `archy_graph_*` family: static AST extraction
+of structural edges, queryable from an MCP client. The headline
+finding is that **larger LLM context windows do not eliminate the
+need for structural navigation**: failure shifts from retrieval
+capacity to *navigational salience*, where architecturally critical
+but semantically distant files are absent from the model's
+attention. The implication for archy is that `archy_graph_focus`
+(bounded local neighborhood with edge metadata) and `archy_impact`
+(blast radius) are not redundant with a long-context model; they
+solve a distinct failure mode the model can't budget its way out
+of. This is direct external validation of archy's MCP surface and
+its category, not just its individual metrics.
+
+**c.2. LocAgent ablation (ACL 2025)**
+([aclanthology:2025.acl-long.426][locagent]). The paper builds a
+heterogeneous code graph with four edge types - **invoke**, import,
+inherit, contain - and ablates each. Invoke edges contribute the
+most to LLM-agent code-localization accuracy, more than imports.
+Removing the graph traversal tool entirely causes "a more
+significant decrease" at function-level localization. This is
+direct evidence that **archy's call-graph roadmap item is the
+highest-impact addition for agent-facing positioning**, not just a
+"nice to have" - the missing edge type is precisely the one with
+the strongest ablation contribution in an agent context.
+
+**c.3. Coding-agent failure-mode literature (2026)**. Cross-source
+characterization of agent failures yields a small recurring set of
+patterns: **scope drift** (agent edits adjacent code, introduces
+subtle regressions), **context exhaustion** (agent runs out of
+attention before finishing), **deprecated-pattern propagation**
+(agent copies dated patterns it sees nearby), **half-implemented
+features** (agent declares done prematurely), and **cross-file
+reasoning failures** (agent fails to connect distant files even when
+they're cited). Sources include Columbia DAPLab's "9 Critical
+Failure Patterns" ([daplab][daplab-9-patterns]), Anthropic's
+"Effective harnesses for long-running agents"
+([anthropic-harnesses][anthropic-harnesses]), and the Stack Overflow
+synthesis ([stackoverflow-bugs][so-bugs-coding-agents]). Mapping
+these failure modes to archy capabilities:
+
+| Failure mode                          | What archy can predict / detect                                                                                  | Status                                                              |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Scope drift causes regression         | Did this PR introduce new cycles / layer violations / score drops?                                               | **Shipping** (`archy_snapshot` + `archy_diff`).                     |
+| Hidden cross-file impact              | Blast radius, weighted by propagation cost                                                                       | **Partially shipping** (`archy_impact` returns reverse-closure set; propagation-cost weighting on the roadmap). |
+| Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Roadmap** (composite of existing signals + NCCD).                 |
+| Agent should read X first             | Top-N by PageRank / fan-in                                                                                       | **Shipping** (`archy_graph_summary`).                                |
+| Deprecated-pattern propagation        | Out of scope for archy (handled by ruff / mypy / pattern lints).                                                 | **Not shipping; not planned.**                                       |
+| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Roadmap** (`archy hotspots`, CC pass required); a pure-static fragility proxy (instability × fan-in) is a faster intermediate. |
+| Cross-file reasoning failure          | Bounded subgraph navigation, edge-level metadata                                                                 | **Shipping** (`archy_graph_focus` with import line numbers).         |
+
+**Implication for archy's roadmap.** The three top-priority
+additions, in order of evidence weight: (1) ship call graph as a
+second edge type (LocAgent ablation §14c.2); (2) ship NCCD/
+propagation cost as a diagnostic and as a weighting for
+`archy_impact` (MacCormack literature plus §c.3 mapping above);
+(3) ship a per-module risk composite that surfaces the
+"navigational salience" the Navigation Paradox paper §c.1 names as
+the residual failure mode after large context windows. Detailed
+roadmap entries in [`FUTURE.md`](FUTURE.md).
+
+[nav-paradox]: https://arxiv.org/html/2602.20048v1
+[locagent]: https://aclanthology.org/2025.acl-long.426/
+[daplab-9-patterns]: https://daplab.cs.columbia.edu/general/2026/01/08/9-critical-failure-patterns-of-coding-agents.html
+[anthropic-harnesses]: https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
+[so-bugs-coding-agents]: https://stackoverflow.blog/2026/01/28/are-bugs-and-incidents-inevitable-with-ai-coding-agents/
 
 ---
 
