@@ -469,7 +469,7 @@ deferred). The Python case is *worse* than the general case.
 **Empirical validation.** Vulture 2.16 was run with default settings
 (60% confidence) and at 90% confidence on the full 27-project
 benchmark (see [`bench/projects.yaml`](../bench/projects.yaml)),
-captured 2026-05-11:
+captured 2026-05-13:
 
 | Project        |    LOC | Vulture @ 60% | Vulture @ 90% |
 | -------------- | -----: | ------------: | ------------: |
@@ -498,7 +498,7 @@ captured 2026-05-11:
 | mkdocs         |  7,084 |            88 |             8 |
 | starlette      |  6,584 |            67 |             0 |
 | requests       |  6,369 |            54 |             4 |
-| archy          |  3,279 |            55 |             0 |
+| archy          |  3,725 |            71 |             0 |
 | msgspec        |  2,365 |            10 |             4 |
 
 Spot-checking findings on FastAPI, pytest, and Django (15 random

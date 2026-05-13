@@ -1,7 +1,7 @@
 # Benchmark results
 
 Output of `uv run --with networkx --with pyyaml python bench/run.py --vulture`.
-SHAs pinned in `bench/projects.yaml`. Captured 2026-05-11.
+SHAs pinned in `bench/projects.yaml`. Captured 2026-05-13.
 
 ## Score table
 
@@ -12,9 +12,9 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-11.
 | boto3 | `81a86c9` | 39 | 71 | 0.609 | 0.689 | 0.897 | 0.533 | 0.417 |
 | mkdocs | `2862536` | 61 | 175 | 0.589 | 0.526 | 0.787 | 0.615 | 0.472 |
 | starlette | `7793b92` | 34 | 114 | 0.572 | 0.458 | 0.588 | 0.727 | 0.547 |
+| archy | `v0.13.1` | 14 | 30 | 0.561 | 0.471 | 1.000 | 0.667 | 0.314 |
 | scrapy | `5223dbe` | 172 | 858 | 0.560 | 0.521 | 0.640 | 0.533 | 0.552 |
 | datasette | `aa84fe0` | 59 | 172 | 0.555 | 0.551 | 0.881 | 0.444 | 0.441 |
-| archy | `v0.11.0` | 14 | 29 | 0.555 | 0.470 | 1.000 | 0.667 | 0.303 |
 | anyio | `bcb2db6` | 42 | 158 | 0.555 | 0.499 | 0.643 | 0.615 | 0.480 |
 | setuptools | `84ed591` | 317 | 592 | 0.549 | 0.766 | 0.931 | 0.348 | 0.367 |
 | botocore | `2b64927` | 76 | 255 | 0.534 | 0.566 | 0.934 | 0.348 | 0.443 |
@@ -25,26 +25,26 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-11.
 | requests | `b684dcb` | 19 | 73 | 0.508 | 0.429 | 0.579 | 0.571 | 0.469 |
 | mypy | `e53693b` | 195 | 1104 | 0.499 | 0.571 | 0.815 | 0.286 | 0.465 |
 | sqlalchemy | `1e1c008` | 255 | 2536 | 0.492 | 0.565 | 0.388 | 0.471 | 0.568 |
-| ansible | `b7c0900` | 583 | 2148 | 0.477 | 0.614 | 0.770 | 0.286 | 0.383 |
+| ansible | `b7c0900` | 581 | 2144 | 0.477 | 0.614 | 0.769 | 0.286 | 0.383 |
 | django | `4d455ae` | 902 | 3234 | 0.477 | 0.641 | 0.754 | 0.267 | 0.401 |
 | click | `fc6c7c4` | 17 | 60 | 0.470 | 0.451 | 0.235 | 0.800 | 0.575 |
 | httpx | `b5addb6` | 23 | 87 | 0.463 | 0.482 | 0.261 | 0.667 | 0.550 |
 | flask | `7374c85` | 24 | 94 | 0.463 | 0.484 | 0.208 | 0.800 | 0.569 |
 | dagster | `8e7f318` | 801 | 6255 | 0.461 | 0.578 | 0.400 | 0.471 | 0.416 |
 | scikit-learn | `13f20d7` | 638 | 3857 | 0.459 | 0.523 | 0.826 | 0.216 | 0.476 |
-| aiohttp | `e8f4371` | 53 | 318 | 0.443 | 0.550 | 0.170 | 0.727 | 0.568 |
+| aiohttp | `e8f4371` | 52 | 312 | 0.440 | 0.530 | 0.173 | 0.727 | 0.563 |
 | msgspec | `3b2543b` | 10 | 19 | 0.384 | 0.440 | 0.100 | 0.889 | 0.553 |
 
 ## Pairwise Pearson correlations
 
 | pair | r |
 | --- | ---: |
-| modularity ↔ acyclicity | +0.406 |
-| modularity ↔ depth | -0.566 |
-| modularity ↔ equality | -0.324 |
+| modularity ↔ acyclicity | +0.423 |
+| modularity ↔ depth | -0.576 |
+| modularity ↔ equality | -0.344 |
 | acyclicity ↔ depth | -0.653 |
-| acyclicity ↔ equality | -0.458 |
-| depth ↔ equality | +0.354 |
+| acyclicity ↔ equality | -0.453 |
+| depth ↔ equality | +0.359 |
 
 ## Vulture findings
 
@@ -75,5 +75,5 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-11.
 | mkdocs | `2862536` | 7,084 | 88 | 8 |
 | starlette | `7793b92` | 6,584 | 67 | 0 |
 | requests | `b684dcb` | 6,369 | 54 | 4 |
-| archy | `v0.11.0` | 3,279 | 55 | 0 |
+| archy | `v0.13.1` | 3,725 | 71 | 0 |
 | msgspec | `3b2543b` | 2,365 | 10 | 4 |

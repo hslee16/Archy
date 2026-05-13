@@ -240,17 +240,17 @@ above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
 
 Pairwise Pearson correlations on a 27-project benchmark spanning
 small CLI tools to very large frameworks (msgspec at 10 modules,
-django at 902, dagster at 801), captured 2026-05-11 against pinned
+django at 902, dagster at 801), captured 2026-05-13 against pinned
 SHAs (see [`bench/projects.yaml`](../bench/projects.yaml)):
 
 | Pair                    |    `r` |
 | ----------------------- | -----: |
-| modularity ↔ acyclicity | +0.406 |
-| modularity ↔ depth      | -0.566 |
-| modularity ↔ equality   | -0.324 |
+| modularity ↔ acyclicity | +0.423 |
+| modularity ↔ depth      | -0.576 |
+| modularity ↔ equality   | -0.344 |
 | acyclicity ↔ depth      | -0.653 |
-| acyclicity ↔ equality   | -0.458 |
-| depth ↔ equality        | +0.354 |
+| acyclicity ↔ equality   | -0.453 |
+| depth ↔ equality        | +0.359 |
 
 All six pairs are below `|r| = 0.7`, the OECD-conventional threshold
 for treating sub-indicators as redundant. **Two of six sit at
@@ -264,20 +264,20 @@ the acyclicity↔equality coupling out of the moderate band. Concretely:
   mostly inside a few SCCs has fewer free DAG hops to extend, but the
   SCC condensation it does have tends to be deep when the tangled
   mass dominates.
-- **modularity ↔ depth at `-0.566`**: deeper graphs tend to have
+- **modularity ↔ depth at `-0.576`**: deeper graphs tend to have
   higher modularity. Plausible: in a deep DAG, communities form
   along the chain naturally, so longer chains give Newman's Q more
   structure to find.
-- **acyclicity ↔ equality at `-0.458`**: regressed from `-0.652` at
+- **acyclicity ↔ equality at `-0.453`**: regressed from `-0.652` at
   n=23. The four projects added in the n=27 refresh break the "hub
   modules in large SCC pull both axes down" pattern -
   boto3/botocore/pygments/setuptools are largely acyclic but still
   have concentrated fan-out, so the coupling looks weaker once
   they're in the sample.
-- **modularity ↔ acyclicity at `+0.406`**: strengthened from
+- **modularity ↔ acyclicity at `+0.423`**: strengthened from
   `+0.257` at n=23. The wide-and-shallow plugin shapes (pygments,
   setuptools) score high on both, pulling the correlation up.
-- **depth ↔ equality at `+0.354`**: weak and stable across sample
+- **depth ↔ equality at `+0.359`**: weak and stable across sample
   expansions.
 
 These don't break the geometric-mean argument - none cross the OECD
@@ -307,7 +307,7 @@ sqlalchemy, dagster), with diversity across web / async / scientific
 / ORM / plugin-host / devops / workflow-orchestration / build-tooling
 / syntax-highlighting / generated-SDK domains. Pinned SHAs in
 [`bench/projects.yaml`](../bench/projects.yaml); raw output in
-[`bench/results.md`](../bench/results.md). Captured 2026-05-11:
+[`bench/results.md`](../bench/results.md). Captured 2026-05-13:
 
 | Project       | SHA       | Modules | Edges | Overall | Modularity | Acyclicity | Depth | Equality |
 | ------------- | --------- | ------: | ----: | ------: | ---------: | ---------: | ----: | -------: |
@@ -316,9 +316,9 @@ sqlalchemy, dagster), with diversity across web / async / scientific
 | boto3         | `81a86c9` |      39 |    71 |   0.609 |      0.689 |      0.897 | 0.533 |    0.417 |
 | mkdocs        | `2862536` |      61 |   175 |   0.589 |      0.526 |      0.787 | 0.615 |    0.472 |
 | starlette     | `7793b92` |      34 |   114 |   0.572 |      0.458 |      0.588 | 0.727 |    0.547 |
+| archy         | `v0.13.1` |      14 |    30 |   0.561 |      0.471 |      1.000 | 0.667 |    0.314 |
 | scrapy        | `5223dbe` |     172 |   858 |   0.560 |      0.521 |      0.640 | 0.533 |    0.552 |
 | datasette     | `aa84fe0` |      59 |   172 |   0.555 |      0.551 |      0.881 | 0.444 |    0.441 |
-| archy         | `v0.11.0` |      14 |    29 |   0.555 |      0.470 |      1.000 | 0.667 |    0.303 |
 | anyio         | `bcb2db6` |      42 |   158 |   0.555 |      0.499 |      0.643 | 0.615 |    0.480 |
 | setuptools    | `84ed591` |     317 |   592 |   0.549 |      0.766 |      0.931 | 0.348 |    0.367 |
 | botocore      | `2b64927` |      76 |   255 |   0.534 |      0.566 |      0.934 | 0.348 |    0.443 |
@@ -329,14 +329,14 @@ sqlalchemy, dagster), with diversity across web / async / scientific
 | requests      | `b684dcb` |      19 |    73 |   0.508 |      0.429 |      0.579 | 0.571 |    0.469 |
 | mypy          | `e53693b` |     195 |  1104 |   0.499 |      0.571 |      0.815 | 0.286 |    0.465 |
 | sqlalchemy    | `1e1c008` |     255 |  2536 |   0.492 |      0.565 |      0.388 | 0.471 |    0.568 |
-| ansible       | `b7c0900` |     583 |  2148 |   0.477 |      0.614 |      0.770 | 0.286 |    0.383 |
+| ansible       | `b7c0900` |     581 |  2144 |   0.477 |      0.614 |      0.769 | 0.286 |    0.383 |
 | django        | `4d455ae` |     902 |  3234 |   0.477 |      0.641 |      0.754 | 0.267 |    0.401 |
 | click         | `fc6c7c4` |      17 |    60 |   0.470 |      0.451 |      0.235 | 0.800 |    0.575 |
 | httpx         | `b5addb6` |      23 |    87 |   0.463 |      0.482 |      0.261 | 0.667 |    0.550 |
 | flask         | `7374c85` |      24 |    94 |   0.463 |      0.484 |      0.208 | 0.800 |    0.569 |
 | dagster       | `8e7f318` |     801 |  6255 |   0.461 |      0.578 |      0.400 | 0.471 |    0.416 |
 | scikit-learn  | `13f20d7` |     638 |  3857 |   0.459 |      0.523 |      0.826 | 0.216 |    0.476 |
-| aiohttp       | `e8f4371` |      53 |   318 |   0.443 |      0.550 |      0.170 | 0.727 |    0.568 |
+| aiohttp       | `e8f4371` |      52 |   312 |   0.440 |      0.530 |      0.173 | 0.727 |    0.563 |
 | msgspec       | `3b2543b` |      10 |    19 |   0.384 |      0.440 |      0.100 | 0.889 |    0.553 |
 
 Bands derived from this distribution (median 0.513, IQR roughly
