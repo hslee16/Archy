@@ -34,6 +34,17 @@ from archy.mcp import (
 )
 
 
+def _internal_graph(root: Path):
+    # Build the same internal-only graph the MCP layer hands to callers,
+    # for parity assertions against graph_to_dict.
+    from archy.graph import build_graph
+
+    g = build_graph(root)
+    external = {n for n, d in g.nodes(data=True) if d.get("external")}
+    g.remove_nodes_from(external)
+    return g
+
+
 @pytest.fixture
 def acyclic_project(tmp_path: Path) -> Path:
     pkg = tmp_path / "pkg"
@@ -278,7 +289,7 @@ def test_graph_focus_direction_out_excludes_callers(project_with_caller: Path):
     )
     ids = {n.id for n in payload.nodes}
     assert "pkg.a" in ids and "pkg.b" in ids
-    assert "pkg.c" not in ids  # c imports a, but direction='out' ignores callers
+    assert "pkg.c" not in ids
 
 
 def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Path):
@@ -291,7 +302,7 @@ def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Pat
     )
     ids = {n.id for n in payload.nodes}
     assert "pkg.a" in ids and "pkg.c" in ids
-    assert "pkg.b" not in ids  # a imports b, but direction='in' ignores dependencies
+    assert "pkg.b" not in ids
 
 
 def test_graph_focus_resolves_file_paths(acyclic_project: Path):
@@ -391,11 +402,9 @@ def test_graph_summary_validates_top_n(acyclic_project: Path):
 def test_graph_dump_matches_cli_json(acyclic_project: Path):
     # Parity contract: the MCP dump must be value-equal to graph_to_dict
     # (which the CLI uses for `archy graph --format json`).
-    from archy.graph import build_graph, graph_to_dict
+    from archy.graph import graph_to_dict
 
-    g = build_graph(acyclic_project)
-    external = {n for n, d in g.nodes(data=True) if d.get("external")}
-    g.remove_nodes_from(external)
+    g = _internal_graph(acyclic_project)
     expected = graph_to_dict(g)
 
     payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=500)
@@ -472,7 +481,6 @@ def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
         internal_only=True,
     )
     edge = next(e for e in payload.edges if e.source == "pkg.a" and e.target == "pkg.b")
-    # The two import statements collapse into one edge with both line numbers.
     assert edge.lines == (2, 3)
     # `is_relative` is True iff *any* of the contributing imports was relative;
     # the parser records the last-seen flag, so the assertion is just "tracked".
@@ -523,12 +531,7 @@ def test_graph_focus_multi_seed_with_overlap_dedups_nodes(tmp_path: Path):
 def test_graph_dump_at_max_nodes_boundary_succeeds(acyclic_project: Path):
     # `> max_nodes` errors; `== max_nodes` must succeed. This guards the
     # off-by-one risk in the guardrail condition.
-    from archy.graph import build_graph
-
-    g = build_graph(acyclic_project)
-    external = {n for n, d in g.nodes(data=True) if d.get("external")}
-    g.remove_nodes_from(external)
-    exact = g.number_of_nodes()
+    exact = _internal_graph(acyclic_project).number_of_nodes()
 
     payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=exact)
     assert isinstance(payload, GraphPayload)

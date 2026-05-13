@@ -54,7 +54,6 @@ def test_central_volatile_module_has_nonzero_risk():
     )
     risk = compute_edit_risk(g)
     assert risk["m"] > 0.0
-    # And it should dominate the other modules:
     assert risk["m"] == max(risk.values())
 
 
