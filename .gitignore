@@ -223,3 +223,6 @@ __marimo__/
 
 # archy score history (per-checkout, not committed; one row per `archy score --record`)
 .archy/
+
+# Local-only maintainer notes (PyPI download stats, etc.)
+docs/PYPI_STATS.md
