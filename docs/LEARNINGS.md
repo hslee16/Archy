@@ -140,7 +140,7 @@ Sentrux was the inspiration and is treated as a peer throughout this document, b
 - [`camilooscargbaptista/architect`](https://github.com/camilooscargbaptista/architect) - 2026 Claude Code plugin, language-generic, 0-100 score, 9 MCP tools, anti-pattern detection. Closest in *shape* (AI-agent-facing, MCP, single score) but generic across languages and less rigorous than archy or sentrux.
 
 **2. Python architectural-contract tools.** The enforcement slice archy already integrates with.
-- [import-linter](https://github.com/seddonym/import-linter) - de-facto contract enforcer, five contract types (Layers, Forbidden, Independence, Protected, AcyclicSiblings). Archy wraps it via `archy contracts` (v0.8.x).
+- [import-linter](https://github.com/seddonym/import-linter) - de-facto contract enforcer, five contract types (Layers, Forbidden, Independence, Protected, AcyclicSiblings). Archy wraps it via `archy contracts` (v0.8.x). `.importlinter` is the canonical contracts config; archy.yaml's `forbid:` fallback is a zero-config onramp only (cannot express `ignore_imports`, so any project that needs to whitelist a legitimate transitive edge must use `.importlinter`).
 - [grimp](https://github.com/python-grimp/grimp) - the import-graph library powering import-linter.
 - [tach](https://github.com/tach-org/tach) (gauge.sh) - Rust-implemented Python-target enforcer; `tach sync` / `tach check`, layered architecture, VS Code + pre-commit. The most active mainstream competitor for *enforcement*. No score, no trend, no MCP.
 - [layer-linter](https://pypi.org/project/layer-linter/) - deprecated, folded into import-linter.

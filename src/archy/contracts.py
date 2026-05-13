@@ -7,10 +7,16 @@ for `archy contracts` (CLI) or `archy_contracts` (MCP) to consume.
 
 Config resolution order:
   1. Explicit `config_filename` argument (.importlinter or pyproject.toml).
-  2. `.importlinter` in the project root.
+  2. `.importlinter` in the project root — the canonical contracts config.
+     Supports all five contract types (Layers, Forbidden, Independence,
+     Protected, AcyclicSiblings) and `ignore_imports` whitelists for
+     legitimate transitive edges. Recommended for any project that needs
+     more than a clean direct-edge rule.
   3. `archy.yaml` in the project root, translated to a list of Forbidden
-     contracts (one per `forbid` rule). This lets a project enforce its
-     existing layer rules transitively without duplicating them.
+     contracts (one per `forbid` rule). Best-effort fallback so a project
+     with only an archy.yaml can run `archy contracts` without extra
+     config; emits a UserWarning because this path cannot express
+     `ignore_imports` (transitive false-positives are unavoidable).
 
 import-linter is an optional dependency. Without it installed, the public
 functions raise `ContractsNotAvailable` with an actionable message. The
@@ -25,6 +31,7 @@ from __future__ import annotations
 import contextlib
 import os
 import sys
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -117,11 +124,24 @@ def run_contracts(
             raise ContractsConfigError(
                 f"could not derive contracts from {archy_yaml_path}: {exc}"
             ) from exc
+        warnings.warn(
+            "deriving transitive contracts from archy.yaml `forbid:` is a best-effort "
+            "fallback and cannot express ignore_imports / whitelisted edges. For any "
+            "project that needs to allow legitimate transitive paths, add a "
+            ".importlinter file (the canonical contracts config). See "
+            "https://import-linter.readthedocs.io/en/stable/contract_types.html",
+            UserWarning,
+            stacklevel=2,
+        )
         with _ProjectOnSysPath(project_dir):
             return _drive_import_linter(user_options=user_options)
 
     raise ContractsConfigError(
-        f"no contracts config found in {project_dir}: expected .importlinter or archy.yaml"
+        f"no contracts config found in {project_dir}: expected `.importlinter` "
+        "(canonical, supports all five contract types and ignore_imports whitelists) "
+        "or `archy.yaml` (best-effort fallback that translates `forbid:` rules to "
+        "transitive Forbidden contracts). See "
+        "https://import-linter.readthedocs.io/en/stable/contract_types.html"
     )
 
 

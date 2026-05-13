@@ -157,7 +157,8 @@ def test_run_contracts_falls_back_to_archy_yaml_clean(
 ) -> None:
     _purge_top(monkeypatch)
     _write_yaml_fixture(tmp_path, with_violation=False)
-    result = run_contracts(tmp_path)
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        result = run_contracts(tmp_path)
     assert result.all_kept
     assert result.kept == 1
     assert result.contracts[0].contract_type == "ForbiddenContract"
@@ -169,7 +170,8 @@ def test_run_contracts_falls_back_to_archy_yaml_violation(
 ) -> None:
     _purge_top(monkeypatch)
     _write_yaml_fixture(tmp_path, with_violation=True)
-    result = run_contracts(tmp_path)
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        result = run_contracts(tmp_path)
     assert not result.all_kept
     assert result.broken == 1
 

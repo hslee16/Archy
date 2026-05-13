@@ -11,13 +11,13 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.14.0. Usable today via:
+**Status:** v0.15.0. Usable today via:
 
 | Mode | Command |
 |---|---|
 | Inspection | `archy graph`, `archy cycles` |
 | CI governance | `archy check` (reads `archy.yaml`) |
-| Transitive contracts | `archy contracts` (reads `.importlinter` or `archy.yaml`; requires `archy[contracts]`) |
+| Transitive contracts | `archy contracts` (reads `.importlinter` — canonical — or falls back to `archy.yaml`; requires `archy[contracts]`) |
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | MCP server | `archy mcp` |
@@ -96,10 +96,32 @@ archy contracts path/to/project --format json
 **Config resolution.** `archy contracts` reads, in order:
 
 1. The `--config` argument if passed.
-2. `.importlinter` in the project root.
-3. `archy.yaml`: each `forbid` rule becomes one Forbidden contract checked transitively. **No additional config required**: a project that already has `archy.yaml` can run `archy contracts` immediately to upgrade direct-edge enforcement to transitive.
+2. `.importlinter` in the project root — the **canonical** contracts config.
+3. `archy.yaml` — best-effort fallback. Each `forbid:` rule becomes one Forbidden contract checked transitively. Emits a `UserWarning` because this path cannot express `ignore_imports`, so any legitimate transitive edge (e.g., a service layer reaching `psycopg` *through* a sanctioned `app.libs.db.*` module) will be reported as a violation with no way to whitelist it.
 
-Reach for `.importlinter` only when you need contract types `archy.yaml` does not express: Independence, Protected, AcyclicSiblings, or hand-tuned Layers. See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar.
+Two configs, one concern each:
+
+- **`archy.yaml`** owns layer definitions, direct-edge gating (`archy check`), `sdp:`, `exclude:`, and `roots:`.
+- **`.importlinter`** owns transitive contracts: all five contract types (Forbidden, Layers, Independence, Protected, AcyclicSiblings) and `ignore_imports` whitelists.
+
+Reach for `.importlinter` as soon as you need transitive enforcement at all — the archy.yaml fallback is a zero-config onramp, not a feature target. See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar.
+
+Common case — forbid services from reaching `psycopg` but allow the sanctioned db library to do so:
+
+```ini
+[importlinter]
+root_package = app
+
+[importlinter:contract:services-must-not-reach-psycopg]
+name = services must not reach psycopg
+type = forbidden
+source_modules =
+    app.services
+forbidden_modules =
+    psycopg
+ignore_imports =
+    app.libs.db.engine -> psycopg
+```
 
 ### Compute a quality score
 
