@@ -67,6 +67,11 @@ def clone_or_update(proj: dict) -> Path:
         ["git", "-C", str(target), "checkout", "--quiet", sha],
         check=True,
     )
+    # Force a clean tree at the pinned SHA. Untracked .py files left over
+    # from a previous checkout at a different ref would otherwise be parsed
+    # as phantom modules, inflating module and edge counts.
+    subprocess.run(["git", "-C", str(target), "reset", "--hard", "--quiet", sha], check=True)
+    subprocess.run(["git", "-C", str(target), "clean", "-fdx", "--quiet"], check=True)
     return target
 
 
