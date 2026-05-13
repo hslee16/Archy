@@ -25,13 +25,13 @@ The agent must have access to the `archy` MCP server. The user wires it up once 
 }
 ```
 
-If the `archy_*` tools below are not visible, stop and ask the user to install archy (`pip install archy`) and add the stanza above. Do not fall back to running `archy` via Bash — the MCP server is the supported integration.
+If the `archy_*` tools below are not visible, stop and ask the user to install archy (`pip install archy`) and add the stanza above. Do not fall back to running `archy` via Bash; the MCP server is the supported integration.
 
 ## When to activate
 
 Activate this skill when any of the following is true:
 
-- The repository root contains `archy.yaml` (definitive signal — the project has opted in)
+- The repository root contains `archy.yaml` (definitive signal: the project has opted in)
 - The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, dependency graph, "what depends on X", or "is this safe to remove"
 - An edit is about to touch more than one Python module
 - An edit adds, removes, or changes an `import` statement
@@ -97,7 +97,7 @@ Returns direct layer-rule violations from `archy.yaml` plus Stable Dependencies 
 archy_contracts(path=".")
 ```
 
-Requires `pip install archy[contracts]`. A failed contract means the new import violates the declared architecture — revert or restructure rather than weakening the rule.
+Requires `pip install archy[contracts]`. A failed contract means the new import violates the declared architecture; revert or restructure rather than weakening the rule.
 
 ### 5. Diff against the baseline
 
