@@ -445,6 +445,11 @@ def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
 
     Wraps import-linter so contract findings flow through the same channel
     as `archy check` / `archy score`. Requires `pip install archy[contracts]`.
+
+    Config resolution: `--config` wins; otherwise prefers `.importlinter`
+    in PATH (canonical, supports all five contract types and
+    ignore_imports whitelists); falls back to translating `archy.yaml`'s
+    `forbid:` rules to Forbidden contracts (best-effort, no whitelists).
     """
     try:
         result = run_contracts(path, config_filename=config_filename)
