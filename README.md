@@ -30,6 +30,8 @@ AI agents generate code at machine speed. Without a feedback loop on *structural
 
 `archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
+The agent-feedback framing is empirically supported by 2025-2026 research: the Navigation Paradox paper shows large LLM context windows do not eliminate the need for structural graph navigation, LocAgent's ablation finds graph edges materially improve code-localization accuracy, and the coding-agent failure-mode literature names the specific patterns (scope drift, cross-file reasoning failure) that an architectural feedback loop is built to catch. Citations, a failure-mode-to-archy-capability mapping, and the resulting roadmap priorities are in [`docs/RESEARCH_METRICS.md` §14c](docs/RESEARCH_METRICS.md).
+
 ## Scope
 
 - **Python only.** The cross-language story is deliberately someone else's problem.
