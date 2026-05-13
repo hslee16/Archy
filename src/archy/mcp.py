@@ -38,7 +38,6 @@ from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.impact import Impact, find_impact
 from archy.instability import compute_instability
-from archy.reach import compute_propagation_cost
 from archy.layers import (
     LayerConfigError,
     SdpViolation,
@@ -48,6 +47,7 @@ from archy.layers import (
     find_violations,
     load_config,
 )
+from archy.reach import compute_propagation_cost
 from archy.score import Score, ScoreInputs, compute_score
 
 _AGENT_LOOP_PROMPT = """\

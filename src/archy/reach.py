@@ -6,10 +6,10 @@ chosen module. Formally:
 
     propagation_cost = sum over internal nodes of `|reverse_closure(n)|` / N^2
 
-where `reverse_closure(n) = ancestors(n) ∪ {n}`, the set of internal modules
-that transitively import `n` (so a change to `n` could ripple to them) plus
-`n` itself. External nodes are excluded because they are not subject to
-edits inside the project.
+where `reverse_closure(n)` is the set of internal modules that transitively
+import `n` (so a change to `n` could ripple to them) together with `n`
+itself. External nodes are excluded because they are not subject to edits
+inside the project.
 
 Per-module value `propagation_cost[n] = |reverse_closure(n)| / N` is the
 fraction of the project that depends on `n`. This is the per-module
