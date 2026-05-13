@@ -190,6 +190,7 @@ class GraphNode(BaseModel):
     path: str | None = None
     is_package: bool | None = None
     instability: float | None = None
+    propagation_cost: float | None = None
 
 
 class GraphEdge(BaseModel):
@@ -357,7 +358,11 @@ def _register_tools(server: FastMCP) -> None:
             "that transitively import any of them (the blast radius). Use "
             "before refactoring or removing a module to see what would break. "
             "Files that don't resolve to any module in the graph are returned "
-            "in `unresolved`."
+            "in `unresolved`. `propagation_cost` is the MacCormack-style "
+            "blast-radius scalar: fraction of the project's internal module "
+            "count that this edit set can reach (changed plus impacted, over "
+            "total internal modules). Higher values mean the edit is more "
+            "structurally consequential."
         ),
     )
     def archy_impact(
@@ -805,6 +810,7 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
             path=n.get("path"),
             is_package=n.get("is_package"),
             instability=n.get("instability"),
+            propagation_cost=n.get("propagation_cost"),
         )
         for n in data["nodes"]
     )

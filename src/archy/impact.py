@@ -27,6 +27,7 @@ class Impact(BaseModel):
     changed: tuple[str, ...]
     unresolved: tuple[str, ...]
     impacted: tuple[str, ...]
+    propagation_cost: float = 0.0
 
 
 def find_impact(graph: nx.DiGraph, files: list[Path]) -> Impact:
@@ -34,7 +35,10 @@ def find_impact(graph: nx.DiGraph, files: list[Path]) -> Impact:
 
     `impacted` is the set of internal modules with a directed path to any
     changed module (via `nx.ancestors`), minus the changed set itself.
-    Output tuples are sorted for deterministic JSON.
+    `propagation_cost` is `|changed ∪ impacted| / N_internal`: the fraction
+    of the project's internal module count that this edit set can reach,
+    a MacCormack-style blast-radius scalar. Output tuples are sorted for
+    deterministic JSON.
     """
     path_to_qualname = _index_by_path(graph)
 
@@ -55,10 +59,15 @@ def find_impact(graph: nx.DiGraph, files: list[Path]) -> Impact:
     impacted -= changed
     impacted = {q for q in impacted if not graph.nodes[q].get("external")}
 
+    internal_count = sum(1 for _, d in graph.nodes(data=True) if not d.get("external"))
+    reachable = len(changed) + len(impacted)
+    propagation_cost = (reachable / internal_count) if internal_count else 0.0
+
     return Impact(
         changed=tuple(sorted(changed)),
         unresolved=tuple(sorted(unresolved)),
         impacted=tuple(sorted(impacted)),
+        propagation_cost=propagation_cost,
     )
 
 

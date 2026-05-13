@@ -19,7 +19,7 @@ repos:
         pass_filenames: false
 
   - repo: https://github.com/hslee16/archy
-    rev: v0.13.2
+    rev: v0.13.3
     hooks:
       - id: archy-check
       - id: archy-cycles

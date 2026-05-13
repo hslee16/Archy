@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.instability import compute_instability
 from archy.parser import ImportRef, ParseResult, parse_file
+from archy.reach import compute_propagation_cost
 
 DEFAULT_IGNORED_DIRS = frozenset(
     {
@@ -97,15 +98,25 @@ def build_graph(
 def graph_to_dict(graph: nx.DiGraph) -> dict:
     """Serialize a graph to the JSON shape emitted by `archy graph --format json`.
 
-    Per-node instability (Martin's `I`) is attached to internal nodes only;
-    external modules don't have meaningful Ce/Ca within the project.
+    Per-node `instability` (Martin's `I`) and `propagation_cost` (MacCormack
+    reverse-reach fraction) are attached to internal nodes only; external
+    modules have no meaningful values within the project. When called on
+    a subgraph (e.g. by `archy_graph_focus`), values are computed relative
+    to that subgraph's scope, not the full project. For the canonical
+    project-wide propagation cost, read `archy score`'s `inputs.propagation_cost`.
     """
     instability = compute_instability(graph)
+    _, propagation_cost = compute_propagation_cost(graph)
     return {
         "root": graph.graph.get("root"),
         "parse_errors": list(graph.graph.get("parse_errors", ())),
         "nodes": [
-            {"id": n, **d, **({"instability": instability[n]} if n in instability else {})}
+            {
+                "id": n,
+                **d,
+                **({"instability": instability[n]} if n in instability else {}),
+                **({"propagation_cost": propagation_cost[n]} if n in propagation_cost else {}),
+            }
             for n, d in sorted(graph.nodes(data=True))
         ],
         "edges": [

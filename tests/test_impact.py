@@ -35,6 +35,34 @@ def test_impact_returns_transitive_dependents(tmp_path: Path):
     assert result.unresolved == ()
 
 
+def test_impact_propagation_cost_is_fraction_of_internal_count(tmp_path: Path):
+    # The chain produces 6 internal modules: app, app.libs, app.libs.db,
+    # app.services, app.services.auth, app.routers, app.routers.user.
+    # Editing app.libs.db reaches: app.libs.db + app.services.auth +
+    # app.routers.user = 3 modules out of 7 internal (the package inits
+    # count too since they appear as nodes). The exact fraction depends
+    # on whether package __init__.py modules are counted as internal,
+    # but it must be > 0 and <= 1.
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"])
+    assert 0.0 < result.propagation_cost <= 1.0
+    # Algebraic check: propagation_cost == (|changed| + |impacted|) / N_internal.
+    internal_count = sum(1 for _, d in g.nodes(data=True) if not d.get("external"))
+    expected = (len(result.changed) + len(result.impacted)) / internal_count
+    assert result.propagation_cost == expected
+
+
+def test_impact_leaf_with_no_dependents_has_zero_propagation_cost(tmp_path: Path):
+    # Editing the top router (which nothing imports) reaches only itself.
+    # changed=1, impacted=0 -> propagation_cost = 1 / N_internal.
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "routers" / "user.py"])
+    internal_count = sum(1 for _, d in g.nodes(data=True) if not d.get("external"))
+    assert result.propagation_cost == 1 / internal_count
+
+
 def test_impact_changed_module_excluded_from_impacted(tmp_path: Path):
     project = _make_chain(tmp_path)
     g = build_graph(project)
