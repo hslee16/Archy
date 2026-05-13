@@ -3,7 +3,7 @@
   "name": "io.github.hslee16/archy",
   "title": "archy",
   "description": "Architectural sensor for Python codebases.",
-  "version": "0.13.3",
+  "version": "0.14.0",
   "repository": {
     "url": "https://github.com/hslee16/archy",
     "source": "github"
@@ -13,7 +13,7 @@
     {
       "registryType": "pypi",
       "identifier": "archy",
-      "version": "0.13.3",
+      "version": "0.14.0",
       "transport": {
         "type": "stdio"
       },
