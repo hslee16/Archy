@@ -41,9 +41,9 @@ class Module(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    qualname: str  # e.g. "archy.parser"
-    path: Path  # absolute path to the .py file
-    is_package: bool  # True for __init__.py
+    qualname: str
+    path: Path
+    is_package: bool
 
 
 def build_graph(

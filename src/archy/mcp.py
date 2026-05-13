@@ -38,6 +38,7 @@ from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.impact import Impact, find_impact
 from archy.instability import compute_instability
+from archy.reach import compute_propagation_cost
 from archy.layers import (
     LayerConfigError,
     SdpViolation,
@@ -226,6 +227,7 @@ class GraphSummaryEntry(BaseModel):
     module: str
     value: float
     instability: float | None = None
+    propagation_cost: float | None = None
 
 
 class GraphSummaryPayload(BaseModel):
@@ -720,6 +722,7 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
 
     internal_subgraph = graph.subgraph(internal)
     instability = compute_instability(internal_subgraph)
+    _, propagation_cost = compute_propagation_cost(internal_subgraph)
 
     internal_edge_count = internal_subgraph.number_of_edges()
     external_edge_count = sum(
@@ -747,13 +750,14 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
     def _entries(
         pairs: list[tuple[str, float | int]],
         *,
-        with_instability: bool,
+        with_internal_metrics: bool,
     ) -> tuple[GraphSummaryEntry, ...]:
         return tuple(
             GraphSummaryEntry(
                 module=name,
                 value=float(value),
-                instability=instability.get(name) if with_instability else None,
+                instability=instability.get(name) if with_internal_metrics else None,
+                propagation_cost=propagation_cost.get(name) if with_internal_metrics else None,
             )
             for name, value in pairs[:top_n]
         )
@@ -763,10 +767,10 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
         internal_edge_count=internal_edge_count,
         external_edge_count=external_edge_count,
         parse_errors=tuple(graph.graph.get("parse_errors", ())),
-        top_fan_in=_entries(list(fan_in), with_instability=True),
-        top_fan_out=_entries(list(fan_out), with_instability=True),
-        top_pagerank=_entries(list(pr_sorted), with_instability=True),
-        external_deps=_entries(list(ext_sorted), with_instability=False),
+        top_fan_in=_entries(list(fan_in), with_internal_metrics=True),
+        top_fan_out=_entries(list(fan_out), with_internal_metrics=True),
+        top_pagerank=_entries(list(pr_sorted), with_internal_metrics=True),
+        external_deps=_entries(list(ext_sorted), with_internal_metrics=False),
     )
 
 
