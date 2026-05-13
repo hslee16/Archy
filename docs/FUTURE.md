@@ -48,6 +48,6 @@ These are essentially free - no new edge type, no AST work, no git mining - and 
 
 ## Anti-goals (stay disciplined)
 
-- No multi-language support. The first time someone proposes adding TypeScript, point them at sentrux.
+- **Python only — settled, not up for revisit.** The multi-language story belongs to sentrux. The division is final; this is not a tradeoff to reopen or iterate on, and the roadmap should never spend effort defending it. See `LEARNINGS.md` §"Competitive landscape" for the broader bucket map and why depth-on-Python is archy's defensible wedge.
 - No runtime instrumentation (only static analysis). The whole pitch is "doesn't need to run your code."
 - No replacement of linters or type checkers. We're orthogonal to ruff and mypy, not a competitor.

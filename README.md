@@ -34,7 +34,7 @@ The agent-feedback framing is empirically supported by 2025-2026 research: the N
 
 ## Scope
 
-- **Python only.** The cross-language story is deliberately someone else's problem.
+- **Python only.** The cross-language story belongs to [sentrux](https://github.com/sentrux/sentrux); that division is settled. archy goes deep on Python (transitive contracts, SDP, NCCD, `if TYPE_CHECKING:` semantics) rather than broad across languages — see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) §"Competitive landscape".
 - **Tree-sitter powered.** Robust to in-flight edits and partial files; survives syntax errors that would crash `ast`.
 - **Score that trends over time.** A single number per commit, persisted, plotted. Trend matters more than the absolute value.
 - **Rules as YAML.** "Layer X cannot import Y." No DSL, no plugins (yet).
