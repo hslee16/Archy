@@ -35,10 +35,11 @@ def find_impact(graph: nx.DiGraph, files: list[Path]) -> Impact:
 
     `impacted` is the set of internal modules with a directed path to any
     changed module (via `nx.ancestors`), minus the changed set itself.
-    `propagation_cost` is `|changed ∪ impacted| / N_internal`: the fraction
-    of the project's internal module count that this edit set can reach,
-    a MacCormack-style blast-radius scalar. Output tuples are sorted for
-    deterministic JSON.
+    `propagation_cost` is `(|changed| + |impacted|) / N_internal`: the
+    fraction of the project's internal module count that this edit set
+    can reach (the two sets are disjoint by construction), a MacCormack-
+    style blast-radius scalar. Output tuples are sorted for deterministic
+    JSON.
     """
     path_to_qualname = _index_by_path(graph)
 
