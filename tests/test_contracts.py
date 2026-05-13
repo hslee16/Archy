@@ -183,7 +183,10 @@ def test_run_contracts_prefers_importlinter_over_archy_yaml(
     define a different contract (cli vs parser), so seeing the .importlinter
     contract name in the result confirms precedence."""
     _purge_top(monkeypatch)
-    _write_fixture(tmp_path, with_violation=False)  # writes .importlinter + top/{a,b}.py
+    # `.importlinter` present so the resolution order's #2 branch fires; the
+    # archy.yaml below would generate a *differently named* contract if the
+    # fallback were taken, which is what makes the assertion below load-bearing.
+    _write_fixture(tmp_path, with_violation=False)
     # Add an archy.yaml that would generate a different contract if used.
     (tmp_path / "archy.yaml").write_text(
         textwrap.dedent(
@@ -205,7 +208,9 @@ def test_run_contracts_prefers_importlinter_over_archy_yaml(
 
 def test_run_contracts_no_config_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _purge_top(monkeypatch)
-    # Empty project: neither .importlinter nor archy.yaml.
+    # The resolution order must surface a clean ContractsConfigError when no
+    # config exists, rather than silently passing or letting import-linter
+    # raise its own less-actionable error from deeper in the call.
     with pytest.raises(ContractsConfigError, match="no contracts config"):
         run_contracts(tmp_path)
 

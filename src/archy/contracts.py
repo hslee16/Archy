@@ -7,7 +7,7 @@ for `archy contracts` (CLI) or `archy_contracts` (MCP) to consume.
 
 Config resolution order:
   1. Explicit `config_filename` argument (.importlinter or pyproject.toml).
-  2. `.importlinter` in the project root — the canonical contracts config.
+  2. `.importlinter` in the project root: the canonical contracts config.
      Supports all five contract types (Layers, Forbidden, Independence,
      Protected, AcyclicSiblings) and `ignore_imports` whitelists for
      legitimate transitive edges. Recommended for any project that needs
