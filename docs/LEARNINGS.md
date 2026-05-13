@@ -130,3 +130,58 @@ When archy's agent-feedback-loop framing was first written, it was a positioning
 - **Coding-agent failure-mode literature** (Columbia DAPLab, Anthropic, Stack Overflow synthesis, 2026) names the recurring patterns - scope drift, context exhaustion, cross-file reasoning failure, deprecated-pattern propagation - that an architectural feedback loop is supposed to catch. Mapping these to archy's surface yields a concrete priority ordering: cycle/violation gating (shipping), propagation-cost-weighted blast radius (roadmap), per-module risk composite (roadmap).
 
 Detailed citations, a failure-mode-to-archy-capability mapping, and the implied roadmap priority order live in [`RESEARCH_METRICS.md §14c`](RESEARCH_METRICS.md). The roadmap entries themselves are in [`FUTURE.md`](FUTURE.md).
+
+## Competitive landscape (May 2026 survey)
+
+Sentrux was the inspiration and is treated as a peer throughout this document, but it is not the only adjacent tool. A May 2026 web survey grouped the field into five buckets. Recording it here so the design rationale doesn't drift toward "us vs. sentrux" when the actual landscape is wider.
+
+**1. Real-time architectural sensors for AI agents.** Closest in *positioning*.
+- [sentrux](https://github.com/sentrux/sentrux) - 52 languages, Rust + tree-sitter, single `quality_signal` (0-10000), live treemap. Breadth-first by design. Archy's depth-first counterpart on the Python side.
+- [`camilooscargbaptista/architect`](https://github.com/camilooscargbaptista/architect) - 2026 Claude Code plugin, language-generic, 0-100 score, 9 MCP tools, anti-pattern detection. Closest in *shape* (AI-agent-facing, MCP, single score) but generic across languages and less rigorous than archy or sentrux.
+
+**2. Python architectural-contract tools.** The enforcement slice archy already integrates with.
+- [import-linter](https://github.com/seddonym/import-linter) - de-facto contract enforcer, five contract types (Layers, Forbidden, Independence, Protected, AcyclicSiblings). Archy wraps it via `archy contracts` (v0.8.x).
+- [grimp](https://github.com/python-grimp/grimp) - the import-graph library powering import-linter.
+- [tach](https://github.com/tach-org/tach) (gauge.sh) - Rust-implemented Python-target enforcer; `tach sync` / `tach check`, layered architecture, VS Code + pre-commit. The most active mainstream competitor for *enforcement*. No score, no trend, no MCP.
+- [layer-linter](https://pypi.org/project/layer-linter/) - deprecated, folded into import-linter.
+
+**3. Architecture-as-tests (pytest-style).** Different DX, same target.
+- [PyTestArch](https://pypi.org/project/PyTestArch/), [pytest-archon](https://github.com/jwbargsten/pytest-archon), [ArchUnitPython](https://github.com/LukasNiessen/ArchUnitPython), [pytest-imports](https://github.com/nwilbert/pytest-imports) - all ArchUnit-inspired; rules expressed as unit tests. No trended score, no MCP.
+
+**4. Visualization / cycle detection (older generation).**
+- [pydeps](https://github.com/thebjorn/pydeps) - Graphviz visualization, cycle highlighting. No enforcement.
+- [pycycle](https://github.com/bndr/pycycle) - cycles only.
+- snakefood - Python-2 era, unmaintained.
+- [modulegraph](https://pypi.org/project/modulegraph/), [importlab](https://github.com/google/importlab) - bytecode/AST graph libraries.
+
+**5. Complexity / health trends (adjacent, not import-graph).**
+- [wily](https://pypi.org/project/wily/) - trends *complexity* across git history; closest to archy's "trended score" idea but at the function/cyclomatic level, not architectural.
+- radon, lizard, [cohesion](https://github.com/mschwager/cohesion) - point-in-time complexity / LCOM metrics.
+- [deptry](https://github.com/fpgmaas/deptry) - package-level unused/missing deps; orthogonal.
+
+**6. Commercial / enterprise.** Different buyer, similar idea.
+- [CodeScene](https://codescene.com/product/code-health) - `CodeHealth` score, behavior-aware (combines git history with code). Strongest commercial story for "single trended health metric."
+- [Structure101](https://structure101.com/) (acquired by Sonar) - tangles + excessive complexity as TD measures.
+- Sonargraph, NDepend (.NET), Lattix - DSM-based architectural analysis, enterprise pricing.
+
+### What this implies for archy's design
+
+The only tools sharing **all** of {Python-native, import-graph, layer rules, trended score, MCP server} are archy and the generic Claude Code `architect` plugin. Cross-referenced against the most-cited competitors:
+
+| Capability | archy | sentrux | tach | import-linter | pytest-archon | CodeScene |
+|---|---|---|---|---|---|---|
+| Python-deep (transitive contracts) | ✅ | ❌ | partial | ✅ | partial | ❌ |
+| Multi-language | ❌ | ✅ (52) | ❌ | ❌ | ❌ | ✅ |
+| Single trended score | ✅ | ✅ | ❌ | ❌ | ❌ | ✅ |
+| MCP server for agents | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Tree-sitter (in-flight edits) | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
+| YAML rules (no code) | ✅ | partial | ✅ | ✅ (INI/TOML) | ❌ | n/a |
+| OSS | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+
+Archy's defensible positioning is **Python depth**: transitive contracts via import-linter, SDP-violation rule, NCCD/propagation cost, `if TYPE_CHECKING:` awareness, type-hint coverage, decorator/descriptor-aware call resolution - the things a 52-language tool structurally cannot fold in without privileging Python. Sentrux's defensible positioning is **language breadth**. That division is settled; the two tools are not on a collision course and the roadmap does not need to defend against multi-language pressure.
+
+The realistic threats on archy's wedge come from inside its own bucket:
+- **tach** adding a trended score + MCP server (technically small additions on its existing Rust foundation).
+- **sentrux** adding deeper Python semantics, which would erode the depth wedge for users with Python-only repos.
+
+The defense in both cases is to keep moving on Python-canonical metrics (Martin's SDP, MacCormack's propagation cost, the import-linter contract algebra, LocAgent's invoke-edges finding) that are differentiated by their Python-specific resolution, not by their existence.
