@@ -105,3 +105,13 @@ loop = await session.get_prompt(name="loop")
 This is the distribution mechanism: `pip install archy` and start
 `archy mcp`, and any MCP-aware agent gets both the tools and the
 instructions for using them as a loop.
+
+## Empirical backing
+
+Why this loop exists in this shape, with citations:
+
+- **Navigation Paradox** (Feb 2026, [arxiv:2602.20048](https://arxiv.org/html/2602.20048v1)) shows that larger LLM context windows do not eliminate the need for structural graph navigation. Failure shifts from retrieval capacity to navigational salience. The MCP `archy_graph_focus` + `archy_impact` calls in step 2 of the loop above exist specifically because long context alone is not enough; the agent has to be pointed at the architecturally critical files.
+- **LocAgent ablation** (ACL 2025, [aclanthology:2025.acl-long.426](https://aclanthology.org/2025.acl-long.426/)) finds that removing graph traversal from an LLM agent significantly degrades function-level code localization. The whole-graph view alone is not enough either; bounded local neighborhoods matter, which is why `archy_graph_focus` returns a subgraph rather than the full dump.
+- **Coding-agent failure-mode literature** (Columbia DAPLab, Anthropic, Stack Overflow synthesis, 2026) names "scope drift", "context exhaustion", and "cross-file reasoning failure" as recurring patterns. The snapshot/diff cycle in steps 1, 4, and 5 of the loop above is built to catch the first; the bounded `archy_graph_focus` and `archy_impact` calls in step 2 are built to catch the third.
+
+The detailed failure-mode-to-capability mapping and the implied roadmap priority order live in [`RESEARCH_METRICS.md` §14c](RESEARCH_METRICS.md).
