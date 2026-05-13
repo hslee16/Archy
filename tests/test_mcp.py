@@ -25,6 +25,7 @@ from archy.mcp import (
     _run_graph_dump,
     _run_graph_focus,
     _run_graph_summary,
+    _run_high_risk_modules,
     _run_impact,
     _run_score,
     _run_snapshot,
@@ -74,6 +75,7 @@ def test_create_server_registers_expected_tools():
         "archy_graph_focus",
         "archy_graph_summary",
         "archy_graph",
+        "archy_high_risk_modules",
     }
 
 
@@ -411,6 +413,45 @@ def test_graph_dump_refuses_oversized_graph(acyclic_project: Path):
     assert payload.max_nodes == 1
     assert payload.node_count > 1
     assert "archy_graph_focus" in payload.error
+
+
+def test_high_risk_modules_ranks_central_volatile_first(tmp_path: Path):
+    # `pkg.hub` is imported by three peers (high fan-in) AND itself imports a
+    # downstream dep (non-zero instability), so it dominates the composite.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
+    (pkg / "a.py").write_text("from pkg.hub import x\n")
+    (pkg / "b.py").write_text("from pkg.hub import y\n")
+    (pkg / "c.py").write_text("from pkg.hub import z\n")
+
+    payload = _run_high_risk_modules(tmp_path, top_n=5)
+    assert payload.modules[0].module == "pkg.hub"
+    top = payload.modules[0]
+    assert 0.0 < top.edit_risk <= 1.0
+    assert top.fan_in == 3
+    assert top.instability > 0.0
+    assert top.propagation_cost > 0.0
+
+
+def test_high_risk_modules_validates_top_n(acyclic_project: Path):
+    with pytest.raises(ValueError, match="top_n"):
+        _run_high_risk_modules(acyclic_project, top_n=0)
+
+
+def test_high_risk_modules_top_n_caps_results(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for name in ("a", "b", "c", "d"):
+        (pkg / f"{name}.py").write_text("")
+
+    payload = _run_high_risk_modules(tmp_path, top_n=2)
+    assert len(payload.modules) <= 2
+    # module_count reports the size of the candidate pool, not the slice.
+    assert payload.module_count >= len(payload.modules)
 
 
 def test_graph_focus_preserves_edge_attributes(tmp_path: Path):

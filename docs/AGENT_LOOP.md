@@ -38,6 +38,18 @@ as the `loop` prompt on the MCP server, so an agent connected to
 
    - MCP: `archy_graph_summary(path)`
 
+   Before a non-trivial edit (refactor, public-surface change, anything
+   touching more than a handful of files), check whether your target
+   sits in the project's central-and-fragile zone:
+
+   - MCP: `archy_high_risk_modules(path)`
+
+   Returns the top-N modules by `edit_risk`: the geometric mean of
+   propagation cost, normalized fan-in, and Martin's instability. Each
+   entry breaks the composite back out into its components so you can
+   see *why* a module ranks high. If your target is on the list, scope
+   down or pause for review before proceeding.
+
 3. **Edit** the code as you normally would.
 
 4. **Diff** after editing to see what got better, what got worse, and

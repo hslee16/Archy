@@ -11,7 +11,7 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.13.3. Usable today via:
+**Status:** v0.14.0. Usable today via:
 
 | Mode | Command |
 |---|---|
