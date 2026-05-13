@@ -27,6 +27,7 @@ import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
 from archy.cycles import find_cycles
+from archy.reach import compute_propagation_cost
 
 
 class ScoreInputs(BaseModel):
@@ -40,6 +41,7 @@ class ScoreInputs(BaseModel):
     community_count: int
     raw_modularity: float
     raw_gini: float
+    propagation_cost: float = 0.0
 
 
 class Score(BaseModel):
@@ -58,6 +60,7 @@ def compute_score(graph: nx.DiGraph) -> Score:
     acy, cycle_count, tangle_ratio = compute_acyclicity(graph)
     dep, max_depth = compute_depth(graph)
     eq, raw_gini = compute_equality(graph)
+    propagation_cost, _ = compute_propagation_cost(graph)
     overall = (mod * acy * dep * eq) ** 0.25
     return Score(
         overall=overall,
@@ -74,6 +77,7 @@ def compute_score(graph: nx.DiGraph) -> Score:
             community_count=communities,
             raw_modularity=raw_q,
             raw_gini=raw_gini,
+            propagation_cost=propagation_cost,
         ),
     )
 

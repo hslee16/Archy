@@ -38,6 +38,7 @@ from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.impact import Impact, find_impact
 from archy.instability import compute_instability
+from archy.reach import compute_propagation_cost
 from archy.layers import (
     LayerConfigError,
     SdpViolation,
@@ -190,6 +191,7 @@ class GraphNode(BaseModel):
     path: str | None = None
     is_package: bool | None = None
     instability: float | None = None
+    propagation_cost: float | None = None
 
 
 class GraphEdge(BaseModel):
@@ -225,6 +227,7 @@ class GraphSummaryEntry(BaseModel):
     module: str
     value: float
     instability: float | None = None
+    propagation_cost: float | None = None
 
 
 class GraphSummaryPayload(BaseModel):
@@ -357,7 +360,11 @@ def _register_tools(server: FastMCP) -> None:
             "that transitively import any of them (the blast radius). Use "
             "before refactoring or removing a module to see what would break. "
             "Files that don't resolve to any module in the graph are returned "
-            "in `unresolved`."
+            "in `unresolved`. `propagation_cost` is the MacCormack-style "
+            "blast-radius scalar: fraction of the project's internal module "
+            "count that this edit set can reach (changed plus impacted, over "
+            "total internal modules). Higher values mean the edit is more "
+            "structurally consequential."
         ),
     )
     def archy_impact(
@@ -715,6 +722,7 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
 
     internal_subgraph = graph.subgraph(internal)
     instability = compute_instability(internal_subgraph)
+    _, propagation_cost = compute_propagation_cost(internal_subgraph)
 
     internal_edge_count = internal_subgraph.number_of_edges()
     external_edge_count = sum(
@@ -742,13 +750,14 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
     def _entries(
         pairs: list[tuple[str, float | int]],
         *,
-        with_instability: bool,
+        with_internal_metrics: bool,
     ) -> tuple[GraphSummaryEntry, ...]:
         return tuple(
             GraphSummaryEntry(
                 module=name,
                 value=float(value),
-                instability=instability.get(name) if with_instability else None,
+                instability=instability.get(name) if with_internal_metrics else None,
+                propagation_cost=propagation_cost.get(name) if with_internal_metrics else None,
             )
             for name, value in pairs[:top_n]
         )
@@ -758,10 +767,10 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
         internal_edge_count=internal_edge_count,
         external_edge_count=external_edge_count,
         parse_errors=tuple(graph.graph.get("parse_errors", ())),
-        top_fan_in=_entries(list(fan_in), with_instability=True),
-        top_fan_out=_entries(list(fan_out), with_instability=True),
-        top_pagerank=_entries(list(pr_sorted), with_instability=True),
-        external_deps=_entries(list(ext_sorted), with_instability=False),
+        top_fan_in=_entries(list(fan_in), with_internal_metrics=True),
+        top_fan_out=_entries(list(fan_out), with_internal_metrics=True),
+        top_pagerank=_entries(list(pr_sorted), with_internal_metrics=True),
+        external_deps=_entries(list(ext_sorted), with_internal_metrics=False),
     )
 
 
@@ -805,6 +814,7 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
             path=n.get("path"),
             is_package=n.get("is_package"),
             instability=n.get("instability"),
+            propagation_cost=n.get("propagation_cost"),
         )
         for n in data["nodes"]
     )

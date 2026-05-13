@@ -7,7 +7,7 @@ from archy.impact import find_impact
 
 
 def _make_chain(tmp_path: Path) -> Path:
-    # routers -> services -> libs.db; only libs.db imports os
+    # Three-hop chain so transitive (not just direct) propagation is exercised.
     pkg = tmp_path / "app"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
@@ -33,6 +33,30 @@ def test_impact_returns_transitive_dependents(tmp_path: Path):
     assert result.changed == ("app.libs.db",)
     assert set(result.impacted) == {"app.routers.user", "app.services.auth"}
     assert result.unresolved == ()
+
+
+def _internal_count(g) -> int:
+    return sum(1 for _, d in g.nodes(data=True) if not d.get("external"))
+
+
+def test_impact_propagation_cost_matches_changed_plus_impacted_over_internal(tmp_path: Path):
+    # Pins the documented contract of Impact.propagation_cost so a future
+    # refactor (e.g. switching to per-changed-file average) can't silently
+    # change the semantic.
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"])
+    expected = (len(result.changed) + len(result.impacted)) / _internal_count(g)
+    assert result.propagation_cost == expected
+    assert 0.0 < result.propagation_cost <= 1.0
+
+
+def test_impact_leaf_with_no_dependents_has_zero_propagation_cost(tmp_path: Path):
+    # Touching a sink module is the lower-bound case: changed=1, impacted=0.
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "routers" / "user.py"])
+    assert result.propagation_cost == 1 / _internal_count(g)
 
 
 def test_impact_changed_module_excluded_from_impacted(tmp_path: Path):
@@ -63,7 +87,8 @@ def test_impact_leaf_module_has_no_dependents(tmp_path: Path):
 
 def test_impact_multiple_files_unioned(tmp_path: Path):
     project = _make_chain(tmp_path)
-    # Add a parallel chain that shares no modules with the first.
+    # Disjoint second chain ensures multi-file impact unions independent
+    # subgraphs rather than short-circuiting on the first resolved path.
     other = project / "other"
     other.mkdir()
     (other / "__init__.py").write_text("")

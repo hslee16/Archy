@@ -556,6 +556,7 @@ def _score_to_dict(s: Score) -> dict:
             "community_count": s.inputs.community_count,
             "raw_modularity": s.inputs.raw_modularity,
             "raw_gini": s.inputs.raw_gini,
+            "propagation_cost": s.inputs.propagation_cost,
         },
     }
 
@@ -570,6 +571,8 @@ def _score_to_text(s: Score) -> str:
         f"depth:       {s.depth:.3f}  (max depth {s.inputs.max_depth})",
         f"equality:    {s.equality:.3f}  (Gini={s.inputs.raw_gini:.3f})",
         f"# graph: {s.inputs.module_count} modules, {s.inputs.edge_count} edges",
+        f"# propagation_cost: {s.inputs.propagation_cost:.4f}  "
+        f"(diagnostic, not in score; MacCormack reverse-reach fraction)",
     ]
     return "\n".join(lines)
 
