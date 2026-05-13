@@ -43,15 +43,19 @@ AI agents generate code at machine speed. Without a feedback loop on *structural
 ## Quick start
 
 ```bash
-uv sync
+pip install archy
+# or: uv tool install archy
+# or: pipx install archy
 ```
+
+All examples below use the installed `archy` command. If you're working from a checkout, prefix them with `uv run` (e.g. `uv run archy graph .`).
 
 ### Inspect the graph
 
 ```bash
-uv run archy graph path/to/project --internal-only
-uv run archy graph path/to/project --format json > graph.json
-uv run archy graph path/to/project --format dot | dot -Tsvg > graph.svg
+archy graph path/to/project --internal-only
+archy graph path/to/project --format json > graph.json
+archy graph path/to/project --format dot | dot -Tsvg > graph.svg
 ```
 
 ### Find import cycles
@@ -59,9 +63,9 @@ uv run archy graph path/to/project --format dot | dot -Tsvg > graph.svg
 Tarjan SCCs of size >= 2, plus self-loops (a module importing itself). Use `--strict` in CI to fail on any cycle.
 
 ```bash
-uv run archy cycles path/to/project
-uv run archy cycles path/to/project --format json
-uv run archy cycles path/to/project --strict
+archy cycles path/to/project
+archy cycles path/to/project --format json
+archy cycles path/to/project --strict
 ```
 
 ### Enforce layer rules
@@ -69,9 +73,9 @@ uv run archy cycles path/to/project --strict
 Reads `archy.yaml` from the repo root. Exits 1 on any violation. See [Layer rules](#layer-rules-archy-check) below.
 
 ```bash
-uv run archy check path/to/project
-uv run archy check path/to/project --format json
-uv run archy check path/to/project --config custom.yaml
+archy check path/to/project
+archy check path/to/project --format json
+archy check path/to/project --config custom.yaml
 ```
 
 ### Transitive contracts (`archy contracts`)
@@ -79,9 +83,9 @@ uv run archy check path/to/project --config custom.yaml
 `archy check` only sees direct edges. `archy contracts` wraps [import-linter](https://import-linter.readthedocs.io/) so the same layer story is enforced *transitively* (A → B → C still counts as A reaching C). It is the strictness upgrade for projects whose layers leak through indirect paths.
 
 ```bash
-uv sync --extra contracts        # or: pip install 'archy[contracts]'
-uv run archy contracts path/to/project
-uv run archy contracts path/to/project --format json
+pip install 'archy[contracts]'
+archy contracts path/to/project
+archy contracts path/to/project --format json
 ```
 
 **Config resolution.** `archy contracts` reads, in order:
@@ -97,8 +101,8 @@ Reach for `.importlinter` only when you need contract types `archy.yaml` does no
 Composite of modularity, acyclicity, depth, and equality (geometric mean). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown. These four axes were chosen after surveying ~15 alternatives from the package-metrics literature (Martin's `I`/`A`/`D`, Lakos's NCCD, MacCormack propagation cost, Structure101 fat/tangle, reflexion models, cognitive complexity, hotspots, logical coupling, dead/duplicate-code detection); Martin's `I` and the Stable Dependencies Principle check are also shipped as a per-module diagnostic and an `archy check` rule. See [`docs/RESEARCH_METRICS.md`](docs/RESEARCH_METRICS.md) for the full validation, what was shipped, and what was deferred and why.
 
 ```bash
-uv run archy score path/to/project
-uv run archy score path/to/project --format json
+archy score path/to/project
+archy score path/to/project --format json
 ```
 
 ### Track score over time
@@ -106,9 +110,9 @@ uv run archy score path/to/project --format json
 Persist per-commit scores to `.archy/history.jsonl` and chart the trend.
 
 ```bash
-uv run archy score path/to/project --record
-uv run archy trend path/to/project
-uv run archy trend path/to/project --last 30 --format json
+archy score path/to/project --record
+archy trend path/to/project
+archy trend path/to/project --last 30 --format json
 ```
 
 ### Regression gate
@@ -116,9 +120,9 @@ uv run archy trend path/to/project --last 30 --format json
 Fail if the current score drops more than `--strict-tolerance` (default 0.02) below the most recent recorded run.
 
 ```bash
-uv run archy score path/to/project --strict
-uv run archy score path/to/project --strict --record           # check then record
-uv run archy score path/to/project --strict --strict-tolerance 0.0
+archy score path/to/project --strict
+archy score path/to/project --strict --record           # check then record
+archy score path/to/project --strict --strict-tolerance 0.0
 ```
 
 ### Blast radius
@@ -126,8 +130,8 @@ uv run archy score path/to/project --strict --strict-tolerance 0.0
 List internal modules that transitively depend on a given file. Useful before refactoring or removing a module.
 
 ```bash
-uv run archy impact path/to/project --file app/libs/db.py
-uv run archy impact path/to/project --file app/libs/db.py --file app/services/auth.py --format json
+archy impact path/to/project --file app/libs/db.py
+archy impact path/to/project --file app/libs/db.py --file app/services/auth.py --format json
 ```
 
 ### Snapshot and diff (agent feedback loop)
@@ -135,9 +139,9 @@ uv run archy impact path/to/project --file app/libs/db.py --file app/services/au
 Capture a baseline at the start of an editing session, then diff after edits to see exactly which cycles or layer rules changed. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the full playbook (also available via the MCP server's `loop` prompt).
 
 ```bash
-uv run archy snapshot path/to/project   # writes .archy/baseline.json
+archy snapshot path/to/project   # writes .archy/baseline.json
 # ... edit code ...
-uv run archy diff path/to/project       # score deltas + added/resolved cycles & violations
+archy diff path/to/project       # score deltas + added/resolved cycles & violations
 ```
 
 ### Run as an MCP server
@@ -145,7 +149,7 @@ uv run archy diff path/to/project       # score deltas + added/resolved cycles &
 Stdio transport, so AI agents can call archy directly. See [MCP server](#mcp-server-archy-mcp) below.
 
 ```bash
-uv run archy mcp
+archy mcp
 ```
 
 ## MCP server (`archy mcp`)
@@ -169,7 +173,17 @@ uv run archy mcp
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
-Wire it into Claude Code with this stanza in your config:
+Wire it into Claude Code (or Cursor, Windsurf, OpenCode, any MCP client) with this stanza in your config:
+
+```json
+{
+  "mcpServers": {
+    "archy": { "command": "archy", "args": ["mcp"] }
+  }
+}
+```
+
+If you're running from a checkout instead of an install, use:
 
 ```json
 {
