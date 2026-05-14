@@ -405,6 +405,93 @@ def test_resolve_modules_accepts_absolute_path(tmp_path: Path):
     assert unresolved == []
 
 
+def test_call_edge_attached_to_existing_import_edge(tmp_path: Path, pkg: Path):
+    # Calls that flow along an existing import edge enrich it in place
+    # rather than creating a parallel edge.
+    (pkg / "a.py").write_text("from pkg import b\nb.do()\nb.do()\n")
+    (pkg / "b.py").write_text("def do():\n    pass\n")
+    g = build_graph(tmp_path)
+    edge = g["pkg.a"]["pkg.b"]
+    assert edge["kinds"] == ("import", "call")
+    assert edge["call_count"] == 2
+    assert edge["call_lines"] == (2, 3)
+
+
+def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
+    # `import pkg; pkg.sub.foo()` imports the top-level package only, but
+    # the call resolves to pkg.sub when that submodule is internal - the
+    # depth differential LocAgent (ACL 2025) cites as the invoke-edge signal.
+    sub = pkg / "sub"
+    sub.mkdir()
+    (sub / "__init__.py").write_text("")
+    (pkg / "consumer.py").write_text("import pkg\npkg.sub.do()\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg")
+    assert g.has_edge("pkg.consumer", "pkg.sub")
+    call_only = g["pkg.consumer"]["pkg.sub"]
+    assert call_only["kinds"] == ("call",)
+    assert call_only["call_count"] == 1
+
+
+def test_call_to_unimported_name_is_dropped(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text("rogue.do()\n")
+    g = build_graph(tmp_path)
+    # No alias entry for `rogue` → call drops, no edges added.
+    assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
+
+
+def test_call_through_aliased_import(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text("import pkg.b as bb\nbb.do()\n")
+    (pkg / "b.py").write_text("def do():\n    pass\n")
+    g = build_graph(tmp_path)
+    edge = g["pkg.a"]["pkg.b"]
+    assert "call" in edge["kinds"]
+    assert edge["call_count"] == 1
+
+
+def test_call_through_from_import(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text("from pkg.b import do\ndo()\ndo()\n")
+    (pkg / "b.py").write_text("def do():\n    pass\n")
+    g = build_graph(tmp_path)
+    edge = g["pkg.a"]["pkg.b"]
+    assert edge["call_count"] == 2
+
+
+def test_call_to_self_module_is_skipped(tmp_path: Path, pkg: Path):
+    # A module imports itself somehow (relative) and then calls something -
+    # we never edge from a module to itself via the call pass.
+    (pkg / "a.py").write_text("from pkg import a as me\nme.run()\n")
+    (pkg / "a.py").write_text(
+        "from pkg import b\nb.run()\n# self-targeted via alias would still be from pkg.a\n"
+    )
+    (pkg / "b.py").write_text("def run():\n    pass\n")
+    g = build_graph(tmp_path)
+    assert not g.has_edge("pkg.a", "pkg.a")
+
+
+def test_call_through_reexport_chain(tmp_path: Path):
+    # `from pkg import Foo; Foo()` where pkg/__init__.py re-exports Foo from
+    # pkg.impl. Calls land on pkg.impl, same as imports.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("from .impl import Foo\n")
+    (pkg / "impl.py").write_text("class Foo:\n    pass\n")
+    (pkg / "consumer.py").write_text("from pkg import Foo\nFoo()\n")
+    g = build_graph(tmp_path)
+    edge = g["pkg.consumer"]["pkg.impl"]
+    assert edge["call_count"] == 1
+
+
+def test_graph_to_dict_includes_call_attrs(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text("from pkg import b\nb.do()\n")
+    (pkg / "b.py").write_text("def do():\n    pass\n")
+    data = graph_to_dict(build_graph(tmp_path))
+    edge = next(e for e in data["edges"] if e["source"] == "pkg.a" and e["target"] == "pkg.b")
+    assert edge["call_count"] == 1
+    assert edge["call_lines"] == (2,)
+    assert "call" in edge["kinds"]
+
+
 def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()

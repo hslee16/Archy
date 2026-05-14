@@ -24,6 +24,75 @@ _IMPORT_QUERY_SRC = """
 
 _IMPORT_QUERY = Query(PY_LANGUAGE, _IMPORT_QUERY_SRC)
 
+_CALL_QUERY = Query(PY_LANGUAGE, "(call) @call")
+
+# Heads we never want to attribute as cross-module calls. `self`/`cls` are
+# method dispatch within the same class; `super` is parent-class dispatch.
+# Common builtins keep static-resolution noise out of the call graph.
+_SKIP_CALL_HEADS = frozenset(
+    {
+        "self",
+        "cls",
+        "super",
+        "print",
+        "len",
+        "range",
+        "isinstance",
+        "issubclass",
+        "type",
+        "str",
+        "int",
+        "float",
+        "bool",
+        "list",
+        "tuple",
+        "dict",
+        "set",
+        "frozenset",
+        "bytes",
+        "bytearray",
+        "iter",
+        "next",
+        "getattr",
+        "setattr",
+        "hasattr",
+        "delattr",
+        "callable",
+        "id",
+        "hash",
+        "repr",
+        "open",
+        "zip",
+        "map",
+        "filter",
+        "sorted",
+        "reversed",
+        "enumerate",
+        "min",
+        "max",
+        "sum",
+        "abs",
+        "round",
+        "any",
+        "all",
+        "vars",
+        "dir",
+        "object",
+        "Exception",
+        "ValueError",
+        "TypeError",
+        "KeyError",
+        "AttributeError",
+        "RuntimeError",
+        "StopIteration",
+        "NotImplementedError",
+        "ImportError",
+        "IndexError",
+        "OSError",
+        "FileNotFoundError",
+    }
+)
+
 
 class ImportRef(BaseModel):
     """A single import statement extracted from a source file.
@@ -47,11 +116,30 @@ class ImportRef(BaseModel):
     imported_aliases: tuple[str | None, ...] = ()
 
 
+class CallRef(BaseModel):
+    """A single call site `f(...)` or `a.b.c(...)` extracted from a source file.
+
+    `head` is the leftmost identifier of the callee expression (the binding
+    we look up in the file's import alias table). `chain` is the remaining
+    attribute path after the head: `mod.sub.foo()` → head=`mod`, chain=
+    `('sub','foo')`. Calls whose function expression doesn't start with a
+    bare identifier (subscript, lambda, nested call result, etc.) are
+    dropped at parse time and never appear here. The line is 1-indexed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    head: str
+    chain: tuple[str, ...]
+    line: int
+
+
 class ParseResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     imports: tuple[ImportRef, ...]
     has_errors: bool
+    calls: tuple[CallRef, ...] = ()
 
 
 def parse_file(path: Path) -> ParseResult:
@@ -71,24 +159,48 @@ def parse_source(source: bytes) -> ParseResult:
         imports.extend(_handle_from_import(node, source))
 
     imports.sort(key=lambda ref: (ref.line, ref.module))
-    return ParseResult(imports=tuple(imports), has_errors=tree.root_node.has_error)
+
+    call_cursor = QueryCursor(_CALL_QUERY)
+    call_captures = call_cursor.captures(tree.root_node)
+    calls: list[CallRef] = []
+    for node in call_captures.get("call", []):
+        ref = _handle_call(node, source)
+        if ref is not None:
+            calls.append(ref)
+    calls.sort(key=lambda ref: (ref.line, ref.head, ref.chain))
+
+    return ParseResult(
+        imports=tuple(imports),
+        has_errors=tree.root_node.has_error,
+        calls=tuple(calls),
+    )
 
 
 def _handle_import(node, source: bytes) -> list[ImportRef]:
-    """Handle `import a`, `import a.b`, `import a as x`, `import a, b`."""
+    """Handle `import a`, `import a.b`, `import a as x`, `import a, b`.
+
+    For aliased plain imports (`import X.Y as Z`), the alias is recorded
+    in `imported_aliases` even though `imported_names` is empty - this is
+    how call-graph resolution learns the local binding (`Z` here) maps to
+    the deepest module (`X.Y`). Non-aliased plain imports leave both
+    tuples empty; consumers infer the top-level binding from `module`.
+    """
     refs: list[ImportRef] = []
     line = node.start_point[0] + 1
     for child in node.children_by_field_name("name"):
         module = _extract_module_name(child, source)
-        if module:
-            refs.append(
-                ImportRef(
-                    module=module,
-                    imported_names=(),
-                    is_relative=False,
-                    line=line,
-                )
+        if not module:
+            continue
+        alias = _extract_alias(child, source)
+        refs.append(
+            ImportRef(
+                module=module,
+                imported_names=(),
+                is_relative=False,
+                line=line,
+                imported_aliases=(alias,) if alias else (),
             )
+        )
     return refs
 
 
@@ -140,3 +252,38 @@ def _extract_module_name(node, source: bytes) -> str:
 
 def _node_text(node, source: bytes) -> str:
     return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
+
+
+def _handle_call(node, source: bytes) -> CallRef | None:
+    """Extract the head identifier and attribute chain from a `(call)` node.
+
+    Returns None for callees whose left-hand side is not a bare identifier
+    (subscript indexing, lambda invocation, nested call result, etc.) and
+    for heads we deliberately skip (self/cls/super, common builtins).
+    """
+    function = node.child_by_field_name("function")
+    if function is None:
+        return None
+    chain: list[str] = []
+    head_node = function
+    # Walk attribute chains right-to-left: outer node is (attribute
+    # object=<inner> attribute=<name>). Continue until we hit a bare
+    # identifier (the head) or a non-attribute non-identifier (skip).
+    while head_node.type == "attribute":
+        attr = head_node.child_by_field_name("attribute")
+        obj = head_node.child_by_field_name("object")
+        if attr is None or obj is None:
+            return None
+        chain.append(_node_text(attr, source))
+        head_node = obj
+    if head_node.type != "identifier":
+        return None
+    head_text = _node_text(head_node, source)
+    if head_text in _SKIP_CALL_HEADS:
+        return None
+    chain.reverse()
+    return CallRef(
+        head=head_text,
+        chain=tuple(chain),
+        line=node.start_point[0] + 1,
+    )

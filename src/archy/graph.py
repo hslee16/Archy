@@ -14,7 +14,7 @@ import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
 from archy.instability import compute_instability
-from archy.parser import ImportRef, ParseResult, parse_file
+from archy.parser import CallRef, ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 
@@ -90,6 +90,27 @@ def build_graph(
                 if target not in graph:
                     graph.add_node(target, external=True)
                 _add_or_extend_edge(graph, m.qualname, target, ref)
+
+    # Second pass: call edges. Calls only become an edge if their leftmost
+    # identifier resolves through the source module's import alias table, so
+    # we depend on the import pass having populated qualname_set + reexport
+    # routing first. Call edges land on the longest internal qualname prefix
+    # of (alias_target + chain), which can be deeper than the import edge
+    # (e.g. `import pkg; pkg.sub.foo()` adds a call edge to pkg.sub even
+    # when imports only edged to pkg) - that depth differential is the
+    # whole point of LocAgent's invoke-edges signal.
+    for m in modules:
+        result = parse_results[m.qualname]
+        if not result.calls:
+            continue
+        alias_table = _build_alias_table(result.imports, m, qualname_set, reexport_maps)
+        for call in result.calls:
+            target = _resolve_call_target(call, alias_table, qualname_set)
+            if target is None or target == m.qualname:
+                continue
+            if target not in graph:
+                graph.add_node(target, external=True)
+            _add_or_extend_call_edge(graph, m.qualname, target, call)
 
     graph.graph["root"] = str(root)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
@@ -325,12 +346,7 @@ def _expand_with_imported_names(
     # External path. Try the longest internal prefix first (e.g. an external
     # path that happens to share a prefix with an internal package). If no
     # internal prefix matches, attribute the edge to the top-level package.
-    parts = base.split(".")
-    for end in range(len(parts), 0, -1):
-        candidate = ".".join(parts[:end])
-        if candidate in internal_qualnames:
-            return [candidate]
-    return [parts[0]]
+    return [_external_target(base, internal_qualnames)]
 
 
 def _resolve_relative_base(
@@ -438,5 +454,152 @@ def _add_or_extend_edge(
     if graph.has_edge(src, dst):
         data = graph[src][dst]
         data["lines"] = (*data.get("lines", ()), ref.line)
+        kinds = data.get("kinds") or ("import",)
+        if "import" not in kinds:
+            data["kinds"] = (*kinds, "import")
     else:
-        graph.add_edge(src, dst, is_relative=ref.is_relative, lines=(ref.line,))
+        graph.add_edge(
+            src,
+            dst,
+            is_relative=ref.is_relative,
+            lines=(ref.line,),
+            kinds=("import",),
+        )
+
+
+def _add_or_extend_call_edge(
+    graph: nx.DiGraph,
+    src: str,
+    dst: str,
+    call: CallRef,
+) -> None:
+    """Attach call-site data to an edge, creating it if no import edge exists.
+
+    Call-only edges (kinds=('call',)) appear when calls resolve to a deeper
+    submodule than the import edge - e.g., `import pkg; pkg.sub.foo()`
+    creates a call edge to pkg.sub on top of the import edge to pkg.
+    """
+    if graph.has_edge(src, dst):
+        data = graph[src][dst]
+        data["call_lines"] = (*data.get("call_lines", ()), call.line)
+        data["call_count"] = data.get("call_count", 0) + 1
+        kinds = data.get("kinds") or ("import",)
+        if "call" not in kinds:
+            data["kinds"] = (*kinds, "call")
+    else:
+        graph.add_edge(
+            src,
+            dst,
+            is_relative=False,
+            lines=(),
+            kinds=("call",),
+            call_lines=(call.line,),
+            call_count=1,
+        )
+
+
+def _build_alias_table(
+    imports: tuple[ImportRef, ...],
+    source_module: Module,
+    internal_qualnames: set[str],
+    reexport_maps: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """Map each name a source module has in scope after its imports to its target qualname.
+
+    Mirrors `_expand_with_imported_names`'s routing decisions so call
+    resolution and import resolution agree on where each name comes from.
+    `from X import a, b` populates one entry per imported name; `import
+    X.Y` binds only the top-level name `X` per Python's actual import
+    semantics. Function-local imports are merged into the module-level
+    table - this slightly over-resolves (an inner-scope binding can leak
+    to outer call sites in our static view), matching the import graph's
+    existing behavior on function-local imports.
+    """
+    table: dict[str, str] = {}
+    for ref in imports:
+        if ref.is_relative:
+            base = _resolve_relative_base(ref.module, source_module)
+            if base is None:
+                continue
+        else:
+            base = ref.module
+        if ref.imported_names:
+            base_internal = base in internal_qualnames
+            reexports = reexport_maps.get(base, {}) if base_internal else {}
+            for i, name in enumerate(ref.imported_names):
+                alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
+                local = alias or name
+                if not local:
+                    continue
+                if base_internal:
+                    submodule = f"{base}.{name}"
+                    if submodule in internal_qualnames:
+                        table[local] = submodule
+                    elif name in reexports:
+                        table[local] = reexports[name]
+                    else:
+                        table[local] = base
+                else:
+                    table[local] = _external_target(base, internal_qualnames)
+        else:
+            alias = ref.imported_aliases[0] if ref.imported_aliases else None
+            if alias:
+                # `import X.Y as Z` binds Z to the deepest module (X.Y), unlike
+                # bare `import X.Y` which only binds the top-level name X --
+                # the alias short-circuits Python's attribute-walk semantics.
+                if base in internal_qualnames:
+                    table[alias] = base
+                else:
+                    table[alias] = _external_target(base, internal_qualnames)
+            else:
+                # `import X.Y` binds only the top-level name `X` per Python's
+                # actual import semantics (X.Y is accessed via attribute on X).
+                top = base.split(".")[0]
+                if not top:
+                    continue
+                if top in internal_qualnames:
+                    table[top] = top
+                else:
+                    table[top] = _external_target(top, internal_qualnames)
+    return table
+
+
+def _external_target(base: str, internal_qualnames: set[str]) -> str:
+    """Collapse an external dotted path to the longest internal prefix or top-level pkg."""
+    parts = base.split(".")
+    for end in range(len(parts), 0, -1):
+        candidate = ".".join(parts[:end])
+        if candidate in internal_qualnames:
+            return candidate
+    return parts[0]
+
+
+def _resolve_call_target(
+    call: CallRef,
+    alias_table: dict[str, str],
+    internal_qualnames: set[str],
+) -> str | None:
+    """Resolve a CallRef to the target module qualname, or None if unresolvable.
+
+    The leftmost identifier (`call.head`) must appear in the alias table -
+    we don't try to follow class-attribute or assignment chains. The
+    chain segments before the trailing function name are then walked
+    against `internal_qualnames` to find the longest internal prefix
+    (`import pkg; pkg.sub.foo()` resolves to `pkg.sub` rather than the
+    import-edge target `pkg`). When no deeper internal match exists we
+    fall back to the alias-table target, which is already a node in the
+    graph (it was the import target).
+    """
+    base = alias_table.get(call.head)
+    if base is None:
+        return None
+    base_parts = base.split(".")
+    # The trailing chain segment is the function name being called; a module
+    # itself isn't callable, so don't extend the candidate qualname through it.
+    chain_for_module = list(call.chain[:-1]) if call.chain else []
+    extended = base_parts + chain_for_module
+    for end in range(len(extended), len(base_parts), -1):
+        candidate = ".".join(extended[:end])
+        if candidate in internal_qualnames:
+            return candidate
+    return base

@@ -739,12 +739,126 @@ archy's value is the integrated graph + score + governance surface.
 | -------------------------- | ------------------------------------------- | --------------------------------------------------------------- |
 | [import-linter][il]        | Module-level architecture rules              | Closest cousin. archy.yaml has Layers; adding Forbidden + Independence (section 10) closes the gap. |
 | [pydeps][pydeps-doc]       | Module-level visualization                   | archy's `archy graph` is the same scope. archy adds scoring, governance, MCP. |
-| [pyan][pyan-repo]          | Function-level call graph                    | Matches archy's planned call-graph PR ([`FUTURE.md`](FUTURE.md)). |
+| [pyan][pyan-repo]          | Function-level call graph                    | Adjacent to archy's v0.16 call-graph diagnostic (section 16). pyan tracks function-level invoke edges with heuristic class-attribute resolution; archy's call extraction is module-level and import-alias-only, accepting lower coverage for a lower false-positive rate. |
 | [radon][radon-repo]        | Per-function CC + maintainability index      | archy's planned CC pass would replicate this. Worth reading radon's AST visitor for inspiration. |
 | [xenon][xenon-repo]        | radon-based CI gate                          | archy's `--strict` gate is a generalization across multiple metrics, not just CC. |
 | [vulture][vulture-fp]      | Dead-code detection                          | False-positive rate (section 12) makes this hard to beat without runtime-coverage input. |
 | [pyright][pyright-doc] / [mypy][mypy-doc] | Type checking                | Type-hint coverage (section 13) builds on these without re-implementing them. |
 | [ruff][ruff-doc]           | Lint + format                                | Orthogonal - ruff is rule-based on individual files; archy reasons about the dependency graph. |
+
+---
+
+## 16. Call edges (LocAgent invoke edges)
+
+archy v0.16.0 ships call edges as a second edge type, attached as
+per-edge `kinds: tuple[str,...]`, `call_lines: tuple[int,...]`, and
+`call_count: int` attributes on the same `nx.DiGraph` that already
+carries the import edges. Call-only edges (kinds=('call',)) appear
+when calls resolve to a deeper internal submodule than the import
+itself - `import pkg; pkg.sub.foo()` adds a call edge to `pkg.sub`
+on top of the existing import edge to `pkg`. The motivation is
+LocAgent's (ACL 2025, [aclanthology:2025.acl-long.426][locagent])
+ablation finding that invoke edges contribute *more* to LLM-agent
+code-localization accuracy than imports, framed in
+[`RESEARCH_METRICS.md §14c.2`](RESEARCH_METRICS.md) as the missing
+edge type with the strongest measured contribution.
+
+**Resolution strategy.** Static. Tree-sitter `(call) @call` query
+extracts the leftmost identifier of each call expression plus the
+attribute chain (`mod.sub.foo()` → head=`mod`, chain=`('sub','foo')`).
+The head is looked up in a per-file alias table derived from the
+file's import statements; if the lookup succeeds, the chain segments
+(excluding the trailing function name, which is never itself a
+module) are walked against the internal-qualname set to find the
+longest internal prefix. `self`/`cls`/`super` calls and a small list
+of common builtins are skipped at extraction time.
+
+**Empirical orthogonality.** 27-project bench captured 2026-05-14,
+SHAs pinned in [`bench/projects.yaml`](../bench/projects.yaml):
+
+| signal           |   r vs calls_per_edge |
+| ---------------- | --------------------: |
+| modularity       |                +0.148 |
+| acyclicity       |                +0.208 |
+| depth            |                -0.062 |
+| equality         |                +0.212 |
+| propagation_cost |                -0.229 |
+
+All five correlations sit well below the OECD `|r| > 0.7` redundancy
+threshold (max absolute is 0.229). Call density is the most
+orthogonal new signal archy has added since v0.2.0: every existing
+axis pair sits at moderate-or-stronger correlation (median `|r| ≈
+0.45`), while every pair *involving* `calls_per_edge` sits at `|r| ≤
+0.23`. This makes the call signal a strong candidate for promotion
+to a score axis in a future release, either as call-weighted Newman
+Q (replacing the unweighted modularity computation) or as a new
+fifth axis based on call-density / call-concentration.
+
+**Raw distribution.** Calls-per-edge across the bench:
+
+| project      | edges | call_edges | total_calls | calls/edge |
+| ------------ | ----: | ---------: | ----------: | ---------: |
+| numpy        |  1342 |        988 |       52044 |      52.68 |
+| pygments     |   834 |        331 |        5926 |      17.90 |
+| mkdocs       |   177 |        119 |        1425 |      11.97 |
+| mypy         |  1105 |        716 |        6872 |       9.60 |
+| scikit-learn |  3866 |       3083 |       25869 |       8.39 |
+| sqlalchemy   |  2550 |       1085 |        7970 |       7.35 |
+| datasette    |   180 |        111 |         672 |       6.05 |
+| fastapi      |   114 |         51 |         272 |       5.33 |
+| click        |    60 |         38 |         167 |       4.39 |
+| httpx        |    87 |         36 |         155 |       4.31 |
+| requests     |    73 |         41 |         174 |       4.24 |
+| anyio        |   158 |         78 |         306 |       3.92 |
+| setuptools   |   592 |        400 |        1520 |       3.80 |
+| aiohttp      |   312 |        107 |         403 |       3.77 |
+| dagster      |  6273 |       2872 |       10540 |       3.67 |
+| pydantic     |   496 |        264 |         959 |       3.63 |
+| botocore     |   257 |        207 |         714 |       3.45 |
+| ansible      |  2145 |       1395 |        4448 |       3.19 |
+| django       |  3274 |       1919 |        5969 |       3.11 |
+| pytest       |   374 |        193 |         549 |       2.84 |
+| rich         |   421 |        322 |         886 |       2.75 |
+| archy        |    30 |         27 |          74 |       2.74 |
+| msgspec      |    20 |          9 |          24 |       2.67 |
+| boto3        |    71 |         57 |         142 |       2.49 |
+| flask        |    94 |         36 |          88 |       2.44 |
+| scrapy       |   858 |        354 |         762 |       2.15 |
+| starlette    |   114 |         60 |         116 |       1.93 |
+
+Two qualitative observations:
+
+1. **Scientific Python tops the distribution.** numpy at 52.68
+   calls/edge is an outlier driven by heavy intra-package function
+   dispatch (every public ndarray method routes through the same
+   handful of internal modules). scikit-learn and mkdocs sit in the
+   8–12 band for the same reason. The "shape" of these codebases -
+   small core, broad call surface against it - is exactly what the
+   call signal captures and the import signal misses.
+2. **Plugin/registry shapes bottom the distribution.** starlette,
+   scrapy, flask, and boto3 sit at < 3 calls/edge: their internal
+   structure is mostly attribute access on auto-generated or
+   registry-built objects rather than direct function calls. The
+   import graph picks up the structural coupling; calls add little
+   on top.
+
+**Known limitations.** Call resolution is alias-only: no class /
+attribute-assignment tracking. `obj = SomeClass(); obj.method()`
+resolves the call to the alias target of `obj`, which is only set
+if `obj` came from an import (rare). Function returns (`f().g()`)
+drop the outer call. Decorator-renamed callables resolve to the
+decorator's target, not the decorated function's defining module.
+These are accepted false negatives, matching LocAgent's static
+extraction approach; the alternative is pyan-style heuristics with
+the false-positive rate they imply.
+
+**Edge-count shifts on upgrade.** A small fraction of projects show
+modest edge-count growth in the v0.16 bench vs v0.15 because
+call-only edges now appear (e.g., numpy 1192 → 1342, +13%). The
+score numbers move by ≤0.01 on every project; the qualitative
+ordering is unchanged. Trend histories in `.archy/history.jsonl`
+remain comparable to within tolerance, but the cleanest signal is
+a `--record` checkpoint immediately after the upgrade.
 
 ---
 
@@ -768,6 +882,7 @@ The "Role" column distinguishes:
 | Candidate                                 | Signal | Cost   | Role                | Validation       | Recommend |
 | ----------------------------------------- | ------ | ------ | ------------------- | ---------------- | --------- |
 | Tangle ratio                              | High   | Trivial| **Shipped** (acyclicity = 1 - tangle_ratio) | ✓ shipped: `score.compute_acyclicity` | **Shipped** |
+| Call edges (LocAgent invoke edges)        | High   | Medium | **Shipped** as diagnostic (kinds/call_lines/call_count per edge); follow-up promotion to score axis pending design choice | ✓ orthogonal: max `\|r\| = 0.229` against 5 existing signals on 27-project bench | **Shipped (diagnostic)** |
 | Reflexion: Forbidden + Independence       | High   | Low    | Check rule          | -                | **Yes**   |
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
 | Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |
