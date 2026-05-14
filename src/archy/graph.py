@@ -13,6 +13,7 @@ from pathlib import Path
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from archy.complexity import FunctionComplexity
 from archy.instability import compute_instability
 from archy.parser import CallRef, ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
@@ -68,16 +69,18 @@ def build_graph(
     modules = _discover_modules(root, ignored, tuple(extra_roots))
     qualname_set = {m.qualname for m in modules}
 
+    parse_results: dict[str, ParseResult] = {m.qualname: parse_file(m.path) for m in modules}
+
     graph: nx.DiGraph = nx.DiGraph()
     for m in modules:
+        cc_aggregates = _cc_aggregates(parse_results[m.qualname].functions)
         graph.add_node(
             m.qualname,
             path=str(m.path),
             is_package=m.is_package,
             external=False,
+            **cc_aggregates,
         )
-
-    parse_results: dict[str, ParseResult] = {m.qualname: parse_file(m.path) for m in modules}
     reexport_maps = _build_reexport_maps(modules, parse_results, qualname_set)
 
     parse_errors: list[str] = []
@@ -603,3 +606,22 @@ def _resolve_call_target(
         if candidate in internal_qualnames:
             return candidate
     return base
+
+
+def _cc_aggregates(functions: tuple[FunctionComplexity, ...]) -> dict[str, int | float]:
+    """Per-module CC roll-up: function count, sum, max, and mean.
+
+    Empty / no-function modules (e.g. plain `__init__.py`, type-only stub
+    modules) get function_count=0 and the rest 0; downstream consumers
+    treat 0 as "no signal" rather than "perfectly simple."
+    """
+    if not functions:
+        return {"function_count": 0, "cc_sum": 0, "cc_max": 0, "cc_mean": 0.0}
+    counts = [f.cyclomatic for f in functions]
+    total = sum(counts)
+    return {
+        "function_count": len(counts),
+        "cc_sum": total,
+        "cc_max": max(counts),
+        "cc_mean": total / len(counts),
+    }

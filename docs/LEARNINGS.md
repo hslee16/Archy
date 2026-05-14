@@ -143,6 +143,18 @@ Three things that shaped the implementation:
 
 The score number didn't change in v0.16 (call diagnostics aren't folded in), but absolute edge counts moved on some projects (e.g., numpy 1192 → 1342, +13%) because call-only edges to deeper submodules are now created. That flows into modularity / equality at the second decimal place. Pre-existing trend histories remain comparable within the existing 0.02 tolerance, but the cleanest practice is `archy score --record` once on each project after the upgrade.
 
+## v0.17.0 - per-function cyclomatic complexity (diagnostic)
+
+McCabe CC ships as a diagnostic in v0.17. The walker in `src/archy/complexity.py` counts branch nodes (if/elif/for/while/except/case/conditional_expression/boolean_operator/comprehension-clauses) over the same tree-sitter parse the import-graph build already uses, so the AST cost is amortized. Per-function rows roll up to per-module aggregates (`function_count`, `cc_sum`, `cc_max`, `cc_mean`) on internal graph nodes and to project-wide aggregates on `archy score`'s `inputs`. Same diagnostic-first precedent as v0.16 calls and v0.13.3 propagation cost: no score-axis change in this release.
+
+Three things shaped the implementation:
+
+1. **The tree-sitter walk is cheap, but only if it shares the parse.** First cut had `complexity.compute_function_complexity(source)` parsing each file independently. Refactor: expose `walk_functions(root_node, source)` and call it from `parser.parse_source` after the import / call extractions, so one `Parser.parse()` per file feeds all three walks. The integration test in `tests/test_graph.py` covers the wiring; the unit tests in `tests/test_complexity.py` still call the bytes-in convenience entry point.
+2. **Nested defs and class bodies need separate counters.** A naive descendant walk inflates outer-function CC with branches inside `def inner(): ...` or class-scope `if`. Skip both during the branch-counting BFS (each inner def gets its own FunctionComplexity row), and recurse into class bodies for method discovery only - branches at class top-level (`if SETTING: x = 1` patterns at module / class scope) belong to no function. The test `test_class_body_top_level_branches_do_not_count_for_any_function` pins this.
+3. **The empirical headline is orthogonality, not absolute numbers.** On the 27-project bench, `cc_mean` lands at max `|r| = 0.197` against the four score axes plus propagation cost plus calls-per-edge - more orthogonal than v0.16's call density (max 0.229) and substantially more so than any existing axis pair (median `|r| ~ 0.45`). That makes CC the strongest candidate yet for score-axis promotion. Detailed empirics in [`RESEARCH_METRICS.md` §17](RESEARCH_METRICS.md); the promotion-shape decision (5th axis vs Gini-of-CC replacing the current out-degree-Gini equality axis) is the open follow-up.
+
+Cognitive complexity (Sonar / Campbell 2017) didn't ride along despite the original "free with CC" framing - the Sonar definition needs nesting-depth bookkeeping that doesn't fit the single-pass BFS. Type-hint coverage same status. Both are open follow-ups using the same `function_definition` AST surface; the call-graph PR established the precedent that diagnostic-first means one signal at a time so the bench can isolate its contribution.
+
 ## Competitive landscape (May 2026 survey)
 
 Sentrux was the inspiration and is treated as a peer throughout this document, but it is not the only adjacent tool. A May 2026 web survey grouped the field into five buckets. Recording it here so the design rationale doesn't drift toward "us vs. sentrux" when the actual landscape is wider.

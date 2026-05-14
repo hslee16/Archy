@@ -49,6 +49,17 @@ class ScoreInputs(BaseModel):
     call_edge_count: int = 0
     total_calls: int = 0
     calls_per_edge: float = 0.0
+    # Cyclomatic complexity diagnostics (v0.17, diagnostic). Per-function
+    # CC aggregated to the project level. Not folded into the four-axis
+    # geometric mean: ships diagnostic-first, same precedent as call edges
+    # (v0.16) and propagation cost (v0.13.3). The long-term target for the
+    # equality axis is gini(per_function_cc) instead of gini(out_degree);
+    # the underlying data lives here so a future promotion has empirical
+    # ground to stand on.
+    function_count: int = 0
+    cc_total: int = 0
+    cc_max: int = 0
+    cc_mean: float = 0.0
 
 
 class Score(BaseModel):
@@ -69,6 +80,7 @@ def compute_score(graph: nx.DiGraph) -> Score:
     eq, raw_gini = compute_equality(graph)
     propagation_cost, _ = compute_propagation_cost(graph)
     call_edge_count, total_calls, calls_per_edge = _call_stats(graph)
+    function_count, cc_total, cc_max, cc_mean = _cc_stats(graph)
     overall = (mod * acy * dep * eq) ** 0.25
     return Score(
         overall=overall,
@@ -89,8 +101,37 @@ def compute_score(graph: nx.DiGraph) -> Score:
             call_edge_count=call_edge_count,
             total_calls=total_calls,
             calls_per_edge=calls_per_edge,
+            function_count=function_count,
+            cc_total=cc_total,
+            cc_max=cc_max,
+            cc_mean=cc_mean,
         ),
     )
+
+
+def _cc_stats(graph: nx.DiGraph) -> tuple[int, int, int, float]:
+    """Project-wide CC roll-up: (function_count, cc_total, cc_max, cc_mean).
+
+    Computed off the per-node `function_count` / `cc_sum` / `cc_max`
+    attributes attached by `build_graph` so we don't re-parse anything.
+    External modules have no CC data; they're skipped via the missing-key
+    default rather than a node-type check, which keeps subgraph callers
+    (e.g. archy_graph_focus) honest.
+    """
+    n = 0
+    total = 0
+    max_cc = 0
+    for _, data in graph.nodes(data=True):
+        cnt = data.get("function_count", 0)
+        if cnt == 0:
+            continue
+        n += cnt
+        total += data.get("cc_sum", 0)
+        node_max = data.get("cc_max", 0)
+        if node_max > max_cc:
+            max_cc = node_max
+    mean = total / n if n else 0.0
+    return n, total, max_cc, mean
 
 
 def _call_stats(graph: nx.DiGraph) -> tuple[int, int, float]:

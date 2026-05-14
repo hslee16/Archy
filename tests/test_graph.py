@@ -436,7 +436,8 @@ def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
 def test_call_to_unimported_name_is_dropped(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("rogue.do()\n")
     g = build_graph(tmp_path)
-    # No alias entry for `rogue` → call drops, no edges added.
+    # Unresolved heads must not invent edges; doing so would let
+    # locals/runtime-injected names corrupt the coupling signal.
     assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
 
 
@@ -457,21 +458,11 @@ def test_call_through_from_import(tmp_path: Path, pkg: Path):
     assert edge["call_count"] == 2
 
 
-def test_call_to_self_module_is_skipped(tmp_path: Path, pkg: Path):
-    # A module imports itself somehow (relative) and then calls something -
-    # we never edge from a module to itself via the call pass.
-    (pkg / "a.py").write_text("from pkg import a as me\nme.run()\n")
-    (pkg / "a.py").write_text(
-        "from pkg import b\nb.run()\n# self-targeted via alias would still be from pkg.a\n"
-    )
-    (pkg / "b.py").write_text("def run():\n    pass\n")
-    g = build_graph(tmp_path)
-    assert not g.has_edge("pkg.a", "pkg.a")
-
-
 def test_call_through_reexport_chain(tmp_path: Path):
-    # `from pkg import Foo; Foo()` where pkg/__init__.py re-exports Foo from
-    # pkg.impl. Calls land on pkg.impl, same as imports.
+    # Re-exports must route calls to the canonical source module the same
+    # way imports do; landing them on the re-exporting package instead
+    # would inflate that package's coupling metrics with traffic that
+    # logically belongs elsewhere.
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("from .impl import Foo\n")
@@ -490,6 +481,30 @@ def test_graph_to_dict_includes_call_attrs(tmp_path: Path, pkg: Path):
     assert edge["call_count"] == 1
     assert edge["call_lines"] == (2,)
     assert "call" in edge["kinds"]
+
+
+def test_cc_aggregates_on_internal_nodes(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text(
+        "def f(x):\n    if x:\n        return 1\n    return 0\ndef g():\n    return 42\n"
+    )
+    (pkg / "empty.py").write_text("")
+    g = build_graph(tmp_path)
+    a = g.nodes["pkg.a"]
+    assert a["function_count"] == 2
+    assert a["cc_sum"] == 3
+    assert a["cc_max"] == 2
+    assert a["cc_mean"] == 1.5
+    empty = g.nodes["pkg.empty"]
+    assert empty["function_count"] == 0
+    assert empty["cc_sum"] == 0
+
+
+def test_cc_attrs_appear_in_graph_to_dict(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text("def f(x):\n    return x and x\n")
+    data = graph_to_dict(build_graph(tmp_path))
+    by_id = {n["id"]: n for n in data["nodes"]}
+    assert by_id["pkg.a"]["function_count"] == 1
+    assert by_id["pkg.a"]["cc_max"] == 2
 
 
 def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path):

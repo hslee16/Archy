@@ -565,6 +565,10 @@ def _score_to_dict(s: Score) -> dict:
             "call_edge_count": s.inputs.call_edge_count,
             "total_calls": s.inputs.total_calls,
             "calls_per_edge": s.inputs.calls_per_edge,
+            "function_count": s.inputs.function_count,
+            "cc_total": s.inputs.cc_total,
+            "cc_max": s.inputs.cc_max,
+            "cc_mean": s.inputs.cc_mean,
         },
     }
 
@@ -583,6 +587,9 @@ def _score_to_text(s: Score) -> str:
         f"(diagnostic, not in score; MacCormack reverse-reach fraction)",
         f"# calls: {s.inputs.total_calls} resolved across {s.inputs.call_edge_count} edge(s), "
         f"{s.inputs.calls_per_edge:.2f}/edge  (diagnostic, not in score)",
+        f"# cc: {s.inputs.function_count} functions, "
+        f"mean={s.inputs.cc_mean:.2f}, max={s.inputs.cc_max}  "
+        f"(diagnostic, not in score; per-function McCabe)",
     ]
     return "\n".join(lines)
 

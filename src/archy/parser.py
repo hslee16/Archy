@@ -12,6 +12,8 @@ import tree_sitter_python as tsp
 from pydantic import BaseModel, ConfigDict
 from tree_sitter import Language, Parser, Query, QueryCursor
 
+from archy.complexity import FunctionComplexity, walk_functions
+
 PY_LANGUAGE = Language(tsp.language())
 
 # We capture each import statement as a whole, then walk its fields. This is
@@ -140,6 +142,7 @@ class ParseResult(BaseModel):
     imports: tuple[ImportRef, ...]
     has_errors: bool
     calls: tuple[CallRef, ...] = ()
+    functions: tuple[FunctionComplexity, ...] = ()
 
 
 def parse_file(path: Path) -> ParseResult:
@@ -169,10 +172,13 @@ def parse_source(source: bytes) -> ParseResult:
             calls.append(ref)
     calls.sort(key=lambda ref: (ref.line, ref.head, ref.chain))
 
+    functions = walk_functions(tree.root_node, source)
+
     return ParseResult(
         imports=tuple(imports),
         has_errors=tree.root_node.has_error,
         calls=tuple(calls),
+        functions=functions,
     )
 
 

@@ -452,6 +452,20 @@ deliberate version boundary along with a SCORING.md band refresh.
 Detailed empirics in
 [`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).
 
+**Cyclomatic complexity (v0.17.0).** Per-function McCabe CC ships as
+a *diagnostic only*: per-module `function_count` / `cc_sum` / `cc_max`
+/ `cc_mean` on every internal graph node, plus project-wide aggregates
+on `archy score`'s `inputs`. Not folded into the geometric mean. The
+27-project benchmark shows `cc_mean` is the most orthogonal signal
+archy has ever measured: max `|r| = 0.197` against modularity,
+acyclicity, depth, equality, propagation_cost, and calls_per_edge.
+This makes CC the strongest candidate to date for score-axis
+promotion - either as a new 5th axis (`1 - normalized_cc_mean`) or
+as a redesign of the equality axis to use `gini(per_function_cc)`
+instead of `gini(out_degree)`, the long-term target the Equality
+section above already flags. Detailed empirics in
+[`docs/RESEARCH_METRICS.md` §17](RESEARCH_METRICS.md).
+
 ## References
 
 - Sentrux quality-signal design (the model archy follows): [sentrux/docs/quality-signal-design.md][sentrux-design]

@@ -227,3 +227,29 @@ def test_compute_score_all_components_in_unit_interval():
     for value in (s.overall, s.modularity, s.acyclicity, s.depth, s.equality):
         assert 0.0 <= value <= 1.0
         assert math.isfinite(value)
+
+
+def test_cc_aggregates_roll_up_from_node_attrs():
+    # Synthesize a graph with explicit per-node CC attributes — the score
+    # roll-up reads these without re-parsing anything, so a unit test on
+    # ScoreInputs can verify the math without going through tree-sitter.
+    g = nx.DiGraph()
+    g.add_node("m1", external=False, function_count=2, cc_sum=5, cc_max=4)
+    g.add_node("m2", external=False, function_count=3, cc_sum=6, cc_max=3)
+    g.add_node("m3", external=False, function_count=0, cc_sum=0, cc_max=0)
+    g.add_edge("m1", "m2")
+    s = compute_score(g)
+    assert s.inputs.function_count == 5
+    assert s.inputs.cc_total == 11
+    assert s.inputs.cc_max == 4
+    assert s.inputs.cc_mean == pytest.approx(11 / 5)
+
+
+def test_cc_aggregates_with_no_functions_are_zero():
+    g = nx.DiGraph()
+    g.add_node("m", external=False)
+    s = compute_score(g)
+    assert s.inputs.function_count == 0
+    assert s.inputs.cc_total == 0
+    assert s.inputs.cc_max == 0
+    assert s.inputs.cc_mean == 0.0

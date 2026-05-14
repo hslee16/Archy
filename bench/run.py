@@ -237,6 +237,10 @@ def main() -> int:
             "call_edge_count": inputs.get("call_edge_count", 0),
             "total_calls": inputs.get("total_calls", 0),
             "calls_per_edge": inputs.get("calls_per_edge", 0.0),
+            "function_count": inputs.get("function_count", 0),
+            "cc_total": inputs.get("cc_total", 0),
+            "cc_max": inputs.get("cc_max", 0),
+            "cc_mean": inputs.get("cc_mean", 0.0),
         }
         if args.vulture:
             row["vulture_60"] = vulture_count(src, 60)
@@ -320,6 +324,31 @@ def main() -> int:
     for a in axes:
         emit(f"| {a} | {pearson(cols2[a], cpe):+.3f} |")
     emit(f"| propagation_cost | {pearson(pc, cpe):+.3f} |")
+
+    emit()
+    emit("## Cyclomatic complexity diagnostics")
+    emit()
+    emit("| project | sha | functions | cc_mean | cc_max |")
+    emit("| --- | --- | ---: | ---: | ---: |")
+    for r in rows:
+        emit(
+            f"| {r['name']} | `{r['sha']}` | {r['function_count']:,} | "
+            f"{r['cc_mean']:.2f} | {r['cc_max']} |"
+        )
+
+    emit()
+    emit("## CC orthogonality to existing axes")
+    emit()
+    emit("Pearson correlation of `cc_mean` against each axis + the two prior diagnostics.")
+    emit("Values below `|r| = 0.7` are below the OECD redundancy threshold.")
+    emit()
+    cm = [r["cc_mean"] for r in rows]
+    emit("| signal | r vs cc_mean |")
+    emit("| --- | ---: |")
+    for a in axes:
+        emit(f"| {a} | {pearson(cols2[a], cm):+.3f} |")
+    emit(f"| propagation_cost | {pearson(pc, cm):+.3f} |")
+    emit(f"| calls_per_edge | {pearson(cpe, cm):+.3f} |")
 
     if args.vulture:
         emit()

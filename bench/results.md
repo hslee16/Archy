@@ -90,3 +90,49 @@ Values below `|r| = 0.7` are below the OECD redundancy threshold.
 | depth | -0.062 |
 | equality | +0.212 |
 | propagation_cost | -0.229 |
+
+## Cyclomatic complexity diagnostics
+
+| project | sha | functions | cc_mean | cc_max |
+| --- | --- | ---: | ---: | ---: |
+| pygments | `6fe2c31` | 936 | 3.66 | 98 |
+| boto3 | `81a86c9` | 375 | 2.11 | 12 |
+| numpy | `0a1ed72` | 11,283 | 2.15 | 181 |
+| mkdocs | `2862536` | 1,277 | 1.77 | 29 |
+| starlette | `7793b92` | 498 | 2.51 | 17 |
+| archy | `v0.13.1` | 157 | 3.73 | 13 |
+| scrapy | `5223dbe` | 1,715 | 2.49 | 19 |
+| anyio | `bcb2db6` | 1,051 | 2.03 | 20 |
+| datasette | `aa84fe0` | 798 | 4.37 | 98 |
+| setuptools | `84ed591` | 3,811 | 2.91 | 340 |
+| botocore | `2b64927` | 2,296 | 2.42 | 25 |
+| pytest | `856da14` | 2,010 | 2.94 | 37 |
+| fastapi | `e89a37e` | 296 | 3.63 | 41 |
+| pydantic | `5c63f86` | 1,864 | 3.62 | 77 |
+| rich | `46cebbb` | 912 | 3.36 | 49 |
+| requests | `b684dcb` | 267 | 3.22 | 21 |
+| mypy | `e53693b` | 6,485 | 4.04 | 79 |
+| sqlalchemy | `1e1c008` | 11,480 | 2.45 | 73 |
+| ansible | `b7c0900` | 4,925 | 4.42 | 127 |
+| django | `4d455ae` | 9,561 | 3.04 | 94 |
+| click | `fc6c7c4` | 544 | 3.26 | 48 |
+| httpx | `b5addb6` | 446 | 2.75 | 46 |
+| flask | `7374c85` | 388 | 2.59 | 23 |
+| scikit-learn | `13f20d7` | 10,841 | 2.52 | 75 |
+| dagster | `8e7f318` | 10,381 | 2.58 | 96 |
+| aiohttp | `e8f4371` | 1,497 | 2.72 | 91 |
+| msgspec | `3b2543b` | 63 | 5.33 | 86 |
+
+## CC orthogonality to existing axes
+
+Pearson correlation of `cc_mean` against each axis + the two prior diagnostics.
+Values below `|r| = 0.7` are below the OECD redundancy threshold.
+
+| signal | r vs cc_mean |
+| --- | ---: |
+| modularity | -0.149 |
+| acyclicity | -0.082 |
+| depth | +0.064 |
+| equality | -0.110 |
+| propagation_cost | +0.113 |
+| calls_per_edge | -0.197 |
