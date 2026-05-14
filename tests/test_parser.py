@@ -130,9 +130,7 @@ def test_extracts_attribute_call_chain():
 
 
 def test_skips_self_and_cls_and_super():
-    result = parse_source(
-        b"class A:\n  def m(self):\n    self.x()\n    cls.y()\n    super().z()\n"
-    )
+    result = parse_source(b"class A:\n  def m(self):\n    self.x()\n    cls.y()\n    super().z()\n")
     assert result.calls == ()
 
 
