@@ -445,9 +445,9 @@ attributes plus `inputs.total_calls` / `inputs.calls_per_edge` on
 27-project benchmark shows `calls_per_edge` is highly orthogonal to
 every existing axis (max `|r| = 0.229` against modularity,
 acyclicity, depth, equality, propagation_cost), so the signal earns
-a follow-up promotion. The shape of that promotion — weighted Newman
+a follow-up promotion. The shape of that promotion - weighted Newman
 Q replacing the unweighted modularity computation, or a new fifth
-axis based on call concentration — is unresolved and deferred to a
+axis based on call concentration - is unresolved and deferred to a
 deliberate version boundary along with a SCORING.md band refresh.
 Detailed empirics in
 [`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).

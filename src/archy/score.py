@@ -43,7 +43,7 @@ class ScoreInputs(BaseModel):
     raw_gini: float
     propagation_cost: float = 0.0
     # Call-graph diagnostics. Not folded into the four-axis geometric mean
-    # in v0.16 — shipped as a diagnostic first per the MacCormack v0.13.3
+    # in v0.16 - shipped as a diagnostic first per the MacCormack v0.13.3
     # precedent. Promotion to a score axis depends on the 27-project
     # benchmark showing orthogonality to existing axes.
     call_edge_count: int = 0

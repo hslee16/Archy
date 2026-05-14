@@ -144,20 +144,20 @@ def test_skips_common_builtins():
 def test_skips_subscript_and_nested_call_function_expressions():
     # The outer call in `arr[0]()`, `f()()`, and `(lambda: 1)()` all have
     # non-identifier function heads and drop. The inner `f()` in `f()()`
-    # *is* a valid bare-identifier call and survives — that's correct.
+    # *is* a valid bare-identifier call and survives - that's correct.
     result = parse_source(b"arr[0]()\nf()()\n(lambda: 1)()\n")
     assert [(c.head, c.chain) for c in result.calls] == [("f", ())]
 
 
 def test_nested_call_inner_arg_is_extracted():
-    # f(g()) — outer head is f, inner is g; both captured separately.
+    # f(g()) - outer head is f, inner is g; both captured separately.
     result = parse_source(b"f(g(1))\n")
     heads = sorted((c.head, c.chain) for c in result.calls)
     assert heads == [("f", ()), ("g", ())]
 
 
 def test_method_chain_only_resolves_leftmost_identifier():
-    # a.b().c() — outer call's function is attribute(call.c), not an
+    # a.b().c() - outer call's function is attribute(call.c), not an
     # identifier chain, so it drops. Inner call (a.b) is captured.
     result = parse_source(b"a.b().c()\n")
     heads = [(c.head, c.chain) for c in result.calls]

@@ -180,7 +180,7 @@ def _handle_import(node, source: bytes) -> list[ImportRef]:
     """Handle `import a`, `import a.b`, `import a as x`, `import a, b`.
 
     For aliased plain imports (`import X.Y as Z`), the alias is recorded
-    in `imported_aliases` even though `imported_names` is empty — this is
+    in `imported_aliases` even though `imported_names` is empty - this is
     how call-graph resolution learns the local binding (`Z` here) maps to
     the deepest module (`X.Y`). Non-aliased plain imports leave both
     tuples empty; consumers infer the top-level binding from `module`.

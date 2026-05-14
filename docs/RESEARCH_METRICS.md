@@ -755,7 +755,7 @@ per-edge `kinds: tuple[str,...]`, `call_lines: tuple[int,...]`, and
 `call_count: int` attributes on the same `nx.DiGraph` that already
 carries the import edges. Call-only edges (kinds=('call',)) appear
 when calls resolve to a deeper internal submodule than the import
-itself — `import pkg; pkg.sub.foo()` adds a call edge to `pkg.sub`
+itself - `import pkg; pkg.sub.foo()` adds a call edge to `pkg.sub`
 on top of the existing import edge to `pkg`. The motivation is
 LocAgent's (ACL 2025, [aclanthology:2025.acl-long.426][locagent])
 ablation finding that invoke edges contribute *more* to LLM-agent
@@ -832,8 +832,8 @@ Two qualitative observations:
    calls/edge is an outlier driven by heavy intra-package function
    dispatch (every public ndarray method routes through the same
    handful of internal modules). scikit-learn and mkdocs sit in the
-   8–12 band for the same reason. The "shape" of these codebases —
-   small core, broad call surface against it — is exactly what the
+   8–12 band for the same reason. The "shape" of these codebases -
+   small core, broad call surface against it - is exactly what the
    call signal captures and the import signal misses.
 2. **Plugin/registry shapes bottom the distribution.** starlette,
    scrapy, flask, and boto3 sit at < 3 calls/edge: their internal

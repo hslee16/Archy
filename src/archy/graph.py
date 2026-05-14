@@ -97,7 +97,7 @@ def build_graph(
     # routing first. Call edges land on the longest internal qualname prefix
     # of (alias_target + chain), which can be deeper than the import edge
     # (e.g. `import pkg; pkg.sub.foo()` adds a call edge to pkg.sub even
-    # when imports only edged to pkg) — that depth differential is the
+    # when imports only edged to pkg) - that depth differential is the
     # whole point of LocAgent's invoke-edges signal.
     for m in modules:
         result = parse_results[m.qualname]
@@ -346,12 +346,7 @@ def _expand_with_imported_names(
     # External path. Try the longest internal prefix first (e.g. an external
     # path that happens to share a prefix with an internal package). If no
     # internal prefix matches, attribute the edge to the top-level package.
-    parts = base.split(".")
-    for end in range(len(parts), 0, -1):
-        candidate = ".".join(parts[:end])
-        if candidate in internal_qualnames:
-            return [candidate]
-    return [parts[0]]
+    return [_external_target(base, internal_qualnames)]
 
 
 def _resolve_relative_base(
@@ -481,7 +476,7 @@ def _add_or_extend_call_edge(
     """Attach call-site data to an edge, creating it if no import edge exists.
 
     Call-only edges (kinds=('call',)) appear when calls resolve to a deeper
-    submodule than the import edge — e.g., `import pkg; pkg.sub.foo()`
+    submodule than the import edge - e.g., `import pkg; pkg.sub.foo()`
     creates a call edge to pkg.sub on top of the import edge to pkg.
     """
     if graph.has_edge(src, dst):
@@ -516,7 +511,7 @@ def _build_alias_table(
     `from X import a, b` populates one entry per imported name; `import
     X.Y` binds only the top-level name `X` per Python's actual import
     semantics. Function-local imports are merged into the module-level
-    table — this slightly over-resolves (an inner-scope binding can leak
+    table - this slightly over-resolves (an inner-scope binding can leak
     to outer call sites in our static view), matching the import graph's
     existing behavior on function-local imports.
     """
@@ -549,7 +544,9 @@ def _build_alias_table(
         else:
             alias = ref.imported_aliases[0] if ref.imported_aliases else None
             if alias:
-                # `import X.Y as Z` binds Z to the deepest module name.
+                # `import X.Y as Z` binds Z to the deepest module (X.Y), unlike
+                # bare `import X.Y` which only binds the top-level name X --
+                # the alias short-circuits Python's attribute-walk semantics.
                 if base in internal_qualnames:
                     table[alias] = base
                 else:
@@ -584,7 +581,7 @@ def _resolve_call_target(
 ) -> str | None:
     """Resolve a CallRef to the target module qualname, or None if unresolvable.
 
-    The leftmost identifier (`call.head`) must appear in the alias table —
+    The leftmost identifier (`call.head`) must appear in the alias table -
     we don't try to follow class-attribute or assignment chains. The
     chain segments before the trailing function name are then walked
     against `internal_qualnames` to find the longest internal prefix

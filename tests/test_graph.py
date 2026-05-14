@@ -419,7 +419,7 @@ def test_call_edge_attached_to_existing_import_edge(tmp_path: Path, pkg: Path):
 
 def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
     # `import pkg; pkg.sub.foo()` imports the top-level package only, but
-    # the call resolves to pkg.sub when that submodule is internal — the
+    # the call resolves to pkg.sub when that submodule is internal - the
     # depth differential LocAgent (ACL 2025) cites as the invoke-edge signal.
     sub = pkg / "sub"
     sub.mkdir()
@@ -458,7 +458,7 @@ def test_call_through_from_import(tmp_path: Path, pkg: Path):
 
 
 def test_call_to_self_module_is_skipped(tmp_path: Path, pkg: Path):
-    # A module imports itself somehow (relative) and then calls something —
+    # A module imports itself somehow (relative) and then calls something -
     # we never edge from a module to itself via the call pass.
     (pkg / "a.py").write_text("from pkg import a as me\nme.run()\n")
     (pkg / "a.py").write_text(
