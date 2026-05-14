@@ -862,6 +862,117 @@ a `--record` checkpoint immediately after the upgrade.
 
 ---
 
+## 17. Cyclomatic complexity per function (McCabe 1976)
+
+archy v0.17.0 ships per-function McCabe cyclomatic complexity as a
+diagnostic. Implementation in `src/archy/complexity.py`: a tree-sitter
+walk over `(function_definition)` nodes counts branch-creating child
+nodes (excluding descendants of nested `function_definition` /
+`class_definition` so each function carries only its own branches).
+The counted node types: `if_statement`, `elif_clause`, `for_statement`,
+`while_statement`, `except_clause`, `case_clause`,
+`conditional_expression`, `boolean_operator`, plus comprehension
+`for_in_clause` / `if_clause`. `assert_statement` is excluded to match
+radon's default-mode behavior (assert can be compiled out at `-O`).
+
+Per-function rows roll up to per-module aggregates on each internal
+node (`function_count`, `cc_sum`, `cc_max`, `cc_mean`) and to
+project-wide aggregates on `archy score`'s `inputs` (`function_count`,
+`cc_total`, `cc_max`, `cc_mean`). Not folded into the four-axis
+geometric mean: ships diagnostic-first, same MacCormack v0.13.3 / call
+edges v0.16.0 precedent.
+
+**Empirical orthogonality.** 27-project bench captured 2026-05-14,
+SHAs pinned in [`bench/projects.yaml`](../bench/projects.yaml):
+
+| signal           |  r vs cc_mean |
+| ---------------- | ------------: |
+| modularity       |        -0.149 |
+| acyclicity       |        -0.082 |
+| depth            |        +0.064 |
+| equality         |        -0.110 |
+| propagation_cost |        +0.113 |
+| calls_per_edge   |        -0.197 |
+
+All six correlations sit well below the OECD `|r| > 0.7` redundancy
+threshold (max absolute is 0.197). `cc_mean` is the **most orthogonal
+new signal archy has ever measured**: more orthogonal than v0.16's
+call density (max `|r| = 0.229`) and substantially more so than any
+existing axis pair (median `|r| ~ 0.45`). This is the strongest
+candidate to date for promotion to a score axis, either as a 5th axis
+(`1 - normalized_cc_mean`, mapping the typical `[1.5, 5]` cc_mean range
+to `[0, 1]`) or as a redesign of the equality axis to use
+`gini(per_function_cc)` instead of `gini(out_degree)` as
+[`SCORING.md`](SCORING.md) section Equality has flagged as the long-term
+target.
+
+**Raw distribution.** cc_mean across the bench:
+
+| project      | functions | cc_mean | cc_max |
+| ------------ | --------: | ------: | -----: |
+| msgspec      |        63 |    5.33 |     86 |
+| ansible      |     4,925 |    4.42 |    127 |
+| datasette    |       798 |    4.37 |     98 |
+| mypy         |     6,485 |    4.04 |     79 |
+| archy        |       157 |    3.73 |     13 |
+| pygments     |       936 |    3.66 |     98 |
+| fastapi      |       296 |    3.63 |     41 |
+| pydantic     |     1,864 |    3.62 |     77 |
+| rich         |       912 |    3.36 |     49 |
+| click        |       544 |    3.26 |     48 |
+| requests     |       267 |    3.22 |     21 |
+| django       |     9,561 |    3.04 |     94 |
+| pytest       |     2,010 |    2.94 |     37 |
+| setuptools   |     3,811 |    2.91 |    340 |
+| httpx        |       446 |    2.75 |     46 |
+| aiohttp      |     1,497 |    2.72 |     91 |
+| flask        |       388 |    2.59 |     23 |
+| dagster      |    10,381 |    2.58 |     96 |
+| scikit-learn |    10,841 |    2.52 |     75 |
+| starlette    |       498 |    2.51 |     17 |
+| scrapy       |     1,715 |    2.49 |     19 |
+| sqlalchemy   |    11,480 |    2.45 |     73 |
+| botocore     |     2,296 |    2.42 |     25 |
+| numpy        |    11,283 |    2.15 |    181 |
+| boto3        |       375 |    2.11 |     12 |
+| anyio        |     1,051 |    2.03 |     20 |
+| mkdocs       |     1,277 |    1.77 |     29 |
+
+Qualitative observations:
+
+1. **Top and bottom are shape-driven, not size.** msgspec (5.33 on 63
+   functions) and ansible (4.42 on 4,925) both top the list; mkdocs
+   (1.77) and anyio (2.03) bottom it. Project size doesn't explain
+   either end; the underlying coding style does. Test-runner /
+   inventory / DSL-heavy code (ansible, datasette, mypy) carries
+   more branching per function; plugin-host code (mkdocs) carries
+   less because most functions are thin registration calls.
+2. **cc_max can be wildly out of line with cc_mean.** setuptools has
+   cc_max=340 (one extreme function) and cc_mean=2.91 (typical
+   restraint elsewhere). numpy at cc_max=181, pygments at 98 - all
+   driven by single dispatcher / parser functions. cc_mean is the
+   stable signal; cc_max is a hotspot pointer rather than a project
+   health number. The forthcoming `archy hotspots` command will lean
+   on cc_max alongside per-file churn for that ranking.
+3. **CC is uncorrelated with size at the project level.** numpy at
+   11,283 functions and msgspec at 63 sit at opposite ends of the
+   `cc_mean` distribution. This is what makes the signal useful: it
+   doesn't just re-encode "how big is the codebase."
+
+**Known limitations.** assert is not counted (radon-default). `try`,
+`else`, `finally`, `with`, `async with` are not branches. Cognitive
+complexity (Sonar / Campbell 2017) is NOT computed - it needs
+nesting-depth bookkeeping the single-pass walker doesn't support; a
+follow-up using the same `function_definition` AST surface is cheap
+but didn't land in v0.17 because the call-graph PR established the
+precedent that diagnostic-first means one signal at a time, validated
+on the bench before bundling. Same status applies to type-hint
+coverage. Lambda expressions don't get their own FunctionComplexity
+row, but their internal branches do count for the containing function
+(consistent with radon, inconsistent with pyan).
+
+---
+
 ## Summary table
 
 Ratings reflect Python-specific feasibility and signal, not
@@ -883,6 +994,7 @@ The "Role" column distinguishes:
 | ----------------------------------------- | ------ | ------ | ------------------- | ---------------- | --------- |
 | Tangle ratio                              | High   | Trivial| **Shipped** (acyclicity = 1 - tangle_ratio) | ✓ shipped: `score.compute_acyclicity` | **Shipped** |
 | Call edges (LocAgent invoke edges)        | High   | Medium | **Shipped** as diagnostic (kinds/call_lines/call_count per edge); follow-up promotion to score axis pending design choice | ✓ orthogonal: max `\|r\| = 0.229` against 5 existing signals on 27-project bench | **Shipped (diagnostic)** |
+| Cyclomatic complexity per function        | High   | Medium | **Shipped** as diagnostic (per-module function_count/cc_sum/cc_max/cc_mean; project-wide aggregates on score inputs); strongest candidate yet for score-axis promotion | ✓ orthogonal: max `\|r\| = 0.197` against 6 existing signals on 27-project bench | **Shipped (diagnostic)** |
 | Reflexion: Forbidden + Independence       | High   | Low    | Check rule          | -                | **Yes**   |
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
 | Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |

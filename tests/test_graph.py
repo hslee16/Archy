@@ -492,6 +492,30 @@ def test_graph_to_dict_includes_call_attrs(tmp_path: Path, pkg: Path):
     assert "call" in edge["kinds"]
 
 
+def test_cc_aggregates_on_internal_nodes(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text(
+        "def f(x):\n    if x:\n        return 1\n    return 0\ndef g():\n    return 42\n"
+    )
+    (pkg / "empty.py").write_text("")
+    g = build_graph(tmp_path)
+    a = g.nodes["pkg.a"]
+    assert a["function_count"] == 2
+    assert a["cc_sum"] == 3
+    assert a["cc_max"] == 2
+    assert a["cc_mean"] == 1.5
+    empty = g.nodes["pkg.empty"]
+    assert empty["function_count"] == 0
+    assert empty["cc_sum"] == 0
+
+
+def test_cc_attrs_appear_in_graph_to_dict(tmp_path: Path, pkg: Path):
+    (pkg / "a.py").write_text("def f(x):\n    return x and x\n")
+    data = graph_to_dict(build_graph(tmp_path))
+    by_id = {n["id"]: n for n in data["nodes"]}
+    assert by_id["pkg.a"]["function_count"] == 1
+    assert by_id["pkg.a"]["cc_max"] == 2
+
+
 def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
