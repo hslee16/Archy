@@ -562,6 +562,9 @@ def _score_to_dict(s: Score) -> dict:
             "raw_modularity": s.inputs.raw_modularity,
             "raw_gini": s.inputs.raw_gini,
             "propagation_cost": s.inputs.propagation_cost,
+            "call_edge_count": s.inputs.call_edge_count,
+            "total_calls": s.inputs.total_calls,
+            "calls_per_edge": s.inputs.calls_per_edge,
         },
     }
 
@@ -578,6 +581,8 @@ def _score_to_text(s: Score) -> str:
         f"# graph: {s.inputs.module_count} modules, {s.inputs.edge_count} edges",
         f"# propagation_cost: {s.inputs.propagation_cost:.4f}  "
         f"(diagnostic, not in score; MacCormack reverse-reach fraction)",
+        f"# calls: {s.inputs.total_calls} resolved across {s.inputs.call_edge_count} edge(s), "
+        f"{s.inputs.calls_per_edge:.2f}/edge  (diagnostic, not in score)",
     ]
     return "\n".join(lines)
 

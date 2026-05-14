@@ -131,6 +131,18 @@ When archy's agent-feedback-loop framing was first written, it was a positioning
 
 Detailed citations, a failure-mode-to-archy-capability mapping, and the implied roadmap priority order live in [`RESEARCH_METRICS.md §14c`](RESEARCH_METRICS.md). The roadmap entries themselves are in [`FUTURE.md`](FUTURE.md).
 
+## v0.16.0 - call edges as a second edge type (diagnostic)
+
+LocAgent (ACL 2025) ablated four edge types in a heterogeneous code graph and found invoke edges contributed more to LLM-agent code-localization accuracy than imports — the empirical justification for archy adding a second edge type. v0.16.0 ships call edges as a *diagnostic*, mirroring the [`MacCormack v0.13.3 propagation-cost rollout`](RESEARCH_METRICS.md): ship the signal, validate orthogonality on the 27-project benchmark, promote to a score axis at a deliberate version boundary once the design choice (weighted-Newman-Q vs new fifth axis) is settled.
+
+Three things that shaped the implementation:
+
+1. **Static call resolution in Python is mostly alias-table lookup, not call-graph construction.** The tree-sitter `(call) @call` query gives the callee expression; the leftmost identifier of that expression is what you look up. The per-file alias table built from import statements (`from X import Y as Z` binds `Z` → resolved-target-of-`X.Y`; `import X.Y as Z` binds `Z` → `X.Y`; `import X.Y` binds only `X` per Python's actual import semantics) covers the common cases. Going further — chasing assignments, tracking class attribute resolution, pyan-style heuristics — adds false-positive rate faster than coverage. Matches LocAgent's static-extraction approach.
+2. **The depth-differential edges are the interesting ones.** `import pkg; pkg.sub.foo()` adds an import edge to `pkg` (top-level package binding only) and a *call* edge to `pkg.sub` when the submodule is internal. Those call-only edges are the empirical evidence that calls carry signal imports miss — the FUTURE.md framing "two modules can be independent by imports but tightly coupled by calls" holds because attribute access through a single import binding produces statically resolvable call edges deeper than the import target.
+3. **Orthogonality was the load-bearing question.** Pre-bench, the worry was that call counts would correlate ≈1.0 with edge counts and thus with modularity / equality. The 27-project bench showed `|r| ≤ 0.229` against every existing axis plus propagation cost — far below the OECD redundancy threshold and the most orthogonal new signal archy has added since v0.2.0. The skew toward extreme values (numpy 52.68 calls/edge, starlette 1.93) does most of the orthogonality lift: scientific-Python and plugin-registry shapes carry very different call densities at similar import-graph shapes, and that's exactly what a new signal should be doing.
+
+The score number didn't change in v0.16 (call diagnostics aren't folded in), but absolute edge counts moved on some projects (e.g., numpy 1192 → 1342, +13%) because call-only edges to deeper submodules are now created. That flows into modularity / equality at the second decimal place. Pre-existing trend histories remain comparable within the existing 0.02 tolerance, but the cleanest practice is `archy score --record` once on each project after the upgrade.
+
 ## Competitive landscape (May 2026 survey)
 
 Sentrux was the inspiration and is treated as a peer throughout this document, but it is not the only adjacent tool. A May 2026 web survey grouped the field into five buckets. Recording it here so the design rationale doesn't drift toward "us vs. sentrux" when the actual landscape is wider.

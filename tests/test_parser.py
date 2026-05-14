@@ -114,3 +114,64 @@ def test_aliased_from_import():
     ref = result.imports[0]
     assert ref.module == "numpy"
     assert ref.imported_names == ("ndarray",)
+
+
+# --- call extraction --------------------------------------------------------
+
+
+def test_extracts_bare_call():
+    result = parse_source(b"foo()\n")
+    assert [(c.head, c.chain, c.line) for c in result.calls] == [("foo", (), 1)]
+
+
+def test_extracts_attribute_call_chain():
+    result = parse_source(b"mod.sub.foo(1, 2)\n")
+    assert [(c.head, c.chain) for c in result.calls] == [("mod", ("sub", "foo"))]
+
+
+def test_skips_self_and_cls_and_super():
+    result = parse_source(
+        b"class A:\n  def m(self):\n    self.x()\n    cls.y()\n    super().z()\n"
+    )
+    assert result.calls == ()
+
+
+def test_skips_common_builtins():
+    result = parse_source(b"print('x')\nlen([])\nisinstance(x, int)\n")
+    assert result.calls == ()
+
+
+def test_skips_subscript_and_nested_call_function_expressions():
+    # The outer call in `arr[0]()`, `f()()`, and `(lambda: 1)()` all have
+    # non-identifier function heads and drop. The inner `f()` in `f()()`
+    # *is* a valid bare-identifier call and survives — that's correct.
+    result = parse_source(b"arr[0]()\nf()()\n(lambda: 1)()\n")
+    assert [(c.head, c.chain) for c in result.calls] == [("f", ())]
+
+
+def test_nested_call_inner_arg_is_extracted():
+    # f(g()) — outer head is f, inner is g; both captured separately.
+    result = parse_source(b"f(g(1))\n")
+    heads = sorted((c.head, c.chain) for c in result.calls)
+    assert heads == [("f", ()), ("g", ())]
+
+
+def test_method_chain_only_resolves_leftmost_identifier():
+    # a.b().c() — outer call's function is attribute(call.c), not an
+    # identifier chain, so it drops. Inner call (a.b) is captured.
+    result = parse_source(b"a.b().c()\n")
+    heads = [(c.head, c.chain) for c in result.calls]
+    assert heads == [("a", ("b",))]
+
+
+def test_keyword_args_do_not_confuse_extraction():
+    result = parse_source(b"foo(key=value, other=bar())\n")
+    heads = sorted((c.head, c.chain) for c in result.calls)
+    assert heads == [("bar", ()), ("foo", ())]
+
+
+def test_calls_inside_function_body_are_extracted():
+    src = b"def go():\n    helper.run(42)\n    return helper.done()\n"
+    result = parse_source(src)
+    heads = sorted({(c.head, c.chain) for c in result.calls})
+    assert heads == [("helper", ("done",)), ("helper", ("run",))]

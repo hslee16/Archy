@@ -438,6 +438,20 @@ indicators over time has to either pin a baseline or accept that
 absolute scores aren't comparable across versions, per the OECD
 Handbook's guidance.[^oecd-handbook]
 
+**Call edges (v0.16.0).** Call-graph extraction shipped as a
+*diagnostic only*: per-edge `kinds`, `call_lines`, `call_count`
+attributes plus `inputs.total_calls` / `inputs.calls_per_edge` on
+`archy score`'s output. Not folded into the geometric mean. The
+27-project benchmark shows `calls_per_edge` is highly orthogonal to
+every existing axis (max `|r| = 0.229` against modularity,
+acyclicity, depth, equality, propagation_cost), so the signal earns
+a follow-up promotion. The shape of that promotion — weighted Newman
+Q replacing the unweighted modularity computation, or a new fifth
+axis based on call concentration — is unresolved and deferred to a
+deliberate version boundary along with a SCORING.md band refresh.
+Detailed empirics in
+[`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).
+
 ## References
 
 - Sentrux quality-signal design (the model archy follows): [sentrux/docs/quality-signal-design.md][sentrux-design]

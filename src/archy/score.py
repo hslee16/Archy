@@ -42,6 +42,13 @@ class ScoreInputs(BaseModel):
     raw_modularity: float
     raw_gini: float
     propagation_cost: float = 0.0
+    # Call-graph diagnostics. Not folded into the four-axis geometric mean
+    # in v0.16 — shipped as a diagnostic first per the MacCormack v0.13.3
+    # precedent. Promotion to a score axis depends on the 27-project
+    # benchmark showing orthogonality to existing axes.
+    call_edge_count: int = 0
+    total_calls: int = 0
+    calls_per_edge: float = 0.0
 
 
 class Score(BaseModel):
@@ -61,6 +68,7 @@ def compute_score(graph: nx.DiGraph) -> Score:
     dep, max_depth = compute_depth(graph)
     eq, raw_gini = compute_equality(graph)
     propagation_cost, _ = compute_propagation_cost(graph)
+    call_edge_count, total_calls, calls_per_edge = _call_stats(graph)
     overall = (mod * acy * dep * eq) ** 0.25
     return Score(
         overall=overall,
@@ -78,8 +86,31 @@ def compute_score(graph: nx.DiGraph) -> Score:
             raw_modularity=raw_q,
             raw_gini=raw_gini,
             propagation_cost=propagation_cost,
+            call_edge_count=call_edge_count,
+            total_calls=total_calls,
+            calls_per_edge=calls_per_edge,
         ),
     )
+
+
+def _call_stats(graph: nx.DiGraph) -> tuple[int, int, float]:
+    """Per-graph aggregates of call-edge data attached by the call-resolution pass.
+
+    `call_edge_count` counts edges carrying any calls; `total_calls` sums
+    every resolved call site; `calls_per_edge` averages calls over edges
+    that carry at least one (not over all edges). The all-edges
+    denominator would compress the signal toward zero on import-heavy
+    graphs even when calls are dense on the edges that do have them.
+    """
+    call_edge_count = 0
+    total = 0
+    for _, _, data in graph.edges(data=True):
+        count = data.get("call_count", 0)
+        if count > 0:
+            call_edge_count += 1
+            total += count
+    cpe = total / call_edge_count if call_edge_count else 0.0
+    return call_edge_count, total, cpe
 
 
 def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:

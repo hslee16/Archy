@@ -233,6 +233,10 @@ def main() -> int:
             "equality": comp["equality"],
             "cycle_count": inputs["cycle_count"],
             "tangle_ratio": inputs.get("tangle_ratio", 0.0),
+            "propagation_cost": inputs.get("propagation_cost", 0.0),
+            "call_edge_count": inputs.get("call_edge_count", 0),
+            "total_calls": inputs.get("total_calls", 0),
+            "calls_per_edge": inputs.get("calls_per_edge", 0.0),
         }
         if args.vulture:
             row["vulture_60"] = vulture_count(src, 60)
@@ -291,6 +295,31 @@ def main() -> int:
     for a, b in combinations(axes, 2):
         r = pearson(cols2[a], cols2[b])
         emit(f"| {a} ↔ {b} | {r:+.3f} |")
+
+    emit()
+    emit("## Call-graph diagnostics")
+    emit()
+    emit("| project | sha | modules | edges | call_edges | total_calls | calls/edge |")
+    emit("| --- | --- | ---: | ---: | ---: | ---: | ---: |")
+    for r in rows:
+        emit(
+            f"| {r['name']} | `{r['sha']}` | {r['modules']} | {r['edges']} | "
+            f"{r['call_edge_count']} | {r['total_calls']} | {r['calls_per_edge']:.2f} |"
+        )
+
+    emit()
+    emit("## Call-density orthogonality to existing axes")
+    emit()
+    emit("Pearson correlation of `calls_per_edge` against each axis + propagation cost.")
+    emit("Values below `|r| = 0.7` are below the OECD redundancy threshold.")
+    emit()
+    cpe = [r["calls_per_edge"] for r in rows]
+    pc = [r["propagation_cost"] for r in rows]
+    emit("| signal | r vs calls/edge |")
+    emit("| --- | ---: |")
+    for a in axes:
+        emit(f"| {a} | {pearson(cols2[a], cpe):+.3f} |")
+    emit(f"| propagation_cost | {pearson(pc, cpe):+.3f} |")
 
     if args.vulture:
         emit()

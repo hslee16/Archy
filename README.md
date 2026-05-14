@@ -350,10 +350,10 @@ uv run pytest              # the test now runs instead of being skipped
 
 Next up:
 
-- [ ] Call graph: second edge type alongside imports
+- [ ] Promote call-density to a score axis (currently a diagnostic in v0.16; orthogonality vs. existing axes already validated on the 27-project benchmark, see [`docs/RESEARCH_METRICS.md` §16](docs/RESEARCH_METRICS.md))
 - [ ] Design Structure Matrix (`archy dsm`)
 
-Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt), import-linter contract wrap (`archy contracts`, `archy[contracts]`), graph-navigation MCP tools (`archy_graph_focus`, `archy_graph_summary`, `archy_graph`; design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)), per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool (geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload).
+Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt), import-linter contract wrap (`archy contracts`, `archy[contracts]`), graph-navigation MCP tools (`archy_graph_focus`, `archy_graph_summary`, `archy_graph`; design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)), per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool (geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload), call-graph edges as a second edge type (v0.16, diagnostic: `kinds`, `call_lines`, `call_count` on every edge; `total_calls` / `calls_per_edge` on `archy score`; static import-alias resolution per LocAgent's invoke-edge framing).
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
