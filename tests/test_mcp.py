@@ -697,3 +697,61 @@ def test_hotspots_returns_diagnostic_when_not_in_git_repo(tmp_path: Path):
     assert payload.note is not None
     assert "not inside a git repository" in payload.note
     assert "archy_high_risk_modules" in payload.note
+
+
+def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
+    # Verifies the `since` arg is actually plumbed into `git_churn`, not
+    # silently dropped. Regression guard: if someone refactored
+    # `_run_hotspots` and forgot to forward `since`, every other test in
+    # this file would still pass.
+    import os
+    import subprocess
+
+    repo = tmp_path
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t.t")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "config", "commit.gpgsign", "false")
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # Two branchy files (cc_sum > 0 each) so both are eligible for the
+    # top-K under full history.
+    (pkg / "hot.py").write_text("def f(x):\n    if x: return 1\n    return 0\n")
+    (pkg / "old.py").write_text("def g(x):\n    if x: return 1\n    return 0\n")
+
+    old_env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": "2020-01-01T00:00:00",
+        "GIT_COMMITTER_DATE": "2020-01-01T00:00:00",
+    }
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-q", "-m", "old init"],
+        check=True,
+        capture_output=True,
+        env=old_env,
+    )
+    # Touch `hot.py` again in a "recent" commit so the since filter keeps it
+    # but drops `old.py`, which only appears in the 2020 commit.
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "recent tweak hot")
+
+    full = _run_hotspots(repo, top=20, since=None)
+    full_modules = {h.module for h in full.hotspots}
+    assert "pkg.hot" in full_modules
+    assert "pkg.old" in full_modules
+    hot_full = next(h for h in full.hotspots if h.module == "pkg.hot")
+    old_full = next(h for h in full.hotspots if h.module == "pkg.old")
+    assert hot_full.churn == 2
+    assert old_full.churn == 1
+
+    filtered = _run_hotspots(repo, top=20, since="2025-01-01")
+    assert filtered.since == "2025-01-01"
+    filtered_modules = {h.module for h in filtered.hotspots}
+    # `old.py` was last touched in 2020 -> dropped (churn=0 -> filtered).
+    # `hot.py` still has the 2026-tweak commit -> kept with churn=1.
+    assert "pkg.old" not in filtered_modules
+    hot_filtered = next(h for h in filtered.hotspots if h.module == "pkg.hot")
+    assert hot_filtered.churn == 1
