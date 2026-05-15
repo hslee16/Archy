@@ -26,6 +26,7 @@ from archy.mcp import (
     _run_graph_focus,
     _run_graph_summary,
     _run_high_risk_modules,
+    _run_hotspots,
     _run_impact,
     _run_score,
     _run_snapshot,
@@ -87,6 +88,7 @@ def test_create_server_registers_expected_tools():
         "archy_graph_summary",
         "archy_graph",
         "archy_high_risk_modules",
+        "archy_hotspots",
     }
 
 
@@ -622,3 +624,139 @@ def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
     (gen / "b.py").write_text("from myapp.baml_client import other\n")
     (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
     assert _run_cycles(tmp_path, min_size=2, internal_only=True) == []
+
+
+def _git(repo: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def _init_git_repo(repo: Path) -> None:
+    # Bare git init + the three configs every hotspot test needs (identity
+    # so commits don't fail, and gpgsign=false so the CI runner without a
+    # signing key still completes). Shared by every test in this file that
+    # touches git history.
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t.t")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "config", "commit.gpgsign", "false")
+
+
+def _init_hotspot_repo(repo: Path) -> None:
+    _init_git_repo(repo)
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "hot.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        return 1\n"
+        "    elif x == 2:\n"
+        "        return 2\n"
+        "    for y in range(x):\n"
+        "        if y: pass\n"
+        "    return 0\n"
+    )
+    (pkg / "cold.py").write_text("def g():\n    return 1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "init")
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "touch hot")
+
+
+def test_hotspots_payload_shape_and_ranking(tmp_path: Path):
+    _init_hotspot_repo(tmp_path)
+    payload = _run_hotspots(tmp_path, top=20, since=None)
+    assert payload.note is None
+    assert payload.since is None
+    assert payload.total >= 1
+    assert payload.shown == len(payload.hotspots)
+    top = payload.hotspots[0]
+    assert top.module == "pkg.hot"
+    assert top.score == top.cc_sum * top.churn
+    assert top.path.endswith("pkg/hot.py")
+
+
+def test_hotspots_top_caps_results(tmp_path: Path):
+    _init_hotspot_repo(tmp_path)
+    payload = _run_hotspots(tmp_path, top=1, since=None)
+    assert payload.shown <= 1
+    # `total` reports the size of the candidate pool, not the slice.
+    assert payload.total >= payload.shown
+
+
+def test_hotspots_validates_top(tmp_path: Path):
+    with pytest.raises(ValueError, match="top"):
+        _run_hotspots(tmp_path, top=0, since=None)
+
+
+def test_hotspots_returns_diagnostic_when_not_in_git_repo(tmp_path: Path):
+    # Same Python project shape but no `git init` -> the tool must NOT raise.
+    # The agent reads `note` and pivots to archy_high_risk_modules instead.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("def f():\n    if True: return 1\n")
+    payload = _run_hotspots(tmp_path, top=20, since=None)
+    assert payload.hotspots == ()
+    assert payload.total == 0
+    assert payload.note is not None
+    assert "not inside a git repository" in payload.note
+    assert "archy_high_risk_modules" in payload.note
+
+
+def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
+    # Verifies the `since` arg is actually plumbed into `git_churn`, not
+    # silently dropped. Regression guard: if someone refactored
+    # `_run_hotspots` and forgot to forward `since`, every other test in
+    # this file would still pass.
+    import os
+    import subprocess
+
+    repo = tmp_path
+    _init_git_repo(repo)
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # Two branchy files (cc_sum > 0 each) so both are eligible for the
+    # top-K under full history.
+    (pkg / "hot.py").write_text("def f(x):\n    if x: return 1\n    return 0\n")
+    (pkg / "old.py").write_text("def g(x):\n    if x: return 1\n    return 0\n")
+
+    old_env = {
+        **os.environ,
+        "GIT_AUTHOR_DATE": "2020-01-01T00:00:00",
+        "GIT_COMMITTER_DATE": "2020-01-01T00:00:00",
+    }
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "commit", "-q", "-m", "old init"],
+        check=True,
+        capture_output=True,
+        env=old_env,
+    )
+    # Touch `hot.py` again in a "recent" commit so the since filter keeps it
+    # but drops `old.py`, which only appears in the 2020 commit.
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "recent tweak hot")
+
+    full = _run_hotspots(repo, top=20, since=None)
+    full_modules = {h.module for h in full.hotspots}
+    assert "pkg.hot" in full_modules
+    assert "pkg.old" in full_modules
+    hot_full = next(h for h in full.hotspots if h.module == "pkg.hot")
+    old_full = next(h for h in full.hotspots if h.module == "pkg.old")
+    assert hot_full.churn == 2
+    assert old_full.churn == 1
+
+    filtered = _run_hotspots(repo, top=20, since="2025-01-01")
+    assert filtered.since == "2025-01-01"
+    filtered_modules = {h.module for h in filtered.hotspots}
+    # `old.py` was last touched in 2020 -> dropped (churn=0 -> filtered).
+    # `hot.py` still has the 2026-tweak commit -> kept with churn=1.
+    assert "pkg.old" not in filtered_modules
+    hot_filtered = next(h for h in filtered.hotspots if h.module == "pkg.hot")
+    assert hot_filtered.churn == 1

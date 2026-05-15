@@ -50,6 +50,18 @@ as the `loop` prompt on the MCP server, so an agent connected to
    see *why* a module ranks high. If your target is on the list, scope
    down or pause for review before proceeding.
 
+   The churn-aware sibling answers "where is the refactoring leverage?"
+   rather than "is this edit dangerous?":
+
+   - MCP: `archy_hotspots(path)`
+
+   Returns the top-N modules by `cc_sum x git-commit-count` (Tornhill /
+   CodeScene's "Code Red"); each entry is `{module, path, cc_sum, churn,
+   score}`. Needs git history; if the project isn't under git, returns
+   an empty list plus a `note` so you can pivot back to
+   `archy_high_risk_modules`. Most useful when planning a refactoring
+   sprint, less useful for a single targeted edit.
+
 3. **Edit** the code as you normally would.
 
 4. **Diff** after editing to see what got better, what got worse, and

@@ -36,6 +36,7 @@ from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict, resolv
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
+from archy.hotspots import compute_hotspots, git_churn
 from archy.impact import Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
@@ -265,6 +266,31 @@ class HighRiskPayload(BaseModel):
 
     module_count: int
     modules: tuple[HighRiskEntry, ...]
+
+
+class HotspotEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    path: str
+    cc_sum: int
+    churn: int
+    score: int
+
+
+class HotspotsPayload(BaseModel):
+    """Per-file CC x churn ranking. `note` is set when the metric
+    cannot run (project is not under git), and `hotspots` is empty -
+    the agent should pivot to `archy_high_risk_modules` for a
+    git-free structural alternative."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: str | None
+    total: int
+    shown: int
+    hotspots: tuple[HotspotEntry, ...]
+    note: str | None = None
 
 
 def create_server() -> FastMCP:
@@ -517,6 +543,33 @@ def _register_tools(server: FastMCP) -> None:
     )
     def archy_high_risk_modules(path: str, top_n: int = 10) -> HighRiskPayload:
         return _run_high_risk_modules(Path(path), top_n=top_n)
+
+    @server.tool(
+        name="archy_hotspots",
+        description=(
+            "Rank internal modules by cyclomatic complexity x git "
+            "churn (Tornhill / CodeScene's 'Code Red'). Each entry is "
+            "`{module, path, cc_sum, churn, score}` where "
+            "`score = cc_sum * churn`. Files with zero CC or zero "
+            "churn are filtered so the top-K only contains files that "
+            "score on both axes. The structural cousin "
+            "`archy_high_risk_modules` answers 'is this edit "
+            "dangerous?' without needing git history; `archy_hotspots` "
+            "answers 'where is the refactoring leverage?' and needs "
+            "git. `since` is passed straight to `git log --since` "
+            "(e.g. '12.months', '2025-01-01'); the default is full "
+            "history. If the project isn't under git, the tool "
+            "returns an empty list plus a `note` explaining why so "
+            "the agent can pivot to `archy_high_risk_modules` "
+            "instead."
+        ),
+    )
+    def archy_hotspots(
+        path: str,
+        top: int = 20,
+        since: str | None = None,
+    ) -> HotspotsPayload:
+        return _run_hotspots(Path(path), top=top, since=since)
 
 
 # --- thin internals ----------------------------------------------------------
@@ -880,6 +933,44 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
         nodes=nodes,
         edges=edges,
         unresolved=unresolved,
+    )
+
+
+def _run_hotspots(path: Path, *, top: int, since: str | None) -> HotspotsPayload:
+    if top <= 0:
+        raise ValueError(f"top must be >= 1; got {top}")
+    graph = _load_graph(path, internal_only=True)
+    churn = git_churn(path, since=since)
+    if churn is None:
+        return HotspotsPayload(
+            since=since,
+            total=0,
+            shown=0,
+            hotspots=(),
+            note=(
+                f"{path} is not inside a git repository (or git is unavailable); "
+                "hotspots needs git history to compute per-file churn. For a "
+                "git-free 'is this edit dangerous?' signal, call "
+                "archy_high_risk_modules instead."
+            ),
+        )
+    rows = compute_hotspots(graph, churn=churn)
+    shown = rows[:top]
+    entries = tuple(
+        HotspotEntry(
+            module=r.module,
+            path=r.path,
+            cc_sum=r.cc_sum,
+            churn=r.churn,
+            score=r.score,
+        )
+        for r in shown
+    )
+    return HotspotsPayload(
+        since=since,
+        total=len(rows),
+        shown=len(entries),
+        hotspots=entries,
     )
 
 
