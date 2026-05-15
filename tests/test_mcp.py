@@ -26,6 +26,7 @@ from archy.mcp import (
     _run_graph_focus,
     _run_graph_summary,
     _run_high_risk_modules,
+    _run_hotspots,
     _run_impact,
     _run_score,
     _run_snapshot,
@@ -87,6 +88,7 @@ def test_create_server_registers_expected_tools():
         "archy_graph_summary",
         "archy_graph",
         "archy_high_risk_modules",
+        "archy_hotspots",
     }
 
 
@@ -622,3 +624,76 @@ def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
     (gen / "b.py").write_text("from myapp.baml_client import other\n")
     (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
     assert _run_cycles(tmp_path, min_size=2, internal_only=True) == []
+
+
+def _git(repo: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def _init_hotspot_repo(repo: Path) -> None:
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@t.t")
+    _git(repo, "config", "user.name", "t")
+    _git(repo, "config", "commit.gpgsign", "false")
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "hot.py").write_text(
+        "def f(x):\n"
+        "    if x:\n"
+        "        return 1\n"
+        "    elif x == 2:\n"
+        "        return 2\n"
+        "    for y in range(x):\n"
+        "        if y: pass\n"
+        "    return 0\n"
+    )
+    (pkg / "cold.py").write_text("def g():\n    return 1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "init")
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "touch hot")
+
+
+def test_hotspots_payload_shape_and_ranking(tmp_path: Path):
+    _init_hotspot_repo(tmp_path)
+    payload = _run_hotspots(tmp_path, top=20, since=None)
+    assert payload.note is None
+    assert payload.since is None
+    assert payload.total >= 1
+    assert payload.shown == len(payload.hotspots)
+    top = payload.hotspots[0]
+    assert top.module == "pkg.hot"
+    assert top.score == top.cc_sum * top.churn
+    assert top.path.endswith("pkg/hot.py")
+
+
+def test_hotspots_top_caps_results(tmp_path: Path):
+    _init_hotspot_repo(tmp_path)
+    payload = _run_hotspots(tmp_path, top=1, since=None)
+    assert payload.shown <= 1
+    # `total` reports the size of the candidate pool, not the slice.
+    assert payload.total >= payload.shown
+
+
+def test_hotspots_validates_top(tmp_path: Path):
+    with pytest.raises(ValueError, match="top"):
+        _run_hotspots(tmp_path, top=0, since=None)
+
+
+def test_hotspots_returns_diagnostic_when_not_in_git_repo(tmp_path: Path):
+    # Same Python project shape but no `git init` -> the tool must NOT raise.
+    # The agent reads `note` and pivots to archy_high_risk_modules instead.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("def f():\n    if True: return 1\n")
+    payload = _run_hotspots(tmp_path, top=20, since=None)
+    assert payload.hotspots == ()
+    assert payload.total == 0
+    assert payload.note is not None
+    assert "not inside a git repository" in payload.note
+    assert "archy_high_risk_modules" in payload.note

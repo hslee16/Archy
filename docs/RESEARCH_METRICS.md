@@ -377,9 +377,13 @@ first." Pairs well with the AI-agent loop
 (`docs/AGENT_LOOP.md`): "before you start work, here are the
 highest-risk files you might be touching."
 
-**Fit:** standalone CLI command (`archy hotspots`). MCP-tool surface
-is the open follow-up so an agent can read the ranking without
-spawning a subprocess.
+**Fit:** standalone CLI command (`archy hotspots`) plus the
+`archy_hotspots` MCP tool (shipped in v0.19.0) so an agent can read
+the ranking without spawning a subprocess. The MCP variant returns
+an empty list + a `note` pointing at `archy_high_risk_modules` when
+the project isn't under git, rather than raising; the structural
+cousin needs no git history and is the natural fallback for the
+agent loop.
 
 ---
 
@@ -718,7 +722,7 @@ these failure modes to archy capabilities:
 | Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Roadmap** (composite of existing signals + NCCD).                 |
 | Agent should read X first             | Top-N by PageRank / fan-in                                                                                       | **Shipping** (`archy_graph_summary`).                                |
 | Deprecated-pattern propagation        | Out of scope for archy (handled by ruff / mypy / pattern lints).                                                 | **Not shipping; not planned.**                                       |
-| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Shipping** (`archy hotspots`, v0.18.0); CLI today, MCP-tool surface is the open follow-up. |
+| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Shipping** (`archy hotspots` CLI v0.18.0; `archy_hotspots` MCP tool v0.19.0).               |
 | Cross-file reasoning failure          | Bounded subgraph navigation, edge-level metadata                                                                 | **Shipping** (`archy_graph_focus` with import line numbers).         |
 
 **Implication for archy's roadmap.** The three top-priority

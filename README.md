@@ -11,7 +11,7 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.18.0. Usable today via:
+**Status:** v0.19.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -182,7 +182,7 @@ archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes thirteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes fourteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -199,6 +199,7 @@ archy mcp
 | `archy_graph_summary` | Top-N modules by fan-in, fan-out, and PageRank, plus top external dependencies. Whole-project overview sized for LLM context. |
 | `archy_graph` | Full dependency-graph dump matching `archy graph --format json`. Refuses graphs larger than `max_nodes` (default 500) to avoid blowing context; bump the limit explicitly when you really want everything. |
 | `archy_high_risk_modules` | Top-N internal modules by `edit_risk`: geometric mean of propagation cost, normalized fan-in, and Martin's instability. Each entry breaks the composite back out. Call before a non-trivial edit to decide whether to scope down or pause for review. |
+| `archy_hotspots` | Rank internal modules by `cc_sum x git-commit-count` (Tornhill / CodeScene's "Code Red"). Each entry is `{module, path, cc_sum, churn, score}`; zero-CC and zero-churn rows are filtered. `since` is passed straight to `git log --since`. Answers "where is the refactoring leverage?"; the structural cousin `archy_high_risk_modules` answers "is this edit dangerous?" without needing git. If the project isn't under git, returns an empty list plus a `note` so the agent can pivot. |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
@@ -233,7 +234,7 @@ If you're running from a checkout instead of an install, use:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.18.0
+- uses: hslee16/archy@v0.19.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -259,7 +260,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.18.0
+    rev: v0.19.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score

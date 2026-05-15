@@ -167,7 +167,17 @@ Three things shaped the implementation:
 
 The `--since` window default was settled empirically against the 27-project bench in `bench/hotspots_results.md`. Headline: median Jaccard(full, 12mo) = 0.60 (the window genuinely matters), median Jaccard(12mo, 6mo) = 0.74 (the meaningful boundary is "full vs ~12 months", not "12 vs 6"), median `stale_full_frac` = 0.25 (full history carries about 25% recency contamination on the median project). The kicker: low-activity codebases (`mkdocs` collapses to 1 hotspot at 12 months, `httpx` to 10) make a 12-month default unworkable - the metric would vanish on stable codebases. Default stays full history; `--since` is documented as the "what should I refactor right now" lens, and the docstring carries the recency-contamination caveat so readers understand what they're reading.
 
-The open follow-up is an MCP-tool surface so an agent can ask "what should I refactor before I touch this file?" without spawning a CLI. The structural cousin (`archy_high_risk_modules`, propagation cost x fan-in x instability) already ships as the MCP-side answer to "is this edit dangerous?"; hotspots adds the orthogonal churn-aware ranking once it lands as a tool.
+The open follow-up - an MCP-tool surface so an agent can read the ranking without spawning a CLI - landed in v0.19.0 (`archy_hotspots`).
+
+## v0.19.0 - archy_hotspots MCP tool
+
+`archy_hotspots` ships as the MCP-side surface for the v0.18 ranking. Signature mirrors the CLI: `archy_hotspots(path, top=20, since=None)` returns `{since, total, shown, hotspots: [{module, path, cc_sum, churn, score}], note}`. The agent loop now has two coordinated answers to the "should I be careful here?" family of questions: `archy_high_risk_modules` for the structural / git-free view ("is this edit dangerous?" via propagation cost x fan-in x instability), and `archy_hotspots` for the churn-aware view ("where is the refactoring leverage?" via cc_sum x commit count). Both surface top-N rankings with each row broken into its components so the agent can see why a module ranks high.
+
+One design decision was load-bearing here, and it took a pushback to get right:
+
+**Graceful diagnostic on non-git projects, not a hard failure.** First instinct was to mirror the CLI's `ClickException` ("path is not inside a git repository"). The pushback: there is a wider audience than that error message implies. The MCP tool runs in an agent loop, and an agent that hits a hard error on a perfectly valid Python project (vendored snapshot, freshly-unpacked tarball, sparse checkout, anything that hasn't been `git init`'d locally yet) has no good way to recover except to crash and report. Returning `{hotspots: [], note: "..."}` with a pointer at `archy_high_risk_modules` as the git-free alternative lets the agent pivot in a single tool call. The bar to enable hotspots is much lower than it sounds - a local `git init` is sufficient, no remote required - but the tool doesn't need to know that; it just needs to say "this metric needs git history; if you don't have it, here's the structural cousin." Same pattern as `archy_contracts` returning a `not_available` payload when `archy[contracts]` isn't installed.
+
+The synthesize-`churn=1`-for-everything alternative was rejected: it makes the metric degrade to "rank by cc_sum", which is already trivially available via `cc_sum` on every internal node of `archy_graph_summary`. Adding a second pathway to the same information would just create confusion about which tool to call.
 
 ## Competitive landscape (May 2026 survey)
 
