@@ -20,6 +20,15 @@ per-file ``git log`` commands and no co-change matrix. If the project
 isn't inside a git repository (or git is unavailable), ``git_churn``
 returns ``None`` rather than raising, and the CLI surfaces the
 diagnostic separately. Diagnostic only - not folded into ``archy score``.
+
+The default churn window is full history. The 27-project bench sweep
+in ``bench/hotspots_results.md`` (median Jaccard(full, 12mo) = 0.60,
+median stale-fraction = 0.25) shows full history carries about 25%
+recency contamination but is the only window that produces a stable
+top-K on low-activity projects, where a 12-month cap can collapse the
+result set to fewer than 20 items. Use ``--since`` (a CLI passthrough
+to ``git log --since``) when you want the "what should I refactor
+right now" lens instead of the historical view.
 """
 
 from __future__ import annotations
