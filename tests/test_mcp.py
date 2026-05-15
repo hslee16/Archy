@@ -632,11 +632,19 @@ def _git(repo: Path, *args: str) -> None:
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
 
 
-def _init_hotspot_repo(repo: Path) -> None:
+def _init_git_repo(repo: Path) -> None:
+    # Bare git init + the three configs every hotspot test needs (identity
+    # so commits don't fail, and gpgsign=false so the CI runner without a
+    # signing key still completes). Shared by every test in this file that
+    # touches git history.
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.email", "t@t.t")
     _git(repo, "config", "user.name", "t")
     _git(repo, "config", "commit.gpgsign", "false")
+
+
+def _init_hotspot_repo(repo: Path) -> None:
+    _init_git_repo(repo)
     pkg = repo / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
@@ -708,10 +716,7 @@ def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
     import subprocess
 
     repo = tmp_path
-    _git(repo, "init", "-q", "-b", "main")
-    _git(repo, "config", "user.email", "t@t.t")
-    _git(repo, "config", "user.name", "t")
-    _git(repo, "config", "commit.gpgsign", "false")
+    _init_git_repo(repo)
     pkg = repo / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
