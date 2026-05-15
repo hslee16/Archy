@@ -137,9 +137,7 @@ def _make_hotspot_project(repo: Path) -> None:
     (pkg / "cold.py").write_text("def g():\n    return 1\n")
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "init")
-    (pkg / "hot.py").write_text(
-        (pkg / "hot.py").read_text() + "\n# tweak\n"
-    )
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "touch hot")
 
@@ -183,9 +181,7 @@ def test_cli_hotspots_top_limits_rows(tmp_path: Path):
     import json as _json
 
     _make_hotspot_project(tmp_path)
-    result = CliRunner().invoke(
-        main, ["hotspots", str(tmp_path), "--top", "1", "--format", "json"]
-    )
+    result = CliRunner().invoke(main, ["hotspots", str(tmp_path), "--top", "1", "--format", "json"])
     assert result.exit_code == 0, result.output
     payload = _json.loads(result.output)
     assert len(payload["hotspots"]) <= 1

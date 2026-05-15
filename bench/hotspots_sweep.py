@@ -74,9 +74,12 @@ def clone_or_update(proj: dict) -> Path | None:
     )
     if has_sha.returncode != 0:
         subprocess.run(["git", "-C", str(target), "fetch", "--quiet", "origin"], check=False)
-    if subprocess.run(
-        ["git", "-C", str(target), "checkout", "--quiet", sha],
-    ).returncode != 0:
+    if (
+        subprocess.run(
+            ["git", "-C", str(target), "checkout", "--quiet", sha],
+        ).returncode
+        != 0
+    ):
         return None
     subprocess.run(["git", "-C", str(target), "reset", "--hard", "--quiet", sha], check=False)
     subprocess.run(["git", "-C", str(target), "clean", "-fdx", "--quiet"], check=False)
@@ -117,8 +120,11 @@ def main() -> int:
     args = parser.parse_args()
 
     manifest = load_manifest()
-    print(f"# hotspots sweep over {len(manifest)} projects, windows: "
-          f"{', '.join(name for name, _ in WINDOWS)}", file=sys.stderr)
+    print(
+        f"# hotspots sweep over {len(manifest)} projects, windows: "
+        f"{', '.join(name for name, _ in WINDOWS)}",
+        file=sys.stderr,
+    )
 
     rows: list[dict] = []
     for proj in manifest:
@@ -129,9 +135,7 @@ def main() -> int:
             print("  SKIP (clone/checkout failed)", file=sys.stderr)
             continue
         try:
-            results = {
-                wname: run_hotspots(root, since=since) for wname, since in WINDOWS
-            }
+            results = {wname: run_hotspots(root, since=since) for wname, since in WINDOWS}
         except Exception as exc:
             print(f"  SKIP (sweep error: {exc})", file=sys.stderr)
             continue
@@ -155,9 +159,12 @@ def main() -> int:
             ),
         }
         rows.append(row)
-        print(f"  full={len(full_mods)} 12mo={len(twelve)} "
-              f"j(full,12mo)={row['j_full_12mo']:.2f} "
-              f"stale_frac={row['stale_full_frac']:.2f}", file=sys.stderr)
+        print(
+            f"  full={len(full_mods)} 12mo={len(twelve)} "
+            f"j(full,12mo)={row['j_full_12mo']:.2f} "
+            f"stale_frac={row['stale_full_frac']:.2f}",
+            file=sys.stderr,
+        )
 
     out_lines: list[str] = []
 
@@ -167,14 +174,15 @@ def main() -> int:
     today = dt.date.today().isoformat()
     emit("# Hotspots window sweep")
     emit()
-    emit(f"Output of `uv run --with pyyaml python bench/hotspots_sweep.py`. "
-         f"Captured {today}.")
+    emit(f"Output of `uv run --with pyyaml python bench/hotspots_sweep.py`. Captured {today}.")
     emit()
     emit(f"Top-K = {TOP_K}. Windows: full history, 12 months, 6 months. ")
     emit("Jaccard = |A intersect B| / |A union B| on the per-window top-K module sets. ")
-    emit("`stale_full_frac` = fraction of full-history top-K modules that "
-         "are NOT in the 12-month top-K (the recency-contamination proxy: "
-         "high means full-history is dominated by complex-but-dead files).")
+    emit(
+        "`stale_full_frac` = fraction of full-history top-K modules that "
+        "are NOT in the 12-month top-K (the recency-contamination proxy: "
+        "high means full-history is dominated by complex-but-dead files)."
+    )
     emit()
     emit("## Per-project results")
     emit()
