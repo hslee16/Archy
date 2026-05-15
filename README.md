@@ -11,7 +11,7 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
-**Status:** v0.17.0. Usable today via:
+**Status:** v0.18.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -20,6 +20,7 @@
 | Transitive contracts | `archy contracts` (reads `.importlinter` (canonical) or falls back to `archy.yaml`; requires `archy[contracts]`) |
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
+| Refactor priority | `archy hotspots` (CC x git churn) |
 | MCP server | `archy mcp` |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
@@ -232,7 +233,7 @@ If you're running from a checkout instead of an install, use:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.17.0
+- uses: hslee16/archy@v0.18.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -258,7 +259,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.17.0
+    rev: v0.18.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -351,10 +352,30 @@ uv run pytest              # the test now runs instead of being skipped
 Next up:
 
 - [ ] Promote call-density or per-function CC to a score axis (both ship as diagnostics in v0.16/v0.17; orthogonality vs. existing axes validated on the 27-project benchmark, see [`docs/RESEARCH_METRICS.md` §16](docs/RESEARCH_METRICS.md) and §17)
-- [ ] `archy hotspots = CC x per-file churn` (unblocked by v0.17 cyclomatic complexity; needs the one-pass `git log --name-only` parser)
+- [x] `archy hotspots = CC x per-file churn` (shipped in v0.18.0: per-file refactor-priority list from `cc_sum * commit_count` over the git history, single `git log --name-only` pass; filters zero-CC and zero-churn rows)
 - [ ] Design Structure Matrix (`archy dsm`)
 
-Shipped: tree-sitter import graph, `__init__.py` re-export resolution, Tarjan cycle detection, YAML layer rules (`archy check`), composite score (`archy score`), JSONL history + `archy trend`, MCP server (`archy mcp`), GitHub Action + pre-commit hooks, blast-radius (`archy impact`), snapshot/diff agent loop (`archy snapshot` / `archy diff` + MCP `loop` prompt), import-linter contract wrap (`archy contracts`, `archy[contracts]`), graph-navigation MCP tools (`archy_graph_focus`, `archy_graph_summary`, `archy_graph`; design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)), per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool (geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload), call-graph edges as a second edge type (v0.16, diagnostic: `kinds`, `call_lines`, `call_count` on every edge; `total_calls` / `calls_per_edge` on `archy score`; static import-alias resolution per LocAgent's invoke-edge framing), per-function cyclomatic complexity (v0.17, diagnostic: per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every internal node; project-wide `function_count` / `cc_total` / `cc_max` / `cc_mean` on `archy score`; tree-sitter McCabe walker in `src/archy/complexity.py`).
+Shipped:
+
+**Foundations**
+
+- Tree-sitter import graph; `__init__.py` re-export resolution; Tarjan cycle detection.
+- YAML layer rules (`archy check`); composite score (`archy score`); JSONL history + `archy trend`.
+- MCP server (`archy mcp`); GitHub Action + pre-commit hooks.
+
+**Agent loop**
+
+- Blast-radius: `archy impact`.
+- Snapshot/diff: `archy snapshot` / `archy diff` + MCP `loop` prompt.
+- Import-linter contract wrap: `archy contracts`, `archy[contracts]`.
+- Graph-navigation MCP tools: `archy_graph_focus`, `archy_graph_summary`, `archy_graph` (design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)).
+- Per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool — geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload.
+
+**Diagnostics**
+
+- **v0.16 — Call-graph edges** as a second edge type: `kinds`, `call_lines`, `call_count` on every edge; `total_calls` / `calls_per_edge` on `archy score`; static import-alias resolution per LocAgent's invoke-edge framing.
+- **v0.17 — Per-function cyclomatic complexity**: per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every internal node; project-wide `function_count` / `cc_total` / `cc_max` / `cc_mean` on `archy score`; tree-sitter McCabe walker in `src/archy/complexity.py`.
+- **v0.18 — `archy hotspots`**: per-file refactor-priority ranking from `cc_sum x git-commit-count`; single `git log --name-only` pass; Tornhill/CodeScene's "Code Red" formulation; filters zero-CC and zero-churn rows.
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
