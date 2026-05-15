@@ -348,19 +348,28 @@ rank the result. Empirical claim: the top ~10 hotspots account for
 the majority of defect risk and refactoring leverage.
 
 **Python translation:** the CC half is clean - radon's CC computation
-is the de-facto Python standard, and archy can compute it natively
-once the AST pass for cyclomatic complexity (already in
-[`FUTURE.md`](FUTURE.md)) lands. The churn half reuses the git-mining
-machinery from section 7.
+is the de-facto Python standard, and archy computes it natively via
+the tree-sitter walker that landed in v0.17 (`src/archy/complexity.py`).
+The churn half reuses a one-pass `git log --name-only --format=`
+stream rather than the per-file co-change matrix from section 7;
+hotspots only needs per-file commit counts, not cross-file
+correlations.
 
 One Python specifically: decorators that wrap a function (`@retry`,
 `@cache`, `@app.route`) can dramatically increase the *effective*
 complexity of a function without changing its CC count. Treat these
 as a known limitation rather than try to model them.
 
-**Feasibility:** Medium, but cheap if both git-mining (section 7) and
-cyclomatic complexity ([`FUTURE.md`](FUTURE.md)) ship - this comes
-nearly free on top of those.
+**Status:** **Shipped in v0.18.0** as `archy hotspots`
+(`src/archy/hotspots.py`). The rank is `cc_sum * commit_count` per
+internal module, with zero-CC and zero-churn rows filtered so the
+top-K only contains files that score on both axes. The 27-project
+`--since` window sweep (`bench/hotspots_sweep.py`,
+`bench/hotspots_results.md`) settled the default at full history;
+narrower windows collapse the result set on low-activity codebases
+(`mkdocs`, `httpx`) while only buying about 25% less recency
+contamination on the median project. The `--since` flag is the "what
+should I refactor right now" lens.
 
 **Signal:** Very strong, and very actionable. Produces a *prioritized
 list* rather than a single number - "refactor these three files
@@ -368,8 +377,9 @@ first." Pairs well with the AI-agent loop
 (`docs/AGENT_LOOP.md`): "before you start work, here are the
 highest-risk files you might be touching."
 
-**Fit:** standalone command (`archy hotspots`) consuming the
-cyclomatic-complexity pass + git mining.
+**Fit:** standalone CLI command (`archy hotspots`). MCP-tool surface
+is the open follow-up so an agent can read the ranking without
+spawning a subprocess.
 
 ---
 
@@ -708,7 +718,7 @@ these failure modes to archy capabilities:
 | Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Roadmap** (composite of existing signals + NCCD).                 |
 | Agent should read X first             | Top-N by PageRank / fan-in                                                                                       | **Shipping** (`archy_graph_summary`).                                |
 | Deprecated-pattern propagation        | Out of scope for archy (handled by ruff / mypy / pattern lints).                                                 | **Not shipping; not planned.**                                       |
-| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Roadmap** (`archy hotspots`, CC pass required); a pure-static fragility proxy (instability × fan-in) is a faster intermediate. |
+| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Shipping** (`archy hotspots`, v0.18.0); CLI today, MCP-tool surface is the open follow-up. |
 | Cross-file reasoning failure          | Bounded subgraph navigation, edge-level metadata                                                                 | **Shipping** (`archy_graph_focus` with import line numbers).         |
 
 **Implication for archy's roadmap.** The three top-priority
@@ -952,8 +962,14 @@ Qualitative observations:
    restraint elsewhere). numpy at cc_max=181, pygments at 98 - all
    driven by single dispatcher / parser functions. cc_mean is the
    stable signal; cc_max is a hotspot pointer rather than a project
-   health number. The forthcoming `archy hotspots` command will lean
-   on cc_max alongside per-file churn for that ranking.
+   health number. `archy hotspots` (v0.18) ended up ranking on
+   `cc_sum` rather than `cc_max` so a file with twenty CC-7
+   functions outranks one with a single CC-15 function - the
+   refactor-priority signal is breadth-of-complexity, not the worst
+   single function. The `setuptools` case (cc_max=340 from one
+   dispatcher, cc_mean=2.91 elsewhere) is the empirical reason: a
+   `cc_max`-based ranking would surface that single function on
+   every run and bury everything else.
 3. **CC is uncorrelated with size at the project level.** numpy at
    11,283 functions and msgspec at 63 sit at opposite ends of the
    `cc_mean` distribution. This is what makes the signal useful: it
@@ -999,7 +1015,7 @@ The "Role" column distinguishes:
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
 | Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |
 | Cognitive complexity                      | Medium | Trivial| Sub-stat (free with CC) | -            | **Yes (free)** |
-| Hotspots (CC × per-file churn)            | High   | Medium | Standalone command  | -                | **Yes (after CC)** |
+| Hotspots (CC × per-file churn)            | High   | Medium | **Shipped** as `archy hotspots` (v0.18.0): `cc_sum * commit_count` per internal module, single `git log --name-only` pass, zero-component rows filtered; `--since` window default settled at full history via the 27-project sweep in `bench/hotspots_results.md` | ✓ window choice empirically validated: median J(full, 12mo) = 0.60, J(12mo, 6mo) = 0.74, stale_full_frac = 0.25 on the bench | **Shipped (diagnostic)** |
 | Martin's `I` + SDP-violation rule         | Medium | Low    | Sub-stat + check rule | ✓ shipped: `instability.py`, `layers.find_sdp_violations`, surfaced in `archy graph --format json` and `archy check` | **Shipped** |
 | PageRank per module                       | Medium | Low    | Sub-stat (diagnostic) | -              | **Yes**   |
 | Core/periphery size                       | Medium | Trivial| Sub-stat (diagnostic) | -              | **Yes**   |

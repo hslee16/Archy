@@ -30,6 +30,7 @@ from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
+from archy.hotspots import Hotspot, compute_hotspots, git_churn
 from archy.impact import Impact, find_impact
 from archy.layers import (
     LayerConfigError,
@@ -356,6 +357,55 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str) -> None:
         click.echo(json.dumps(_impact_to_dict(result), indent=2, sort_keys=True))
     else:
         click.echo(_impact_to_text(result))
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Maximum hotspots to show.",
+)
+@click.option(
+    "--since",
+    default=None,
+    help="Restrict churn to commits since this date or refspec (passed to `git log --since`).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
+    """Rank files by cyclomatic complexity x git churn.
+
+    Produces a "refactor these first" priority list. CC comes from the
+    v0.17 tree-sitter walker (per-module `cc_sum`); churn is per-file
+    commit count from a one-pass `git log --name-only`. Files that score
+    zero on either axis are dropped.
+    """
+    g = _load_graph(path, internal_only=True)
+    churn = git_churn(path, since=since)
+    if churn is None:
+        raise click.ClickException(
+            f"{path} is not inside a git repository (or git is unavailable); "
+            "`archy hotspots` needs git history to compute per-file churn."
+        )
+    rows = compute_hotspots(g, churn=churn)
+    if fmt == "json":
+        payload = _hotspots_to_dict(rows, top_n=top_n, since=since)
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        click.echo(_hotspots_to_text(rows, top_n=top_n, since=since))
 
 
 @main.command()
@@ -748,6 +798,29 @@ def _impact_to_dict(result: Impact) -> dict:
         "unresolved": list(result.unresolved),
         "impacted": list(result.impacted),
     }
+
+
+def _hotspots_to_dict(rows: list[Hotspot], *, top_n: int, since: str | None) -> dict:
+    return {
+        "since": since,
+        "total": len(rows),
+        "shown": min(top_n, len(rows)),
+        "hotspots": [r.model_dump() for r in rows[:top_n]],
+    }
+
+
+def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> str:
+    if not rows:
+        suffix = f" since {since}" if since else ""
+        return f"# No hotspots found{suffix} (need both cc_sum > 0 and churn > 0)."
+    shown = rows[:top_n]
+    header = f"# {len(rows)} hotspot(s); showing top {len(shown)}"
+    if since:
+        header += f" since {since}"
+    lines = [header, "", "  score  churn  cc_sum  module"]
+    for r in shown:
+        lines.append(f"  {r.score:>5}  {r.churn:>5}  {r.cc_sum:>6}  {r.module}")
+    return "\n".join(lines)
 
 
 def _impact_to_text(result: Impact) -> str:
