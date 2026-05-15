@@ -369,13 +369,13 @@ Shipped:
 - Snapshot/diff: `archy snapshot` / `archy diff` + MCP `loop` prompt.
 - Import-linter contract wrap: `archy contracts`, `archy[contracts]`.
 - Graph-navigation MCP tools: `archy_graph_focus`, `archy_graph_summary`, `archy_graph` (design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)).
-- Per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool — geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload.
+- Per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool: geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload.
 
 **Diagnostics**
 
-- **v0.16 — Call-graph edges** as a second edge type: `kinds`, `call_lines`, `call_count` on every edge; `total_calls` / `calls_per_edge` on `archy score`; static import-alias resolution per LocAgent's invoke-edge framing.
-- **v0.17 — Per-function cyclomatic complexity**: per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every internal node; project-wide `function_count` / `cc_total` / `cc_max` / `cc_mean` on `archy score`; tree-sitter McCabe walker in `src/archy/complexity.py`.
-- **v0.18 — `archy hotspots`**: per-file refactor-priority ranking from `cc_sum x git-commit-count`; single `git log --name-only` pass; Tornhill/CodeScene's "Code Red" formulation; filters zero-CC and zero-churn rows.
+- **v0.16, call-graph edges** as a second edge type: `kinds`, `call_lines`, `call_count` on every edge; `total_calls` / `calls_per_edge` on `archy score`; static import-alias resolution per LocAgent's invoke-edge framing.
+- **v0.17, per-function cyclomatic complexity**: per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every internal node; project-wide `function_count` / `cc_total` / `cc_max` / `cc_mean` on `archy score`; tree-sitter McCabe walker in `src/archy/complexity.py`.
+- **v0.18, `archy hotspots`**: per-file refactor-priority ranking from `cc_sum x git-commit-count`; single `git log --name-only` pass; Tornhill/CodeScene's "Code Red" formulation; filters zero-CC and zero-churn rows.
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
