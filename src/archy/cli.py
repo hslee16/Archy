@@ -311,6 +311,8 @@ def trend(path: Path, last_n: int, fmt: str) -> None:
                             "acyclicity": r.acyclicity,
                             "depth": r.depth,
                             "equality": r.equality,
+                            # complexity is None on rows written before v0.20.
+                            "complexity": r.complexity,
                         },
                     }
                     for r in window
@@ -601,6 +603,7 @@ def _score_to_dict(s: Score) -> dict:
             "acyclicity": s.acyclicity,
             "depth": s.depth,
             "equality": s.equality,
+            "complexity": s.complexity,
         },
         "inputs": {
             "module_count": s.inputs.module_count,
@@ -632,14 +635,14 @@ def _score_to_text(s: Score) -> str:
         f"({s.inputs.cycle_count} cycles, tangle={s.inputs.tangle_ratio:.3f})",
         f"depth:       {s.depth:.3f}  (max depth {s.inputs.max_depth})",
         f"equality:    {s.equality:.3f}  (Gini={s.inputs.raw_gini:.3f})",
+        f"complexity:  {s.complexity:.3f}  "
+        f"({s.inputs.function_count} functions, cc_mean={s.inputs.cc_mean:.2f}, "
+        f"cc_max={s.inputs.cc_max})",
         f"# graph: {s.inputs.module_count} modules, {s.inputs.edge_count} edges",
         f"# propagation_cost: {s.inputs.propagation_cost:.4f}  "
         f"(diagnostic, not in score; MacCormack reverse-reach fraction)",
         f"# calls: {s.inputs.total_calls} resolved across {s.inputs.call_edge_count} edge(s), "
         f"{s.inputs.calls_per_edge:.2f}/edge  (diagnostic, not in score)",
-        f"# cc: {s.inputs.function_count} functions, "
-        f"mean={s.inputs.cc_mean:.2f}, max={s.inputs.cc_max}  "
-        f"(diagnostic, not in score; per-function McCabe)",
     ]
     return "\n".join(lines)
 
@@ -719,7 +722,7 @@ def _snapshot_to_text(snap: Snapshot) -> str:
 def _diff_to_text(result: DiffReport) -> str:
     deltas = result.score_delta
     lines = ["# score deltas (current - baseline):"]
-    for name in ("overall", "modularity", "acyclicity", "depth", "equality"):
+    for name in ("overall", "modularity", "acyclicity", "depth", "equality", "complexity"):
         lines.append(f"  {name:11s} {getattr(deltas, name):+.3f}")
     cycles = result.cycles
     lines.append("")

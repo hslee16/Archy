@@ -221,6 +221,7 @@ def test_score_text_output(tmp_path: Path):
     assert "acyclicity:" in result.output
     assert "depth:" in result.output
     assert "equality:" in result.output
+    assert "complexity:" in result.output
 
 
 def test_score_json_output(tmp_path: Path):
@@ -229,7 +230,13 @@ def test_score_json_output(tmp_path: Path):
     assert result.exit_code == 0
     payload = json.loads(result.output)
     assert "overall" in payload
-    assert set(payload["components"]) == {"modularity", "acyclicity", "depth", "equality"}
+    assert set(payload["components"]) == {
+        "modularity",
+        "acyclicity",
+        "depth",
+        "equality",
+        "complexity",
+    }
     assert 0.0 <= payload["overall"] <= 1.0
     for v in payload["components"].values():
         assert 0.0 <= v <= 1.0

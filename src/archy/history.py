@@ -28,6 +28,11 @@ class HistoryRow(BaseModel):
     acyclicity: float
     depth: float
     equality: float
+    # complexity (per-function CC) was added in v0.20 when cc_mean got
+    # promoted from a diagnostic to a score axis. Rows written by earlier
+    # archy versions don't have it; we render those as "-" in the trend
+    # table rather than guess the value.
+    complexity: float | None = None
     module_count: int
     edge_count: int
     cycle_count: int
@@ -80,6 +85,7 @@ def row_from_score(
         acyclicity=score.acyclicity,
         depth=score.depth,
         equality=score.equality,
+        complexity=score.complexity,
         module_count=score.inputs.module_count,
         edge_count=score.inputs.edge_count,
         cycle_count=score.inputs.cycle_count,
@@ -132,6 +138,7 @@ def _row_to_dict(row: HistoryRow) -> dict:
             "acyclicity": row.acyclicity,
             "depth": row.depth,
             "equality": row.equality,
+            "complexity": row.complexity,
         },
         "inputs": {
             "module_count": row.module_count,
@@ -163,6 +170,8 @@ def _row_from_dict(data: object) -> HistoryRow | None:
             acyclicity=_as_float(score["acyclicity"]),
             depth=_as_float(score["depth"]),
             equality=_as_float(score["equality"]),
+            # complexity (v0.20) is None on rows written by older archy.
+            complexity=_optional_float(score.get("complexity")),
             module_count=_as_int(inputs["module_count"]),
             edge_count=_as_int(inputs["edge_count"]),
             cycle_count=_as_int(inputs["cycle_count"]),
@@ -204,3 +213,11 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return value if isinstance(value, str) else None
+
+
+def _optional_float(value: object) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None

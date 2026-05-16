@@ -8,6 +8,7 @@ import pytest
 from archy.score import (
     _gini,
     compute_acyclicity,
+    compute_complexity,
     compute_depth,
     compute_equality,
     compute_modularity,
@@ -181,6 +182,45 @@ def test_equality_empty_graph_is_one():
     assert gini == 0.0
 
 
+# --- complexity ---------------------------------------------------------------
+
+
+def test_complexity_no_functions_is_vacuously_one():
+    # No functions => no CC signal => cannot pull the geomean down.
+    assert compute_complexity(cc_mean=0.0, function_count=0) == 1.0
+
+
+def test_complexity_floor_cc_mean_of_one_is_one():
+    # cc_mean=1 means every function has exactly one branch-free path:
+    # the theoretical floor; the axis cannot do better.
+    assert compute_complexity(cc_mean=1.0, function_count=100) == 1.0
+
+
+def test_complexity_ceiling_cc_mean_of_six_is_zero():
+    assert compute_complexity(cc_mean=6.0, function_count=100) == 0.0
+
+
+def test_complexity_above_ceiling_clamps_to_zero():
+    assert compute_complexity(cc_mean=12.5, function_count=100) == 0.0
+
+
+def test_complexity_linear_midpoint():
+    # cc_mean=3.5 sits at (3.5 - 1) / 5 = 0.5, so the axis returns 1 - 0.5 = 0.5.
+    assert compute_complexity(cc_mean=3.5, function_count=100) == pytest.approx(0.5)
+
+
+def test_complexity_bench_anchor_points():
+    # Anchors from RESEARCH_METRICS.md sec 17. Verify the formula matches
+    # what the docs claim so a future normalization tweak can't silently
+    # invalidate the published interpretation bands.
+    # mkdocs: cc_mean 1.77 -> 0.846
+    assert compute_complexity(cc_mean=1.77, function_count=1_277) == pytest.approx(0.846)
+    # archy: cc_mean 3.73 -> 0.454
+    assert compute_complexity(cc_mean=3.73, function_count=157) == pytest.approx(0.454)
+    # msgspec: cc_mean 5.33 -> 0.134
+    assert compute_complexity(cc_mean=5.33, function_count=63) == pytest.approx(0.134)
+
+
 # --- compute_score ------------------------------------------------------------
 
 
@@ -215,22 +255,24 @@ def test_compute_score_with_cycle_is_lower():
 
 
 def test_compute_score_geometric_mean_combines_multiplicatively():
-    # Sanity check that overall is the geometric mean of the four
-    # sub-metrics, not their arithmetic mean.
+    # Sanity check that overall is the geometric mean of the five
+    # sub-metrics (complexity promoted from diagnostic in v0.20),
+    # not their arithmetic mean.
     s = compute_score(_g(("a", "b")))
-    assert s.overall == pytest.approx((s.modularity * s.acyclicity * s.depth * s.equality) ** 0.25)
+    expected = (s.modularity * s.acyclicity * s.depth * s.equality * s.complexity) ** 0.2
+    assert s.overall == pytest.approx(expected)
 
 
 def test_compute_score_all_components_in_unit_interval():
     g = _g(("a", "b"), ("b", "c"), ("c", "a"), ("d", "a"))
     s = compute_score(g)
-    for value in (s.overall, s.modularity, s.acyclicity, s.depth, s.equality):
+    for value in (s.overall, s.modularity, s.acyclicity, s.depth, s.equality, s.complexity):
         assert 0.0 <= value <= 1.0
         assert math.isfinite(value)
 
 
 def test_cc_aggregates_roll_up_from_node_attrs():
-    # Synthesize a graph with explicit per-node CC attributes — the score
+    # Synthesize a graph with explicit per-node CC attributes; the score
     # roll-up reads these without re-parsing anything, so a unit test on
     # ScoreInputs can verify the math without going through tree-sitter.
     g = nx.DiGraph()

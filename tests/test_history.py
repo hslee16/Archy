@@ -21,6 +21,7 @@ def _score(overall: float = 0.5) -> Score:
         acyclicity=0.5,
         depth=0.7,
         equality=0.4,
+        complexity=0.55,
         inputs=ScoreInputs(
             module_count=10,
             edge_count=20,
@@ -80,6 +81,38 @@ def test_row_from_score_uses_injected_now():
     fixed = dt.datetime(2026, 5, 9, 13, 45, 7, tzinfo=dt.timezone.utc)
     row = row_from_score(_score(0.42), commit="abc", branch="main", now=fixed)
     assert row.timestamp == "2026-05-09T13:45:07Z"
+
+
+def test_pre_v0_20_row_without_complexity_reads_as_none(tmp_path: Path):
+    # Backwards-compat: a JSONL row written by archy < 0.20 has no
+    # `complexity` key in the score dict. We accept it and surface
+    # `complexity=None` rather than refusing the whole row.
+    history = tmp_path / "history.jsonl"
+    legacy_payload = {
+        "timestamp": "2025-12-01T12:00:00Z",
+        "commit": "deadbeef",
+        "branch": "main",
+        "score": {
+            "overall": 0.55,
+            "modularity": 0.6,
+            "acyclicity": 0.5,
+            "depth": 0.7,
+            "equality": 0.4,
+        },
+        "inputs": {
+            "module_count": 10,
+            "edge_count": 20,
+            "cycle_count": 1,
+            "tangle_ratio": 0.2,
+            "max_depth": 2,
+            "community_count": 3,
+        },
+    }
+    history.write_text(json.dumps(legacy_payload) + "\n")
+    rows = read(history)
+    assert len(rows) == 1
+    assert rows[0].overall == 0.55
+    assert rows[0].complexity is None
 
 
 def test_git_metadata_on_non_git_dir(tmp_path: Path):

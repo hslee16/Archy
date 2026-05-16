@@ -22,7 +22,7 @@ archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.19.0. Usable today via:
+**Status:** v0.20.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -255,7 +255,7 @@ If you're running from a checkout instead of an install, use:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.19.0
+- uses: hslee16/archy@v0.20.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -281,7 +281,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.19.0
+    rev: v0.20.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -373,7 +373,7 @@ uv run pytest              # the test now runs instead of being skipped
 
 Next up:
 
-- [ ] Promote call-density or per-function CC to a score axis (both ship as diagnostics in v0.16/v0.17; orthogonality vs. existing axes validated on the 27-project benchmark, see [`docs/RESEARCH_METRICS.md` §16](docs/RESEARCH_METRICS.md) and §17)
+- [ ] Promote call-density (`calls_per_edge`) to a score axis. Per-function CC was promoted in v0.20.0 as a 5th axis (`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`); call-density remains diagnostic because cc_mean was more orthogonal and bundling both in one PR conflated the score-shape change. See [`docs/RESEARCH_METRICS.md` §16](docs/RESEARCH_METRICS.md).
 - [x] `archy hotspots = CC x per-file churn` (shipped in v0.18.0: per-file refactor-priority list from `cc_sum * commit_count` over the git history, single `git log --name-only` pass; filters zero-CC and zero-churn rows)
 - [ ] Design Structure Matrix (`archy dsm`)
 

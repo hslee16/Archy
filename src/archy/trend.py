@@ -23,16 +23,20 @@ def render_text(rows: list[HistoryRow], *, last_n: int) -> str:
         "",
         f"score: {spark}  ({window[0].overall:.3f} -> {window[-1].overall:.3f})",
         "",
-        f"{'when':<17} {'commit':<8} {'score':>6} {'mod':>5} {'acy':>5} {'dep':>5} {'eq':>5}",
-        f"{'-' * 17} {'-' * 8} {'-' * 6} {'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5}",
+        f"{'when':<17} {'commit':<8} {'score':>6} "
+        f"{'mod':>5} {'acy':>5} {'dep':>5} {'eq':>5} {'cpx':>5}",
+        f"{'-' * 17} {'-' * 8} {'-' * 6} {'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5}",
     ]
     for row in window:
         when = row.timestamp[:16].replace("T", " ")
         commit = (row.commit or "?")[:7]
+        # complexity is None on rows written before v0.20; render "-" so the
+        # column still aligns rather than swallowing the row.
+        cpx = f"{row.complexity:5.3f}" if row.complexity is not None else f"{'-':>5}"
         lines.append(
             f"{when:<17} {commit:<8} "
             f"{row.overall:6.3f} {row.modularity:5.3f} {row.acyclicity:5.3f} "
-            f"{row.depth:5.3f} {row.equality:5.3f}"
+            f"{row.depth:5.3f} {row.equality:5.3f} {cpx}"
         )
     return "\n".join(lines)
 
