@@ -28,17 +28,16 @@ import sys
 from pathlib import Path
 
 import networkx as nx
-import yaml  # type: ignore[import-untyped]
 
 # Reuse the bench scaffolding for clone-and-checkout so this script does
 # not drift from `bench/run.py`'s reproducibility guarantees.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from run import clone_or_update, load_manifest, pearson  # noqa: E402
+from run import clone_or_update, load_manifest, pearson
 
 # Importing archy from the working tree (we are inside the repo).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-from archy.graph import build_graph  # noqa: E402
-from archy.score import (  # noqa: E402
+from archy.graph import build_graph
+from archy.score import (
     compute_acyclicity,
     compute_complexity,
     compute_depth,
