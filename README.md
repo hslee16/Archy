@@ -1,6 +1,6 @@
 <!-- mcp-name: io.github.hslee16/archy -->
 
-# archy
+<p align="center"><img src="docs/assets/logo-wordmark.png" alt="archy" width="420"></p>
 
 [![PyPI](https://img.shields.io/pypi/v/archy.svg)](https://pypi.org/project/archy/)
 [![Python](https://img.shields.io/pypi/pyversions/archy.svg)](https://pypi.org/project/archy/)
@@ -65,6 +65,8 @@ The agent-feedback framing is empirically supported by 2025-2026 research: the N
 
 ## Quick start
 
+**Requires Python 3.10+** (archy depends on `mcp>=1.27.1` which is 3.10-only). If you only have system Python 3.9 or older, install a newer Python first or use [uv](https://docs.astral.sh/uv/) which manages versions for you.
+
 ```bash
 pip install archy
 # or: uv tool install archy
@@ -72,6 +74,8 @@ pip install archy
 ```
 
 All examples below use the installed `archy` command. If you're working from a checkout, prefix them with `uv run` (e.g. `uv run archy graph .`).
+
+See [`docs/SIXTY_SECOND_TOUR.md`](docs/SIXTY_SECOND_TOUR.md) for the copy-paste path from zero to first score.
 
 ### Inspect the graph
 

@@ -1,3 +1,6 @@
+# macOS Finder droppings
+.DS_Store
+
 # Local Claude Code state (never commit)
 .claude/
 
@@ -229,3 +232,6 @@ __marimo__/
 
 # Local-only maintainer notes (PyPI download stats, etc.)
 docs/PYPI_STATS.md
+
+# Local research notes (kept locally, never published)
+research/
