@@ -11,6 +11,17 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
+```bash
+pip install archy
+archy score .         # one-shot architectural health number
+archy hotspots .      # refactor priority = complexity x git churn
+archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
+```
+
+![archy demo](docs/demo.gif)
+
+**Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
+
 **Status:** v0.19.0. Usable today via:
 
 | Mode | Command |
@@ -25,7 +36,13 @@
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
 
+## In the wild
+
+archy is used in production by the projects listed in [`ADOPTERS.md`](ADOPTERS.md). If you're running archy on a real codebase, please open a PR to add yourself, or file an issue and I'll add you.
+
 ## Why
+
+I built archy because I kept watching coding agents generate code that passed review but rotted the import graph underneath. The score on a feature change would look fine; six weeks later the cycle count had doubled and nobody noticed until a refactor blew up. I wanted a single number per commit that would have caught it.
 
 AI agents generate code at machine speed. Without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
 

@@ -1,5 +1,22 @@
 # Contributing
 
+## Community Compact
+
+What the maintainer commits to:
+
+- Respond to new issues within a week (best effort; one person, day job).
+- Public roadmap in [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/FUTURE.md`](docs/FUTURE.md); changes land as PRs so the history is in git.
+- No surprise re-licensing. archy is MIT and intended to stay that way. Any change would be announced in advance with rationale; released versions stay under their original license.
+- No commercial-feature gating in the OSS package. If a hosted version of archy ever exists, the OSS package will never be the lesser product.
+
+What contributors are asked to do:
+
+- Open an issue before a large PR so we can scope-check before you invest time.
+- Follow the style rules below (notably the no-em-dash rule; CI does not yet enforce it but reviewers will).
+- Write tests for new behavior, especially anything graph-shape or score-affecting.
+
+For governance details (decision process, how this evolves with multiple committers, right-to-fork) see [`GOVERNANCE.md`](GOVERNANCE.md). For conduct expectations see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+
 ## Style
 
 ### No em dashes
