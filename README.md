@@ -11,6 +11,17 @@
 
 > Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
 
+```bash
+pip install archy
+archy score .         # one-shot architectural health number
+archy hotspots .      # refactor priority = complexity x git churn
+archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
+```
+
+![archy demo](docs/demo.gif)
+
+**Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
+
 **Status:** v0.19.0. Usable today via:
 
 | Mode | Command |
@@ -24,6 +35,10 @@
 | MCP server | `archy mcp` |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
+
+## In the wild
+
+archy is used in production by the projects listed in [`ADOPTERS.md`](ADOPTERS.md). If you're running archy on a real codebase, please open a PR to add yourself, or file an issue and I'll add you.
 
 ## Why
 
