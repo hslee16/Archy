@@ -99,6 +99,25 @@ This maps the canonical `[-0.5, 1.0]` range onto `[0, 1]`.
   cannot detect communities smaller than roughly `√m`. For very small
   codebases this metric saturates at 1.0 and stops being informative.
 
+**Call-weighted Q diagnostic.** The same algorithm is rerun on a graph
+whose edges are weighted by `call_count` (with weight=1 fallback for
+import-only edges), producing a second raw Q value reported alongside
+the unweighted one on `archy score`. The *gap* between unweighted and
+weighted Q is the load-bearing signal:
+
+- gap `> +0.05`: calls amplify community structure (the package layout
+  matches how the code actually runs).
+- gap `< -0.05`: calls cross community boundaries (the package layout
+  is aspirational; runtime usage doesn't respect it).
+- gap roughly zero: calls track the community structure.
+
+This is a diagnostic, not a score axis. The empirical analysis and the
+rejected "ship as axis replacement" alternative are in
+[`CALL_WEIGHTED_Q_EMPIRICS.md`](CALL_WEIGHTED_Q_EMPIRICS.md). The gap
+is the unique signal among archy's outputs that compares two views of
+the same codebase (import structure vs call structure) rather than
+looking at one view in isolation.
+
 ### Acyclicity
 
 > **What it measures:** what fraction of the codebase sits inside a

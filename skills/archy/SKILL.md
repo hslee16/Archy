@@ -1,6 +1,6 @@
 ---
 name: archy
-description: Track architectural health of a Python codebase via the archy CLI and MCP server. Computes a four-axis quality score (modularity, acyclicity, depth, equality), detects import cycles via Tarjan SCCs, enforces YAML layer rules directly and transitively (via import-linter), and runs a snapshot/diff feedback loop so AI-assisted edits do not silently regress structure. Use when working in a Python project that contains `archy.yaml`, when the user mentions architectural drift, import cycles, layer violations, module coupling, blast radius, refactor risk, "what depends on this", or before any multi-file Python refactor.
+description: Track architectural health of a Python codebase via the archy CLI and MCP server. Computes a five-axis quality score (modularity, acyclicity, depth, equality, complexity), detects import cycles via Tarjan SCCs, enforces YAML layer rules directly and transitively (via import-linter), ranks refactor priority via `cyclomatic_complexity * git_churn` hotspots, surfaces high-risk modules before edits, and runs a snapshot/diff feedback loop so AI-assisted edits do not silently regress structure. Use when working in a Python project that contains `archy.yaml`, when the user mentions architectural drift, import cycles, layer violations, module coupling, blast radius, refactor risk, refactor priority, hotspots, "what depends on this", "where should I refactor first", or before any multi-file Python refactor.
 license: MIT
 compatibility: Requires Python 3.10+ and `pip install archy` (or `archy[contracts]` for transitive import-linter checks). The MCP server runs over stdio.
 metadata:
@@ -32,10 +32,11 @@ If the `archy_*` tools below are not visible, stop and ask the user to install a
 Activate this skill when any of the following is true:
 
 - The repository root contains `archy.yaml` (definitive signal: the project has opted in)
-- The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, dependency graph, "what depends on X", or "is this safe to remove"
+- The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, refactor priority, dependency graph, hotspots, "what depends on X", "is this safe to remove", or "where should I refactor first"
 - An edit is about to touch more than one Python module
 - An edit adds, removes, or changes an `import` statement
 - The user asks for a structural review of a Python project
+- The user asks about per-function cyclomatic complexity, per-module CC aggregates, or per-file refactor priority
 
 Do *not* activate this skill for: single-file scripts, non-Python projects, code-style or lint questions (use ruff/mypy), or test failures (use the test runner).
 
@@ -78,6 +79,22 @@ archy_graph_summary(path=".", top_n=20)
 ```
 
 Returns top modules by fan-in, fan-out, and PageRank, plus top external dependencies. Cheap. Read this before reading the full graph.
+
+Before a non-trivial edit, check whether the target is a high-risk module:
+
+```
+archy_high_risk_modules(path=".", top_n=10)
+```
+
+Ranks internal modules by `edit_risk = geomean(propagation_cost, normalized_fan_in, instability)`. A high score means central *and* fragile; treat such edits with extra care or scope them down. Pairs with `archy_hotspots` (below) which answers "where is the refactoring leverage" using git churn rather than structural risk.
+
+For refactor priority across the whole codebase:
+
+```
+archy_hotspots(path=".", top_n=20, since=None)
+```
+
+Ranks files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). The top of the list is where refactoring effort pays back the most. `since` is passed straight to `git log --since`; use it for "what should I refactor right now" recency-weighted views. Falls back gracefully on non-git projects (empty list plus a note pointing at `archy_high_risk_modules` as the structural alternative).
 
 ### 3. Edit the code
 
@@ -126,10 +143,12 @@ Loop back to step 4 after each correction.
 | `archy_graph_focus` | `(path, modules: list[str], depth=1, direction="both", internal_only=True)` | Bounded local neighborhood with edges + line numbers. |
 | `archy_graph_summary` | `(path, top_n=20)` | Top-N overview by fan-in / fan-out / PageRank. |
 | `archy_graph` | `(path, internal_only=True, max_nodes=500)` | Full dump. Refuses graphs over `max_nodes`; prefer focus/summary for reasoning. |
+| `archy_high_risk_modules` | `(path, top_n=10, internal_only=True)` | "Is this edit dangerous?" Top-N modules by `edit_risk` (geomean of propagation cost, normalized fan-in, instability). Call before a non-trivial edit. |
+| `archy_hotspots` | `(path, top_n=20, since=None)` | "Where is the refactoring leverage?" Rank files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). Pass `since` (e.g. `"1 year ago"`) for recency-weighted views. |
 | `archy_check` | `(path, config_path=None)` | After import changes. Direct-edge layer + SDP rules from `archy.yaml`. |
 | `archy_contracts` | `(path, config_path=None)` | Transitive layer enforcement via import-linter. Requires `archy[contracts]`. |
 | `archy_cycles` | `(path, min_size=2, internal_only=True)` | Standalone cycle listing (Tarjan SCCs + self-loops). |
-| `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite quality score. `record=True` appends to `.archy/history.jsonl`; `strict=True` fails on regression beyond tolerance. |
+| `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl`; `strict=True` fails on regression beyond tolerance. |
 | `archy_record_baseline` | `(path, internal_only=True)` | Convenience: `archy_score(record=True)` for the start-of-session entry. |
 | `archy_trend` | `(path, last_n=10)` | Recent score history (oldest-first). |
 
@@ -151,6 +170,10 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 - "Who uses this and what edges?" → `archy_graph_focus(direction="both")` (carries import line numbers)
 - "Where should I start reading this codebase?" → `archy_graph_summary`
 - "I really need the whole graph" → `archy_graph` (bump `max_nodes` only after `archy_graph_summary` shows the project fits)
+- "Is this module dangerous to edit?" → `archy_high_risk_modules` (structural; no git required)
+- "Where should I focus refactoring effort?" → `archy_hotspots` (CC x git churn; needs a git repo)
+
+**Reading the score breakdown.** `archy_score` returns five axes plus a call-weighted Q diagnostic. The diagnostic appears alongside the unweighted `modularity` line: the *gap* between unweighted and call-weighted raw Q is the load-bearing signal (it detects mismatch between the import-graph community structure and the call-graph community structure). The headline `overall` is the geometric mean of the five axes only; the call-weighted Q diagnostic is for context, not score. See [`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/CALL_WEIGHTED_Q_EMPIRICS.md) for what the gap means in practice.
 
 **Score vs. snapshot/diff:**
 
@@ -195,10 +218,40 @@ archy_graph_focus(path=".", modules=[<one node from the SCC>], depth=2, directio
 # Read import line numbers from the edges; choose the edge to break.
 ```
 
+### Finding what to refactor next
+
+```
+archy_hotspots(path=".", top_n=10)
+# Top of the list is the highest `cc_sum * git_commit_count` product.
+# These files cost the most attention per change; refactoring them
+# pays back the most.
+archy_graph_focus(path=".", modules=[<top hotspot>], depth=1, direction="both")
+# Decide whether the right move is "extract some functions" (CC-driven)
+# or "split the module" (structure-driven), then snapshot and edit.
+```
+
+For recency-weighted hotspots ("what's hot in the last quarter"):
+
+```
+archy_hotspots(path=".", top_n=10, since="3 months ago")
+```
+
+### Assessing edit risk before touching a module
+
+```
+archy_high_risk_modules(path=".", top_n=10)
+# If the module you plan to edit is in this list, scope the edit down or
+# pause for review. `edit_risk` is the geometric mean of propagation
+# cost, normalized fan-in, and Martin's instability; high means the
+# module is both central and fragile.
+```
+
 ## References
 
-- Repository: https://github.com/hslee16/archy
-- Agent loop playbook: https://github.com/hslee16/archy/blob/main/docs/AGENT_LOOP.md
-- Score formulas: https://github.com/hslee16/archy/blob/main/docs/SCORING.md
-- Layer rules and `archy.yaml` syntax: https://github.com/hslee16/archy#layer-rules-archy-check
-- Benchmarks across 27 projects: https://github.com/hslee16/archy/blob/main/bench/results.md
+- Repository: https://github.com/hslee16/Archy
+- Agent loop playbook: https://github.com/hslee16/Archy/blob/main/docs/AGENT_LOOP.md
+- Score formulas (five axes + call-weighted Q diagnostic): https://github.com/hslee16/Archy/blob/main/docs/SCORING.md
+- Axis review (why 5 axes, why no 6th from calls_per_edge): https://github.com/hslee16/Archy/blob/main/docs/AXIS_REVIEW.md
+- Call-weighted Q empirical study: https://github.com/hslee16/Archy/blob/main/docs/CALL_WEIGHTED_Q_EMPIRICS.md
+- Layer rules and `archy.yaml` syntax: https://github.com/hslee16/Archy#layer-rules-archy-check
+- Benchmarks across 27 projects: https://github.com/hslee16/Archy/blob/main/bench/results.md
