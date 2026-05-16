@@ -51,6 +51,7 @@ class ScoreDelta(BaseModel):
     acyclicity: float
     depth: float
     equality: float
+    complexity: float
 
 
 class CycleSetDiff(BaseModel):
@@ -198,6 +199,7 @@ def _score_to_dict(s: Score) -> dict[str, object]:
             "acyclicity": s.acyclicity,
             "depth": s.depth,
             "equality": s.equality,
+            "complexity": s.complexity,
         },
         "inputs": s.inputs.model_dump(),
     }
@@ -212,12 +214,23 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
     # ScoreInputs.model_validate handles per-field type coercion and raises a
     # clear ValidationError if a key is missing or wrongly typed.
     inputs = ScoreInputs.model_validate(raw_inputs)
+    # complexity (v0.20): re-derive from cc_mean / function_count on an old
+    # snapshot rather than refusing to load. The components dict on a pre-v0.20
+    # baseline.json doesn't carry the field; reconstructing it from inputs
+    # keeps the diff loop working across the version boundary.
+    if "complexity" in components:
+        complexity = _expect_float(components["complexity"])
+    else:
+        from archy.score import compute_complexity
+
+        complexity = compute_complexity(inputs.cc_mean, inputs.function_count)
     score = Score(
         overall=_expect_float(score_dict["overall"]),
         modularity=_expect_float(components["modularity"]),
         acyclicity=_expect_float(components["acyclicity"]),
         depth=_expect_float(components["depth"]),
         equality=_expect_float(components["equality"]),
+        complexity=complexity,
         inputs=inputs,
     )
     cycles = tuple(
@@ -277,6 +290,7 @@ def _score_delta(baseline: Score, current: Score) -> ScoreDelta:
         acyclicity=current.acyclicity - baseline.acyclicity,
         depth=current.depth - baseline.depth,
         equality=current.equality - baseline.equality,
+        complexity=current.complexity - baseline.complexity,
     )
 
 

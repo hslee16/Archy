@@ -7,7 +7,7 @@ Short, opinionated summary of where archy is going. The detailed item-by-item li
 Things actively in flight or planned for the next 2-3 releases.
 
 - **Design Structure Matrix (`archy dsm`)**: render the internal dependency graph as a square module x module matrix with rows/columns ordered to push edges below the diagonal. Canonical industrial visualization of architectural coupling. ASCII for terminals, JSON for tooling, optional self-contained HTML for CI artifacts. Diagnostic, not a score axis. See [`FUTURE.md`](FUTURE.md) near-term section.
-- **Promote `cc_mean` (per-function cyclomatic complexity) and/or call-density to a score axis** at a deliberate version boundary. Both ship as diagnostics in v0.16/v0.17 and their orthogonality vs. existing axes is validated on the 27-project benchmark. The remaining work is picking the promotion shape and refreshing the SCORING.md interpretation bands.
+- **Promote call-density (`calls_per_edge`) to a score axis.** Per-function `cc_mean` was promoted in v0.20.0 as a 5th axis (`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`); call-density remains diagnostic because cc_mean was more orthogonal and bundling both in one PR conflated the score-shape change. The remaining work is picking a normalization shape for `calls_per_edge` (bench distribution is heavy-tailed: numpy at 52, msgspec at 2.7) and deciding whether it lands as a 6th axis or replaces / refines the modularity axis (call-weighted Newman Q).
 
 ## Next
 

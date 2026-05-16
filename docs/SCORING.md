@@ -1,18 +1,31 @@
 # Scoring
 
 `archy score` reduces an import graph to a single number in `[0, 1]` by
-combining four sub-metrics that each capture an independent structural
-property of a directed graph: **modularity**, **acyclicity**, **depth**,
-and **equality**. The four are aggregated by geometric mean.
+combining five sub-metrics that each capture an independent structural
+property of the codebase: **modularity**, **acyclicity**, **depth**,
+**equality**, and **complexity**. The five are aggregated by geometric mean.
 
 This document explains what each sub-metric measures, the exact formula
 archy uses, why that formula was chosen, and how to read the output. The
 implementation lives in [`src/archy/score.py`](../src/archy/score.py).
 
-The model - four-of-five sub-metrics plus geometric-mean aggregation -
-follows sentrux's [`quality-signal-design.md`][sentrux-design]. archy
-defers sentrux's fifth metric (redundancy); see
+The first four sub-metrics plus the geometric-mean aggregator follow
+sentrux's [`quality-signal-design.md`][sentrux-design]. The fifth axis
+(complexity) was promoted from a v0.17 diagnostic to a score axis in
+v0.20 after the 27-project benchmark showed it is the most orthogonal
+signal archy has ever measured against the existing four (max
+`|r| = 0.197`); the validation evidence lives in
+[`docs/RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md).
+archy defers sentrux's redundancy axis; see
 [Deferred metrics](#deferred-metrics) below.
+
+> **v0.20 score-shape change.** Adding a fifth axis means absolute
+> `overall` scores shift slightly on every project. The four pre-v0.20
+> sub-axis values are unchanged. Existing `.archy/history.jsonl`
+> trends will show a one-step discontinuity at the v0.20 upgrade
+> commit; record a fresh baseline (`archy score --record`) after
+> upgrading to anchor the new series. See
+> [Score-shape versioning](#score-shape-versioning).
 
 ## Design goals
 
@@ -203,15 +216,88 @@ equivalent to `1 - 2 * (area under the Lorenz curve)`.[^gini-formula]
   long-term target is `gini(per_function_cyclomatic_complexity)` -
   inequality across function complexity, not module fan-out. Module-
   level Gini is computable from the import graph alone; per-function
-  CC requires AST-level analysis that archy plans to add but has not
-  shipped (see [`docs/FUTURE.md`](FUTURE.md)).
+  CC requires AST-level analysis. archy ships per-function CC as of
+  v0.17 (and uses the project-wide `cc_mean` as the basis for the
+  Complexity axis below); swapping the equality axis to use
+  `gini(per_function_cc)` is still on the roadmap (see
+  [`docs/ROADMAP.md`](ROADMAP.md)).
 - For very small graphs (< ~10 modules) Gini is noisy and a single
   utility module can swing the score significantly.
+
+### Complexity
+
+> **What it measures:** how branch-heavy the average function is. A
+> codebase whose typical function carries lots of conditional logic
+> drags this down.
+
+archy computes per-function McCabe cyclomatic complexity over the
+tree-sitter AST (see [`src/archy/complexity.py`](../src/archy/complexity.py))
+and aggregates to a project-wide mean (`cc_mean`). The mean is then
+mapped linearly to `[0, 1]` with the floor at the theoretical minimum
+(every function has one branch-free path) and the ceiling at six:
+
+```
+complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)
+```
+
+Anchor points from the 27-project benchmark
+([`RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md)):
+
+- mkdocs at `cc_mean = 1.77` -> `complexity = 0.846`
+- archy at `cc_mean = 3.73` -> `complexity = 0.454`
+- msgspec at `cc_mean = 5.33` -> `complexity = 0.134`
+
+A graph with zero functions (a project of only empty `__init__.py`
+files) returns `1.0` vacuously, matching the convention the other axes
+use for empty inputs.
+
+**Why a linear floor-to-six mapping.** The bench distribution sits in
+`[1.77, 5.33]`. Linearly mapping `[1, 6]` to `[1, 0]` spreads that
+entire range across roughly `[0.85, 0.13]`, which gives the axis room
+to discriminate without bottoming out at 0 for any real Python project.
+A floor of 1 (rather than 0) is what McCabe's definition implies: even
+a function with no branches has cyclomatic complexity 1.
+
+**Why mean and not max.** Project-wide `cc_max` is dominated by
+single dispatcher / parser functions and does not correlate with the
+overall coding style: setuptools shows `cc_max = 340` (one extreme
+function) alongside `cc_mean = 2.91` (typical restraint elsewhere).
+The mean is the stable signal; `cc_max` is preserved as a diagnostic
+and used by [`archy hotspots`](FUTURE.md) for refactor-priority
+ranking, where the worst single function is exactly the signal you
+want.
+
+**What moves it:**
+
+- **Up:** reducing the branching in the typical function (extracting
+  guard clauses, replacing nested conditionals with dispatch, breaking
+  multi-purpose functions into single-purpose ones).
+- **Down:** dropping a new highly-branched function into the codebase,
+  or growing existing functions with additional conditional paths.
+
+**Caveats:**
+
+- `assert` is not counted (matches radon-default; `assert` compiles
+  out at `-O`).
+- `try` / `else` / `finally` / `with` / `async with` are not branches
+  (matches radon).
+- **Cognitive complexity** (Sonar / Campbell 2017) is *not* what this
+  axis measures; cognitive complexity needs nesting-depth bookkeeping
+  the single-pass walker doesn't track. McCabe was chosen because the
+  walker is one pass over the existing AST and the metric is
+  well-defined.
+- Lambda expressions don't get their own row but their internal
+  branches count toward the containing function (consistent with
+  radon, inconsistent with pyan).
+
+The full implementation surface (the walker, the per-module
+aggregates, the bench distribution) lives in
+[`docs/RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md).
 
 ## Aggregation
 
 ```
-overall = (modularity * acyclicity * depth * equality) ^ (1/4)
+overall = (modularity * acyclicity * depth * equality * complexity) ^ (1/5)
 ```
 
 Geometric mean, not arithmetic. The reason is the
@@ -223,13 +309,42 @@ being aggregated.[^geomean-axioms] More practically, geometric mean is
 **non-compensatory**: a low value on one axis cannot be hidden by
 piling up high values on the others, the way it can with arithmetic
 mean.[^non-compensatory] If any sub-metric is 0, the overall is 0; a
-sub-metric at 0.2 caps the overall around 0.67 even if the other three
+sub-metric at 0.2 caps the overall around 0.72 even if the other four
 are perfect.
 
 This is the property that makes the score hard to game. Improving
 `overall` requires improving every axis, and adding cosmetic edges to
 boost one sub-metric will tend to degrade another (e.g., bridging
 communities to flatten depth lowers modularity).
+
+### Score-shape versioning
+
+The score is intentionally not a stable absolute number across archy
+versions. Every axis addition (and every normalization change) shifts
+`overall` for every project. The OECD Handbook recommends being explicit
+about this: "Composite indicators should be revised over time as
+information improves, but the discontinuity should be flagged so trends
+remain interpretable."[^oecd-handbook] Adding the Complexity axis in
+v0.20 is one such discontinuity:
+
+- The four pre-v0.20 sub-axis values are unchanged.
+- `overall` shifts by a multiplicative factor of `complexity ^ (1/5) /
+  (existing_geomean ^ (1/4)) * existing_geomean`: in practice, for
+  projects whose complexity score is close to their old `overall`, the
+  number barely moves; for projects with unusually high or low
+  complexity, the number shifts more.
+- `.archy/history.jsonl` rows written by archy < 0.20 are still
+  readable; their `complexity` field reads as `null` and the trend
+  table renders `-` for that column. Record a fresh baseline after
+  upgrading to anchor the new five-axis series:
+
+  ```bash
+  archy score . --record
+  ```
+
+The same precedent will apply to any future axis addition or
+normalization change. See [`docs/ROADMAP.md`](ROADMAP.md) for the
+next candidates.
 
 ### Empirical axis independence
 

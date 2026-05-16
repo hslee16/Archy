@@ -96,6 +96,7 @@ class ScoreComponents(BaseModel):
     acyclicity: float
     depth: float
     equality: float
+    complexity: float
 
 
 class ScoreGate(BaseModel):
@@ -165,6 +166,8 @@ class TrendRowScore(BaseModel):
     acyclicity: float
     depth: float
     equality: float
+    # Optional: rows written by archy < 0.20 don't have a complexity axis.
+    complexity: float | None = None
 
 
 class TrendRowInputs(BaseModel):
@@ -318,7 +321,8 @@ def _register_tools(server: FastMCP) -> None:
         name="archy_score",
         description=(
             "Compute the composite quality score (modularity, acyclicity, depth, "
-            "equality - geometric mean) for a Python project. Optionally append "
+            "equality, complexity - geometric mean of five axes) for a Python "
+            "project. Optionally append "
             "the result to .archy/history.jsonl and/or compare against the most "
             "recent recorded run as a regression gate."
         ),
@@ -622,6 +626,7 @@ def _run_score(
             acyclicity=score.acyclicity,
             depth=score.depth,
             equality=score.equality,
+            complexity=score.complexity,
         ),
         inputs=score.inputs,
         gate=gate,
@@ -732,6 +737,7 @@ def _run_trend(path: Path, *, last_n: int) -> list[TrendRow]:
                 acyclicity=r.acyclicity,
                 depth=r.depth,
                 equality=r.equality,
+                complexity=r.complexity,
             ),
             inputs=TrendRowInputs(
                 module_count=r.module_count,
