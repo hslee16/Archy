@@ -12,6 +12,7 @@ from archy.score import (
     compute_depth,
     compute_equality,
     compute_modularity,
+    compute_modularity_weighted,
     compute_score,
 )
 
@@ -180,6 +181,62 @@ def test_equality_empty_graph_is_one():
     score, gini = compute_equality(g)
     assert score == 1.0
     assert gini == 0.0
+
+
+# --- modularity (call-weighted diagnostic) -----------------------------------
+
+
+def test_modularity_weighted_with_no_call_counts_matches_unweighted():
+    # No call_count anywhere on the graph; the weight=1 fallback means every
+    # edge weighs the same, so the weighted partition and the unweighted
+    # partition agree exactly. This is the invariant that lets the diagnostic
+    # be interpreted as "calls amplify / cross community structure" relative
+    # to a baseline of "calls are not informative."
+    g = _g(("a", "b"), ("b", "c"), ("c", "a"), ("x", "y"), ("y", "z"), ("z", "x"))
+    _, _, raw_q_unweighted = compute_modularity(g)
+    _, _, raw_q_weighted = compute_modularity_weighted(g)
+    assert raw_q_weighted == pytest.approx(raw_q_unweighted)
+
+
+def test_modularity_weighted_does_not_mutate_input_graph():
+    # The weight policy needs a per-edge `_w` attribute; the function must
+    # operate on a copy so callers that recompute on the same graph
+    # (`archy diff`, MCP loop) see stable inputs.
+    g = _g(("a", "b"), ("b", "c"))
+    compute_modularity_weighted(g)
+    for _, _, data in g.edges(data=True):
+        assert "_w" not in data
+
+
+def test_modularity_weighted_reads_call_count_attribute():
+    # Two disjoint pairs joined by a heavily-called bridge edge. Bumping
+    # the bridge's call_count up changes Q under the weighted partition
+    # because the algorithm now sees a dominant single-edge structure.
+    # We don't try to predict the greedy algorithm's partition choice;
+    # we just assert that the raw Q values differ between two graphs
+    # that are topologically identical and differ only in call_count.
+    # This is the unit-level evidence that weights flow through; the
+    # bench (bench/call_weighted_modularity_results.md) is the real
+    # behavioral evidence on production-shaped graphs.
+    edges = [("a", "b"), ("b", "a"), ("c", "d"), ("d", "c"), ("a", "c")]
+    g_light: nx.DiGraph = nx.DiGraph()
+    g_heavy: nx.DiGraph = nx.DiGraph()
+    for u, v in edges:
+        g_light.add_edge(u, v, call_count=1)
+        g_heavy.add_edge(u, v, call_count=1)
+    g_heavy["a"]["c"]["call_count"] = 1000  # the bridge edge gets heavy traffic
+    _, _, q_light = compute_modularity_weighted(g_light)
+    _, _, q_heavy = compute_modularity_weighted(g_heavy)
+    assert q_light != pytest.approx(q_heavy)
+
+
+def test_modularity_weighted_trivial_graph_is_vacuously_perfect():
+    g: nx.DiGraph = nx.DiGraph()
+    g.add_node("a")
+    score, n_comm, raw_q = compute_modularity_weighted(g)
+    assert score == 1.0
+    assert n_comm == 1
+    assert raw_q == 1.0
 
 
 # --- complexity ---------------------------------------------------------------

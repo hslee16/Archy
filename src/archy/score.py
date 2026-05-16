@@ -51,11 +51,20 @@ class ScoreInputs(BaseModel):
     propagation_cost: float = 0.0
     # Call-graph diagnostics. Not folded into the four-axis geometric mean
     # in v0.16 - shipped as a diagnostic first per the MacCormack v0.13.3
-    # precedent. Promotion to a score axis depends on the 27-project
-    # benchmark showing orthogonality to existing axes.
+    # precedent. The v0.20 axis-promotion review (docs/AXIS_REVIEW.md)
+    # decided against promoting `calls_per_edge` to a score axis on
+    # directionality / actionability / discriminant-validity grounds.
     call_edge_count: int = 0
     total_calls: int = 0
     calls_per_edge: float = 0.0
+    # Call-weighted Newman Q as a parallel diagnostic next to the
+    # unweighted modularity score. Shipped per docs/CALL_WEIGHTED_Q_EMPIRICS.md
+    # (Path B: parallel diagnostic, not axis replacement). The gap between
+    # `raw_modularity` and `raw_modularity_weighted` is the load-bearing
+    # signal: it detects mismatch between the import-graph decomposition
+    # and the call-graph decomposition. See `compute_modularity_weighted`.
+    raw_modularity_weighted: float = 0.0
+    modularity_weighted_community_count: int = 0
     # Cyclomatic complexity diagnostics (v0.17, diagnostic). Per-function
     # CC aggregated to the project level. Not folded into the four-axis
     # geometric mean: ships diagnostic-first, same precedent as call edges
@@ -90,6 +99,7 @@ def compute_score(graph: nx.DiGraph) -> Score:
     call_edge_count, total_calls, calls_per_edge = _call_stats(graph)
     function_count, cc_total, cc_max, cc_mean = _cc_stats(graph)
     cpx = compute_complexity(cc_mean, function_count)
+    _, communities_weighted, raw_q_weighted = compute_modularity_weighted(graph)
     overall = (mod * acy * dep * eq * cpx) ** 0.2
     return Score(
         overall=overall,
@@ -115,6 +125,8 @@ def compute_score(graph: nx.DiGraph) -> Score:
             cc_total=cc_total,
             cc_max=cc_max,
             cc_mean=cc_mean,
+            raw_modularity_weighted=raw_q_weighted,
+            modularity_weighted_community_count=communities_weighted,
         ),
     )
 
@@ -175,6 +187,41 @@ def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
         return 1.0, max(graph.number_of_nodes(), 1), 1.0
     communities = list(nx.community.greedy_modularity_communities(graph))
     raw_q = float(nx.community.modularity(graph, communities))
+    normalized = max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
+    return normalized, len(communities), raw_q
+
+
+def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
+    """Call-weighted Newman Q diagnostic. Returns (normalized_score, n_communities, raw_Q).
+
+    Tuple order matches ``compute_modularity`` so the two functions are
+    drop-in interchangeable at call sites.
+
+    Identical to ``compute_modularity`` except edges are weighted by
+    ``call_count``; edges without resolved calls (import-only edges) get
+    weight 1 rather than 0 so every structural edge stays in the
+    community-detection computation. The greedy algorithm is rerun under
+    the weighted graph; the resulting partition is independent of the
+    unweighted partition.
+
+    The gap between the unweighted and weighted raw Q is the load-bearing
+    signal: a wider positive gap means call traffic amplifies the
+    structural community shape; a negative gap means call traffic crosses
+    community boundaries. See ``docs/CALL_WEIGHTED_Q_EMPIRICS.md`` for the
+    empirical justification of this shape over axis replacement.
+
+    Done on a copy so the input graph is never mutated; the per-edge ``_w``
+    fallback (call_count else 1) is a deliberate weight policy choice
+    described in the bench script and the empirics doc.
+    """
+    if graph.number_of_edges() == 0 or graph.number_of_nodes() < 2:
+        return 1.0, max(graph.number_of_nodes(), 1), 1.0
+    weighted = graph.copy()
+    for _, _, data in weighted.edges(data=True):
+        cc = data.get("call_count", 0)
+        data["_w"] = cc if cc > 0 else 1
+    communities = list(nx.community.greedy_modularity_communities(weighted, weight="_w"))
+    raw_q = float(nx.community.modularity(weighted, communities, weight="_w"))
     normalized = max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
     return normalized, len(communities), raw_q
 

@@ -595,6 +595,21 @@ def _gate_to_text(gate: dict, tolerance: float) -> str:
     )
 
 
+def _call_weighted_modularity_prose(s: Score) -> str:
+    """One-line direction summary for the call-weighted Q diagnostic.
+
+    The gap (weighted - unweighted) is what carries the meaning; thresholds
+    chosen empirically from the 27-project bench so common projects land
+    in one of the three buckets without false precision in the prose.
+    """
+    delta = s.inputs.raw_modularity_weighted - s.inputs.raw_modularity
+    if delta > 0.05:
+        return "calls amplify community structure"
+    if delta < -0.05:
+        return "calls cross community boundaries"
+    return "calls roughly track community structure"
+
+
 def _score_to_dict(s: Score) -> dict:
     return {
         "overall": s.overall,
@@ -622,6 +637,8 @@ def _score_to_dict(s: Score) -> dict:
             "cc_total": s.inputs.cc_total,
             "cc_max": s.inputs.cc_max,
             "cc_mean": s.inputs.cc_mean,
+            "raw_modularity_weighted": s.inputs.raw_modularity_weighted,
+            "modularity_weighted_community_count": s.inputs.modularity_weighted_community_count,
         },
     }
 
@@ -631,6 +648,8 @@ def _score_to_text(s: Score) -> str:
         f"# archy score: {s.overall:.3f}",
         f"modularity:  {s.modularity:.3f}  "
         f"({s.inputs.community_count} communities, raw Q={s.inputs.raw_modularity:.3f})",
+        f"  call-weighted Q={s.inputs.raw_modularity_weighted:.3f}  "
+        f"({_call_weighted_modularity_prose(s)})",
         f"acyclicity:  {s.acyclicity:.3f}  "
         f"({s.inputs.cycle_count} cycles, tangle={s.inputs.tangle_ratio:.3f})",
         f"depth:       {s.depth:.3f}  (max depth {s.inputs.max_depth})",
