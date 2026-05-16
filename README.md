@@ -42,6 +42,8 @@ archy is used in production by the projects listed in [`ADOPTERS.md`](ADOPTERS.m
 
 ## Why
 
+I built archy because I kept watching coding agents generate code that passed review but rotted the import graph underneath. The score on a feature change would look fine; six weeks later the cycle count had doubled and nobody noticed until a refactor blew up. I wanted a single number per commit that would have caught it.
+
 AI agents generate code at machine speed. Without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
 
 `archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
