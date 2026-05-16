@@ -231,6 +231,11 @@ def main() -> int:
             "acyclicity": comp["acyclicity"],
             "depth": comp["depth"],
             "equality": comp["equality"],
+            # complexity was promoted from diagnostic to score axis in v0.20.
+            # Default to 1.0 (the vacuous case the axis uses) for older
+            # archy that doesn't surface it; the bench should always run
+            # against current archy so this is just defensive.
+            "complexity": comp.get("complexity", 1.0),
             "cycle_count": inputs["cycle_count"],
             "tangle_ratio": inputs.get("tangle_ratio", 0.0),
             "propagation_cost": inputs.get("propagation_cost", 0.0),
@@ -241,6 +246,11 @@ def main() -> int:
             "cc_total": inputs.get("cc_total", 0),
             "cc_max": inputs.get("cc_max", 0),
             "cc_mean": inputs.get("cc_mean", 0.0),
+            # Call-weighted Newman Q diagnostic shipped in v0.21. The gap
+            # between unweighted and weighted raw Q is the load-bearing
+            # signal; see docs/CALL_WEIGHTED_Q_EMPIRICS.md.
+            "raw_modularity": inputs.get("raw_modularity", 0.0),
+            "raw_modularity_weighted": inputs.get("raw_modularity_weighted", 0.0),
         }
         if args.vulture:
             row["vulture_60"] = vulture_count(src, 60)
@@ -272,6 +282,7 @@ def main() -> int:
         "acyclicity",
         "depth",
         "equality",
+        "complexity",
     ]
     emit("| " + " | ".join(cols) + " |")
     emit("| " + " | ".join("---:" if c not in {"name", "sha"} else "---" for c in cols) + " |")
@@ -286,13 +297,14 @@ def main() -> int:
             f"{r['acyclicity']:.3f}",
             f"{r['depth']:.3f}",
             f"{r['equality']:.3f}",
+            f"{r['complexity']:.3f}",
         ]
         emit("| " + " | ".join(cells) + " |")
 
     emit()
     emit("## Pairwise Pearson correlations")
     emit()
-    axes = ["modularity", "acyclicity", "depth", "equality"]
+    axes = ["modularity", "acyclicity", "depth", "equality", "complexity"]
     cols2 = {a: [r[a] for r in rows] for a in axes}
     emit("| pair | r |")
     emit("| --- | ---: |")
@@ -346,9 +358,46 @@ def main() -> int:
     emit("| signal | r vs cc_mean |")
     emit("| --- | ---: |")
     for a in axes:
+        if a == "complexity":
+            # cc_mean is what the complexity axis is computed from, so the
+            # correlation is mechanical (cc_mean=1 -> complexity=1, monotone
+            # decreasing). Skip to avoid the misleading near-1.0 row.
+            continue
         emit(f"| {a} | {pearson(cols2[a], cm):+.3f} |")
     emit(f"| propagation_cost | {pearson(pc, cm):+.3f} |")
     emit(f"| calls_per_edge | {pearson(cpe, cm):+.3f} |")
+
+    emit()
+    emit("## Call-weighted modularity diagnostic (v0.21)")
+    emit()
+    emit(
+        "Per-project unweighted vs call-weighted raw Newman Q. The gap "
+        "(weighted - unweighted) is the load-bearing signal; see "
+        "`docs/CALL_WEIGHTED_Q_EMPIRICS.md`."
+    )
+    emit()
+    emit("| project | sha | unweighted Q | weighted Q | gap |")
+    emit("| --- | --- | ---: | ---: | ---: |")
+    for r in rows:
+        gap = r["raw_modularity_weighted"] - r["raw_modularity"]
+        emit(
+            f"| {r['name']} | `{r['sha']}` | "
+            f"{r['raw_modularity']:+.3f} | "
+            f"{r['raw_modularity_weighted']:+.3f} | "
+            f"{gap:+.3f} |"
+        )
+
+    emit()
+    emit("Pearson correlation of normalized weighted Q against the existing axes.")
+    emit("Lower absolute values indicate stronger orthogonality.")
+    emit()
+    # Normalize raw Q the same way the unweighted axis does, so cross-axis
+    # comparison is on the same [0, 1] scale.
+    qw_norm = [max(0.0, min(1.0, (r["raw_modularity_weighted"] + 0.5) / 1.5)) for r in rows]
+    emit("| signal | r vs weighted Q (normalized) |")
+    emit("| --- | ---: |")
+    for a in axes:
+        emit(f"| {a} | {pearson(cols2[a], qw_norm):+.3f} |")
 
     if args.vulture:
         emit()
