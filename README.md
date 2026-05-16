@@ -22,7 +22,7 @@ archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.20.0. Usable today via:
+**Status:** v0.21.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -255,7 +255,7 @@ If you're running from a checkout instead of an install, use:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.20.0
+- uses: hslee16/archy@v0.21.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -281,7 +281,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.20.0
+    rev: v0.21.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -373,7 +373,7 @@ uv run pytest              # the test now runs instead of being skipped
 
 Next up:
 
-- [ ] Call-weighted Newman Q as a refinement of the modularity axis (instead of promoting `calls_per_edge` to a separate 6th axis: that candidacy was reviewed and rejected on directionality / actionability / discriminant-validity grounds; see [`docs/AXIS_REVIEW.md`](docs/AXIS_REVIEW.md)).
+- [x] ~~Call-weighted Newman Q as a refinement of the modularity axis~~ shipped in v0.21.0 as a *parallel diagnostic* on `archy score` rather than an axis replacement. The gap between unweighted and weighted Q is the load-bearing signal (it detects mismatch between import-graph and call-graph community structure). Full empirical study, three-paths analysis, and decision rationale in [`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](docs/CALL_WEIGHTED_Q_EMPIRICS.md).
 - [ ] Type-hint coverage as the candidate 6th score axis. Same AST surface as v0.17 cyclomatic complexity. Empirics first: distribution across the 27-project bench, correlation with existing axes, normalization shape. See [`docs/AXIS_REVIEW.md`](docs/AXIS_REVIEW.md).
 - [x] `archy hotspots = CC x per-file churn` (shipped in v0.18.0: per-file refactor-priority list from `cc_sum * commit_count` over the git history, single `git log --name-only` pass; filters zero-CC and zero-churn rows)
 - [ ] Design Structure Matrix (`archy dsm`)
