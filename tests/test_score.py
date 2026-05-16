@@ -272,7 +272,7 @@ def test_compute_score_all_components_in_unit_interval():
 
 
 def test_cc_aggregates_roll_up_from_node_attrs():
-    # Synthesize a graph with explicit per-node CC attributes — the score
+    # Synthesize a graph with explicit per-node CC attributes; the score
     # roll-up reads these without re-parsing anything, so a unit test on
     # ScoreInputs can verify the math without going through tree-sitter.
     g = nx.DiGraph()

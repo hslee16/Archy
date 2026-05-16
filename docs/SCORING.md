@@ -544,14 +544,16 @@ empirical FP rates and remains a candidate, but is similarly
 deferred until evidence on real codebases is available.
 
 If `archy redundancy` does ship, the geometric mean exponent will
-widen from 1/4 to 1/5 and absolute scores will shift downward;
+widen from 1/5 to 1/6 and absolute scores will shift downward;
 trends within a single project will remain comparable via
 `archy score --record`, but cross-version comparisons will need a
 note. The same caveat applies to any future axis (e.g., a NCCD or
 type-hint-coverage axis) - a published scoring model that adds
 indicators over time has to either pin a baseline or accept that
 absolute scores aren't comparable across versions, per the OECD
-Handbook's guidance.[^oecd-handbook]
+Handbook's guidance.[^oecd-handbook] The v0.20 promotion of `cc_mean`
+to the `complexity` axis is the first time archy has exercised this
+versioning discipline; see [Score-shape versioning](#score-shape-versioning).
 
 **Call edges (v0.16.0).** Call-graph extraction shipped as a
 *diagnostic only*: per-edge `kinds`, `call_lines`, `call_count`
@@ -561,24 +563,25 @@ attributes plus `inputs.total_calls` / `inputs.calls_per_edge` on
 every existing axis (max `|r| = 0.229` against modularity,
 acyclicity, depth, equality, propagation_cost), so the signal earns
 a follow-up promotion. The shape of that promotion - weighted Newman
-Q replacing the unweighted modularity computation, or a new fifth
-axis based on call concentration - is unresolved and deferred to a
-deliberate version boundary along with a SCORING.md band refresh.
-Detailed empirics in
+Q replacing the unweighted modularity computation, or a new sixth
+axis based on call concentration (since `complexity` took the fifth
+slot in v0.20) - is unresolved and deferred to a deliberate version
+boundary along with a SCORING.md band refresh. Detailed empirics in
 [`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).
 
-**Cyclomatic complexity (v0.17.0).** Per-function McCabe CC ships as
-a *diagnostic only*: per-module `function_count` / `cc_sum` / `cc_max`
-/ `cc_mean` on every internal graph node, plus project-wide aggregates
-on `archy score`'s `inputs`. Not folded into the geometric mean. The
-27-project benchmark shows `cc_mean` is the most orthogonal signal
-archy has ever measured: max `|r| = 0.197` against modularity,
-acyclicity, depth, equality, propagation_cost, and calls_per_edge.
-This makes CC the strongest candidate to date for score-axis
-promotion - either as a new 5th axis (`1 - normalized_cc_mean`) or
-as a redesign of the equality axis to use `gini(per_function_cc)`
-instead of `gini(out_degree)`, the long-term target the Equality
-section above already flags. Detailed empirics in
+**Cyclomatic complexity (v0.17.0 diagnostic, v0.20.0 promoted).**
+Per-function McCabe CC shipped in v0.17.0 as a *diagnostic only*:
+per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every
+internal graph node, plus project-wide aggregates on `archy score`'s
+`inputs`. Not deferred any longer: in v0.20.0 `cc_mean` was promoted
+to the fifth score axis as `complexity = 1 - clamp((cc_mean - 1) / 5,
+0, 1)`. See the [Complexity](#complexity) sub-metric section above for
+the formula, anchor points, and what-moves-it discussion; the
+diagnostic surface (per-module aggregates, `cc_max` for hotspots) is
+unchanged. The Gini-of-CC redesign of the equality axis remains
+on the roadmap as a separate question; the v0.20 promotion was
+additive rather than a replacement so the equality redesign can land
+later without undoing this work. Detailed empirics in
 [`docs/RESEARCH_METRICS.md` §17](RESEARCH_METRICS.md).
 
 ## References
