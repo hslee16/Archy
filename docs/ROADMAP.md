@@ -7,7 +7,7 @@ Short, opinionated summary of where archy is going. The detailed item-by-item li
 Things actively in flight or planned for the next 2-3 releases.
 
 - **Design Structure Matrix (`archy dsm`)**: render the internal dependency graph as a square module x module matrix with rows/columns ordered to push edges below the diagonal. Canonical industrial visualization of architectural coupling. ASCII for terminals, JSON for tooling, optional self-contained HTML for CI artifacts. Diagnostic, not a score axis. See [`FUTURE.md`](FUTURE.md) near-term section.
-- **Promote call-density (`calls_per_edge`) to a score axis.** Per-function `cc_mean` was promoted in v0.20.0 as a 5th axis (`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`); call-density remains diagnostic because cc_mean was more orthogonal and bundling both in one PR conflated the score-shape change. The remaining work is picking a normalization shape for `calls_per_edge` (bench distribution is heavy-tailed: numpy at 52, msgspec at 2.7) and deciding whether it lands as a 6th axis or replaces / refines the modularity axis (call-weighted Newman Q).
+- **Call-weighted Newman Q as a refinement of the modularity axis.** Weight import-graph edges by `call_count` so module pairs that don't actually call each other contribute less to the community-structure signal. This is a refinement of the existing modularity axis, not a new axis. Replaces the prior "promote `calls_per_edge` to a 6th axis" plan, which was reviewed in v0.20 and rejected on directionality / actionability / discriminant-validity grounds (see [`AXIS_REVIEW.md`](AXIS_REVIEW.md)). Validation work: re-run the 27-project bench with call-weighted Q, check whether the orthogonality picture and project ordering both move in defensible directions.
 
 ## Next
 
@@ -15,7 +15,7 @@ Things that are validated and queued but not yet started.
 
 - **Static HTML trend report**: render `.archy/history.jsonl` as a self-contained HTML page so trend can be linked from a CI artifact or dashboard. Original v0.3 stretch goal.
 - **Duplicate-function detection** via AST-shape hashing. Advisory list, not a score axis.
-- **Type-hint coverage** as a sub-stat or sixth score axis. Tree-sitter pass over `FunctionDef` nodes; rides on the same AST scope as cyclomatic complexity.
+- **Type-hint coverage** as the candidate 6th score axis. Tree-sitter pass over `FunctionDef` nodes; rides on the same AST scope as cyclomatic complexity. Promoted from "Next" to the primary 6th-axis candidate after the [`AXIS_REVIEW.md`](AXIS_REVIEW.md) review: Python-specific, clear direction, cheap to compute, actionable, likely discriminant validity. The right path is empirics first (distribution across the bench, correlation with existing axes, normalization shape) before any promotion attempt.
 - **Static fragility proxy** as a pre-CC hotspot stand-in (high-instability x high-fan-in modules). Ships today without git-history overhead; the full hotspots feature (already in v0.18) remains the higher-quality target.
 
 ## Deferred (needs more thought)

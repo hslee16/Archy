@@ -373,7 +373,8 @@ uv run pytest              # the test now runs instead of being skipped
 
 Next up:
 
-- [ ] Promote call-density (`calls_per_edge`) to a score axis. Per-function CC was promoted in v0.20.0 as a 5th axis (`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`); call-density remains diagnostic because cc_mean was more orthogonal and bundling both in one PR conflated the score-shape change. See [`docs/RESEARCH_METRICS.md` §16](docs/RESEARCH_METRICS.md).
+- [ ] Call-weighted Newman Q as a refinement of the modularity axis (instead of promoting `calls_per_edge` to a separate 6th axis: that candidacy was reviewed and rejected on directionality / actionability / discriminant-validity grounds; see [`docs/AXIS_REVIEW.md`](docs/AXIS_REVIEW.md)).
+- [ ] Type-hint coverage as the candidate 6th score axis. Same AST surface as v0.17 cyclomatic complexity. Empirics first: distribution across the 27-project bench, correlation with existing axes, normalization shape. See [`docs/AXIS_REVIEW.md`](docs/AXIS_REVIEW.md).
 - [x] `archy hotspots = CC x per-file churn` (shipped in v0.18.0: per-file refactor-priority list from `cc_sum * commit_count` over the git history, single `git log --name-only` pass; filters zero-CC and zero-churn rows)
 - [ ] Design Structure Matrix (`archy dsm`)
 

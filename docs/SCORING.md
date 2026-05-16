@@ -555,19 +555,21 @@ Handbook's guidance.[^oecd-handbook] The v0.20 promotion of `cc_mean`
 to the `complexity` axis is the first time archy has exercised this
 versioning discipline; see [Score-shape versioning](#score-shape-versioning).
 
-**Call edges (v0.16.0).** Call-graph extraction shipped as a
-*diagnostic only*: per-edge `kinds`, `call_lines`, `call_count`
+**Call edges (v0.16.0, diagnostic).** Call-graph extraction shipped
+as a *diagnostic only*: per-edge `kinds`, `call_lines`, `call_count`
 attributes plus `inputs.total_calls` / `inputs.calls_per_edge` on
 `archy score`'s output. Not folded into the geometric mean. The
-27-project benchmark shows `calls_per_edge` is highly orthogonal to
-every existing axis (max `|r| = 0.229` against modularity,
-acyclicity, depth, equality, propagation_cost), so the signal earns
-a follow-up promotion. The shape of that promotion - weighted Newman
-Q replacing the unweighted modularity computation, or a new sixth
-axis based on call concentration (since `complexity` took the fifth
-slot in v0.20) - is unresolved and deferred to a deliberate version
-boundary along with a SCORING.md band refresh. Detailed empirics in
-[`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).
+27-project benchmark shows `calls_per_edge` is orthogonal to every
+existing axis (max `|r| = 0.229` against modularity, acyclicity,
+depth, equality, propagation_cost). The original plan was to promote
+it to a score axis at a deliberate version boundary; that plan was
+reviewed after the v0.20 cc_mean promotion and **rejected** on
+directionality, actionability, and discriminant-validity grounds (see
+[`AXIS_REVIEW.md`](AXIS_REVIEW.md)). The call data continues to be
+useful as a diagnostic on `archy score`'s output, as a refinement
+candidate for the modularity axis (call-weighted Newman Q), and as
+agent navigation data via the `archy_graph_*` MCP tools. Detailed
+empirics in [`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).
 
 **Cyclomatic complexity (v0.17.0 diagnostic, v0.20.0 promoted).**
 Per-function McCabe CC shipped in v0.17.0 as a *diagnostic only*:

@@ -800,13 +800,23 @@ SHAs pinned in [`bench/projects.yaml`](../bench/projects.yaml):
 
 All five correlations sit well below the OECD `|r| > 0.7` redundancy
 threshold (max absolute is 0.229). Call density is the most
-orthogonal new signal archy has added since v0.2.0: every existing
-axis pair sits at moderate-or-stronger correlation (median `|r| ≈
-0.45`), while every pair *involving* `calls_per_edge` sits at `|r| ≤
-0.23`. This makes the call signal a strong candidate for promotion
-to a score axis in a future release, either as call-weighted Newman
-Q (replacing the unweighted modularity computation) or as a new
-fifth axis based on call-density / call-concentration.
+orthogonal new signal archy added between v0.2.0 and v0.17 (cc_mean
+later beat it at max `|r| = 0.197`): every existing axis pair sits at
+moderate-or-stronger correlation (median `|r| ≈ 0.45`), while every
+pair *involving* `calls_per_edge` sits at `|r| ≤ 0.23`.
+
+**Score-axis promotion: reviewed and rejected (2026-05).** This section's
+original language called `calls_per_edge` "a strong candidate for
+promotion to a score axis." A deliberate review after the v0.20 cc_mean
+promotion concluded the opposite: see [`AXIS_REVIEW.md`](../docs/AXIS_REVIEW.md).
+The short version is that orthogonality is necessary but not sufficient,
+and `calls_per_edge` fails three of the four OECD composite-indicator
+criteria (directionality is shape-driven not quality-driven, no canonical
+positive refactoring exists, discriminant validity is weak). The call
+data itself is still genuinely useful, but as a refinement of the
+existing modularity axis (call-weighted Newman Q) and as agent
+navigation data (already shipped via `archy_graph_*` MCP tools), not as
+a new score axis.
 
 **Raw distribution.** Calls-per-edge across the bench:
 
