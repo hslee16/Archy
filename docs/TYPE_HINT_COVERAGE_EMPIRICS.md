@@ -6,16 +6,9 @@ Companion artifacts: `bench/typehint_coverage.py` (the script) and `bench/typehi
 
 ## Decision
 
-**Ship type-hint coverage as a parallel diagnostic on `archy score`, not as a 6th score axis.** Same path as the v0.21 call-weighted Newman Q decision, for compatible reasons. Implementation is deferred to a future PR; this document captures the decision and the reasoning behind it so the implementation work can proceed against a stable target.
+**Do not ship type-hint coverage in any form — not as a score axis, not as a diagnostic.** archy is a graph-shape sensor; type-hint coverage is per-function metadata at a different level of abstraction and is already handled well by existing tooling (`mypy --strict`, `pyright --strict`). Adding it to archy would widen the surface without deepening the niche.
 
-Concrete shape (when shipped):
-
-```
-complexity:  0.712  (566 functions, cc_mean=2.44, cc_max=24)
-# typing: 56 public functions, 93.8% annotated  (diagnostic, not in score)
-```
-
-Two new fields on `ScoreInputs`. New helper in `archy.complexity` that adds annotation counting to the existing v0.17 tree-sitter walk over `function_definition` nodes (amortizes the parse). No score-formula change. No baseline reset.
+This document is retained as a "we measured this, considered it, decided no" reference. The bench script and raw numbers stay in `bench/` so future reconsiderations have a starting point.
 
 ## What the data shows
 
@@ -55,7 +48,7 @@ Per [`AXIS_REVIEW.md`](AXIS_REVIEW.md): a sub-indicator must clear four criteria
 | Actionability | weak | strong | strong |
 | Discriminant validity | weak | mixed | mixed |
 
-Coverage scores **between** `cc_mean` and `calls_per_edge`. Strong on direction and actionability; weak on independence and discriminant validity.
+Coverage scores **between** `cc_mean` and `calls_per_edge` on the OECD criteria. Strong on direction and actionability; weak on independence and discriminant validity. That alone doesn't settle the question; see [Why not even as a diagnostic](#why-not-even-as-a-diagnostic) below for the value-prop argument that does.
 
 ### Independence: borderline
 
@@ -106,29 +99,25 @@ Same problem `calls_per_edge` had: the metric penalizes intentional or legacy de
 - **Pros:** `mypy` / `pyright` / `monkeytype` already measure this; archy doesn't have to.
 - **Cons:** archy's value proposition is "single number for architectural health"; typing is widely considered part of that picture, and not measuring it means an agent using archy as the loop-closer signal will not know about typing gaps.
 
-## Why Path B
+## Why not even as a diagnostic
 
-1. **Directionality and actionability are strong.** This argues for surfacing the signal in some form.
-2. **Independence is borderline.** This argues against axis promotion. Adding an axis with `|r| = 0.551` against three existing axes weakens the geomean's non-compensatory argument substantially.
-3. **Discriminant validity is contested.** This also argues against axis promotion. Penalizing django / numpy as a headline score reduction is not defensible.
-4. **The diagnostic shape (cheap, parallel) gets the value without the cost.**
+The OECD scorecard rules out axis promotion. A separate argument rules out diagnostic shipment.
 
-## Implementation summary (to be done in a follow-up PR)
+The argument by analogy to v0.21's call-weighted Newman Q decision (ship as parallel diagnostic when axis case is contested) does *not* apply here. Call-weighted Q earned a diagnostic slot because the *gap* between two values was the load-bearing signal — you can only read it when both values sit side by side. Type-hint coverage is one number; there is no gap to surface. "Consistency with the v0.21 precedent" was a rhetorical match, not a substantive one.
 
-Code surface (small):
+Five concrete arguments against the diagnostic:
 
-- `src/archy/complexity.py`: extend the existing `function_definition` walk to also count parameter annotations and return-type slot per public function. Return aggregates alongside CC.
-- `src/archy/score.py`: two new `ScoreInputs` fields (`public_function_count: int = 0`, `type_hint_coverage: float = 0.0`) with backwards-compatible defaults.
-- `src/archy/cli.py`: one new diagnostic line in `_score_to_text`; two new keys in `_score_to_dict`.
-- `src/archy/mcp.py`: picked up automatically via `ScoreInputs`; no shape break.
-- `tests/`: unit tests for the annotation counter (annotated / unannotated / dunder / private / `self`-skip / `*args` / `**kwargs` cases).
-- Brief subsection in `docs/SCORING.md` Deferred metrics pointing at this doc.
+1. **Better tools exist and own the niche.** `mypy --strict` and `pyright --strict` report exactly which functions are untyped, with file paths and line numbers. archy's "93.8% annotated" is a pale shadow; a user who wants to improve the number runs `mypy` next anyway. archy adds zero value in that loop.
 
-Roughly 3-4 hours of work; smaller than the v0.21 call-weighted Q PR (no graph-copy work, just extending one tree-sitter walk).
+2. **The signal is noisy without significant additional work.** Stub files (`.pyi`) are not read, so numpy reads as 1.1% when its real practical coverage via stubs is much higher. `Any`-as-cover-all is not detected. `__all__`-exported public surface is not honored. A user looking at the number could be meaningfully misled. Closing these gaps requires substantially more than the "3-4 hours" the diagnostic was originally estimated at.
 
-## Deprecation principle
+3. **It is not structural.** archy's distinctive value is graph-shape: modularity, acyclicity, depth, equality, complexity. Type coverage is per-function metadata at a different level of abstraction. Adding it dilutes the focus without deepening the niche.
 
-Same as call-weighted Q: if the diagnostic field is not referenced in any user-facing artifact (bug reports, blog posts, third-party tooling) within ~3 releases of shipping, plan to remove it rather than let unused diagnostics accumulate.
+4. **Audience mismatch.** archy is club-shaped (per Eghbal's *Working in Public*, and per the AXIS_REVIEW.md framing). The small group of Python infra people who care about graph-shape signals already use mypy / pyright for typing. Widening archy's surface is the wrong move for a club project; deepening the niche is the right move.
+
+5. **Slippery slope.** If type-hint coverage warrants a diagnostic, so does docstring coverage, test coverage, license scanning, `__all__` consistency, public-API churn. Every one of these has the same "but agents want one read" argument. The diagnostic surface inflates and the structural niche dilutes.
+
+The actual question this empirical study answered, in retrospect, was not "does the OECD criteria check pass?" but "is archy a graph-shape sensor or a complete-codebase-health sensor?" The answer to that strategic question is the former. The OECD scorecard was a useful tool for the axis-promotion question; the value-prop question is what closes out the diagnostic-or-not question.
 
 ## What this analysis does *not* settle
 
