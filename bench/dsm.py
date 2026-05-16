@@ -142,7 +142,6 @@ def _depth_buckets(graph: nx.DiGraph) -> dict[str, int]:
     sccs = list(nx.strongly_connected_components(graph))
     scc_of = {n: i for i, comp in enumerate(sccs) for n in comp}
     cond = nx.condensation(graph, scc=sccs)
-    # Longest path length to each condensation node from any source.
     depth: dict[int, int] = dict.fromkeys(cond.nodes(), 0)
     for scc_idx in nx.topological_sort(cond):
         for pred in cond.predecessors(scc_idx):
@@ -179,7 +178,6 @@ def main() -> int:
         cpx_norm = compute_complexity(cc_mean, n_funcs)
         pc, _ = compute_propagation_cost(graph)
 
-        # DSM-derived signals on the internal subgraph.
         ig = _internal_subgraph(graph)
         order = _scc_topo_order(ig)
         feedback, bandwidth = _feedback_and_bandwidth(ig, order)
