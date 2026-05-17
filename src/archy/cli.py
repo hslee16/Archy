@@ -517,6 +517,125 @@ def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
 
 
 @main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--group",
+    "group_by",
+    type=click.Choice(["community", "layer", "topological"]),
+    default="community",
+    help="How to order rows/columns. Defaults to community-detected blocks.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["ascii", "json"]),
+    default="ascii",
+    help="Output format. ASCII rejects graphs over --max-nodes.",
+)
+@click.option(
+    "--weight",
+    type=click.Choice(["imports", "calls"]),
+    default="imports",
+    help="Cell value: binary edge presence (imports) or call_count (calls).",
+)
+@click.option(
+    "--focus",
+    type=str,
+    default=None,
+    help="Qualname to focus on; keeps focus + its N-hop neighborhood.",
+)
+@click.option(
+    "--focus-depth",
+    type=int,
+    default=1,
+    help="Hop count for --focus (default 1).",
+)
+@click.option(
+    "--package",
+    type=str,
+    default=None,
+    help="Keep only modules whose qualname starts with this prefix.",
+)
+@click.option(
+    "--max-nodes",
+    type=int,
+    default=80,
+    help="ASCII rendering refuses graphs larger than this.",
+)
+@click.option(
+    "--diff",
+    "diff_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to a previously written DSM JSON. Renders the diff against current.",
+)
+def dsm(
+    path: Path,
+    group_by: str,
+    fmt: str,
+    weight: str,
+    focus: str | None,
+    focus_depth: int,
+    package: str | None,
+    max_nodes: int,
+    diff_path: Path | None,
+) -> None:
+    """Design Structure Matrix view of the import graph.
+
+    A DSM places modules on both axes in a chosen ordering; cell
+    (row=source, col=target) is non-empty when source imports target.
+    Use `--group=community` to see block-diagonal cohesion,
+    `--group=layer` for layer-violation forensics, or
+    `--group=topological` to localize back-edges (cycles appear as
+    above-diagonal entries within an SCC block).
+
+    For large projects, narrow with `--focus=<module>` or
+    `--package=<prefix>`, or use `--format=json` and let the agent
+    consume the structured view.
+    """
+    from archy.dsm import (
+        GroupBy,
+        Weight,
+        build_dsm,
+        diff_dsm,
+        read_dsm,
+        render_ascii,
+        render_diff_text,
+        render_json,
+    )
+
+    g = _load_graph(path, internal_only=False)
+    current = build_dsm(
+        g,
+        group_by=cast(GroupBy, group_by),
+        weight=cast(Weight, weight),
+        focus=focus,
+        focus_depth=focus_depth,
+        package=package,
+    )
+
+    if diff_path is not None:
+        before = read_dsm(diff_path)
+        if before is None:
+            raise click.ClickException(f"no DSM snapshot at {diff_path}.")
+        diff = diff_dsm(before, current)
+        if fmt == "json":
+            click.echo(json.dumps(diff.model_dump(), indent=2, sort_keys=True))
+        else:
+            click.echo(render_diff_text(diff, current))
+        return
+
+    if fmt == "json":
+        click.echo(json.dumps(render_json(current), indent=2, sort_keys=True))
+    else:
+        click.echo(render_ascii(current, max_nodes=max_nodes))
+
+
+@main.command()
 def mcp() -> None:
     """Run archy as an MCP server on stdio for AI agent integration."""
     from archy.mcp import create_server

@@ -62,6 +62,25 @@ as the `loop` prompt on the MCP server, so an agent connected to
    `archy_high_risk_modules`. Most useful when planning a refactoring
    sprint, less useful for a single targeted edit.
 
+   When you need *where*, not *how much*, reach for the Design Structure
+   Matrix:
+
+   - CLI: `archy dsm . --group community` (orientation in an unfamiliar
+     repo) or `archy dsm . --focus <module>` (read the module's row and
+     column to see who you depend on and who depends on you)
+   - MCP: `archy_dsm(path, group_by="community"|"layer"|"topological",
+     focus=<qualname>, package=<prefix>)`
+
+   The DSM is structured context an agent reads positionally rather
+   than a number to act on: block-diagonal blocks under community
+   grouping name the top-level decomposition; above-diagonal entries
+   under topological ordering localize back-edges to specific module
+   pairs; off-block entries under layer grouping show which
+   dependencies cross declared layers. Save the JSON output as a DSM
+   snapshot before editing so step 4 can diff against it. See
+   [`docs/DSM_EMPIRICS.md`](DSM_EMPIRICS.md) for why DSM ships as a
+   visualization rather than a score axis.
+
 3. **Edit** the code as you normally would.
 
 4. **Diff** after editing to see what got better, what got worse, and
@@ -72,6 +91,17 @@ as the `loop` prompt on the MCP server, so an agent connected to
 
    Returns per-component score deltas plus cycles and violations
    `added` / `resolved` since the baseline.
+
+   If `acyclicity` dropped or `cycles.added` is non-empty, the
+   companion DSM diff names the specific edge that closed the cycle:
+
+   - CLI: `archy dsm . --group topological --diff <path/to/dsm.json>`
+   - MCP: `archy_dsm(path, group_by="topological",
+     baseline_path=<path>)`
+
+   The `new_back_edges` field on `DSMDiff` lists every source-target
+   pair that turned into a back-edge in the new ordering, which is the
+   exact information needed to pick which import to remove or invert.
 
 5. If `score_delta.overall` dropped or `cycles.added` /
    `violations.added` are non-empty, the change introduced a

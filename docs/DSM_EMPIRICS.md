@@ -146,6 +146,20 @@ confirms there's no shortcut through scalar promotion.
   legible. The bench shape suggests yes; the exact UX is for the
   implementation PR.
 
+## Post-implementation robustness sweep
+
+After shipping the v1 CLI and MCP tool, the same 27-project bench was
+run through `archy dsm <src_dir> --group <mode> --format json` for each
+of `community`, `layer`, and `topological` (81 invocations). All
+returned valid JSON with sensible shapes; no crashes, no empty
+matrices, no degenerate group counts. Pure-DAG projects (archy,
+pygments) collapse to a single "DAG" group under `--group=topological`,
+which matches their `feedback = 0.000` rows above. Module counts in the
+sweep scope to `src_dir` (what `archy score` uses) rather than the
+repo root (what the empirical bench uses), so they differ from the
+table values for projects with large non-package trees (django, etc.);
+the implementation is the same.
+
 ## Setup details
 
 For reproducibility (matches the `CALL_WEIGHTED_Q_EMPIRICS.md` setup):

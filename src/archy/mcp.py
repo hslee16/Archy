@@ -19,6 +19,7 @@ agent calling these tools.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict
@@ -31,6 +32,15 @@ from archy.diff import (
     read_snapshot,
     take_snapshot,
     write_snapshot,
+)
+from archy.dsm import (
+    DSM,
+    DSMDiff,
+    GroupBy,
+    Weight,
+    build_dsm,
+    diff_dsm,
+    read_dsm,
 )
 from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict, resolve_modules
 from archy.history import append as append_history
@@ -83,6 +93,17 @@ between edits. The loop is:
 `archy_score(path, strict=True)` is a one-shot gate against the last
 recorded run; it's lighter than the snapshot/diff loop and useful as
 the final pre-commit check.
+
+`archy_dsm(path, ...)` returns the Design Structure Matrix: a row/col
+matrix the agent reads positionally, not a scalar. Use it when you
+need *where*, not *how much*: orienting in a new repo
+(`group_by='community'`), localizing a cycle to specific back-edges
+(`group_by='topological'`), or inspecting cross-layer traffic
+(`group_by='layer', weight='calls'`). Narrow large projects with
+`focus=<qualname>` or `package=<prefix>`. Passing `baseline_path` to
+a previously saved DSM JSON returns a structured diff whose
+`new_back_edges` field flags cycles the most recent edit just
+introduced.
 """
 
 
@@ -294,6 +315,12 @@ class HotspotsPayload(BaseModel):
     shown: int
     hotspots: tuple[HotspotEntry, ...]
     note: str | None = None
+
+
+class DSMErrorPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    error: str
 
 
 def create_server() -> FastMCP:
@@ -574,6 +601,46 @@ def _register_tools(server: FastMCP) -> None:
         since: str | None = None,
     ) -> HotspotsPayload:
         return _run_hotspots(Path(path), top=top, since=since)
+
+    @server.tool(
+        name="archy_dsm",
+        description=(
+            "Design Structure Matrix view of the import graph. Returns a "
+            "structured matrix the agent reads positionally: cell (row=source, "
+            "col=target) is non-empty when source imports target. Use "
+            "`group_by='community'` for block-diagonal cohesion, "
+            "`group_by='layer'` for layer-violation forensics, or "
+            "`group_by='topological'` to localize back-edges (above-diagonal "
+            "entries within an SCC). Narrow large projects with `focus` "
+            "(qualname + focus_depth-hop neighborhood) or `package` (qualname "
+            "prefix). When `baseline_path` is provided, returns a DSMDiff "
+            "instead; `new_back_edges` flags cycles the edit just introduced."
+        ),
+    )
+    def archy_dsm(
+        path: str,
+        group_by: str = "community",
+        weight: str = "imports",
+        focus: str | None = None,
+        focus_depth: int = 1,
+        package: str | None = None,
+        baseline_path: str | None = None,
+    ) -> DSM | DSMDiff | DSMErrorPayload:
+        graph = _load_graph(Path(path), internal_only=False)
+        current = build_dsm(
+            graph,
+            group_by=cast(GroupBy, group_by),
+            weight=cast(Weight, weight),
+            focus=focus,
+            focus_depth=focus_depth,
+            package=package,
+        )
+        if baseline_path is None:
+            return current
+        before = read_dsm(Path(baseline_path))
+        if before is None:
+            return DSMErrorPayload(error=f"no DSM snapshot at {baseline_path}")
+        return diff_dsm(before, current)
 
 
 # --- thin internals ----------------------------------------------------------

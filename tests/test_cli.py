@@ -546,3 +546,111 @@ def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):
     result = CliRunner().invoke(main, ["check", str(tmp_path)])
     assert result.exit_code == 1
     assert "libs -> routers" in result.output
+
+
+# --- dsm command --------------------------------------------------------------
+
+
+def _make_three_module_project(tmp_path: Path) -> Path:
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import thing\n")
+    (pkg / "b.py").write_text("from pkg.c import other\n")
+    (pkg / "c.py").write_text("")
+    return tmp_path
+
+
+def test_dsm_ascii_output_contains_module_names(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["dsm", str(project), "--group", "topological"])
+    assert result.exit_code == 0
+    assert "pkg.a" in result.output
+    assert "pkg.b" in result.output
+    assert "pkg.c" in result.output
+
+
+def test_dsm_json_output_is_valid_json(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["dsm", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["n"] >= 3
+    assert "cells" in payload
+    assert "ordering" in payload
+
+
+def test_dsm_focus_filter_narrows_output(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["dsm", str(project), "--focus", "pkg.b", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    names = set(payload["ordering"])
+    assert names == {"pkg.a", "pkg.b", "pkg.c"}
+
+
+def test_dsm_package_filter_excludes_other_packages(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    other = tmp_path / "other"
+    pkg.mkdir()
+    other.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (other / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("")
+    (other / "b.py").write_text("")
+    result = CliRunner().invoke(
+        main, ["dsm", str(tmp_path), "--package", "pkg", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert all(n.startswith("pkg") for n in payload["ordering"])
+
+
+def test_dsm_diff_against_baseline_snapshot(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    baseline = tmp_path / "before.json"
+    before = CliRunner().invoke(
+        main, ["dsm", str(project), "--format", "json", "--group", "topological"]
+    )
+    assert before.exit_code == 0
+    baseline.write_text(before.output)
+    # Introduce a back-edge.
+    (project / "pkg" / "c.py").write_text("from pkg.a import _\n")
+    result = CliRunner().invoke(
+        main,
+        [
+            "dsm",
+            str(project),
+            "--group",
+            "topological",
+            "--diff",
+            str(baseline),
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    diff_payload = json.loads(result.output)
+    assert diff_payload["new_back_edges"], "the c->a edit must surface as a new back-edge"
+
+
+def test_dsm_diff_missing_baseline_errors_cleanly(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["dsm", str(project), "--diff", str(tmp_path / "nope.json")])
+    assert result.exit_code != 0
+    assert "no DSM snapshot" in result.output or "no DSM snapshot" in (result.stderr or "")
+
+
+def test_dsm_ascii_rejects_oversized_with_helpful_message(tmp_path: Path):
+    pkg = tmp_path / "big"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for i in range(20):
+        (pkg / f"m{i}.py").write_text("")
+    result = CliRunner().invoke(main, ["dsm", str(tmp_path), "--max-nodes", "5"])
+    assert result.exit_code == 0
+    assert "exceeds max_nodes" in result.output
+    assert "--focus" in result.output
