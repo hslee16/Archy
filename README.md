@@ -22,7 +22,7 @@ archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.21.0. Usable today via:
+**Status:** v0.22.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -256,7 +256,7 @@ If you're running from a checkout instead of an install, use:
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.21.0
+- uses: hslee16/archy@v0.22.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -282,7 +282,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.21.0
+    rev: v0.22.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
