@@ -180,6 +180,6 @@ projects:
   # Bump deliberately when refreshing the benchmark.
   - name: archy
     repo: hslee16/archy
-    sha: "v0.21.0"
+    sha: "v0.22.0"
     src_dir: src/archy
     why: dogfooding
