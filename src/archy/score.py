@@ -184,6 +184,15 @@ def _call_stats(graph: nx.DiGraph) -> tuple[int, int, float]:
     return call_edge_count, total, cpe
 
 
+def _normalize_q(raw_q: float) -> float:
+    """Map canonical Newman range [-0.5, 1.0] onto [0, 1] via sentrux's
+    `(Q + 0.5) / 1.5`, then clamp. Shared by `compute_modularity` and
+    `compute_modularity_weighted` so the unweighted and weighted axes
+    stay calibrated identically.
+    """
+    return max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
+
+
 def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
     """Return (normalized_score, n_communities, raw_Q).
 
@@ -195,8 +204,7 @@ def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
         return 1.0, max(graph.number_of_nodes(), 1), 1.0
     communities = list(nx.community.greedy_modularity_communities(graph))
     raw_q = float(nx.community.modularity(graph, communities))
-    normalized = max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
-    return normalized, len(communities), raw_q
+    return _normalize_q(raw_q), len(communities), raw_q
 
 
 def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
@@ -230,8 +238,7 @@ def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
         data["_w"] = cc if cc > 0 else 1
     communities = list(nx.community.greedy_modularity_communities(weighted, weight="_w"))
     raw_q = float(nx.community.modularity(weighted, communities, weight="_w"))
-    normalized = max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
-    return normalized, len(communities), raw_q
+    return _normalize_q(raw_q), len(communities), raw_q
 
 
 def compute_acyclicity(graph: nx.DiGraph) -> tuple[float, int, float]:
