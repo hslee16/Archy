@@ -270,7 +270,7 @@ For each aggregator, overall scores under the **status-quo acyclicity** axis.
 The Pearson correlation of `overall` against each axis is shown; lower
 |r| means the aggregator depends less mechanically on that single axis.
 
-| aggregator | r(overall, mod) | r(overall, acy) | r(overall, dep) | r(overall, eq) | r(overall, comp) |
+| aggregator | r(overall, mod) | r(overall, acy) | r(overall, dep) | r(overall, equ) | r(overall, com) |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | geomean | +0.262 | +0.552 | -0.135 | +0.069 | +0.555 |
 | arith | +0.298 | +0.575 | -0.086 | +0.074 | +0.515 |

@@ -67,7 +67,7 @@ archy's score follows sentrux's [`quality-signal-design.md`](https://github.com/
 
 What we get from being faithful: a v0.2.0 archy score on a given codebase is directly comparable to whatever sentrux would produce on its four-metric subset. What we lose: redundancy. When `archy redundancy` ships (FUTURE.md, deferred), aggregation will widen back to five and the numeric scale will line up with sentrux's.
 
-The deeper agreement is methodological - sentrux's argument for geometric mean (the only aggregator that's Pareto-optimal, symmetric, and independent) is the load-bearing claim. That's why score gaming works only by improving every axis.
+The deeper agreement is methodological - sentrux's argument for geometric mean (the only aggregator that's Pareto-optimal, symmetric, and independent) is the load-bearing claim. That's why score gaming works only by improving every axis. (Refined in 2026-05 by `docs/SCORE_SHAPE_REDESIGN_EMPIRICS.md`: the 28-project empirics found that `depth` correlates only weakly with `overall` under every tested aggregator (`|r| ≤ 0.187`), so depth-side gaming is essentially toothless in practice. The non-compensatory property bites hardest on the other four axes - modularity, acyclicity, equality, complexity - which all have non-trivial leverage on `overall`.)
 
 ## v0.3.0 - history persistence: comparison with sentrux
 

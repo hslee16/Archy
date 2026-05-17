@@ -293,9 +293,11 @@ single dispatcher / parser functions and does not correlate with the
 overall coding style: setuptools shows `cc_max = 340` (one extreme
 function) alongside `cc_mean = 2.91` (typical restraint elsewhere).
 The mean is the stable signal; `cc_max` is preserved as a diagnostic
-and used by [`archy hotspots`](FUTURE.md) for refactor-priority
-ranking, where the worst single function is exactly the signal you
-want.
+on `Score.inputs`. The [`archy hotspots`](RESEARCH_METRICS.md)
+refactor-priority ranking uses `cc_sum` (total CC per file) rather
+than `cc_max`, because a file with twenty branchy functions is a
+bigger refactoring target than one with a single high-CC dispatcher
+(see `src/archy/hotspots.py` module docstring).
 
 **What moves it:**
 

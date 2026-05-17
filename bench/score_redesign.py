@@ -41,6 +41,14 @@ CACHE = REPO_ROOT / "bench" / "cache"
 RESULTS = REPO_ROOT / "bench" / "score_redesign_results.md"
 WORKDIR = Path("/tmp/archy_bench")
 
+AXIS_ORDER: tuple[str, ...] = (
+    "modularity",
+    "acyclicity",
+    "depth",
+    "equality",
+    "complexity",
+)
+
 GUINEA_PIG = {
     "name": "governingdocs",
     "repo": "local:governingdocs/backend",
@@ -160,7 +168,11 @@ def scc_metrics(g: nx.DiGraph) -> dict:
     sccs = [c for c in nx.strongly_connected_components(g)]
     nontrivial = [len(c) for c in sccs if len(c) >= 2]
     # self-loops on singletons also count as cycles per archy
-    self_loop_singletons = sum(1 for c in sccs if len(c) == 1 and next(iter(c)) in g.successors(next(iter(c))))
+    self_loop_singletons = sum(
+        1
+        for c in sccs
+        if len(c) == 1 and next(iter(c)) in g.successors(next(iter(c)))
+    )
     nic = sum(nontrivial) + self_loop_singletons
     largest = max(nontrivial, default=0)
     # Feedback edges lower bound: edges entirely inside non-trivial SCCs
@@ -197,21 +209,21 @@ def scc_metrics(g: nx.DiGraph) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def clamp01(x: float) -> float:
+def _clamp01(x: float) -> float:
     return max(0.0, min(1.0, x))
 
 
 def axis_baseline_tangle(s: dict, sm: dict) -> float:
     """v0.23 status quo: 1 - nodes_in_cycles / total_nodes."""
     n = max(1, sm["n_nodes"])
-    return clamp01(1.0 - sm["nodes_in_cycles"] / n)
+    return _clamp01(1.0 - sm["nodes_in_cycles"] / n)
 
 
 def axis_largest_scc(s: dict, sm: dict) -> float:
     """1 - largest_scc / total_nodes. Decouples from depth: doesn't count
     every node in every SCC, only the worst single tangle."""
     n = max(1, sm["n_nodes"])
-    return clamp01(1.0 - sm["largest_scc"] / n)
+    return _clamp01(1.0 - sm["largest_scc"] / n)
 
 
 def axis_feedback_edges(s: dict, sm: dict) -> float:
@@ -219,20 +231,20 @@ def axis_feedback_edges(s: dict, sm: dict) -> float:
     centric: counts the minimal number of import-removals needed to make
     the graph a DAG. Independent of how big each SCC is."""
     m = max(1, sm["n_edges"])
-    return clamp01(1.0 - sm["feedback_edges_lb"] / m)
+    return _clamp01(1.0 - sm["feedback_edges_lb"] / m)
 
 
 def axis_log_cycle_count(s: dict, sm: dict) -> float:
     """1 / (1 + log(1 + cycle_count)). Cycle-count-centric with logarithmic
     saturation: one cycle isn't 10x better than ten cycles."""
     c = sm["scc_count"]
-    return clamp01(1.0 / (1.0 + math.log1p(c)))
+    return _clamp01(1.0 / (1.0 + math.log1p(c)))
 
 
 def axis_sentrux_legacy(s: dict, sm: dict) -> float:
     """1 / (1 + cycle_count). The pre-Structure101 form. Included as a
     baseline to confirm the v0.20 switch to tangle-ratio wasn't the cause."""
-    return clamp01(1.0 / (1.0 + sm["scc_count"]))
+    return _clamp01(1.0 / (1.0 + sm["scc_count"]))
 
 
 def axis_modular_tangle(s: dict, sm: dict) -> float:
@@ -244,7 +256,7 @@ def axis_modular_tangle(s: dict, sm: dict) -> float:
     """
     n_wcc = sm.get("largest_wcc", sm["n_nodes"])
     w = max(1, n_wcc)
-    return clamp01(1.0 - sm["largest_scc"] / w)
+    return _clamp01(1.0 - sm["largest_scc"] / w)
 
 
 def axis_feedback_x_tangle(s: dict, sm: dict) -> float:
@@ -285,13 +297,13 @@ ACYCLICITY_CANDIDATES = {
 # in-SCC traversal decouples from acyclicity.
 
 
-def depth_score_from_raw(max_depth: int) -> float:
+def _depth_score_from_raw(max_depth: int) -> float:
     return 1.0 / (1.0 + max_depth / 8.0)
 
 
 def depth_baseline(s: dict, sm: dict) -> float:
     """v0.23 status quo: longest path on condensation DAG."""
-    return depth_score_from_raw(s["inputs"]["max_depth"])
+    return _depth_score_from_raw(s["inputs"]["max_depth"])
 
 
 def depth_with_scc_penalty(s: dict, sm: dict) -> float:
@@ -299,13 +311,13 @@ def depth_with_scc_penalty(s: dict, sm: dict) -> float:
 
     Treat the largest SCC as if every node in it were a chain link
     (because, from a 'how far does a change propagate' standpoint,
-    a 50-module SCC IS at least 50 hops deep — every node reaches
+    a 50-module SCC IS at least 50 hops deep (every node reaches
     every other). This deliberately couples depth and acyclicity in
     the SAME direction, so any reduction in the moderate-negative
     pair will reflect the SCC mechanism collapsing rather than the
     pair flipping sign.
     """
-    return depth_score_from_raw(s["inputs"]["max_depth"] + sm["largest_scc"])
+    return _depth_score_from_raw(s["inputs"]["max_depth"] + sm["largest_scc"])
 
 
 def depth_size_relative(s: dict, sm: dict) -> float:
@@ -320,7 +332,7 @@ def depth_size_relative(s: dict, sm: dict) -> float:
     ratio = s["inputs"]["max_depth"] / n
     # Map [0, 0.5] -> [1, 0] linearly; >50% of the graph in one chain is
     # already pathological.
-    return clamp01(1.0 - 2 * ratio)
+    return _clamp01(1.0 - 2 * ratio)
 
 
 DEPTH_CANDIDATES = {
@@ -514,7 +526,7 @@ def overall_for(corpus: list[dict], acyclicity_variant: str, aggregator: str) ->
     fn = AGGREGATOR_CANDIDATES[aggregator]
     out = []
     for i in range(len(corpus)):
-        row = [axes_map[a][i] for a in ("modularity", "acyclicity", "depth", "equality", "complexity")]
+        row = [axes_map[a][i] for a in AXIS_ORDER]
         out.append(fn(row))
     return out
 
@@ -534,7 +546,8 @@ def evaluate() -> None:
     emit = out.append
     emit("# Score-shape redesign empirics")
     emit("")
-    emit(f"Output of `uv run --with networkx --with pyyaml python bench/score_redesign.py evaluate`.")
+    cmd = "uv run --with networkx --with pyyaml python bench/score_redesign.py evaluate"
+    emit(f"Output of `{cmd}`.")
     emit(f"{len(corpus)} projects (27-project bench + governingdocs/backend). Captured {today}.")
     emit("")
     emit("## Per-acyclicity-candidate Pearson correlation matrices")
@@ -637,7 +650,8 @@ def evaluate() -> None:
     emit("|r| means the aggregator depends less mechanically on that single axis.")
     emit("")
     axes_map = axis_values(corpus, "baseline_tangle")
-    emit("| aggregator | r(overall, mod) | r(overall, acy) | r(overall, dep) | r(overall, eq) | r(overall, comp) |")
+    header_cells = ["aggregator"] + [f"r(overall, {a[:3]})" for a in AXIS_ORDER]
+    emit("| " + " | ".join(header_cells) + " |")
     emit("| --- | ---: | ---: | ---: | ---: | ---: |")
     for agg in AGGREGATOR_CANDIDATES:
         overalls = overall_for(corpus, "baseline_tangle", agg)
@@ -688,7 +702,7 @@ def evaluate() -> None:
     for acy_cand, dep_cand in interesting_combos:
         axes_map = axis_values(corpus, acy_cand, dep_cand)
         overalls = [
-            agg_geomean([axes_map[a][i] for a in ("modularity", "acyclicity", "depth", "equality", "complexity")])
+            agg_geomean([axes_map[a][i] for a in AXIS_ORDER])
             for i in range(len(corpus))
         ]
         rho = spearman(baseline_overall, overalls)
@@ -714,7 +728,11 @@ def evaluate() -> None:
 
     emit("## Per-project axis dump (debugging)")
     emit("")
-    emit("| project | mod | acy_baseline | acy_largest | acy_feedback | acy_log | acy_legacy | depth | equality | complexity |")
+    dump_header = (
+        "| project | mod | acy_baseline | acy_largest | acy_feedback "
+        "| acy_log | acy_legacy | depth | equality | complexity |"
+    )
+    emit(dump_header)
     emit("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
     for i, rec in enumerate(corpus):
         n = rec["project"]["name"]

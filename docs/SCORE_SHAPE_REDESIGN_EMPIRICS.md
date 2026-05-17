@@ -290,7 +290,7 @@ uniform sensitivity).
     not gameable by single-axis cosmetic changes to acyclicity,
     modularity, equality, or complexity. The depth axis correlates
     weakly with overall under every tested aggregator, so depth
-    optimization is essentially toothless against the score — but for
+    optimization is essentially toothless against the score, but for
     the unrelated reason that depth's correlations with other axes
     don't bleed into the score, not because the axes are strictly
     independent."
