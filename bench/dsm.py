@@ -209,8 +209,7 @@ def main() -> int:
     print("# DSM-derived signals vs the existing score axes\n")
     print("Bench: 27 projects pinned in `bench/projects.yaml`. Captured locally.\n")
     print(
-        "Internal-only subgraph. Ordering: SCC-condensed topological, "
-        "alphabetical inside SCCs.\n"
+        "Internal-only subgraph. Ordering: SCC-condensed topological, alphabetical inside SCCs.\n"
     )
 
     print("## Per-project DSM signals\n")
@@ -241,7 +240,12 @@ def main() -> int:
         "propagation_cost": [r["pc"] for r in rows],
     }
     axes_order = (
-        "modularity", "acyclicity", "depth", "equality", "complexity", "propagation_cost",
+        "modularity",
+        "acyclicity",
+        "depth",
+        "equality",
+        "complexity",
+        "propagation_cost",
     )
     header = "| signal | " + " | ".join(f"vs {a}" for a in axes_order) + " |"
     print(header)
@@ -256,7 +260,7 @@ def main() -> int:
     print("| pair | r |")
     print("| --- | ---: |")
     for i, a in enumerate(sigs):
-        for b in sigs[i + 1:]:
+        for b in sigs[i + 1 :]:
             r_val = pearson([r[a] for r in rows], [r[b] for r in rows])
             print(f"| {a} ↔ {b} | {r_val:+.3f} |")
 
