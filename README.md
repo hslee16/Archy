@@ -147,7 +147,7 @@ ignore_imports =
 
 ### Compute a quality score
 
-Composite of modularity, acyclicity, depth, and equality (geometric mean). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown. These four axes were chosen after surveying ~15 alternatives from the package-metrics literature (Martin's `I`/`A`/`D`, Lakos's NCCD, MacCormack propagation cost, Structure101 fat/tangle, reflexion models, cognitive complexity, hotspots, logical coupling, dead/duplicate-code detection); Martin's `I` and the Stable Dependencies Principle check are also shipped as a per-module diagnostic and an `archy check` rule. See [`docs/RESEARCH_METRICS.md`](docs/RESEARCH_METRICS.md) for the full validation, what was shipped, and what was deferred and why.
+Composite of modularity, acyclicity, depth, equality, and complexity (geometric mean of five axes). See [`docs/SCORING.md`](docs/SCORING.md) for formulas and how to interpret the breakdown. These five axes were chosen after surveying ~15 alternatives from the package-metrics literature (Martin's `I`/`A`/`D`, Lakos's NCCD, MacCormack propagation cost, Structure101 fat/tangle, reflexion models, cognitive complexity, hotspots, logical coupling, dead/duplicate-code detection); Martin's `I` and the Stable Dependencies Principle check are also shipped as a per-module diagnostic and an `archy check` rule. See [`docs/RESEARCH_METRICS.md`](docs/RESEARCH_METRICS.md) for the full validation, what was shipped, and what was deferred and why.
 
 ```bash
 archy score path/to/project
@@ -203,11 +203,11 @@ archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes fourteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes fifteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
-| `archy_score` | Compute the four-metric score; optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. |
+| `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. |
 | `archy_cycles` | Find import cycles. |
 | `archy_check` | Run layer rules from `archy.yaml`. |
 | `archy_contracts` | Run import-linter contracts (transitive Layers, Forbidden, Independence, Protected, AcyclicSiblings). Stricter than `archy_check`; requires `archy[contracts]`. |
@@ -221,6 +221,7 @@ archy mcp
 | `archy_graph` | Full dependency-graph dump matching `archy graph --format json`. Refuses graphs larger than `max_nodes` (default 500) to avoid blowing context; bump the limit explicitly when you really want everything. |
 | `archy_high_risk_modules` | Top-N internal modules by `edit_risk`: geometric mean of propagation cost, normalized fan-in, and Martin's instability. Each entry breaks the composite back out. Call before a non-trivial edit to decide whether to scope down or pause for review. |
 | `archy_hotspots` | Rank internal modules by `cc_sum x git-commit-count` (Tornhill / CodeScene's "Code Red"). Each entry is `{module, path, cc_sum, churn, score}`; zero-CC and zero-churn rows are filtered. `since` is passed straight to `git log --since`. Answers "where is the refactoring leverage?"; the structural cousin `archy_high_risk_modules` answers "is this edit dangerous?" without needing git. If the project isn't under git, returns an empty list plus a `note` so the agent can pivot. |
+| `archy_dsm` | Design Structure Matrix view of the import graph. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md). |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
@@ -376,7 +377,7 @@ Next up:
 - [x] ~~Call-weighted Newman Q as a refinement of the modularity axis~~ shipped in v0.21.0 as a *parallel diagnostic* on `archy score` rather than an axis replacement. The gap between unweighted and weighted Q is the load-bearing signal (it detects mismatch between import-graph and call-graph community structure). Full empirical study, three-paths analysis, and decision rationale in [`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](docs/CALL_WEIGHTED_Q_EMPIRICS.md).
 - [ ] Type-hint coverage as the candidate 6th score axis. Same AST surface as v0.17 cyclomatic complexity. Empirics first: distribution across the 27-project bench, correlation with existing axes, normalization shape. See [`docs/AXIS_REVIEW.md`](docs/AXIS_REVIEW.md).
 - [x] `archy hotspots = CC x per-file churn` (shipped in v0.18.0: per-file refactor-priority list from `cc_sum * commit_count` over the git history, single `git log --name-only` pass; filters zero-CC and zero-churn rows)
-- [ ] Design Structure Matrix (`archy dsm`)
+- [x] ~~Design Structure Matrix (`archy dsm`)~~ shipped. CLI `archy dsm PATH` and MCP tool `archy_dsm` with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package` for large projects, and `--diff` for back-edge regression detection. ASCII for terminal, JSON for tool consumption. Visualization-only per [`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md): empirical study ruled out a DSM-derived score axis or diagnostic scalar.
 
 Shipped:
 
