@@ -890,10 +890,15 @@ a `--record` checkpoint immediately after the upgrade.
 
 archy v0.17.0 shipped per-function McCabe cyclomatic complexity as a
 diagnostic. **Promoted to a score axis in v0.20.0** as
-`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`; the normalization,
-anchor points, and the score-shape-versioning implications are in
+`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`; the divisor was
+widened to `/8` in v0.23.0 after real-world repos with
+`cc_mean in [6, 9)` (validator/parser-heavy backends) were zeroing the
+entire geomean on a single axis. Below the small-project threshold
+(< 20 functions) the axis returns 1.0 vacuously since `cc_mean` is
+statistically unstable on tiny inputs. The normalization, anchor
+points, and the score-shape-versioning implications are in
 [`SCORING.md`](SCORING.md). The orthogonality data below is what
-justified the promotion.
+justified the original promotion.
 
 Implementation in `src/archy/complexity.py`: a tree-sitter
 walk over `(function_definition)` nodes counts branch-creating child
@@ -931,8 +936,8 @@ threshold (max absolute is 0.197). `cc_mean` is the **most orthogonal
 new signal archy has ever measured**: more orthogonal than v0.16's
 call density (max `|r| = 0.229`) and substantially more so than any
 existing axis pair (median `|r| ~ 0.45`). This is what justified
-the v0.20.0 promotion to a 5th score axis (`1 - clamp((cc_mean - 1)
-/ 5, 0, 1)`). The alternative path - redesigning the equality axis to
+the v0.20.0 promotion to a 5th score axis (initially `1 - clamp((cc_mean - 1)
+/ 5, 0, 1)`, widened to `/8` in v0.23.0). The alternative path - redesigning the equality axis to
 use `gini(per_function_cc)` instead of `gini(out_degree)` - is still
 on the roadmap; the v0.20 promotion is additive (5th axis) rather than
 a replacement, so the equality redesign can land later without
@@ -1032,7 +1037,7 @@ The "Role" column distinguishes:
 | ----------------------------------------- | ------ | ------ | ------------------- | ---------------- | --------- |
 | Tangle ratio                              | High   | Trivial| **Shipped** (acyclicity = 1 - tangle_ratio) | ✓ shipped: `score.compute_acyclicity` | **Shipped** |
 | Call edges (LocAgent invoke edges)        | High   | Medium | **Shipped** as diagnostic (kinds/call_lines/call_count per edge); follow-up promotion to score axis pending design choice | ✓ orthogonal: max `\|r\| = 0.229` against 5 existing signals on 27-project bench | **Shipped (diagnostic)** |
-| Cyclomatic complexity per function        | High   | Medium | **Shipped as a score axis in v0.20** (`complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)`); per-module function_count/cc_sum/cc_max/cc_mean still surfaced as diagnostics | ✓ orthogonal: max `\|r\| = 0.197` against 6 existing signals on 27-project bench | **Shipped (score axis, v0.20)** |
+| Cyclomatic complexity per function        | High   | Medium | **Shipped as a score axis in v0.20**; v0.23 widened divisor: `complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)`; per-module function_count/cc_sum/cc_max/cc_mean still surfaced as diagnostics | ✓ orthogonal: max `\|r\| = 0.197` against 6 existing signals on 27-project bench | **Shipped (score axis, v0.20; recalibrated v0.23)** |
 | Reflexion: Forbidden + Independence       | High   | Low    | Check rule          | -                | **Yes**   |
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
 | Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |

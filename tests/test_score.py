@@ -247,14 +247,26 @@ def test_complexity_no_functions_is_vacuously_one():
     assert compute_complexity(cc_mean=0.0, function_count=0) == 1.0
 
 
+def test_complexity_small_project_is_vacuously_one():
+    # Below the small-project threshold, cc_mean is statistically unstable
+    # (one branchy dispatcher dominates the average), so the axis returns
+    # 1.0 rather than penalize on noisy data.
+    assert compute_complexity(cc_mean=8.0, function_count=19) == 1.0
+
+
+def test_complexity_threshold_activates_at_twenty_functions():
+    # At exactly the threshold the formula kicks in.
+    assert compute_complexity(cc_mean=3.0, function_count=20) == pytest.approx(0.75)
+
+
 def test_complexity_floor_cc_mean_of_one_is_one():
     # cc_mean=1 means every function has exactly one branch-free path:
     # the theoretical floor; the axis cannot do better.
     assert compute_complexity(cc_mean=1.0, function_count=100) == 1.0
 
 
-def test_complexity_ceiling_cc_mean_of_six_is_zero():
-    assert compute_complexity(cc_mean=6.0, function_count=100) == 0.0
+def test_complexity_ceiling_cc_mean_of_nine_is_zero():
+    assert compute_complexity(cc_mean=9.0, function_count=100) == 0.0
 
 
 def test_complexity_above_ceiling_clamps_to_zero():
@@ -262,20 +274,20 @@ def test_complexity_above_ceiling_clamps_to_zero():
 
 
 def test_complexity_linear_midpoint():
-    # cc_mean=3.5 sits at (3.5 - 1) / 5 = 0.5, so the axis returns 1 - 0.5 = 0.5.
-    assert compute_complexity(cc_mean=3.5, function_count=100) == pytest.approx(0.5)
+    # cc_mean=5 sits at (5 - 1) / 8 = 0.5, so the axis returns 1 - 0.5 = 0.5.
+    assert compute_complexity(cc_mean=5.0, function_count=100) == pytest.approx(0.5)
 
 
 def test_complexity_bench_anchor_points():
     # Anchors from RESEARCH_METRICS.md sec 17. Verify the formula matches
     # what the docs claim so a future normalization tweak can't silently
     # invalidate the published interpretation bands.
-    # mkdocs: cc_mean 1.77 -> 0.846
-    assert compute_complexity(cc_mean=1.77, function_count=1_277) == pytest.approx(0.846)
-    # archy: cc_mean 3.73 -> 0.454
-    assert compute_complexity(cc_mean=3.73, function_count=157) == pytest.approx(0.454)
-    # msgspec: cc_mean 5.33 -> 0.134
-    assert compute_complexity(cc_mean=5.33, function_count=63) == pytest.approx(0.134)
+    # mkdocs: cc_mean 1.77 -> 0.904
+    assert compute_complexity(cc_mean=1.77, function_count=1_277) == pytest.approx(0.904, abs=1e-3)
+    # archy: cc_mean 3.73 -> 0.659
+    assert compute_complexity(cc_mean=3.73, function_count=157) == pytest.approx(0.659, abs=1e-3)
+    # msgspec: cc_mean 5.33 -> 0.459
+    assert compute_complexity(cc_mean=5.33, function_count=63) == pytest.approx(0.459, abs=1e-3)
 
 
 # --- compute_score ------------------------------------------------------------
