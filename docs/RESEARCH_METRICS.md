@@ -908,9 +908,11 @@ radon's default-mode behavior (assert can be compiled out at `-O`).
 Per-function rows roll up to per-module aggregates on each internal
 node (`function_count`, `cc_sum`, `cc_max`, `cc_mean`) and to
 project-wide aggregates on `archy score`'s `inputs` (`function_count`,
-`cc_total`, `cc_max`, `cc_mean`). Not folded into the four-axis
-geometric mean: ships diagnostic-first, same MacCormack v0.13.3 / call
-edges v0.16.0 precedent.
+`cc_total`, `cc_max`, `cc_mean`). v0.17.0 shipped diagnostic-first
+(same MacCormack v0.13.3 / call edges v0.16.0 precedent); v0.20.0
+promoted `cc_mean` to the fifth score axis (`complexity`) after the
+27-project bench showed max `|r| = 0.197` orthogonality against the
+existing four axes.
 
 **Empirical orthogonality.** 27-project bench captured 2026-05-14,
 SHAs pinned in [`bench/projects.yaml`](../bench/projects.yaml):

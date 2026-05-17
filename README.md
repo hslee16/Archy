@@ -15,7 +15,7 @@
 pip install archy
 archy score .         # one-shot architectural health number
 archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
+archy mcp             # expose 15 tools to Claude Code, Cursor, any MCP client
 ```
 
 ![archy demo](docs/demo.gif)
