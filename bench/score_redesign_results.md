@@ -233,11 +233,11 @@ and acyclicity↔depth pairs respond to depth-side reformulations.
 | depth_with_scc_penalty | +0.245 | -0.295 | 0.519 |
 | depth_size_relative | -0.072 | +0.400 | 0.519 |
 
-## Cross-product: best acyclicity × best depth
+## Cross-product: best acyclicity x best depth
 
 If a candidate acyclicity AND a candidate depth both reduce |r|,
 the combination should compound. This table is the full Cartesian
-product over (acyclicity-candidate × depth-candidate), reporting
+product over (acyclicity-candidate x depth-candidate), reporting
 only the two OECD-relevant pairs.
 
 | acyclicity | depth | acyc↔depth | mod↔depth | moderate pairs (\|r\| ≥ 0.5) |
@@ -521,11 +521,11 @@ are trying to prevent.
 
 ## Rank stability of winning axis combinations
 
-Spearman ρ of each candidate axis-combination's overall (geomean)
-against the v0.23 baseline. ρ near 1 means projects re-rank little;
-ρ < 0.9 means the leaderboard would visibly shake up.
+Spearman rho of each candidate axis-combination's overall (geomean)
+against the v0.23 baseline. rho near 1 means projects re-rank little;
+rho < 0.9 means the leaderboard would visibly shake up.
 
-| acyclicity | depth | spearman ρ vs v0.23 |
+| acyclicity | depth | spearman rho vs v0.23 |
 | --- | --- | ---: |
 | baseline_tangle | depth_baseline | +1.000 |
 | feedback_edges | depth_baseline | +0.691 |
@@ -539,11 +539,11 @@ against the v0.23 baseline. ρ near 1 means projects re-rank little;
 
 ## Rank stability under aggregator changes
 
-Spearman ρ between aggregator overall-rankings. ρ near 1 means the
-aggregator change re-orders the projects very little; ρ < 0.9 means
+Spearman rho between aggregator overall-rankings. rho near 1 means the
+aggregator change re-orders the projects very little; rho < 0.9 means
 the new aggregator would visibly shake up the leaderboard.
 
-| pair | spearman ρ |
+| pair | spearman rho |
 | --- | ---: |
 | geomean ↔ arith | +0.897 |
 | geomean ↔ min | +0.793 |

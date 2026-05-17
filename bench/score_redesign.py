@@ -61,7 +61,7 @@ GUINEA_PIG = {
 
 def projects() -> list[dict]:
     manifest: list[dict] = yaml.safe_load(MANIFEST.read_text())["projects"]
-    return manifest + [GUINEA_PIG]
+    return [*manifest, GUINEA_PIG]
 
 
 def resolve_root(proj: dict) -> Path:
@@ -626,10 +626,10 @@ def evaluate() -> None:
         emit(f"| {cand} | {ad:+.3f} | {md:+.3f} | {mx:.3f} |")
     emit("")
 
-    emit("## Cross-product: best acyclicity × best depth\n")
+    emit("## Cross-product: best acyclicity x best depth\n")
     emit("If a candidate acyclicity AND a candidate depth both reduce |r|,")
     emit("the combination should compound. This table is the full Cartesian")
-    emit("product over (acyclicity-candidate × depth-candidate), reporting")
+    emit("product over (acyclicity-candidate x depth-candidate), reporting")
     emit("only the two OECD-relevant pairs.\n")
     emit("| acyclicity | depth | acyc↔depth | mod↔depth | moderate pairs (\\|r\\| ≥ 0.5) |")
     emit("| --- | --- | ---: | ---: | ---: |")
@@ -670,7 +670,7 @@ def evaluate() -> None:
     names = [r["project"]["name"] for r in corpus]
     for agg in AGGREGATOR_CANDIDATES:
         overalls = overall_for(corpus, "baseline_tangle", agg)
-        ranked = sorted(zip(names, overalls), key=lambda x: -x[1])
+        ranked = sorted(zip(names, overalls, strict=True), key=lambda x: -x[1])
         emit(f"### {agg}")
         emit("")
         emit("| project | overall |")
@@ -681,12 +681,12 @@ def evaluate() -> None:
 
     emit("## Rank stability of winning axis combinations")
     emit("")
-    emit("Spearman ρ of each candidate axis-combination's overall (geomean)")
-    emit("against the v0.23 baseline. ρ near 1 means projects re-rank little;")
-    emit("ρ < 0.9 means the leaderboard would visibly shake up.")
+    emit("Spearman rho of each candidate axis-combination's overall (geomean)")
+    emit("against the v0.23 baseline. rho near 1 means projects re-rank little;")
+    emit("rho < 0.9 means the leaderboard would visibly shake up.")
     emit("")
     baseline_overall = overall_for(corpus, "baseline_tangle", "geomean")
-    emit("| acyclicity | depth | spearman ρ vs v0.23 |")
+    emit("| acyclicity | depth | spearman rho vs v0.23 |")
     emit("| --- | --- | ---: |")
     interesting_combos = [
         ("baseline_tangle", "depth_baseline"),
@@ -711,15 +711,15 @@ def evaluate() -> None:
 
     emit("## Rank stability under aggregator changes")
     emit("")
-    emit("Spearman ρ between aggregator overall-rankings. ρ near 1 means the")
-    emit("aggregator change re-orders the projects very little; ρ < 0.9 means")
+    emit("Spearman rho between aggregator overall-rankings. rho near 1 means the")
+    emit("aggregator change re-orders the projects very little; rho < 0.9 means")
     emit("the new aggregator would visibly shake up the leaderboard.")
     emit("")
     overall_by_agg = {
         agg: overall_for(corpus, "baseline_tangle", agg) for agg in AGGREGATOR_CANDIDATES
     }
     aggs = list(AGGREGATOR_CANDIDATES.keys())
-    emit("| pair | spearman ρ |")
+    emit("| pair | spearman rho |")
     emit("| --- | ---: |")
     for a, b in combinations(aggs, 2):
         rho = spearman(overall_by_agg[a], overall_by_agg[b])
@@ -734,7 +734,7 @@ def evaluate() -> None:
     )
     emit(dump_header)
     emit("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
-    for i, rec in enumerate(corpus):
+    for rec in corpus:
         n = rec["project"]["name"]
         comp = rec["score"]["components"]
         sm = rec["scc"]
