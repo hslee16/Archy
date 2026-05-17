@@ -169,9 +169,7 @@ def scc_metrics(g: nx.DiGraph) -> dict:
     nontrivial = [len(c) for c in sccs if len(c) >= 2]
     # self-loops on singletons also count as cycles per archy
     self_loop_singletons = sum(
-        1
-        for c in sccs
-        if len(c) == 1 and next(iter(c)) in g.successors(next(iter(c)))
+        1 for c in sccs if len(c) == 1 and next(iter(c)) in g.successors(next(iter(c)))
     )
     nic = sum(nontrivial) + self_loop_singletons
     largest = max(nontrivial, default=0)
@@ -701,10 +699,7 @@ def evaluate() -> None:
     ]
     for acy_cand, dep_cand in interesting_combos:
         axes_map = axis_values(corpus, acy_cand, dep_cand)
-        overalls = [
-            agg_geomean([axes_map[a][i] for a in AXIS_ORDER])
-            for i in range(len(corpus))
-        ]
+        overalls = [agg_geomean([axes_map[a][i] for a in AXIS_ORDER]) for i in range(len(corpus))]
         rho = spearman(baseline_overall, overalls)
         emit(f"| {acy_cand} | {dep_cand} | {rho:+.3f} |")
     emit("")
