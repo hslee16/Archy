@@ -19,6 +19,7 @@ agent calling these tools.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict
@@ -35,6 +36,8 @@ from archy.diff import (
 from archy.dsm import (
     DSM,
     DSMDiff,
+    GroupBy,
+    Weight,
     build_dsm,
     diff_dsm,
     read_dsm,
@@ -626,8 +629,8 @@ def _register_tools(server: FastMCP) -> None:
         graph = _load_graph(Path(path), internal_only=False)
         current = build_dsm(
             graph,
-            group_by=group_by,  # type: ignore[arg-type]
-            weight=weight,  # type: ignore[arg-type]
+            group_by=cast(GroupBy, group_by),
+            weight=cast(Weight, weight),
             focus=focus,
             focus_depth=focus_depth,
             package=package,

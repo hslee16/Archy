@@ -18,7 +18,7 @@ browsing a dashboard.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
@@ -293,7 +293,7 @@ def render_ascii(
     header_glyphs = [str(i + 1) for i in range(n)]
     out.append(label_prefix + _row_cells(header_glyphs))
 
-    sep_glyphs = ["-" * (cell_w - 1) for _ in range(n)]
+    sep_glyphs: list[str] = ["-" * (cell_w - 1) for _ in range(n)]
     out.append(label_prefix + _row_cells(sep_glyphs).replace(" ", "-").replace("|", "+"))
 
     for r in range(n):
@@ -340,18 +340,28 @@ def render_json(dsm: DSM) -> dict[str, object]:
 
 
 def dsm_from_dict(payload: dict[str, object]) -> DSM:
+    ordering = cast(list[str], payload["ordering"])
+    raw_groups = cast(list[dict[str, object]], payload["groups"])
+    raw_cells = cast(list[dict[str, object]], payload["cells"])
     return DSM(
-        ordering=tuple(payload["ordering"]),  # type: ignore[arg-type]
+        ordering=tuple(ordering),
         groups=tuple(
-            DSMGroup(label=g["label"], members=tuple(g["members"]))  # type: ignore[index]
-            for g in payload["groups"]  # type: ignore[union-attr]
+            DSMGroup(
+                label=cast(str, g["label"]),
+                members=tuple(cast(list[str], g["members"])),
+            )
+            for g in raw_groups
         ),
         cells=tuple(
-            DSMCell(row=c["row"], col=c["col"], weight=c["weight"])  # type: ignore[index]
-            for c in payload["cells"]  # type: ignore[union-attr]
+            DSMCell(
+                row=cast(int, c["row"]),
+                col=cast(int, c["col"]),
+                weight=cast(float, c["weight"]),
+            )
+            for c in raw_cells
         ),
-        group_by=payload["group_by"],  # type: ignore[arg-type]
-        weight=payload["weight"],  # type: ignore[arg-type]
+        group_by=cast(GroupBy, payload["group_by"]),
+        weight=cast(Weight, payload["weight"]),
     )
 
 
