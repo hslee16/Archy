@@ -457,13 +457,27 @@ Concretely:
 These don't break the geometric-mean argument - none cross the OECD
 threshold - but the design language in
 [`docs/LEARNINGS.md`](LEARNINGS.md) ("the only way to game the score
-is to actually improve every dimension") is stronger than the data
-supports. The honest reading is: improving any of the original four
-axes tends to nudge its moderately-coupled neighbors in the same
-direction, which means the geometric mean is slightly easier to move
-via single-axis optimization than a strict-independence design would
-predict. Complexity is the exception: moving it does not mechanically
-move anything else.
+is to actually improve every dimension") was stronger than the data
+supports. The empirical study in
+[`docs/SCORE_SHAPE_REDESIGN_EMPIRICS.md`](SCORE_SHAPE_REDESIGN_EMPIRICS.md)
+(2026-05) tested seven acyclicity reformulations, three depth
+reformulations, and six aggregator alternatives against the 28-project
+bench and concluded against any axis change: the candidate
+combinations that reach `0/10` moderate pairs all require a depth-axis
+redesign that conflates "new long chain" with "new SCC" (fails the
+OECD actionability gate), and every such combination shakes the
+project leaderboard substantially (Spearman ρ vs v0.23 in
+`[0.53, 0.64]`). The honest reading the empirics support is twofold:
+(1) the two moderate pairs both involve `depth`, and under every
+tested aggregator `depth` correlates only weakly with `overall`
+(`|r| ≤ 0.187`), so the OECD breach is operationally cosmetic - depth
+optimization is essentially toothless against the score for the
+unrelated reason that depth barely moves the score; (2) the other
+four axes (modularity, acyclicity, equality, complexity) all have
+non-trivial leverage on `overall` and the geometric mean's
+non-compensatory property does bite on them. Complexity remains the
+most orthogonal axis (max `|r| ≤ 0.14` against any other axis), so
+moving it does not mechanically move anything else.
 
 The flip side is that this couples the *diagnostic* signal usefully:
 a regression in just one axis is a stronger localized signal than a

@@ -235,3 +235,7 @@ docs/PYPI_STATS.md
 
 # Local research notes (kept locally, never published)
 research/
+
+# Score-redesign per-project archy invocation cache; regenerable via
+# `python bench/score_redesign.py collect`. ~10MB of intermediate JSON.
+bench/cache/

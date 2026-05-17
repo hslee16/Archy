@@ -34,7 +34,7 @@ Things validated and queued but not yet started.
 
 ## Deferred (needs more thought)
 
-- **Score-shape redesign for axis independence.** The 27-project benchmark shows 2 of 10 axis pairs at moderate Pearson correlation (`|r|` 0.5-0.7). Two candidate redesigns: replace acyclicity's tangle-ratio normalization, or replace geometric mean with a non-compensatory aggregator (e.g. Mazziotta-Pareto Index). Research project, not a roadmap item today.
+- ~~**Score-shape redesign for axis independence.**~~ Studied in 2026-05 ([`SCORE_SHAPE_REDESIGN_EMPIRICS.md`](SCORE_SHAPE_REDESIGN_EMPIRICS.md)) and concluded against any axis change. Seven acyclicity variants and three depth variants were evaluated against the 28-project bench; the only combinations that reach `0/10` moderate pairs require a depth-axis redesign (`depth_with_scc_penalty`) that fails the OECD actionability gate (conflates "new long chain" with "new SCC" into one number), and every such combination shakes the project leaderboard substantially (Spearman ρ vs v0.23 in `[0.53, 0.64]`). A separately tractable aggregator change (Mariani-Ciommi penalized geometric mean) remains open as a soft recommendation but is not blocking; the moderate pairs all involve `depth`, which under every tested aggregator correlates only weakly with `overall` (`|r| ≤ 0.187`), making the OECD breach operationally cosmetic.
 - **Equality based on per-function CC.** Currently a proxy via Gini over module out-degrees. The eventual signal is `gini(per_function_cyclomatic_complexity)`; requires the cyclomatic-complexity metric (shipped in v0.17, promoted to a score axis as `complexity` in v0.20), but the substitution itself has not been validated yet.
 
 ## Rejected (explicitly will not ship)
