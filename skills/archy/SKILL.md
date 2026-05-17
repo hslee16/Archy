@@ -88,6 +88,16 @@ archy_high_risk_modules(path=".", top_n=10)
 
 Ranks internal modules by `edit_risk = geomean(propagation_cost, normalized_fan_in, instability)`. A high score means central *and* fragile; treat such edits with extra care or scope them down. Pairs with `archy_hotspots` (below) which answers "where is the refactoring leverage" using git churn rather than structural risk.
 
+For positional context (where blocks are dense, where back-edges sit, where layer leakage shows up), reach for the Design Structure Matrix:
+
+```
+archy_dsm(path=".", group_by="community")
+# or: archy_dsm(path=".", focus="src.app.auth", focus_depth=1)
+# or: archy_dsm(path=".", package="src.app")
+```
+
+Returns a structured DSM: ordered row/col list plus a sparse cell list, grouped into block-diagonal blocks. `group_by="community"` orients in an unfamiliar codebase via Newman-community blocks; `"layer"` makes cross-layer dependencies visible as off-block entries; `"topological"` puts cycles above the diagonal so back-edges localize to specific module pairs. `weight="calls"` exposes `call_count` instead of binary edge presence. Pass `focus=<qualname>` to keep just the focus + its N-hop neighborhood, or `package=<prefix>` to scope to a single subpackage. The DSM is *visualization-only*, never a score input; agents read it positionally, not as a number ([`docs/DSM_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/DSM_EMPIRICS.md) for why).
+
 For refactor priority across the whole codebase:
 
 ```
@@ -133,6 +143,14 @@ Decision rule:
 
 Loop back to step 4 after each correction.
 
+When `score_delta.acyclicity` drops or `cycles.added` is non-empty, follow with a DSM diff to localize the offending edge. Save the DSM JSON before editing (`archy_dsm(path=".", group_by="topological")` and redirect to a file), then diff against it after:
+
+```
+archy_dsm(path=".", group_by="topological", baseline_path=".archy/dsm-before.json")
+```
+
+Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair the edit turned into a back-edge in the new ordering. That is the exact information needed to choose which import to remove or invert.
+
 ## Tool reference
 
 | Tool | Signature (defaults shown) | Use when |
@@ -151,6 +169,7 @@ Loop back to step 4 after each correction.
 | `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl`; `strict=True` fails on regression beyond tolerance. |
 | `archy_record_baseline` | `(path, internal_only=True)` | Convenience: `archy_score(record=True)` for the start-of-session entry. |
 | `archy_trend` | `(path, last_n=10)` | Recent score history (oldest-first). |
+| `archy_dsm` | `(path, group_by="community", weight="imports", focus=None, focus_depth=1, package=None, baseline_path=None)` | Design Structure Matrix view of the import graph. `group_by` is `community` / `layer` / `topological`. Narrow large projects with `focus` + `focus_depth` or `package`. When `baseline_path` is provided, returns a `DSMDiff` whose `new_back_edges` flags cycles the edit just introduced. Visualization-only; not part of any score. |
 
 The MCP server also exposes a `loop` **prompt** containing the canonical playbook in archy's own words. Fetch it via `prompts/get name="loop"` for the always-current version.
 
@@ -172,6 +191,14 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 - "I really need the whole graph" → `archy_graph` (bump `max_nodes` only after `archy_graph_summary` shows the project fits)
 - "Is this module dangerous to edit?" → `archy_high_risk_modules` (structural; no git required)
 - "Where should I focus refactoring effort?" → `archy_hotspots` (CC x git churn; needs a git repo)
+
+**Which DSM grouping?**
+
+- "What are the natural top-level blocks of this codebase?" → `group_by="community"` (Newman block-diagonal cohesion)
+- "Which dependencies cross declared layers?" → `group_by="layer"` (off-block entries name the violations; pair with `weight="calls"` to weight by call traffic)
+- "Which edges close which cycle?" → `group_by="topological"` (back-edges appear above the diagonal within an SCC block, named by source and target)
+- "Is this module's neighborhood healthy?" → any grouping with `focus=<qualname>` to keep the matrix focused on the relevant rows and columns
+- "Show me only this subpackage" → any grouping with `package=<prefix>`
 
 **Reading the score breakdown.** `archy_score` returns five axes plus a call-weighted Q diagnostic. The diagnostic appears alongside the unweighted `modularity` line: the *gap* between unweighted and call-weighted raw Q is the load-bearing signal (it detects mismatch between the import-graph community structure and the call-graph community structure). The headline `overall` is the geometric mean of the five axes only; the call-weighted Q diagnostic is for context, not score. See [`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/CALL_WEIGHTED_Q_EMPIRICS.md) for what the gap means in practice.
 
@@ -214,8 +241,22 @@ archy_diff(path=".")   # confirms score did not regress
 ```
 archy_cycles(path=".")
 # Identify the SCC.
-archy_graph_focus(path=".", modules=[<one node from the SCC>], depth=2, direction="both")
+archy_dsm(path=".", group_by="topological")
+# The SCC sits as a contiguous block on the diagonal; entries above the
+# diagonal inside that block are the back-edges that close the cycle.
+archy_graph_focus(path=".", modules=[<one back-edge source from the DSM>], depth=2, direction="both")
 # Read import line numbers from the edges; choose the edge to break.
+```
+
+### Orienting in an unfamiliar codebase
+
+```
+archy_graph_summary(path=".", top_n=20)
+# Top fan-in / fan-out / PageRank modules. Names the hubs.
+archy_dsm(path=".", group_by="community")
+# Block-diagonal view of the top-level decomposition. Each block is one
+# Newman community; row density inside a block names the central module
+# of that block; off-block entries name the cross-cluster bridges.
 ```
 
 ### Finding what to refactor next
@@ -253,5 +294,6 @@ archy_high_risk_modules(path=".", top_n=10)
 - Score formulas (five axes + call-weighted Q diagnostic): https://github.com/hslee16/Archy/blob/main/docs/SCORING.md
 - Axis review (why 5 axes, why no 6th from calls_per_edge): https://github.com/hslee16/Archy/blob/main/docs/AXIS_REVIEW.md
 - Call-weighted Q empirical study: https://github.com/hslee16/Archy/blob/main/docs/CALL_WEIGHTED_Q_EMPIRICS.md
+- DSM empirical study (why DSM ships as visualization, not a scalar): https://github.com/hslee16/Archy/blob/main/docs/DSM_EMPIRICS.md
 - Layer rules and `archy.yaml` syntax: https://github.com/hslee16/Archy#layer-rules-archy-check
 - Benchmarks across 27 projects: https://github.com/hslee16/Archy/blob/main/bench/results.md

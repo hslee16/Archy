@@ -32,7 +32,7 @@ archy defers sentrux's redundancy axis; see
 1. **Every axis must be independent.** Two graphs can have identical
    modularity but very different depth; identical depth but very
    different fan-out concentration. A single number that conflates them
-   is uninformative. The four sub-metrics are chosen so that improving
+   is uninformative. The five sub-metrics are chosen so that improving
    one does not mechanically improve the others.
 2. **The aggregate must be hard to game.** A weak score on any axis
    should pull the overall down sharply. Improving the overall should

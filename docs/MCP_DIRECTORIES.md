@@ -30,7 +30,7 @@ archy
 Architectural sensor for Python codebases (CLI + MCP server)
 
 ### Short description (max 200 chars)
-Python architecture analysis: import graph, cycles, layer rules, four-axis score, refactor-priority hotspots, and an MCP server with 14 tools so coding agents can see structural impact before they commit.
+Python architecture analysis: import graph, cycles, layer rules, five-axis score, refactor-priority hotspots, DSM visualization, and an MCP server with 15 tools so coding agents can see structural impact before they commit.
 
 ### Long description
 archy watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. Designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents (Claude Code, Cursor, Cline, any MCP client) can read their own architectural impact before committing. Tree-sitter powered, so robust to in-flight edits and partial files.

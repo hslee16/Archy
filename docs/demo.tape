@@ -36,7 +36,7 @@ Sleep 400ms
 Enter
 Sleep 4500ms
 
-Type "# expose 14 tools to Claude Code, Cursor, any MCP client"
+Type "# expose 15 tools to Claude Code, Cursor, any MCP client"
 Sleep 800ms
 Enter
 Type "uv run archy mcp --help | head -10"
