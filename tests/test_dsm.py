@@ -1,0 +1,338 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import networkx as nx
+import pytest
+from pydantic import ValidationError
+
+from archy.dsm import (
+    DSM,
+    DSMCell,
+    DSMGroup,
+    build_dsm,
+    diff_dsm,
+    dsm_from_dict,
+    read_dsm,
+    render_ascii,
+    render_diff_text,
+    render_json,
+    write_dsm,
+)
+
+
+def _g(*edges: tuple[str, str], calls: dict[tuple[str, str], int] | None = None) -> nx.DiGraph:
+    g: nx.DiGraph = nx.DiGraph()
+    for u, v in edges:
+        cc = (calls or {}).get((u, v), 0)
+        g.add_edge(u, v, lines=(1,), call_count=cc)
+    return g
+
+
+def _externalize(g: nx.DiGraph, *names: str) -> nx.DiGraph:
+    for n in names:
+        g.add_node(n, external=True)
+    return g
+
+
+# --- Builder: basic shapes ----------------------------------------------------
+
+
+def test_build_dsm_empty_graph():
+    dsm = build_dsm(nx.DiGraph())
+    assert dsm.ordering == ()
+    assert dsm.cells == ()
+    assert dsm.groups == ()
+
+
+def test_build_dsm_single_node():
+    g = nx.DiGraph()
+    g.add_node("a")
+    dsm = build_dsm(g)
+    assert dsm.ordering == ("a",)
+    assert dsm.cells == ()
+    assert len(dsm.groups) == 1
+
+
+def test_build_dsm_excludes_external_nodes():
+    g = _g(("a", "b"))
+    _externalize(g, "stdlib_thing")
+    g.add_edge("a", "stdlib_thing")
+    dsm = build_dsm(g)
+    assert "stdlib_thing" not in dsm.ordering
+    assert all(
+        dsm.ordering[c.row] != "stdlib_thing" and dsm.ordering[c.col] != "stdlib_thing"
+        for c in dsm.cells
+    )
+
+
+def test_build_dsm_cells_cover_all_internal_edges():
+    g = _g(("a", "b"), ("b", "c"), ("a", "c"))
+    dsm = build_dsm(g)
+    assert len(dsm.cells) == 3
+    edge_names = {(dsm.ordering[c.row], dsm.ordering[c.col]) for c in dsm.cells}
+    assert edge_names == {("a", "b"), ("b", "c"), ("a", "c")}
+
+
+# --- Builder: weight modes ----------------------------------------------------
+
+
+def test_build_dsm_imports_weight_is_one():
+    g = _g(("a", "b"), calls={("a", "b"): 17})
+    dsm = build_dsm(g, weight="imports")
+    assert dsm.cells[0].weight == 1.0
+
+
+def test_build_dsm_calls_weight_uses_call_count():
+    g = _g(("a", "b"), calls={("a", "b"): 17})
+    dsm = build_dsm(g, weight="calls")
+    assert dsm.cells[0].weight == 17.0
+
+
+def test_build_dsm_calls_weight_falls_back_to_one_for_import_only_edges():
+    g = _g(("a", "b"))  # call_count=0
+    dsm = build_dsm(g, weight="calls")
+    assert dsm.cells[0].weight == 1.0
+
+
+# --- Builder: grouping modes --------------------------------------------------
+
+
+def test_group_by_topological_puts_dag_nodes_in_topo_order():
+    g = _g(("a", "b"), ("b", "c"))
+    dsm = build_dsm(g, group_by="topological")
+    pos = {n: i for i, n in enumerate(dsm.ordering)}
+    assert pos["a"] < pos["b"] < pos["c"]
+
+
+def test_group_by_topological_isolates_scc_into_its_own_group():
+    g = _g(("a", "b"), ("b", "a"), ("b", "c"))
+    dsm = build_dsm(g, group_by="topological")
+    scc_groups = [g for g in dsm.groups if g.label.startswith("SCC-")]
+    assert len(scc_groups) == 1
+    assert set(scc_groups[0].members) == {"a", "b"}
+
+
+def test_group_by_topological_dag_only_no_scc_groups():
+    g = _g(("a", "b"), ("b", "c"))
+    dsm = build_dsm(g, group_by="topological")
+    assert all(not group.label.startswith("SCC-") for group in dsm.groups)
+
+
+def test_group_by_community_produces_at_least_one_group():
+    g = _g(("a", "b"), ("c", "d"), ("e", "f"))
+    dsm = build_dsm(g, group_by="community")
+    assert len(dsm.groups) >= 1
+    members = {m for grp in dsm.groups for m in grp.members}
+    assert members == set(dsm.ordering)
+
+
+def test_group_by_layer_assigns_depths():
+    g = _g(("a", "b"), ("b", "c"), ("c", "d"))
+    dsm = build_dsm(g, group_by="layer")
+    layer_labels = [grp.label for grp in dsm.groups]
+    assert any("Layer-0" in lbl for lbl in layer_labels)
+    assert any("Layer-3" in lbl for lbl in layer_labels)
+
+
+# --- Builder: focus filter ----------------------------------------------------
+
+
+def test_focus_filter_includes_only_neighborhood():
+    g = _g(("a", "b"), ("b", "c"), ("c", "d"), ("e", "f"))
+    dsm = build_dsm(g, focus="b", focus_depth=1)
+    assert set(dsm.ordering) == {"a", "b", "c"}
+
+
+def test_focus_filter_depth_two_grows_neighborhood():
+    g = _g(("a", "b"), ("b", "c"), ("c", "d"), ("d", "e"))
+    dsm = build_dsm(g, focus="c", focus_depth=2)
+    assert set(dsm.ordering) == {"a", "b", "c", "d", "e"}
+
+
+def test_focus_filter_unknown_node_returns_empty():
+    g = _g(("a", "b"))
+    dsm = build_dsm(g, focus="nope")
+    assert dsm.ordering == ()
+
+
+# --- Builder: package filter --------------------------------------------------
+
+
+def test_package_filter_keeps_prefix_matches():
+    g = _g(("pkg.a", "pkg.b"), ("pkg.b", "other.c"))
+    dsm = build_dsm(g, package="pkg")
+    assert set(dsm.ordering) == {"pkg.a", "pkg.b"}
+
+
+def test_package_filter_exact_match_is_kept():
+    g = nx.DiGraph()
+    g.add_node("pkg")
+    g.add_edge("pkg", "pkg.sub")
+    dsm = build_dsm(g, package="pkg")
+    assert "pkg" in dsm.ordering
+    assert "pkg.sub" in dsm.ordering
+
+
+def test_package_filter_does_not_match_substring_inside_name():
+    g = _g(("mypkg.a", "pkg.b"))
+    dsm = build_dsm(g, package="pkg")
+    assert "mypkg.a" not in dsm.ordering
+
+
+# --- ASCII renderer -----------------------------------------------------------
+
+
+def test_render_ascii_empty():
+    dsm = build_dsm(nx.DiGraph())
+    out = render_ascii(dsm)
+    assert "empty graph" in out
+
+
+def test_render_ascii_rejects_oversized():
+    g = nx.DiGraph()
+    for i in range(10):
+        g.add_node(f"m{i}")
+    dsm = build_dsm(g)
+    out = render_ascii(dsm, max_nodes=5)
+    assert "exceeds max_nodes" in out
+    assert "--focus" in out
+
+
+def test_render_ascii_basic_grid_includes_module_names():
+    g = _g(("a", "b"), ("b", "c"))
+    dsm = build_dsm(g, group_by="topological")
+    out = render_ascii(dsm)
+    assert "a" in out
+    assert "b" in out
+    assert "c" in out
+    assert "X" in out
+
+
+def test_render_ascii_diagonal_uses_backslash_marker():
+    g = _g(("a", "b"))
+    dsm = build_dsm(g, group_by="topological")
+    out = render_ascii(dsm)
+    assert "\\" in out
+
+
+# --- JSON renderer ------------------------------------------------------------
+
+
+def test_render_json_roundtrip():
+    g = _g(("a", "b"), ("b", "c"))
+    dsm = build_dsm(g, group_by="community", weight="imports")
+    payload = render_json(dsm)
+    restored = dsm_from_dict(payload)
+    assert restored.ordering == dsm.ordering
+    assert restored.cells == dsm.cells
+    assert restored.groups == dsm.groups
+    assert restored.group_by == dsm.group_by
+    assert restored.weight == dsm.weight
+
+
+def test_render_json_keys_are_stable():
+    g = _g(("a", "b"))
+    dsm = build_dsm(g)
+    payload = render_json(dsm)
+    assert set(payload.keys()) == {"n", "group_by", "weight", "ordering", "groups", "cells"}
+    assert payload["n"] == 2
+
+
+# --- Persistence --------------------------------------------------------------
+
+
+def test_write_and_read_dsm_roundtrip(tmp_path: Path):
+    g = _g(("a", "b"), ("b", "c"))
+    dsm = build_dsm(g)
+    out = tmp_path / "nested" / "dsm.json"
+    write_dsm(dsm, out)
+    assert out.exists()
+    loaded = read_dsm(out)
+    assert loaded == dsm
+
+
+def test_read_dsm_missing_file_returns_none(tmp_path: Path):
+    assert read_dsm(tmp_path / "absent.json") is None
+
+
+# --- Diff ---------------------------------------------------------------------
+
+
+def test_diff_dsm_identifies_added_edge():
+    before = build_dsm(_g(("a", "b")))
+    after = build_dsm(_g(("a", "b"), ("b", "c")))
+    diff = diff_dsm(before, after)
+    assert any(after.ordering[c.row] == "b" and after.ordering[c.col] == "c" for c in diff.added)
+    assert not diff.removed
+
+
+def test_diff_dsm_identifies_removed_edge():
+    before = build_dsm(_g(("a", "b"), ("b", "c")))
+    after = build_dsm(_g(("a", "b")))
+    diff = diff_dsm(before, after)
+    assert len(diff.removed) == 1
+    assert not diff.added
+
+
+def test_diff_dsm_detects_new_back_edge():
+    before = build_dsm(_g(("a", "b"), ("b", "c")), group_by="topological")
+    after = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "a")), group_by="topological")
+    diff = diff_dsm(before, after)
+    assert diff.new_back_edges, "introducing c->a (a cycle) must be flagged"
+
+
+def test_diff_dsm_detects_weight_change():
+    before = build_dsm(_g(("a", "b"), calls={("a", "b"): 1}), weight="calls")
+    after = build_dsm(_g(("a", "b"), calls={("a", "b"): 5}), weight="calls")
+    diff = diff_dsm(before, after)
+    assert len(diff.weight_changed) == 1
+    before_cell, after_cell = diff.weight_changed[0]
+    assert before_cell.weight == 1.0
+    assert after_cell.weight == 5.0
+
+
+def test_diff_dsm_reports_node_additions_and_removals():
+    before = build_dsm(_g(("a", "b")))
+    g_after = _g(("a", "b"))
+    g_after.add_node("c")
+    after = build_dsm(g_after)
+    diff = diff_dsm(before, after)
+    assert "c" in diff.nodes_added
+    assert not diff.nodes_removed
+
+
+def test_diff_dsm_identity_diff_is_empty():
+    g = _g(("a", "b"), ("b", "c"))
+    dsm = build_dsm(g)
+    diff = diff_dsm(dsm, dsm)
+    assert not diff.added
+    assert not diff.removed
+    assert not diff.weight_changed
+    assert not diff.new_back_edges
+
+
+def test_render_diff_text_mentions_new_back_edges():
+    before = build_dsm(_g(("a", "b"), ("b", "c")), group_by="topological")
+    after = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "a")), group_by="topological")
+    diff = diff_dsm(before, after)
+    text = render_diff_text(diff, after)
+    assert "back-edge" in text.lower()
+    assert "c -> a" in text or "c -&gt; a" in text
+
+
+# --- Model validation ---------------------------------------------------------
+
+
+def test_dsm_models_are_frozen():
+    cell = DSMCell(row=0, col=1, weight=1.0)
+    with pytest.raises(ValidationError):
+        cell.row = 99  # type: ignore[misc]
+    group = DSMGroup(label="x", members=("a",))
+    with pytest.raises(ValidationError):
+        group.label = "y"  # type: ignore[misc]
+    dsm = DSM(
+        ordering=("a",), groups=(group,), cells=(cell,), group_by="community", weight="imports"
+    )
+    with pytest.raises(ValidationError):
+        dsm.ordering = ()  # type: ignore[misc]

@@ -89,6 +89,7 @@ def test_create_server_registers_expected_tools():
         "archy_graph",
         "archy_high_risk_modules",
         "archy_hotspots",
+        "archy_dsm",
     }
 
 
