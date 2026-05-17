@@ -253,29 +253,40 @@ archy computes per-function McCabe cyclomatic complexity over the
 tree-sitter AST (see [`src/archy/complexity.py`](../src/archy/complexity.py))
 and aggregates to a project-wide mean (`cc_mean`). The mean is then
 mapped linearly to `[0, 1]` with the floor at the theoretical minimum
-(every function has one branch-free path) and the ceiling at six:
+(every function has one branch-free path) and the ceiling at nine:
 
 ```
-complexity = 1 - clamp((cc_mean - 1) / 5, 0, 1)
+complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)
 ```
 
 Anchor points from the 27-project benchmark
 ([`RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md)):
 
-- mkdocs at `cc_mean = 1.77` -> `complexity = 0.846`
-- archy at `cc_mean = 3.73` -> `complexity = 0.454`
-- msgspec at `cc_mean = 5.33` -> `complexity = 0.134`
+- mkdocs at `cc_mean = 1.77` -> `complexity = 0.904`
+- archy at `cc_mean = 3.73` -> `complexity = 0.659`
+- msgspec at `cc_mean = 5.33` -> `complexity = 0.459`
 
 A graph with zero functions (a project of only empty `__init__.py`
 files) returns `1.0` vacuously, matching the convention the other axes
-use for empty inputs.
+use for empty inputs. The same `1.0` floor applies to projects with
+fewer than 20 functions: `cc_mean` is statistically unstable on tiny
+inputs and one branchy dispatcher can pull the mean well above 4 even
+when surrounding code is healthy.
 
-**Why a linear floor-to-six mapping.** The bench distribution sits in
-`[1.77, 5.33]`. Linearly mapping `[1, 6]` to `[1, 0]` spreads that
-entire range across roughly `[0.85, 0.13]`, which gives the axis room
+**Why a linear floor-to-nine mapping.** The bench distribution sits in
+`[1.77, 5.33]`. Linearly mapping `[1, 9]` to `[1, 0]` spreads that
+entire range across roughly `[0.90, 0.46]`, which gives the axis room
 to discriminate without bottoming out at 0 for any real Python project.
 A floor of 1 (rather than 0) is what McCabe's definition implies: even
 a function with no branches has cyclomatic complexity 1.
+
+The divisor was widened from `/5` (v0.20) to `/8` (v0.23) after the
+original calibration drove the geomean to 0.000 on realistic backends
+whose `cc_mean` lands in `[6, 9)` (validator-heavy or parser-heavy
+codebases). Under the old slope, a single axis at 0 zeroed the entire
+score regardless of how strong the other four axes were; the wider
+divisor keeps the bottom band discriminative while preserving the
+ordering of the bench distribution.
 
 **Why mean and not max.** Project-wide `cc_max` is dominated by
 single dispatcher / parser functions and does not correlate with the
@@ -360,6 +371,26 @@ v0.20 is one such discontinuity:
   ```bash
   archy score . --record
   ```
+
+Widening the Complexity divisor in v0.23 (`/5` -> `/8`) is the second
+discontinuity:
+
+- The four non-complexity sub-axes are unchanged.
+- `complexity` scores lift uniformly. Bench-wide range shifted from
+  [0.133, 0.846] under `/5` to [0.458, 0.903] under `/8`; ordering
+  preserved.
+- `overall` lifts by a multiplicative factor of
+  `(complexity_new / complexity_old) ^ (1/5)`. Bench-wide that's
+  +0.04 to +0.09; the largest absolute gainer is msgspec
+  (0.310 -> 0.397). The trend table renders both eras side by side
+  without re-baselining since the historical `complexity` field is
+  still meaningful in isolation; record a fresh baseline if you want
+  the new-era number to anchor future comparisons.
+- The motivation was practical: real-world repos with `cc_mean >= 6`
+  (validator-heavy or parser-heavy backends) were zeroing the entire
+  geomean on a single axis under `/5`, masking otherwise-healthy
+  structure. `/8` keeps the ordering of the bench distribution while
+  extending the discriminative range out to `cc_mean = 9`.
 
 The same precedent will apply to any future axis addition or
 normalization change. See [`docs/ROADMAP.md`](ROADMAP.md) for the
@@ -453,48 +484,48 @@ sqlalchemy, dagster), with diversity across web / async / scientific
 / syntax-highlighting / generated-SDK domains. Pinned SHAs in
 [`bench/projects.yaml`](../bench/projects.yaml); raw output in
 [`bench/results.md`](../bench/results.md). Captured 2026-05-16
-against archy v0.21.0 (the first bench run with the five-axis score
-including `complexity`):
+against archy v0.23.0 (the first bench run with the widened `/8`
+complexity divisor; see [Score-shape versioning](#score-shape-versioning)):
 
 | Project       | SHA       | Modules | Edges | Overall | Modularity | Acyclicity | Depth | Equality | Complexity |
 | ------------- | --------- | ------: | ----: | ------: | ---------: | ---------: | ----: | -------: | ---------: |
-| boto3         | `81a86c9` |      39 |    71 |   0.640 |      0.689 |      0.897 | 0.533 |    0.417 |      0.778 |
-| numpy         | `0a1ed72` |     424 |  1342 |   0.633 |      0.596 |      0.745 | 0.571 |    0.521 |      0.770 |
-| mkdocs        | `2862536` |      61 |   177 |   0.631 |      0.520 |      0.787 | 0.615 |    0.469 |      0.845 |
-| pygments      | `6fe2c31` |     342 |   834 |   0.617 |      0.565 |      1.000 | 0.500 |    0.676 |      0.469 |
-| anyio         | `bcb2db6` |      42 |   158 |   0.596 |      0.499 |      0.643 | 0.615 |    0.480 |      0.795 |
-| starlette     | `7793b92` |      34 |   114 |   0.595 |      0.458 |      0.588 | 0.727 |    0.547 |      0.698 |
-| scrapy        | `5223dbe` |     172 |   858 |   0.586 |      0.521 |      0.640 | 0.533 |    0.552 |      0.702 |
-| botocore      | `2b64927` |      76 |   257 |   0.565 |      0.563 |      0.934 | 0.348 |    0.439 |      0.716 |
-| setuptools    | `84ed591` |     317 |   592 |   0.562 |      0.766 |      0.931 | 0.348 |    0.367 |      0.619 |
-| pytest        | `856da14` |      69 |   374 |   0.544 |      0.478 |      0.710 | 0.471 |    0.490 |      0.611 |
-| sqlalchemy    | `1e1c008` |     255 |  2550 |   0.531 |      0.571 |      0.388 | 0.471 |    0.568 |      0.710 |
-| archy         | `v0.21.0` |      18 |    41 |   0.530 |      0.509 |      1.000 | 0.667 |    0.297 |      0.414 |
-| requests      | `b684dcb` |      19 |    73 |   0.517 |      0.429 |      0.579 | 0.571 |    0.469 |      0.556 |
-| rich          | `46cebbb` |     100 |   421 |   0.513 |      0.524 |      0.450 | 0.667 |    0.430 |      0.528 |
-| fastapi       | `e89a37e` |      48 |   114 |   0.512 |      0.522 |      0.771 | 0.615 |    0.300 |      0.474 |
-| pydantic      | `5c63f86` |     104 |   496 |   0.505 |      0.636 |      0.385 | 0.615 |    0.459 |      0.477 |
-| scikit-learn  | `13f20d7` |     638 |  3866 |   0.502 |      0.525 |      0.824 | 0.222 |    0.477 |      0.697 |
-| flask         | `7374c85` |      24 |    94 |   0.500 |      0.484 |      0.208 | 0.800 |    0.569 |      0.683 |
-| dagster       | `8e7f318` |     801 |  6273 |   0.499 |      0.575 |      0.400 | 0.471 |    0.416 |      0.685 |
-| django        | `4d455ae` |     902 |  3274 |   0.497 |      0.640 |      0.754 | 0.267 |    0.399 |      0.593 |
-| datasette     | `aa84fe0` |      59 |   180 |   0.496 |      0.534 |      0.831 | 0.471 |    0.442 |      0.326 |
-| httpx         | `b5addb6` |      23 |    87 |   0.496 |      0.482 |      0.261 | 0.667 |    0.550 |      0.651 |
-| click         | `fc6c7c4` |      17 |    60 |   0.485 |      0.451 |      0.235 | 0.800 |    0.575 |      0.548 |
-| aiohttp       | `e8f4371` |      52 |   312 |   0.477 |      0.530 |      0.173 | 0.727 |    0.563 |      0.656 |
-| mypy          | `e53693b` |     195 |  1105 |   0.475 |      0.571 |      0.815 | 0.286 |    0.464 |      0.391 |
-| ansible       | `b7c0900` |     581 |  2145 |   0.439 |      0.614 |      0.769 | 0.286 |    0.383 |      0.316 |
-| msgspec       | `3b2543b` |      10 |    20 |   0.310 |      0.427 |      0.100 | 0.889 |    0.570 |      0.133 |
+| pygments      | `6fe2c31` |     342 |   834 |   0.663 |      0.565 |      1.000 | 0.500 |    0.676 |      0.668 |
+| boto3         | `81a86c9` |      39 |    71 |   0.653 |      0.689 |      0.897 | 0.533 |    0.417 |      0.861 |
+| numpy         | `0a1ed72` |     424 |  1342 |   0.647 |      0.596 |      0.745 | 0.571 |    0.521 |      0.856 |
+| mkdocs        | `2862536` |      61 |   177 |   0.639 |      0.520 |      0.787 | 0.615 |    0.469 |      0.903 |
+| starlette     | `7793b92` |      34 |   114 |   0.613 |      0.458 |      0.588 | 0.727 |    0.547 |      0.811 |
+| anyio         | `bcb2db6` |      42 |   158 |   0.607 |      0.499 |      0.643 | 0.615 |    0.480 |      0.872 |
+| scrapy        | `5223dbe` |     172 |   858 |   0.603 |      0.521 |      0.640 | 0.533 |    0.552 |      0.814 |
+| setuptools    | `84ed591` |     317 |   592 |   0.586 |      0.766 |      0.931 | 0.348 |    0.367 |      0.762 |
+| botocore      | `2b64927` |      76 |   257 |   0.581 |      0.563 |      0.934 | 0.348 |    0.439 |      0.823 |
+| pytest        | `856da14` |      69 |   374 |   0.568 |      0.478 |      0.710 | 0.471 |    0.490 |      0.757 |
+| archy         | `v0.22.0` |      19 |    43 |   0.564 |      0.512 |      1.000 | 0.667 |    0.273 |      0.615 |
+| datasette     | `aa84fe0` |      59 |   180 |   0.557 |      0.534 |      0.831 | 0.471 |    0.442 |      0.578 |
+| fastapi       | `e89a37e` |      48 |   114 |   0.549 |      0.522 |      0.771 | 0.615 |    0.300 |      0.671 |
+| sqlalchemy    | `1e1c008` |     255 |  2550 |   0.546 |      0.571 |      0.388 | 0.471 |    0.568 |      0.819 |
+| requests      | `b684dcb` |      19 |    73 |   0.545 |      0.429 |      0.579 | 0.571 |    0.469 |      0.722 |
+| rich          | `46cebbb` |     100 |   421 |   0.544 |      0.524 |      0.450 | 0.667 |    0.430 |      0.705 |
+| pydantic      | `5c63f86` |     104 |   496 |   0.541 |      0.636 |      0.385 | 0.615 |    0.459 |      0.673 |
+| django        | `4d455ae` |     902 |  3274 |   0.521 |      0.640 |      0.754 | 0.267 |    0.399 |      0.746 |
+| mypy          | `e53693b` |     195 |  1105 |   0.521 |      0.571 |      0.815 | 0.286 |    0.464 |      0.620 |
+| scikit-learn  | `13f20d7` |     638 |  3866 |   0.518 |      0.525 |      0.824 | 0.222 |    0.477 |      0.810 |
+| flask         | `7374c85` |      24 |    94 |   0.517 |      0.484 |      0.208 | 0.800 |    0.569 |      0.802 |
+| dagster       | `8e7f318` |     801 |  6273 |   0.515 |      0.575 |      0.400 | 0.471 |    0.416 |      0.803 |
+| httpx         | `b5addb6` |      23 |    87 |   0.515 |      0.482 |      0.261 | 0.667 |    0.550 |      0.782 |
+| click         | `fc6c7c4` |      17 |    60 |   0.511 |      0.451 |      0.235 | 0.800 |    0.575 |      0.717 |
+| ansible       | `b7c0900` |     581 |  2145 |   0.495 |      0.614 |      0.769 | 0.286 |    0.383 |      0.573 |
+| aiohttp       | `e8f4371` |      52 |   312 |   0.494 |      0.530 |      0.173 | 0.727 |    0.563 |      0.785 |
+| msgspec       | `3b2543b` |      10 |    20 |   0.397 |      0.427 |      0.100 | 0.889 |    0.570 |      0.458 |
 
-Bands derived from this distribution (median 0.513, IQR ~0.496-0.586):
+Bands derived from this distribution (median 0.544, IQR ~0.517-0.581):
 
 | Overall     | What's typically true at this score                                                                                                                | Examples from the benchmark                                       |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `≥ 0.58`    | Top tier. Usually a deliberate architectural pattern combined with restrained per-function complexity: hand-written facade over an auto-generated SDK (boto3), layered scientific code with disciplined small functions (numpy), pluggy-driven plugin host with short callbacks (mkdocs), wide-and-shallow lexer registry over a small core (pygments), structured async primitives (anyio). | boto3, numpy, mkdocs, pygments, anyio, starlette, scrapy |
-| `0.50–0.58` | Healthy. The bulk of mature Python libraries. Usually one or two weak axes that the others compensate for: setuptools tops the modularity axis (0.766) but middling depth (0.348) and equality (0.367) keep it mid-band; sqlalchemy carries low acyclicity (0.388) and decent complexity (0.710). | botocore, setuptools, pytest, sqlalchemy, archy, requests, rich, fastapi, pydantic, scikit-learn, flask |
-| `0.45–0.50` | "Typical." Often two weak axes that drag the geomean down: large frameworks tend to land here because depth and equality both suffer from "many modules, one or two hubs." datasette and mypy carry the additional drag of low complexity (0.326 and 0.391). | dagster, django, datasette, httpx, click, aiohttp, mypy |
-| `0.40–0.45` | At least one axis severely weak. Examine the breakdown. ansible at 0.439 is dragged by low depth (0.286), equality (0.383), and complexity (0.316) - a "wide, branchy" combination. | ansible |
-| `< 0.40`    | Multiple axes weak, or one axis below 0.15. Worth investigating before adding features. msgspec sits at 0.310 in v0.21: acyclicity 0.100 and complexity 0.133 both bite hard (the 10-module SCC and the 5.33 cc_mean are two independent symptoms of the same compact-but-dense codebase). | msgspec |
+| `≥ 0.60`    | Top tier. Usually a deliberate architectural pattern combined with restrained per-function complexity: wide-and-shallow lexer registry over a small core (pygments), hand-written facade over an auto-generated SDK (boto3), layered scientific code with disciplined small functions (numpy), pluggy-driven plugin host with short callbacks (mkdocs), structured async primitives (anyio). | pygments, boto3, numpy, mkdocs, starlette, anyio, scrapy |
+| `0.55–0.60` | Healthy. Mature Python libraries that ace one or two axes. setuptools tops modularity (0.766) but middling depth (0.348) and equality (0.367) keep it mid-band; archy is acyclic (1.000) with low equality (0.273). | setuptools, botocore, pytest, archy, datasette |
+| `0.50–0.55` | "Typical." The bulk of mature Python libraries. Usually two weak axes that drag the geomean down: large frameworks tend to land here because depth and equality both suffer from "many modules, one or two hubs." | fastapi, sqlalchemy, requests, rich, pydantic, django, mypy, scikit-learn, flask, dagster, httpx, click |
+| `0.45–0.50` | At least one axis severely weak. Examine the breakdown. ansible at 0.495 is dragged by low depth (0.286) and equality (0.383); aiohttp at 0.494 by acyclicity (0.173). | ansible, aiohttp |
+| `< 0.40`    | Multiple axes weak, or one axis below 0.15. Worth investigating before adding features. msgspec sits at 0.397 in v0.23: acyclicity 0.100 and complexity 0.458 still bite (the 10-module SCC and the 5.33 cc_mean are two independent symptoms of the same compact-but-dense codebase). | msgspec |
 
 Two things to note when reading these bands:
 
@@ -515,8 +546,8 @@ Two things to note when reading these bands:
    **0.53–0.80**. Scores in that band are healthy; below ~0.50
    suggests the graph has no clear community structure, above ~0.80
    is unusual outside very small or already-decomposed codebases.
-3. **The top scorers are shape-driven, not size-driven.** boto3
-   (0.640, the v0.21 benchmark high) and setuptools (0.766 modularity,
+3. **The top scorers are shape-driven, not size-driven.** pygments
+   (0.663, the v0.23 benchmark high) and setuptools (0.766 modularity,
    the benchmark high on that axis) both score the way they do because
    of their *layout*, not their quality per se. pygments is a
    wide-and-shallow registry: a small core (`pygments.lexer`,
@@ -532,20 +563,22 @@ Two things to note when reading these bands:
    takeaway: scores in the `0.55+` band often reflect a deliberate
    plugin/registry pattern, and "improving" a non-plugin codebase by
    chasing top-band numbers is the wrong inference.
-4. **Complexity is the most volatile axis project-to-project.** It
-   spans 0.133 (msgspec) to 0.845 (mkdocs) on the v0.21 bench; that
-   range is wider than any other axis. Adding it as a fifth axis in
-   v0.20 reshuffled the top of the table: pygments dropped from rank 1
-   (0.661 in the four-axis bench) to rank 4 (0.617 in the five-axis
-   bench) because its `cc_mean = 3.66` puts its complexity axis at
-   0.469; boto3 climbed to the top in part because its `cc_mean =
-   2.11` puts its complexity axis at 0.778. The takeaway: complexity
-   is doing work the other four axes were not, and any project where
-   the existing four look good but the complexity number is low is
-   the kind of "compact but branchy" codebase the v0.20 promotion was
-   designed to surface.
+4. **Complexity is a meaningful but no-longer-dominant axis.** Under
+   the v0.23 `/8` divisor it spans 0.458 (msgspec) to 0.903 (mkdocs),
+   a 0.45 spread - narrower than the v0.20-v0.22 `/5` range
+   (0.133-0.845) but still wider than depth or equality. The widened
+   divisor was a deliberate response to real-world repos whose
+   `cc_mean` lands in `[6, 9)` zeroing the entire geomean under the
+   old slope; see [Score-shape versioning](#score-shape-versioning).
+   Complexity is still doing work the other four axes were not:
+   pygments at `cc_mean = 3.66` carries a 0.668 complexity score
+   under the new slope, well below its near-perfect acyclicity and
+   equality, and that gap is the signal the axis was promoted to
+   capture. Any project where the existing four look good but
+   complexity is the weakest is the kind of "compact but branchy"
+   codebase the v0.20 promotion was designed to surface.
 5. **Auto-generated SDKs score well on archy's axes for trivial
-   reasons.** boto3 (0.640) and botocore (0.565) both rank above
+   reasons.** boto3 (0.653) and botocore (0.581) both rank above
    average. The bulk of botocore is JSON-driven at runtime, so the
    *static* Python surface archy sees is small and orderly: a handful
    of generic client/session/serializer modules. boto3 is even more
@@ -620,7 +653,10 @@ per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every
 internal graph node, plus project-wide aggregates on `archy score`'s
 `inputs`. Not deferred any longer: in v0.20.0 `cc_mean` was promoted
 to the fifth score axis as `complexity = 1 - clamp((cc_mean - 1) / 5,
-0, 1)`. See the [Complexity](#complexity) sub-metric section above for
+0, 1)`; the divisor was widened from `/5` to `/8` in v0.23.0 after
+the original calibration zeroed the geomean on validator/parser-heavy
+backends whose `cc_mean` sits in `[6, 9)`. See the
+[Complexity](#complexity) sub-metric section above for
 the formula, anchor points, and what-moves-it discussion; the
 diagnostic surface (per-module aggregates, `cc_max` for hotspots) is
 unchanged. The Gini-of-CC redesign of the equality axis remains

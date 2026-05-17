@@ -13,12 +13,20 @@ weak score on any axis pulls the overall down hard:
 * depth:      1 / (1 + max_depth / 8) where max_depth is the longest path
               through the SCC condensation.
 * equality:   1 - Gini(out-degree). Penalizes god-module topology.
-* complexity: 1 - clamp((cc_mean - 1) / 5, 0, 1), where cc_mean is the
+* complexity: 1 - clamp((cc_mean - 1) / 8, 0, 1), where cc_mean is the
               mean per-function McCabe cyclomatic complexity across all
-              internal modules. cc_mean=1 yields 1.0; cc_mean>=6 yields
+              internal modules. cc_mean=1 yields 1.0; cc_mean>=9 yields
               0.0; the 27-project bench (RESEARCH_METRICS.md sec 17)
-              sits in [1.77, 5.33] which maps to [0.85, 0.13]. Promoted
-              from diagnostic to score axis in v0.20.
+              sits in [1.77, 5.33] which maps to [0.90, 0.46]. Promoted
+              from diagnostic to score axis in v0.20; the v0.20 divisor
+              of /5 was widened to /8 in v0.23 after the original
+              calibration under-
+              ranged real-world repos whose cc_mean lands in [6, 9)
+              (e.g. validator/parser-heavy backends), driving the whole
+              geomean to 0 on a single axis. Projects with fewer than
+              20 functions return 1.0 vacuously: cc_mean is statistically
+              unstable on tiny function counts and a single branchy
+              dispatcher can dominate the mean.
 
 The model and original four formulas follow sentrux's
 quality-signal-design.md. sentrux ships a different fifth metric
@@ -176,6 +184,15 @@ def _call_stats(graph: nx.DiGraph) -> tuple[int, int, float]:
     return call_edge_count, total, cpe
 
 
+def _normalize_q(raw_q: float) -> float:
+    """Map canonical Newman range [-0.5, 1.0] onto [0, 1] via sentrux's
+    `(Q + 0.5) / 1.5`, then clamp. Shared by `compute_modularity` and
+    `compute_modularity_weighted` so the unweighted and weighted axes
+    stay calibrated identically.
+    """
+    return max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
+
+
 def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
     """Return (normalized_score, n_communities, raw_Q).
 
@@ -187,8 +204,7 @@ def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
         return 1.0, max(graph.number_of_nodes(), 1), 1.0
     communities = list(nx.community.greedy_modularity_communities(graph))
     raw_q = float(nx.community.modularity(graph, communities))
-    normalized = max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
-    return normalized, len(communities), raw_q
+    return _normalize_q(raw_q), len(communities), raw_q
 
 
 def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
@@ -222,8 +238,7 @@ def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
         data["_w"] = cc if cc > 0 else 1
     communities = list(nx.community.greedy_modularity_communities(weighted, weight="_w"))
     raw_q = float(nx.community.modularity(weighted, communities, weight="_w"))
-    normalized = max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
-    return normalized, len(communities), raw_q
+    return _normalize_q(raw_q), len(communities), raw_q
 
 
 def compute_acyclicity(graph: nx.DiGraph) -> tuple[float, int, float]:
@@ -254,27 +269,33 @@ def compute_depth(graph: nx.DiGraph) -> tuple[float, int]:
     return 1.0 / (1 + max_depth / 8), max_depth
 
 
+SMALL_PROJECT_FUNCTION_THRESHOLD = 20
+
+
 def compute_complexity(cc_mean: float, function_count: int) -> float:
     """Map mean per-function cyclomatic complexity onto [0, 1].
 
-    Linear: ``1 - clamp((cc_mean - 1) / 5, 0, 1)``. cc_mean=1 (the
+    Linear: ``1 - clamp((cc_mean - 1) / 8, 0, 1)``. cc_mean=1 (the
     theoretical floor: every function has exactly one branch-free
-    path) maps to 1.0; cc_mean=6 and above map to 0.0; the typical
+    path) maps to 1.0; cc_mean=9 and above map to 0.0; the typical
     Python project sits in the [2, 5] band which maps roughly linearly
-    to [0.8, 0.2].
+    to [0.875, 0.5].
 
     Anchor points from the 27-project benchmark (RESEARCH_METRICS.md
-    sec 17): mkdocs (1.77) -> 0.846; archy (3.73) -> 0.454; msgspec
-    (5.33) -> 0.134.
+    sec 17): mkdocs (1.77) -> 0.904; archy (3.73) -> 0.659; msgspec
+    (5.33) -> 0.459.
 
-    Vacuous case: a graph with no functions (e.g., a project of only
-    empty ``__init__.py`` files) returns 1.0, mirroring the convention
-    the other axes use for empty inputs. Without functions there is no
-    complexity to measure, so the axis cannot pull the geomean down.
+    Vacuous cases (return 1.0):
+    - No functions at all (e.g., a project of only empty ``__init__.py``
+      files): there is no complexity signal to measure.
+    - Fewer than 20 functions: cc_mean is statistically unstable on
+      tiny inputs; one branchy dispatcher in a 10-function module can
+      pull the mean above 4 even when the rest is healthy. Mirrors the
+      empty-input convention the other axes use.
     """
-    if function_count == 0:
+    if function_count < SMALL_PROJECT_FUNCTION_THRESHOLD:
         return 1.0
-    excess = (cc_mean - 1.0) / 5.0
+    excess = (cc_mean - 1.0) / 8.0
     clamped = max(0.0, min(1.0, excess))
     return 1.0 - clamped
 
