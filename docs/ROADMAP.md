@@ -13,10 +13,14 @@ When deciding whether to ship a feature, the load-bearing question is "what does
 
 ## Now
 
-Things actively in flight or planned for the next 2-3 releases.
+Things actively in flight or planned for the next 2-3 releases. Both items previously in this section shipped in v0.21.0 / v0.22.0; the queue below promotes from "Next" as work picks up.
 
-- **`archy dsm` (Design Structure Matrix)** as agent-shaped output: ASCII for terminal context, JSON for tool consumption, and an `archy_dsm` MCP tool returning the matrix + ordering as structured data. Canonical industrial visualization of architectural coupling (Steward 1981; Eppinger & Browning; MacCormack 2006 propagation cost, which archy already computes from a DSM). Three concrete uses for agents: (1) cycle localization at a glance (above-diagonal entries are cycles / back-references), (2) layer-violation visualization (entries grouped by layer make leakage explicit in the matrix), (3) DSM is the substrate `propagation_cost` is computed from, so exposing it directly closes that interpretive loop. **No HTML output planned** per the audience principle above.
-- **Call-weighted Newman Q as a refinement of the modularity axis.** Weight import-graph edges by `call_count` so module pairs that don't actually call each other contribute less to the community-structure signal. This is a refinement of the existing modularity axis, not a new axis (the "new axis" alternative was reviewed in v0.21 and rejected; the parallel diagnostic shipped in v0.21 instead). Validation work: re-run the 27-project bench with call-weighted Q, check whether the orthogonality picture and project ordering both move in defensible directions.
+- *(no items currently in flight; the queued items are in [Next](#next))*
+
+### Shipped from this section
+
+- ~~`archy dsm` (Design Structure Matrix)~~ shipped in v0.22.0 as a visualization-only output. CLI `archy dsm PATH` + MCP tool `archy_dsm`, with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package` filters, and `--diff` returning a `DSMDiff` whose `new_back_edges` field flags cycles an edit just introduced. ASCII for terminal context, JSON for tool consumption; HTML output dropped per the audience principle. Empirical study against the 27-project bench ruled out promoting any DSM-derived scalar to a score axis or diagnostic ([`DSM_EMPIRICS.md`](DSM_EMPIRICS.md)).
+- ~~Call-weighted Newman Q as a refinement of the modularity axis~~ shipped in v0.21.0 as a parallel diagnostic on `archy score` rather than an axis replacement. The gap between unweighted and weighted Q is the load-bearing signal (it detects mismatch between import-graph and call-graph community structure). Replacement was rejected because directionality is contested for intentional small-core / broad-call shapes ([`CALL_WEIGHTED_Q_EMPIRICS.md`](CALL_WEIGHTED_Q_EMPIRICS.md)).
 
 ## Next
 

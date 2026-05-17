@@ -183,6 +183,23 @@ archy impact path/to/project --file app/libs/db.py
 archy impact path/to/project --file app/libs/db.py --file app/services/auth.py --format json
 ```
 
+### Design Structure Matrix (`archy dsm`)
+
+The DSM puts modules on both axes in a chosen ordering, and cell `(row=source, col=target)` is non-empty when source imports target. Reading positionally exposes properties any single scalar would hide: block-diagonal cohesion under community grouping, above-diagonal back-edges under topological ordering, off-block layer leakage under layer grouping. Visualization-only ([`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md) for why no scalar joins the score).
+
+```bash
+archy dsm path/to/project --group community     # block-diagonal orientation
+archy dsm path/to/project --group topological   # back-edges sit above diagonal
+archy dsm path/to/project --group layer --weight calls   # cross-layer call traffic
+archy dsm path/to/project --focus pkg.module --focus-depth 1   # focal neighborhood
+archy dsm path/to/project --format json > .archy/dsm-before.json
+# ... edit code ...
+archy dsm path/to/project --group topological --diff .archy/dsm-before.json
+# prints any new back-edges the edit introduced
+```
+
+`archy dsm` refuses ASCII rendering for projects larger than `--max-nodes` (default 80) with an actionable error pointing at `--focus`, `--package`, or `--format json`.
+
 ### Snapshot and diff (agent feedback loop)
 
 Capture a baseline at the start of an editing session, then diff after edits to see exactly which cycles or layer rules changed. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the full playbook (also available via the MCP server's `loop` prompt).
