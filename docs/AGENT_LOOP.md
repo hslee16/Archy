@@ -89,8 +89,14 @@ as the `loop` prompt on the MCP server, so an agent connected to
    - CLI: `archy diff .`
    - MCP: `archy_diff(path)`
 
-   Returns per-component score deltas plus cycles and violations
-   `added` / `resolved` since the baseline.
+   Returns a risk-weighted `summary` (headline + `top_regressions` /
+   `top_improvements`) plus per-component score deltas and the full
+   cycles and violations `added` / `resolved` lists. Read
+   `summary.headline` first, then walk `summary.top_regressions` in
+   order; each item carries a 0-1 `risk` weight derived from
+   `compute_edit_risk`, so the most central-and-fragile breakage
+   surfaces first. The raw blocks remain available when you need the
+   full list, but the summary is the right starting point.
 
    If `acyclicity` dropped or `cycles.added` is non-empty, the
    companion DSM diff names the specific edge that closed the cycle:
@@ -103,10 +109,10 @@ as the `loop` prompt on the MCP server, so an agent connected to
    pair that turned into a back-edge in the new ordering, which is the
    exact information needed to pick which import to remove or invert.
 
-5. If `score_delta.overall` dropped or `cycles.added` /
-   `violations.added` are non-empty, the change introduced a
-   regression. Inspect the named modules, fix or revert, then loop
-   back to step 4. Recurse until the diff is clean.
+5. If `summary.headline` shows `overall -...` or `summary.top_regressions`
+   is non-empty, the change introduced a regression. Inspect the named
+   modules in order (highest `risk` first), fix or revert, then loop
+   back to step 4. Recurse until `top_regressions` is empty.
 
 ## When to use which gate
 
