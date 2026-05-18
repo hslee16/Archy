@@ -14,7 +14,7 @@ Item kinds:
 * ``score_component_drop`` / ``score_component_gain`` - risk = clamp(|delta| * 5, 0, 1)
 
 Score-component items use magnitude rather than module risk because they're
-project-wide signals with no module to weight against. The ×5 scaler maps
+project-wide signals with no module to weight against. The x5 scaler maps
 a 0.20 drop to risk 1.0, which matches the empirical "big regression" floor
 on the 27-project bench.
 """
@@ -25,7 +25,6 @@ import networkx as nx
 
 from archy.diff import DiffReport, DiffSummary, DiffSummaryItem
 from archy.risk import compute_edit_risk
-
 
 _COMPONENT_NAMES = ("modularity", "acyclicity", "depth", "equality", "complexity")
 _SCORE_MAGNITUDE_SCALER = 5.0
