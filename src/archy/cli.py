@@ -20,12 +20,14 @@ from archy.contracts import (
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     DiffReport,
+    DiffSummary,
     Snapshot,
     compute_diff,
     read_snapshot,
     take_snapshot,
     write_snapshot,
 )
+from archy.diff_summary import summarize_diff
 from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
@@ -453,11 +455,19 @@ def snapshot(path: Path, out_path: Path | None) -> None:
     default="text",
     help="Output format.",
 )
-def diff(path: Path, baseline_path: Path | None, fmt: str) -> None:
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=5,
+    help="Max items shown per regression / improvement list in the summary.",
+)
+def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int) -> None:
     """Compare current state against a baseline snapshot.
 
-    Reports per-component score deltas, newly added cycles/violations,
-    and any cycles/violations that have been resolved since the baseline.
+    Reports a risk-weighted summary (headline + top regressions / improvements),
+    per-component score deltas, newly added cycles/violations, and any
+    cycles/violations that have been resolved since the baseline.
     """
     target = baseline_path or (path / ".archy" / "baseline.json")
     baseline = read_snapshot(target)
@@ -466,6 +476,7 @@ def diff(path: Path, baseline_path: Path | None, fmt: str) -> None:
     g = _load_graph(path, internal_only=True)
     current = take_snapshot(g, config_path=discover_config(path))
     result = compute_diff(baseline, current)
+    result = result.model_copy(update={"summary": summarize_diff(result, g, top_n=top_n)})
     if fmt == "json":
         click.echo(result.model_dump_json(indent=2))
     else:
@@ -858,8 +869,12 @@ def _snapshot_to_text(snap: Snapshot) -> str:
 
 
 def _diff_to_text(result: DiffReport) -> str:
+    lines: list[str] = []
+    if result.summary is not None:
+        lines.extend(_summary_to_text(result.summary))
+        lines.append("")
     deltas = result.score_delta
-    lines = ["# score deltas (current - baseline):"]
+    lines.append("# score deltas (current - baseline):")
     for name in ("overall", "modularity", "acyclicity", "depth", "equality", "complexity"):
         lines.append(f"  {name:11s} {getattr(deltas, name):+.3f}")
     cycles = result.cycles
@@ -880,6 +895,21 @@ def _diff_to_text(result: DiffReport) -> str:
         rule = f"{v.rule.from_layer} -> {v.rule.to_layer}"
         lines.append(f"  - {v.source} -> {v.target}  resolved ({rule})")
     return "\n".join(lines)
+
+
+def _summary_to_text(summary: DiffSummary) -> list[str]:
+    lines = [f"# summary: {summary.headline}"]
+    if summary.top_regressions:
+        lines.append("")
+        lines.append("## top regressions (risk-weighted):")
+        for item in summary.top_regressions:
+            lines.append(f"  risk={item.risk:.2f}  {item.description}")
+    if summary.top_improvements:
+        lines.append("")
+        lines.append("## top improvements (risk-weighted):")
+        for item in summary.top_improvements:
+            lines.append(f"  risk={item.risk:.2f}  {item.description}")
+    return lines
 
 
 def _contracts_to_dict(result: ContractsResult) -> dict:

@@ -33,6 +33,7 @@ from archy.diff import (
     take_snapshot,
     write_snapshot,
 )
+from archy.diff_summary import summarize_diff
 from archy.dsm import (
     DSM,
     DSMDiff,
@@ -469,9 +470,11 @@ def _register_tools(server: FastMCP) -> None:
         name="archy_diff",
         description=(
             "Compare the current project state to the last snapshot. Returns "
-            "per-component score deltas plus the cycles and layer violations "
-            "that have been added or resolved since the baseline. Use after "
-            "edits to localize regressions; see the `loop` prompt."
+            "a risk-weighted `summary` (headline + top regressions / "
+            "improvements), per-component score deltas, and the cycles and "
+            "layer violations that have been added or resolved since the "
+            "baseline. Use after edits to localize regressions; see the `loop` "
+            "prompt."
         ),
     )
     def archy_diff(path: str) -> DiffReport | DiffErrorPayload:
@@ -781,7 +784,8 @@ def _run_diff(path: Path) -> DiffReport | DiffErrorPayload:
         )
     graph = _load_graph(path, internal_only=True)
     current = take_snapshot(graph, config_path=discover_config(path))
-    return compute_diff(baseline, current)
+    report = compute_diff(baseline, current)
+    return report.model_copy(update={"summary": summarize_diff(report, graph)})
 
 
 def _run_impact(path: Path, *, files: list[Path]) -> Impact:
