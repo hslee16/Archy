@@ -33,6 +33,7 @@ from archy.diff import (
     take_snapshot,
     write_snapshot,
 )
+from archy.diff_summary import summarize_diff
 from archy.dsm import (
     DSM,
     DSMDiff,
@@ -85,10 +86,17 @@ between edits. The loop is:
 4. **Diff** after the edit to see what got better, what got worse, and
    exactly which cycles or layer rules changed:
    `archy_diff(path)`
-5. If `score_delta.overall` dropped or `cycles.added` / `violations.added`
-   are non-empty, the change introduced regressions. Inspect the named
+5. Read `summary.headline` first - one structured sentence
+   ("overall +X; driven by Y; cycles +A/-B"). Then walk
+   `summary.top_regressions` in order; each item carries a `risk` score
+   (0-1, from `compute_edit_risk`) so the most central/fragile breakage
+   surfaces first. The raw `score_delta`, `cycles`, `violations`, and
+   `sdp_violations` blocks remain available for when you need the full
+   list, but the summary is the right starting point: it's the same
+   ranking you would have done by hand. If the headline shows
+   `overall -...` or any `top_regressions` exist, inspect the named
    modules, fix or revert, then loop back to step 4. Recurse until the
-   diff is clean.
+   diff is clean (empty `top_regressions`).
 
 `archy_score(path, strict=True)` is a one-shot gate against the last
 recorded run; it's lighter than the snapshot/diff loop and useful as
@@ -469,9 +477,11 @@ def _register_tools(server: FastMCP) -> None:
         name="archy_diff",
         description=(
             "Compare the current project state to the last snapshot. Returns "
-            "per-component score deltas plus the cycles and layer violations "
-            "that have been added or resolved since the baseline. Use after "
-            "edits to localize regressions; see the `loop` prompt."
+            "a risk-weighted `summary` (headline + top regressions / "
+            "improvements), per-component score deltas, and the cycles and "
+            "layer violations that have been added or resolved since the "
+            "baseline. Use after edits to localize regressions; see the `loop` "
+            "prompt."
         ),
     )
     def archy_diff(path: str) -> DiffReport | DiffErrorPayload:
@@ -781,7 +791,8 @@ def _run_diff(path: Path) -> DiffReport | DiffErrorPayload:
         )
     graph = _load_graph(path, internal_only=True)
     current = take_snapshot(graph, config_path=discover_config(path))
-    return compute_diff(baseline, current)
+    report = compute_diff(baseline, current)
+    return report.model_copy(update={"summary": summarize_diff(report, graph)})
 
 
 def _run_impact(path: Path, *, files: list[Path]) -> Impact:

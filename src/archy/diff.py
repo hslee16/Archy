@@ -75,6 +75,23 @@ class SdpViolationSetDiff(BaseModel):
     resolved: tuple[SdpViolation, ...] = ()
 
 
+class DiffSummaryItem(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    kind: str
+    risk: float
+    modules: tuple[str, ...]
+    description: str
+
+
+class DiffSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    headline: str
+    top_regressions: tuple[DiffSummaryItem, ...]
+    top_improvements: tuple[DiffSummaryItem, ...]
+
+
 class DiffReport(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -82,6 +99,10 @@ class DiffReport(BaseModel):
     cycles: CycleSetDiff
     violations: ViolationSetDiff
     sdp_violations: SdpViolationSetDiff = SdpViolationSetDiff()
+    # Populated by callers via `diff_summary.summarize_diff(report, graph)`;
+    # left None for the pure `compute_diff` path so the function stays
+    # graph-free.
+    summary: DiffSummary | None = None
 
 
 def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
