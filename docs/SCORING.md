@@ -12,9 +12,11 @@ implementation lives in [`src/archy/score.py`](../src/archy/score.py).
 The first four sub-metrics plus the geometric-mean aggregator follow
 sentrux's [`quality-signal-design.md`][sentrux-design]. The fifth axis
 (complexity) was promoted from a v0.17 diagnostic to a score axis in
-v0.20 after the 27-project benchmark showed it is the most orthogonal
-signal archy has ever measured against the existing four (max
-`|r| = 0.197`); the validation evidence lives in
+v0.20 after the then-27-project benchmark showed it is the most
+orthogonal signal archy has ever measured against the existing four
+(max `|r| = 0.197` at the time; `|r| = 0.159` on the current
+28-project bench after pytorch was added); the validation evidence
+lives in
 [`docs/RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md).
 archy defers sentrux's redundancy axis; see
 [Deferred metrics](#deferred-metrics) below.
@@ -259,7 +261,7 @@ mapped linearly to `[0, 1]` with the floor at the theoretical minimum
 complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)
 ```
 
-Anchor points from the 27-project benchmark
+Anchor points from the 28-project benchmark
 ([`RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md)):
 
 - mkdocs at `cc_mean = 1.77` -> `complexity = 0.904`
@@ -405,23 +407,23 @@ The OECD Handbook on Constructing Composite Indicators recommends
 testing this empirically: pairwise correlation between sub-indicators
 above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
 
-Pairwise Pearson correlations on the 27-project benchmark spanning
+Pairwise Pearson correlations on the 28-project benchmark spanning
 small CLI tools to very large frameworks (msgspec at 10 modules,
-django at 902, dagster at 801), captured 2026-05-16 against pinned
-SHAs (see [`bench/projects.yaml`](../bench/projects.yaml)):
+django at 902, dagster at 801, pytorch at 2,252), captured 2026-05-18
+against pinned SHAs (see [`bench/projects.yaml`](../bench/projects.yaml)):
 
 | Pair                     |    `r` |
 | ------------------------ | -----: |
-| modularity ↔ acyclicity  | +0.454 |
-| modularity ↔ depth       | -0.582 |
+| modularity ↔ acyclicity  | +0.383 |
+| modularity ↔ depth       | -0.617 |
 | modularity ↔ equality    | -0.389 |
-| modularity ↔ complexity  | +0.139 |
-| acyclicity ↔ depth       | -0.651 |
-| acyclicity ↔ equality    | -0.475 |
-| acyclicity ↔ complexity  | +0.069 |
-| depth ↔ equality         | +0.362 |
-| depth ↔ complexity       | -0.069 |
-| equality ↔ complexity    | +0.132 |
+| modularity ↔ complexity  | +0.110 |
+| acyclicity ↔ depth       | -0.581 |
+| acyclicity ↔ equality    | -0.458 |
+| acyclicity ↔ complexity  | +0.068 |
+| depth ↔ equality         | +0.359 |
+| depth ↔ complexity       | -0.052 |
+| equality ↔ complexity    | +0.159 |
 
 All ten pairs are below `|r| = 0.7`, the OECD-conventional threshold
 for treating sub-indicators as redundant. **Two of ten sit at
@@ -433,24 +435,26 @@ a fifth axis.
 
 Concretely:
 
-- **acyclicity ↔ depth at `-0.651`**: codebases with low acyclicity
+- **modularity ↔ depth at `-0.617`**: deeper graphs tend to have
+  higher modularity. Plausible: in a deep DAG, communities form
+  along the chain naturally, so longer chains give Newman's Q more
+  structure to find. Tightened slightly with pytorch's addition
+  (modularity 0.680 / depth 0.286), now the dominant moderate pair.
+- **acyclicity ↔ depth at `-0.581`**: codebases with low acyclicity
   also tend to have low depth scores (longer chains). A graph that's
   mostly inside a few SCCs has fewer free DAG hops to extend, but the
   SCC condensation it does have tends to be deep when the tangled
-  mass dominates.
-- **modularity ↔ depth at `-0.582`**: deeper graphs tend to have
-  higher modularity. Plausible: in a deep DAG, communities form
-  along the chain naturally, so longer chains give Newman's Q more
-  structure to find.
-- **acyclicity ↔ equality at `-0.475`**: stable since the prior
+  mass dominates. Eased from `-0.651` after pytorch (acyclicity 0.423
+  with depth 0.286 lands off-trend for this pair).
+- **acyclicity ↔ equality at `-0.458`**: stable since the prior
   bench. Tangled hub modules pull both axes down, but the effect is
   not strong enough to cross into the moderate band.
-- **modularity ↔ acyclicity at `+0.454`**: the wide-and-shallow plugin
-  shapes (pygments, setuptools) score high on both, pulling the
-  correlation up. Stable since the prior bench.
-- **depth ↔ equality at `+0.362`**: weak and stable across sample
+- **modularity ↔ acyclicity at `+0.383`**: the wide-and-shallow plugin
+  shapes (pygments, setuptools) score high on both. Loosened from
+  `+0.454` after pytorch (high modularity, mid acyclicity).
+- **depth ↔ equality at `+0.359`**: weak and stable across sample
   expansions.
-- **All four complexity pairs at `|r| ≤ 0.14`**: empirically the most
+- **All four complexity pairs at `|r| ≤ 0.16`**: empirically the most
   orthogonal axis archy has. Branchiness within functions does not
   correlate with the import-graph shape one way or the other; this is
   what makes the geometric mean's non-compensatory property bite
@@ -493,15 +497,16 @@ There is no universal "good architecture score." The systematic-
 mapping literature on software-metric thresholds is explicit that
 thresholds must be derived empirically from a benchmark population
 rather than asserted from intuition.[^thresholds-empirical] The bands
-below are derived from archy's 27-project benchmark spanning small
-CLI tools (click, msgspec) to very large frameworks (django, numpy,
-sqlalchemy, dagster), with diversity across web / async / scientific
+below are derived from archy's 28-project benchmark spanning small
+CLI tools (click, msgspec) to very large frameworks (pytorch at
+2,252 modules, django, numpy, sqlalchemy, dagster), with diversity
+across web / async / scientific / ML
 / ORM / plugin-host / devops / workflow-orchestration / build-tooling
 / syntax-highlighting / generated-SDK domains. Pinned SHAs in
 [`bench/projects.yaml`](../bench/projects.yaml); raw output in
-[`bench/results.md`](../bench/results.md). Captured 2026-05-16
-against archy v0.23.0 (the first bench run with the widened `/8`
-complexity divisor; see [Score-shape versioning](#score-shape-versioning)):
+[`bench/results.md`](../bench/results.md). Captured 2026-05-18
+against archy v0.24.0 (added pytorch to widen the size envelope to
+2,252 modules; see [Score-shape versioning](#score-shape-versioning)):
 
 | Project       | SHA       | Modules | Edges | Overall | Modularity | Acyclicity | Depth | Equality | Complexity |
 | ------------- | --------- | ------: | ----: | ------: | ---------: | ---------: | ----: | -------: | ---------: |
@@ -531,6 +536,7 @@ complexity divisor; see [Score-shape versioning](#score-shape-versioning)):
 | click         | `fc6c7c4` |      17 |    60 |   0.511 |      0.451 |      0.235 | 0.800 |    0.575 |      0.717 |
 | ansible       | `b7c0900` |     581 |  2145 |   0.495 |      0.614 |      0.769 | 0.286 |    0.383 |      0.573 |
 | aiohttp       | `e8f4371` |      52 |   312 |   0.494 |      0.530 |      0.173 | 0.727 |    0.563 |      0.785 |
+| pytorch       | `9a8a62c` |    2252 | 13238 |   0.478 |      0.680 |      0.423 | 0.286 |    0.431 |      0.703 |
 | msgspec       | `3b2543b` |      10 |    20 |   0.397 |      0.427 |      0.100 | 0.889 |    0.570 |      0.458 |
 
 Bands derived from this distribution (median 0.544, IQR ~0.517-0.581):
@@ -540,7 +546,7 @@ Bands derived from this distribution (median 0.544, IQR ~0.517-0.581):
 | `≥ 0.60`    | Top tier. Usually a deliberate architectural pattern combined with restrained per-function complexity: wide-and-shallow lexer registry over a small core (pygments), hand-written facade over an auto-generated SDK (boto3), layered scientific code with disciplined small functions (numpy), pluggy-driven plugin host with short callbacks (mkdocs), structured async primitives (anyio). | pygments, boto3, numpy, mkdocs, starlette, anyio, scrapy |
 | `0.55–0.60` | Healthy. Mature Python libraries that ace one or two axes. setuptools tops modularity (0.766) but middling depth (0.348) and equality (0.367) keep it mid-band; archy is acyclic (1.000) with low equality (0.273). | setuptools, botocore, pytest, archy, datasette |
 | `0.50–0.55` | "Typical." The bulk of mature Python libraries. Usually two weak axes that drag the geomean down: large frameworks tend to land here because depth and equality both suffer from "many modules, one or two hubs." | fastapi, sqlalchemy, requests, rich, pydantic, django, mypy, scikit-learn, flask, dagster, httpx, click |
-| `0.45–0.50` | At least one axis severely weak. Examine the breakdown. ansible at 0.495 is dragged by low depth (0.286) and equality (0.383); aiohttp at 0.494 by acyclicity (0.173). | ansible, aiohttp |
+| `0.45–0.50` | At least one axis severely weak. Examine the breakdown. ansible at 0.495 is dragged by low depth (0.286) and equality (0.383); aiohttp at 0.494 by acyclicity (0.173); pytorch at 0.478, despite the highest modularity in the bench after setuptools (0.680), is dragged by depth (0.286) and acyclicity (0.423) since its 2,252 modules and 13,238 edges produce both a flat condensation and a few large SCCs. | ansible, aiohttp, pytorch |
 | `< 0.40`    | Multiple axes weak, or one axis below 0.15. Worth investigating before adding features. msgspec sits at 0.397 in v0.23: acyclicity 0.100 and complexity 0.458 still bite (the 10-module SCC and the 5.33 cc_mean are two independent symptoms of the same compact-but-dense codebase). | msgspec |
 
 Two things to note when reading these bands:
@@ -651,7 +657,7 @@ versioning discipline; see [Score-shape versioning](#score-shape-versioning).
 as a *diagnostic only*: per-edge `kinds`, `call_lines`, `call_count`
 attributes plus `inputs.total_calls` / `inputs.calls_per_edge` on
 `archy score`'s output. Not folded into the geometric mean. The
-27-project benchmark shows `calls_per_edge` is orthogonal to every
+28-project benchmark shows `calls_per_edge` is orthogonal to every
 existing axis (max `|r| = 0.229` against modularity, acyclicity,
 depth, equality, propagation_cost). The original plan was to promote
 it to a score axis at a deliberate version boundary; that plan was
