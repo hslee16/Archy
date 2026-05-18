@@ -1,7 +1,7 @@
 # Benchmark results
 
 Output of `uv run --with networkx --with pyyaml python bench/run.py`.
-SHAs pinned in `bench/projects.yaml`. Captured 2026-05-16.
+SHAs pinned in `bench/projects.yaml`. Captured 2026-05-18.
 
 ## Score table
 
@@ -33,22 +33,23 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-16.
 | click | `fc6c7c4` | 17 | 60 | 0.511 | 0.451 | 0.235 | 0.800 | 0.575 | 0.717 |
 | ansible | `b7c0900` | 581 | 2145 | 0.495 | 0.614 | 0.769 | 0.286 | 0.383 | 0.573 |
 | aiohttp | `e8f4371` | 52 | 312 | 0.494 | 0.530 | 0.173 | 0.727 | 0.563 | 0.785 |
+| pytorch | `9a8a62c` | 2252 | 13238 | 0.478 | 0.680 | 0.423 | 0.286 | 0.431 | 0.703 |
 | msgspec | `3b2543b` | 10 | 20 | 0.397 | 0.427 | 0.100 | 0.889 | 0.570 | 0.458 |
 
 ## Pairwise Pearson correlations
 
 | pair | r |
 | --- | ---: |
-| modularity ↔ acyclicity | +0.456 |
-| modularity ↔ depth | -0.581 |
-| modularity ↔ equality | -0.380 |
-| modularity ↔ complexity | +0.139 |
-| acyclicity ↔ depth | -0.651 |
-| acyclicity ↔ equality | -0.479 |
-| acyclicity ↔ complexity | +0.059 |
-| depth ↔ equality | +0.347 |
-| depth ↔ complexity | -0.073 |
-| equality ↔ complexity | +0.154 |
+| modularity ↔ acyclicity | +0.383 |
+| modularity ↔ depth | -0.617 |
+| modularity ↔ equality | -0.389 |
+| modularity ↔ complexity | +0.110 |
+| acyclicity ↔ depth | -0.581 |
+| acyclicity ↔ equality | -0.458 |
+| acyclicity ↔ complexity | +0.068 |
+| depth ↔ equality | +0.359 |
+| depth ↔ complexity | -0.052 |
+| equality ↔ complexity | +0.159 |
 
 ## Call-graph diagnostics
 
@@ -80,6 +81,7 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-05-16.
 | click | `fc6c7c4` | 17 | 60 | 38 | 167 | 4.39 |
 | ansible | `b7c0900` | 581 | 2145 | 1395 | 4448 | 3.19 |
 | aiohttp | `e8f4371` | 52 | 312 | 107 | 403 | 3.77 |
+| pytorch | `9a8a62c` | 2252 | 13238 | 8422 | 73211 | 8.69 |
 | msgspec | `3b2543b` | 10 | 20 | 9 | 24 | 2.67 |
 
 ## Call-density orthogonality to existing axes
@@ -89,12 +91,12 @@ Values below `|r| = 0.7` are below the OECD redundancy threshold.
 
 | signal | r vs calls/edge |
 | --- | ---: |
-| modularity | +0.143 |
-| acyclicity | +0.207 |
-| depth | -0.062 |
-| equality | +0.213 |
-| complexity | +0.201 |
-| propagation_cost | -0.224 |
+| modularity | +0.148 |
+| acyclicity | +0.199 |
+| depth | -0.071 |
+| equality | +0.208 |
+| complexity | +0.197 |
+| propagation_cost | -0.217 |
 
 ## Cyclomatic complexity diagnostics
 
@@ -126,6 +128,7 @@ Values below `|r| = 0.7` are below the OECD redundancy threshold.
 | click | `fc6c7c4` | 544 | 3.26 | 48 |
 | ansible | `b7c0900` | 4,925 | 4.42 | 127 |
 | aiohttp | `e8f4371` | 1,497 | 2.72 | 91 |
+| pytorch | `9a8a62c` | 45,676 | 3.37 | 201 |
 | msgspec | `3b2543b` | 63 | 5.33 | 86 |
 
 ## CC orthogonality to existing axes
@@ -135,12 +138,12 @@ Values below `|r| = 0.7` are below the OECD redundancy threshold.
 
 | signal | r vs cc_mean |
 | --- | ---: |
-| modularity | -0.139 |
-| acyclicity | -0.059 |
-| depth | +0.073 |
-| equality | -0.154 |
-| propagation_cost | +0.094 |
-| calls_per_edge | -0.201 |
+| modularity | -0.110 |
+| acyclicity | -0.068 |
+| depth | +0.052 |
+| equality | -0.159 |
+| propagation_cost | +0.101 |
+| calls_per_edge | -0.197 |
 
 ## Call-weighted modularity diagnostic (v0.21)
 
@@ -174,6 +177,7 @@ Per-project unweighted vs call-weighted raw Newman Q. The gap (weighted - unweig
 | click | `fc6c7c4` | +0.177 | +0.236 | +0.059 |
 | ansible | `b7c0900` | +0.422 | +0.432 | +0.010 |
 | aiohttp | `e8f4371` | +0.295 | +0.406 | +0.111 |
+| pytorch | `9a8a62c` | +0.520 | +0.693 | +0.173 |
 | msgspec | `3b2543b` | +0.140 | +0.201 | +0.061 |
 
 Pearson correlation of normalized weighted Q against the existing axes.
@@ -181,8 +185,8 @@ Lower absolute values indicate stronger orthogonality.
 
 | signal | r vs weighted Q (normalized) |
 | --- | ---: |
-| modularity | +0.767 |
-| acyclicity | +0.198 |
-| depth | -0.486 |
-| equality | -0.406 |
-| complexity | +0.319 |
+| modularity | +0.794 |
+| acyclicity | +0.124 |
+| depth | -0.538 |
+| equality | -0.409 |
+| complexity | +0.265 |

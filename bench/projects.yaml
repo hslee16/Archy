@@ -97,6 +97,12 @@ projects:
     src_dir: numpy
     why: namespace package, mostly C with Python orchestration
 
+  - name: pytorch
+    repo: pytorch/pytorch
+    sha: "9a8a62c"
+    src_dir: torch
+    why: very large ML framework, deep C++/Python boundary, heavy codegen
+
   # --- async / modern-typed ------------------------------------------------
   - name: aiohttp
     repo: aio-libs/aiohttp
