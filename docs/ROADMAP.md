@@ -13,12 +13,13 @@ When deciding whether to ship a feature, the load-bearing question is "what does
 
 ## Now
 
-Things actively in flight or planned for the next 2-3 releases. Both items previously in this section shipped in v0.21.0 / v0.22.0; the queue below promotes from "Next" as work picks up.
+Things actively in flight or planned for the next 2-3 releases. Items previously in this section shipped in v0.21.0 / v0.22.0 / v0.24.0; the queue below promotes from "Next" as work picks up.
 
 - *(no items currently in flight; the queued items are in [Next](#next))*
 
 ### Shipped from this section
 
+- ~~Smarter `archy_diff` summary~~ shipped in v0.24.0. `archy diff` / `archy_diff` returns an additive `DiffSummary` block (`headline`, `top_regressions`, `top_improvements`) ranked by `compute_edit_risk` so the loop-closer step doesn't have to scan and re-rank raw deltas. Detail lists stay; ranking is additive so existing consumers don't break. Cycle descriptions truncate to 5 members + `(+N more)` to keep dagster-sized SCCs readable. Empirical perf on the 28-repo dogfood: `summarize_diff` is 0.1-0.5% of total `archy diff` runtime even on the largest real repos, so shipped additive with no opt-out. MCP `loop` prompt and `AGENT_LOOP.md` updated to direct agents to read `summary.headline` first.
 - ~~`archy dsm` (Design Structure Matrix)~~ shipped in v0.22.0 as a visualization-only output. CLI `archy dsm PATH` + MCP tool `archy_dsm`, with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package` filters, and `--diff` returning a `DSMDiff` whose `new_back_edges` field flags cycles an edit just introduced. ASCII for terminal context, JSON for tool consumption; HTML output dropped per the audience principle. Empirical study against the 27-project bench ruled out promoting any DSM-derived scalar to a score axis or diagnostic ([`DSM_EMPIRICS.md`](DSM_EMPIRICS.md)).
 - ~~Call-weighted Newman Q as a refinement of the modularity axis~~ shipped in v0.21.0 as a parallel diagnostic on `archy score` rather than an axis replacement. The gap between unweighted and weighted Q is the load-bearing signal (it detects mismatch between import-graph and call-graph community structure). Replacement was rejected because directionality is contested for intentional small-core / broad-call shapes ([`CALL_WEIGHTED_Q_EMPIRICS.md`](CALL_WEIGHTED_Q_EMPIRICS.md)).
 
@@ -26,7 +27,6 @@ Things actively in flight or planned for the next 2-3 releases. Both items previ
 
 Things validated and queued but not yet started.
 
-- **Smarter `archy_diff` summary** for the agent loop. Today the diff returns raw deltas; agents would benefit from a "top N significant changes, risk-weighted" structured summary so the loop-closer reasoning is sharper. Direct ROI on the canonical agent interaction.
 - **Per-module score breakdown.** Today `archy score` is project-wide. A per-module breakdown lets an agent ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
 - **`archy_what_to_refactor_next` MCP tool.** Combines `archy_hotspots` and `archy_high_risk_modules` into one ranked list with structured reasoning, so the agent gets one call instead of two-plus-synthesis.
 - **Duplicate-function detection** via AST-shape hashing. Advisory list, not a score axis.
