@@ -7,7 +7,6 @@ import pytest
 from archy.affected import _compile_glob, find_affected
 from archy.graph import build_graph
 
-
 # Setup pattern inlines `_make_project` + `build_graph` per test, matching
 # the sibling `tests/test_impact.py` convention. Reconsider extracting a
 # `@pytest.fixture` returning (project, graph) if this file grows past ~15
