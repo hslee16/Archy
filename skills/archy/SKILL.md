@@ -1,6 +1,6 @@
 ---
 name: archy
-description: Track architectural health of a Python codebase via the archy CLI and MCP server. Computes a five-axis quality score (modularity, acyclicity, depth, equality, complexity), detects import cycles via Tarjan SCCs, enforces YAML layer rules directly and transitively (via import-linter), ranks refactor priority via `cyclomatic_complexity * git_churn` hotspots, surfaces high-risk modules before edits, and runs a snapshot/diff feedback loop so AI-assisted edits do not silently regress structure. Use when working in a Python project that contains `archy.yaml`, when the user mentions architectural drift, import cycles, layer violations, module coupling, blast radius, refactor risk, refactor priority, hotspots, "what depends on this", "where should I refactor first", or before any multi-file Python refactor.
+description: Track architectural health of a Python codebase via the archy CLI and MCP server. Computes a five-axis quality score (modularity, acyclicity, depth, equality, complexity), detects import cycles via Tarjan SCCs, enforces YAML layer rules directly and transitively (via import-linter), ranks refactor priority via `cyclomatic_complexity * git_churn` hotspots, surfaces high-risk modules before edits, maps `git diff` to impacted test files for CI selection, and runs a snapshot/diff feedback loop so AI-assisted edits do not silently regress structure. Use when working in a Python project that contains `archy.yaml`, when the user mentions architectural drift, import cycles, layer violations, module coupling, blast radius, refactor risk, refactor priority, hotspots, affected tests, "what depends on this", "which tests should I run", "where should I refactor first", or before any multi-file Python refactor.
 license: MIT
 compatibility: Requires Python 3.10+ and `pip install archy` (or `archy[contracts]` for transitive import-linter checks). The MCP server runs over stdio.
 metadata:
@@ -32,7 +32,7 @@ If the `archy_*` tools below are not visible, stop and ask the user to install a
 Activate this skill when any of the following is true:
 
 - The repository root contains `archy.yaml` (definitive signal: the project has opted in)
-- The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, refactor priority, dependency graph, hotspots, "what depends on X", "is this safe to remove", or "where should I refactor first"
+- The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, refactor priority, dependency graph, hotspots, affected tests, "what depends on X", "which tests should I run for this PR", "is this safe to remove", or "where should I refactor first"
 - An edit is about to touch more than one Python module
 - An edit adds, removes, or changes an `import` statement
 - The user asks for a structural review of a Python project
@@ -87,6 +87,14 @@ archy_high_risk_modules(path=".", top_n=10)
 ```
 
 Ranks internal modules by `edit_risk = geomean(propagation_cost, normalized_fan_in, instability)`. A high score means central *and* fragile; treat such edits with extra care or scope them down. Pairs with `archy_hotspots` (below) which answers "where is the refactoring leverage" using git churn rather than structural risk.
+
+For CI-shaped test selection (a depth-bounded variant of `archy_impact` that pre-classifies impacted modules into tests vs. other downstream code):
+
+```
+archy_affected(path=".", files=["src/app/db.py"], depth=5)
+```
+
+Use this instead of `archy_impact` when the question is "given this diff, which tests should I run?" rather than "what's the full blast radius?". Returns `impacted_tests` and `impacted_modules` as separate lists. Test detection defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `test_filter=<recursive glob>`. The depth cap prevents a single-line edit on a monorepo from fanning out to thousands of nodes. The CLI form `git diff --name-only HEAD | archy affected . --stdin -q | xargs pytest` is the canonical CI / pre-commit shape.
 
 For positional context (where blocks are dense, where back-edges sit, where layer leakage shows up), reach for the Design Structure Matrix:
 
@@ -158,6 +166,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_snapshot` | `(path)` | Once at session start. Writes `.archy/baseline.json`. |
 | `archy_diff` | `(path)` | After every edit. Compares current state to the snapshot. |
 | `archy_impact` | `(path, files: list[str])` | Sizing a refactor or removal by transitive reverse-dependents. |
+| `archy_affected` | `(path, files: list[str], depth=5, test_filter=None)` | CI-shaped impact: given changed files, return modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped so monorepos stay tractable. Use for "which tests should I run for this diff?". |
 | `archy_graph_focus` | `(path, modules: list[str], depth=1, direction="both", internal_only=True)` | Bounded local neighborhood with edges + line numbers. |
 | `archy_graph_summary` | `(path, top_n=20)` | Top-N overview by fan-in / fan-out / PageRank. |
 | `archy_graph` | `(path, internal_only=True, max_nodes=500)` | Full dump. Refuses graphs over `max_nodes`; prefer focus/summary for reasoning. |
@@ -184,7 +193,8 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 
 **Which graph tool to reach for:**
 
-- "What breaks if I remove this?" → `archy_impact`
+- "What breaks if I remove this?" → `archy_impact` (full blast radius, unbounded)
+- "Which tests should I run for this diff / PR?" → `archy_affected` (depth-capped, tests vs. modules separated)
 - "What does this module depend on?" → `archy_graph_focus(direction="out")`
 - "Who uses this and what edges?" → `archy_graph_focus(direction="both")` (carries import line numbers)
 - "Where should I start reading this codebase?" → `archy_graph_summary`
