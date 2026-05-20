@@ -220,7 +220,7 @@ Capture a baseline at the start of an editing session, then diff after edits to 
 ```bash
 archy snapshot path/to/project   # writes .archy/baseline.json
 # ... edit code ...
-archy diff path/to/project       # score deltas + added/resolved cycles & violations
+archy diff path/to/project       # risk-weighted summary + score deltas + added/resolved cycles & violations
 ```
 
 ### Run as an MCP server
@@ -256,7 +256,46 @@ archy mcp
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
-Wire it into Claude Code (or Cursor, Windsurf, OpenCode, any MCP client) with this stanza in your config:
+#### Claude Code: install as a plugin
+
+The fastest path on Claude Code is the bundled plugin at [`plugins/claude/`](plugins/claude/). It registers the MCP server (via `uvx archy mcp` so users without a global archy install still get the tools) and ships the canonical `archy` skill so the agent knows when and how to call each tool. Local install from a checkout:
+
+```bash
+claude --plugin-dir /path/to/archy/plugins/claude
+```
+
+Restart Claude Code after installing for the MCP server to be picked up. A marketplace listing will land later; until then, the `--plugin-dir` route is the supported install.
+
+Optional: paste the snippet below into `~/.claude/settings.json` to skip the per-tool approval prompt the first time each `archy_*` tool is called. The plugin manifest cannot seed this directly (current Claude Code plugin constraint, May 2026):
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "mcp__archy__archy_score",
+      "mcp__archy__archy_cycles",
+      "mcp__archy__archy_check",
+      "mcp__archy__archy_contracts",
+      "mcp__archy__archy_trend",
+      "mcp__archy__archy_impact",
+      "mcp__archy__archy_affected",
+      "mcp__archy__archy_snapshot",
+      "mcp__archy__archy_diff",
+      "mcp__archy__archy_record_baseline",
+      "mcp__archy__archy_graph_focus",
+      "mcp__archy__archy_graph_summary",
+      "mcp__archy__archy_graph",
+      "mcp__archy__archy_high_risk_modules",
+      "mcp__archy__archy_hotspots",
+      "mcp__archy__archy_dsm"
+    ]
+  }
+}
+```
+
+#### Any other MCP client: manual stanza
+
+Wire it into Cursor, Windsurf, OpenCode, or any MCP client with this stanza in your config:
 
 ```json
 {
