@@ -32,7 +32,7 @@ archy mcp             # expose 16 tools to Claude Code, Cursor, any MCP client
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | Refactor priority | `archy hotspots` (CC x git churn) |
-| CI test selection | `archy affected` (`git diff` -> impacted tests) |
+| CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | MCP server | `archy mcp` |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
