@@ -8,22 +8,26 @@ from click.testing import CliRunner
 from archy.cli import main
 
 
-def _make_cyclic_project(tmp_path: Path) -> Path:
+def _make_two_module_project(tmp_path: Path, *, cyclic: bool) -> Path:
+    """`pkg.a` imports `pkg.b`; `pkg.b` imports `pkg.a` only when cyclic.
+
+    Underlies both `_make_cyclic_project` and `_make_acyclic_project`,
+    which keep descriptive call-site names while sharing the layout.
+    """
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("from pkg.b import thing\n")
-    (pkg / "b.py").write_text("from pkg.a import other\n")
+    (pkg / "b.py").write_text("from pkg.a import other\n" if cyclic else "")
     return tmp_path
+
+
+def _make_cyclic_project(tmp_path: Path) -> Path:
+    return _make_two_module_project(tmp_path, cyclic=True)
 
 
 def _make_acyclic_project(tmp_path: Path) -> Path:
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg.b import thing\n")
-    (pkg / "b.py").write_text("")
-    return tmp_path
+    return _make_two_module_project(tmp_path, cyclic=False)
 
 
 def test_cycles_text_output_lists_cycle(tmp_path: Path):
@@ -503,7 +507,12 @@ def test_roots_makes_namespace_packages_visible(tmp_path: Path):
     assert "app.libs.db" in qualnames
 
 
-def test_impact_lists_transitive_dependents(tmp_path: Path):
+def _make_libs_to_routers_chain(tmp_path: Path) -> None:
+    """`app.routers.user` imports `app.libs.db`.
+
+    Shared by `archy impact` and `archy affected` CLI tests that need a
+    two-module chain to exercise reverse-dependency traversal.
+    """
     pkg = tmp_path / "app"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
@@ -515,6 +524,10 @@ def test_impact_lists_transitive_dependents(tmp_path: Path):
     routers.mkdir()
     (routers / "__init__.py").write_text("")
     (routers / "user.py").write_text("from app.libs.db import x\n")
+
+
+def test_impact_lists_transitive_dependents(tmp_path: Path):
+    _make_libs_to_routers_chain(tmp_path)
     args = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--format", "json"]
     result = CliRunner().invoke(main, args)
     assert result.exit_code == 0
@@ -522,6 +535,70 @@ def test_impact_lists_transitive_dependents(tmp_path: Path):
     assert payload["changed"] == ["app.libs.db"]
     assert payload["impacted"] == ["app.routers.user"]
     assert payload["unresolved"] == []
+
+
+def test_affected_classifies_tests_and_modules_json(tmp_path: Path):
+    _make_libs_to_routers_chain(tmp_path)
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "__init__.py").write_text("")
+    (tests / "test_db.py").write_text("from app.libs.db import x\n")
+
+    args = ["affected", str(tmp_path), "app/libs/db.py", "--json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["changed"] == ["app.libs.db"]
+    assert payload["impacted_modules"] == ["app.routers.user"]
+    assert payload["impacted_tests"] == ["tests.test_db"]
+    assert payload["depth"] == 5
+
+
+def _make_app_with_test_module(tmp_path: Path) -> None:
+    """Minimal app/core.py + tests/test_core.py importing it.
+
+    Shared between the `archy affected` CLI tests that need a single
+    test module mapped to a single source module.
+    """
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "__init__.py").write_text("")
+    (tests / "test_core.py").write_text("from app.core import x\n")
+
+
+def test_affected_quiet_emits_test_file_paths(tmp_path: Path):
+    _make_app_with_test_module(tmp_path)
+    args = ["affected", str(tmp_path), "app/core.py", "--quiet"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.output.splitlines() if line]
+    assert len(lines) == 1
+    assert lines[0].endswith("tests/test_core.py")
+
+
+def test_affected_stdin_reads_paths(tmp_path: Path):
+    _make_app_with_test_module(tmp_path)
+    args = ["affected", str(tmp_path), "--stdin", "--json"]
+    result = CliRunner().invoke(main, args, input="app/core.py\n")
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["impacted_tests"] == ["tests.test_core"]
+
+
+def test_affected_json_and_quiet_mutually_exclusive(tmp_path: Path):
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("")
+
+    args = ["affected", str(tmp_path), "app/core.py", "--json", "--quiet"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code != 0
+    assert "mutually exclusive" in result.output
 
 
 def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):

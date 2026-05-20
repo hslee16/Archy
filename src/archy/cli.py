@@ -11,6 +11,7 @@ import click
 import networkx as nx
 
 from archy import __version__
+from archy.affected import DEFAULT_DEPTH, Affected, find_affected
 from archy.contracts import (
     ContractsConfigError,
     ContractsNotAvailable,
@@ -361,6 +362,97 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str) -> None:
         click.echo(json.dumps(_impact_to_dict(result), indent=2, sort_keys=True))
     else:
         click.echo(_impact_to_text(result))
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.argument("files", nargs=-1, type=click.Path(path_type=Path))
+@click.option(
+    "--stdin",
+    "from_stdin",
+    is_flag=True,
+    default=False,
+    help=(
+        "Read changed file paths from stdin, one per line. "
+        "Pairs with `git diff --name-only | archy affected --stdin`."
+    ),
+)
+@click.option(
+    "-d",
+    "--depth",
+    type=int,
+    default=DEFAULT_DEPTH,
+    show_default=True,
+    help="Maximum reverse-dependency hops to traverse.",
+)
+@click.option(
+    "-f",
+    "--filter",
+    "test_filter",
+    type=str,
+    default=None,
+    help="Recursive glob (matched against project-relative paths) identifying test files. "
+    "Defaults to pytest conventions: test_*.py, *_test.py, anything under a tests/ directory.",
+)
+@click.option(
+    "-j",
+    "--json",
+    "as_json",
+    is_flag=True,
+    default=False,
+    help="Emit JSON instead of human-readable text.",
+)
+@click.option(
+    "-q",
+    "--quiet",
+    is_flag=True,
+    default=False,
+    help=(
+        "Emit one affected test FILE PATH per line. "
+        "Designed for `archy affected -q | xargs pytest`."
+    ),
+)
+def affected(
+    path: Path,
+    files: tuple[Path, ...],
+    from_stdin: bool,
+    depth: int,
+    test_filter: str | None,
+    as_json: bool,
+    quiet: bool,
+) -> None:
+    """Map changed source files to impacted modules and test files.
+
+    Internal-only at launch: third-party and vendored code is not
+    traced through. See docs/SPEC_INDEX_AND_INSTALL.md Q3.
+    """
+    if as_json and quiet:
+        raise click.UsageError("--json and --quiet are mutually exclusive.")
+
+    file_list = list(files)
+    if from_stdin:
+        file_list.extend(Path(line.strip()) for line in sys.stdin if line.strip())
+    if not file_list:
+        raise click.UsageError(
+            "No changed files provided. Pass files as arguments or use --stdin "
+            "(for example: `git diff --name-only | archy affected --stdin`)."
+        )
+
+    g = _load_graph(path, internal_only=True)
+    resolved = [path / f if not f.is_absolute() else f for f in file_list]
+    result = find_affected(g, resolved, project_root=path, depth=depth, test_filter=test_filter)
+
+    if as_json:
+        click.echo(json.dumps(_affected_to_dict(result), indent=2, sort_keys=True))
+    elif quiet:
+        for test_path in _affected_test_paths(g, result):
+            click.echo(test_path)
+    else:
+        click.echo(_affected_to_text(result))
 
 
 @main.command()
@@ -961,6 +1053,64 @@ def _contracts_to_text(result: ContractsResult) -> str:
                     nodes.extend(str(step.get("imported", "?")) for step in path)
                     lines.append(f"      via {' -> '.join(nodes)}")
     return "\n".join(lines)
+
+
+def _affected_to_dict(result: Affected) -> dict:
+    return {
+        "changed": list(result.changed),
+        "unresolved": list(result.unresolved),
+        "impacted_modules": list(result.impacted_modules),
+        "impacted_tests": list(result.impacted_tests),
+        "depth": result.depth,
+        "test_filter": result.test_filter,
+    }
+
+
+def _affected_to_text(result: Affected) -> str:
+    lines = [
+        f"# depth={result.depth}, "
+        f"{len(result.impacted_tests)} test(s), "
+        f"{len(result.impacted_modules)} module(s) "
+        f"affected by {len(result.changed)} changed module(s)"
+    ]
+    if result.test_filter:
+        lines.append(f"# test filter: {result.test_filter}")
+    if result.unresolved:
+        lines.append(
+            f"# {len(result.unresolved)} file(s) did not resolve to a module "
+            "(non-Python, excluded, or outside any package):"
+        )
+        for f in result.unresolved:
+            lines.append(f"  ? {f}")
+    if result.changed:
+        lines.append("")
+        lines.append("Changed:")
+        for q in result.changed:
+            lines.append(f"  - {q}")
+    if result.impacted_tests:
+        lines.append("")
+        lines.append("Tests to run:")
+        for q in result.impacted_tests:
+            lines.append(f"  - {q}")
+    if result.impacted_modules:
+        lines.append("")
+        lines.append("Other modules touched:")
+        for q in result.impacted_modules:
+            lines.append(f"  - {q}")
+    return "\n".join(lines)
+
+
+def _affected_test_paths(graph: nx.DiGraph, result: Affected) -> list[str]:
+    """File paths for the impacted tests, suitable for `xargs pytest`.
+
+    Falls back to the qualname if a node has no resolvable path (which
+    shouldn't happen for internal nodes, but degrades safely).
+    """
+    out: list[str] = []
+    for qualname in result.impacted_tests:
+        path = graph.nodes[qualname].get("path")
+        out.append(str(path) if path else qualname)
+    return out
 
 
 def _impact_to_dict(result: Impact) -> dict:
