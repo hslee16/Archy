@@ -1,12 +1,12 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
 Built on the official Python `mcp` SDK using its FastMCP API. The
-twelve tools mirror the CLI surface (`archy_score`, `archy_cycles`,
+tools mirror the CLI surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
-`archy_snapshot`, `archy_diff`, `archy_record_baseline`) plus three
-graph-navigation tools (`archy_graph_focus`, `archy_graph_summary`,
-`archy_graph`) so an agent can treat archy as a structural sensor in
-its own feedback loop, the way the README pitches.
+`archy_affected`, `archy_snapshot`, `archy_diff`, `archy_record_baseline`)
+plus three graph-navigation tools (`archy_graph_focus`,
+`archy_graph_summary`, `archy_graph`) so an agent can treat archy as a
+structural sensor in its own feedback loop, the way the README pitches.
 
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.
@@ -24,6 +24,7 @@ from typing import cast
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict
 
+from archy.affected import DEFAULT_DEPTH, Affected, find_affected
 from archy.contracts import ContractCheck
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
@@ -463,6 +464,35 @@ def _register_tools(server: FastMCP) -> None:
         return _run_impact(Path(path), files=[Path(f) for f in files])
 
     @server.tool(
+        name="archy_affected",
+        description=(
+            "CI-shaped impact lookup: given changed files (typically from "
+            "`git diff --name-only`), return the impacted modules split into "
+            "`impacted_tests` (test files whose behavior could change) and "
+            "`impacted_modules` (other downstream code). Differs from "
+            "archy_impact in two ways: traversal is depth-capped (default 5) "
+            "so a single-line edit on a monorepo doesn't fan out to thousands "
+            "of nodes, and the result is pre-classified for test selection. "
+            "Test detection uses pytest conventions (test_*.py, *_test.py, "
+            "files under tests/ directories) unless `test_filter` overrides "
+            "with a recursive glob. Internal modules only; vendored/third-"
+            "party code is not traced through."
+        ),
+    )
+    def archy_affected(
+        path: str,
+        files: list[str],
+        depth: int = DEFAULT_DEPTH,
+        test_filter: str | None = None,
+    ) -> Affected:
+        return _run_affected(
+            Path(path),
+            files=[Path(f) for f in files],
+            depth=depth,
+            test_filter=test_filter,
+        )
+
+    @server.tool(
         name="archy_snapshot",
         description=(
             "Capture score, cycles, and layer violations to .archy/baseline.json "
@@ -799,6 +829,24 @@ def _run_impact(path: Path, *, files: list[Path]) -> Impact:
     graph = _load_graph(path, internal_only=True)
     resolved = [path / f if not f.is_absolute() else f for f in files]
     return find_impact(graph, resolved)
+
+
+def _run_affected(
+    path: Path,
+    *,
+    files: list[Path],
+    depth: int,
+    test_filter: str | None,
+) -> Affected:
+    graph = _load_graph(path, internal_only=True)
+    resolved = [path / f if not f.is_absolute() else f for f in files]
+    return find_affected(
+        graph,
+        resolved,
+        project_root=path,
+        depth=depth,
+        test_filter=test_filter,
+    )
 
 
 def _run_trend(path: Path, *, last_n: int) -> list[TrendRow]:

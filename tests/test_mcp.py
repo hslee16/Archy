@@ -81,6 +81,7 @@ def test_create_server_registers_expected_tools():
         "archy_contracts",
         "archy_trend",
         "archy_impact",
+        "archy_affected",
         "archy_snapshot",
         "archy_diff",
         "archy_record_baseline",

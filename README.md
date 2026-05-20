@@ -15,7 +15,7 @@
 pip install archy
 archy score .         # one-shot architectural health number
 archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 15 tools to Claude Code, Cursor, any MCP client
+archy mcp             # expose 16 tools to Claude Code, Cursor, any MCP client
 ```
 
 ![archy demo](docs/demo.gif)
@@ -32,6 +32,7 @@ archy mcp             # expose 15 tools to Claude Code, Cursor, any MCP client
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | Refactor priority | `archy hotspots` (CC x git churn) |
+| CI test selection | `archy affected` (`git diff` -> impacted tests) |
 | MCP server | `archy mcp` |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
@@ -183,6 +184,18 @@ archy impact path/to/project --file app/libs/db.py
 archy impact path/to/project --file app/libs/db.py --file app/services/auth.py --format json
 ```
 
+### Affected tests (CI gating)
+
+`archy affected` is the CI-shaped cousin of `archy impact`: given changed files, it returns the impacted modules pre-classified into tests and other downstream code, with a depth cap (default 5 hops) so a one-line edit doesn't fan out to thousands of nodes on a monorepo. Pipes naturally from `git diff`:
+
+```bash
+git diff --name-only HEAD | archy affected . --stdin
+git diff --name-only HEAD | archy affected . --stdin --quiet | xargs pytest
+archy affected . src/foo.py --filter "tests/integration/**" --json
+```
+
+Test classification defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `--filter <glob>`. Internal modules only; vendored or third-party code is not traced.
+
 ### Design Structure Matrix (`archy dsm`)
 
 The DSM puts modules on both axes in a chosen ordering, and cell `(row=source, col=target)` is non-empty when source imports target. Reading positionally exposes properties any single scalar would hide: block-diagonal cohesion under community grouping, above-diagonal back-edges under topological ordering, off-block layer leakage under layer grouping. Visualization-only ([`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md) for why no scalar joins the score).
@@ -220,7 +233,7 @@ archy mcp
 
 ## MCP server (`archy mcp`)
 
-`archy mcp` exposes fifteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes sixteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -230,6 +243,7 @@ archy mcp
 | `archy_contracts` | Run import-linter contracts (transitive Layers, Forbidden, Independence, Protected, AcyclicSiblings). Stricter than `archy_check`; requires `archy[contracts]`. |
 | `archy_trend` | Read recent score history. |
 | `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius). |
+| `archy_affected` | CI-shaped impact lookup: given changed files (typically from `git diff --name-only`), return the impacted modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes on a monorepo. Test detection uses pytest conventions unless `test_filter` overrides with a recursive glob. Internal modules only. |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations and per-component score deltas. |
 | `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
