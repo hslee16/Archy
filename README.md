@@ -33,7 +33,8 @@ archy mcp             # expose 16 tools to Claude Code, Cursor, any MCP client
 | Trended score | `archy score --record` + `archy trend` |
 | Refactor priority | `archy hotspots` (CC x git churn) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
-| MCP server | `archy mcp` |
+| MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
+| Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
 | Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue; wire in or cleanly remove the MCP server) |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
@@ -235,6 +236,8 @@ archy mcp
 ```
 
 ## MCP server (`archy mcp`)
+
+The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, so a cached result is never stale. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
 `archy mcp` exposes sixteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 

@@ -18,6 +18,7 @@ agent calling these tools.
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import cast
 
@@ -50,6 +51,7 @@ from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import compute_hotspots, git_churn
 from archy.impact import Impact, find_impact
+from archy.index import build_graph_cached
 from archy.instability import compute_instability
 from archy.layers import (
     LayerConfigError,
@@ -68,7 +70,10 @@ _AGENT_LOOP_PROMPT = """\
 # archy agent loop
 
 archy turns the project's structural health into a number you can act on
-between edits. The loop is:
+between edits. A persistent parse cache keeps every call cheap (warm graph
+builds are a few seconds even on 10k+ module repos), so consult archy on
+*each* edit to keep your working surface relevant, not just at the start and
+end of a task. The loop is:
 
 1. **Snapshot** at session start so you have a baseline:
    `archy_snapshot(path)`
@@ -754,7 +759,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload:
             )
         config_path = discovered
     config = load_config(config_path)
-    graph = build_graph(
+    graph = _build_graph(
         path,
         ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
         extra_roots=config.roots,
@@ -1129,8 +1134,21 @@ def _run_high_risk_modules(path: Path, *, top_n: int) -> HighRiskPayload:
     return HighRiskPayload(module_count=len(edit_risk), modules=entries)
 
 
+def _build_graph(path: Path, **kwargs):
+    """Cache-backed build for the long-lived MCP server (its hot path).
+
+    Falls back to a cold `build_graph` if the cache cannot be opened (read-only
+    filesystem, permission error): the index is an optimization, never a
+    dependency, so a tool call must still succeed without it.
+    """
+    try:
+        return build_graph_cached(path, **kwargs)
+    except (sqlite3.Error, OSError):
+        return build_graph(path, **kwargs)
+
+
 def _load_graph(path: Path, *, internal_only: bool):
-    graph = build_graph(path, **_graph_kwargs(path))
+    graph = _build_graph(path, **_graph_kwargs(path))
     if internal_only:
         external = {n for n, d in graph.nodes(data=True) if d.get("external")}
         graph.remove_nodes_from(external)

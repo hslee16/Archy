@@ -6,6 +6,12 @@ doc describes the recommended loop. The same playbook is also exposed
 as the `loop` prompt on the MCP server, so an agent connected to
 `archy mcp` can pull it on demand.
 
+A persistent parse cache (`.archy/index.db`) keeps every call cheap: warm
+graph builds are a few seconds even on 10k+ module repos, because only
+files whose content changed are re-parsed. That economics is the point of
+the loop below: consult archy on *each* edit to keep your working surface
+relevant (impact before, diff after), not just once at the start and end.
+
 ## The loop
 
 1. **Snapshot** at session start so you have a baseline.
