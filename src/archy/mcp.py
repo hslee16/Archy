@@ -19,6 +19,7 @@ agent calling these tools.
 from __future__ import annotations
 
 import sqlite3
+import threading
 from pathlib import Path
 from typing import cast
 
@@ -51,7 +52,6 @@ from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import compute_hotspots, git_churn
 from archy.impact import Impact, find_impact
-from archy.index import build_graph_cached
 from archy.instability import compute_instability
 from archy.layers import (
     LayerConfigError,
@@ -65,15 +65,20 @@ from archy.layers import (
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 from archy.score import Score, ScoreInputs, compute_score
+from archy.watcher import IndexManager
 
 _AGENT_LOOP_PROMPT = """\
 # archy agent loop
 
 archy turns the project's structural health into a number you can act on
-between edits. A persistent parse cache keeps every call cheap (warm graph
-builds are a few seconds even on 10k+ module repos), so consult archy on
-*each* edit to keep your working surface relevant, not just at the start and
-end of a task. The loop is:
+between edits. A persistent parse cache, kept warm by a background file
+watcher, makes every call cheap (warm graph builds are a few seconds even on
+10k+ module repos), so consult archy on *each* edit to keep your working
+surface relevant, not just at the start and end of a task. You never need to
+worry about staleness: every tool re-syncs the changed files on demand, so a
+result always reflects the current code. `archy_status(path)` reports the
+index's `last_synced_at` and whether the watcher is running if you want to
+confirm freshness explicitly. The loop is:
 
 1. **Snapshot** at session start so you have a baseline:
    `archy_snapshot(path)`
@@ -335,6 +340,15 @@ class DSMErrorPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     error: str
+
+
+class StatusPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    root: str
+    last_synced_at: str | None
+    cached_files: int
+    watching: bool
 
 
 def create_server() -> FastMCP:
@@ -687,8 +701,40 @@ def _register_tools(server: FastMCP) -> None:
             return DSMErrorPayload(error=f"no DSM snapshot at {baseline_path}")
         return diff_dsm(before, current)
 
+    @server.tool(
+        name="archy_status",
+        description=(
+            "Report the persistent index's freshness for a project. Returns "
+            "`last_synced_at` (ISO timestamp of the most recent cache sync), "
+            "`cached_files` (parsed files held in `.archy/index.db`), and "
+            "`watching` (whether the background file watcher is running). Call "
+            "to sanity-check that the graph an agent is about to read reflects "
+            "recent edits; the watcher keeps the index warm on a short debounce, "
+            "and every other tool also syncs on demand, so a tool result is "
+            "never stale even if `last_synced_at` looks a moment behind."
+        ),
+    )
+    def archy_status(path: str) -> StatusPayload:
+        return _run_status(Path(path))
+
 
 # --- thin internals ----------------------------------------------------------
+
+
+def _run_status(path: Path) -> StatusPayload:
+    root = path.resolve()
+    try:
+        manager = _manager_for(path, **_graph_kwargs(path))
+        if manager.last_synced_at is None:
+            manager.sync_now()  # seed freshness so a first status call is meaningful
+        return StatusPayload(
+            root=str(root),
+            last_synced_at=manager.last_synced_at,
+            cached_files=manager.cached_file_count(),
+            watching=manager.watching,
+        )
+    except (sqlite3.Error, OSError):
+        return StatusPayload(root=str(root), last_synced_at=None, cached_files=0, watching=False)
 
 
 def _run_score(
@@ -1138,15 +1184,39 @@ def _run_high_risk_modules(path: Path, *, top_n: int) -> HighRiskPayload:
     return HighRiskPayload(module_count=len(edit_risk), modules=entries)
 
 
+_MANAGERS: dict[str, IndexManager] = {}
+_MANAGERS_LOCK = threading.Lock()
+
+
+def _manager_for(path: Path, **kwargs) -> IndexManager:
+    """Get-or-create the per-root IndexManager, starting its watcher once.
+
+    Managers live for the server's lifetime: one persistent cache connection
+    and one debounced watcher per project, so repeated tool calls reuse a warm,
+    background-synced index. ``kwargs`` (ignored_dirs / extra_roots) are honored
+    on first creation.
+    """
+    root = path.resolve()
+    key = str(root)
+    with _MANAGERS_LOCK:
+        manager = _MANAGERS.get(key)
+        if manager is None:
+            manager = IndexManager(root, **kwargs)
+            manager.start_watching()  # best-effort; on-demand sync works regardless
+            _MANAGERS[key] = manager
+        return manager
+
+
 def _build_graph(path: Path, **kwargs):
     """Cache-backed build for the long-lived MCP server (its hot path).
 
-    Falls back to a cold `build_graph` if the cache cannot be opened (read-only
-    filesystem, permission error): the index is an optimization, never a
-    dependency, so a tool call must still succeed without it.
+    Routes through a per-root IndexManager (persistent connection + background
+    watcher). Falls back to a cold `build_graph` if the cache cannot be used
+    (read-only filesystem, permission error): the index is an optimization,
+    never a dependency, so a tool call must still succeed without it.
     """
     try:
-        return build_graph_cached(path, **kwargs)
+        return _manager_for(path, **kwargs).build_graph()
     except (sqlite3.Error, OSError):
         return build_graph(path, **kwargs)
 

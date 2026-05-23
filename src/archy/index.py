@@ -54,14 +54,18 @@ def default_db_path(root: Path) -> Path:
     return root / ".archy" / "index.db"
 
 
-def open_index(db_path: Path) -> sqlite3.Connection:
+def open_index(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """Open (creating if needed) the cache DB, rebuilding it on a schema bump.
 
     The cache is disposable, so a version mismatch just drops the tables rather
     than running a migration. Callers own the returned connection.
+
+    ``check_same_thread=False`` lets the watcher's background thread reuse one
+    connection (the IndexManager serializes all access with a lock, so this is
+    safe); the CLI keeps the stdlib default.
     """
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     version = _read_version(conn)
     if version is not None and version != SCHEMA_VERSION:

@@ -81,10 +81,14 @@ def test_plugin_detection_ignores_foreign_manifests(simulate_os):
 
 
 def test_permissions_render_contains_all_tools(simulate_os):
+    from archy.install.base import TOOL_NAMES
+
     simulate_os("linux")
     plan = ADAPTER.plan(Scope.GLOBAL, seed_permissions=True)
     perm_action = next(a for a in plan if a.kind == "permissions")
     content = perm_action.render(None)
     allow = json.loads(content)["permissions"]["allow"]
     assert "mcp__archy__archy_dsm" in allow
-    assert len(allow) == 16
+    assert "mcp__archy__archy_status" in allow
+    # One pattern per registered tool; count-agnostic so new tools don't re-break it.
+    assert len(allow) == len(TOOL_NAMES)
