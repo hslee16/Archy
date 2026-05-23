@@ -34,6 +34,11 @@ dependencies = [
     # `tomli` backport on 3.10 (archy's floor).
     "tomli-w>=1.0",
     "tomli>=2.0; python_version < '3.11'",
+    # The `archy mcp` server runs a debounced filesystem watcher so the parse
+    # cache stays warm in the background (FSEvents/inotify/ReadDirectoryChangesW
+    # under one cross-platform API). Imported lazily, only when the server
+    # starts watching; the CLI and cache never need it.
+    "watchdog>=4.0",
 ]
 
 [project.optional-dependencies]

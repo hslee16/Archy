@@ -13,7 +13,7 @@ metadata:
 
 Archy turns the structural health of a Python codebase into numbers and rule violations an agent can act on between edits. This skill explains when to reach for it and how to drive its MCP tools as a tight feedback loop.
 
-Archy keeps a persistent parse cache (`.archy/index.db`), so its tools stay cheap to call: warm graph builds take a few seconds even on 10k+ module repos because only files whose content changed are re-parsed. Lean on that. Consult archy on *each* edit to keep your working surface relevant (impact before, diff after), not only at the start and end of a task.
+Archy keeps a persistent parse cache (`.archy/index.db`), kept warm by a background file watcher in `archy mcp`, so its tools stay cheap to call: warm graph builds take a few seconds even on 10k+ module repos because only files whose content changed are re-parsed. Lean on that. Consult archy on *each* edit to keep your working surface relevant (impact before, diff after), not only at the start and end of a task. Freshness is automatic (every tool re-syncs changed files on demand, so a result is never stale); `archy_status` reports `last_synced_at` and whether the watcher is running if you want to check.
 
 ## Prerequisites
 

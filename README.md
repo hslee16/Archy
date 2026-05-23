@@ -15,7 +15,7 @@
 pip install archy
 archy score .         # one-shot architectural health number
 archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 16 tools to Claude Code, Cursor, any MCP client
+archy mcp             # expose 17 tools to Claude Code, Cursor, any MCP client
 ```
 
 ![archy demo](docs/demo.gif)
@@ -239,7 +239,7 @@ archy mcp
 
 The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, so a cached result is never stale. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
-`archy mcp` exposes sixteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes seventeen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -259,6 +259,7 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 | `archy_high_risk_modules` | Top-N internal modules by `edit_risk`: geometric mean of propagation cost, normalized fan-in, and Martin's instability. Each entry breaks the composite back out. Call before a non-trivial edit to decide whether to scope down or pause for review. |
 | `archy_hotspots` | Rank internal modules by `cc_sum x git-commit-count` (Tornhill / CodeScene's "Code Red"). Each entry is `{module, path, cc_sum, churn, score}`; zero-CC and zero-churn rows are filtered. `since` is passed straight to `git log --since`. Answers "where is the refactoring leverage?"; the structural cousin `archy_high_risk_modules` answers "is this edit dangerous?" without needing git. If the project isn't under git, returns an empty list plus a `note` so the agent can pivot. |
 | `archy_dsm` | Design Structure Matrix view of the import graph. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md). |
+| `archy_status` | Report the persistent index's freshness: `last_synced_at`, `cached_files`, and whether the background watcher is `watching`. The `archy mcp` server keeps a debounced filesystem watcher warming `.archy/index.db` so graph builds stay fast; every tool also syncs on demand, so results are never stale even when `last_synced_at` looks a moment behind. |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
