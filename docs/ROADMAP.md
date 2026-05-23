@@ -34,6 +34,7 @@ Things validated and queued but not yet started.
 - **`archy_what_to_refactor_next` MCP tool.** Combines `archy_hotspots` and `archy_high_risk_modules` into one ranked list with structured reasoning, so the agent gets one call instead of two-plus-synthesis.
 - **Duplicate-function detection** via AST-shape hashing. Advisory list, not a score axis.
 - **Static fragility proxy** as a pre-CC hotspot stand-in (high-instability x high-fan-in modules). Ships today without git-history overhead; the full hotspots feature (already in v0.18) remains the higher-quality target.
+- **Opt-in agent hooks (`archy install --hooks`).** Register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, Codex `post-edit`/`notify`, opencode plugin; Continue has no hooks) that runs the archy gate (`archy score --strict` / `archy diff`) automatically after edits, so the feedback loop fires whether or not the agent remembers to call the tools. Opt-in and advisory by default; reuses the install adapter registry's render/unrender pattern so `archy uninstall --hooks` is the exact inverse. Made affordable by the persistent parse cache. Spec: [`SPEC_INSTALL_HOOKS.md`](SPEC_INSTALL_HOOKS.md).
 
 ## Deferred (needs more thought)
 
