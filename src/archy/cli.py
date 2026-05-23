@@ -746,6 +746,107 @@ def mcp() -> None:
     create_server().run()
 
 
+@main.command()
+@click.option(
+    "--target",
+    default="auto",
+    show_default=True,
+    metavar="auto|all|<id>[,<id>...]",
+    help="Which agents to configure: auto-detected, all, or a comma list of ids.",
+)
+@click.option(
+    "--location",
+    type=click.Choice(["global", "local"]),
+    default="global",
+    show_default=True,
+    help="Configure for every project (global) or just this one (local).",
+)
+@click.option(
+    "--project-root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Project root for --location=local writes (defaults to the cwd).",
+)
+@click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt.")
+@click.option(
+    "--no-permissions",
+    is_flag=True,
+    help="Do not seed Claude's permission allowlist for the archy tools.",
+)
+@click.option(
+    "--print-config",
+    "print_id",
+    default=None,
+    metavar="<id>",
+    help="Print the config that would be written for one agent, then exit.",
+)
+def install(
+    target: str,
+    location: str,
+    project_root: Path | None,
+    yes: bool,
+    no_permissions: bool,
+    print_id: str | None,
+) -> None:
+    """Wire archy's MCP server into your AI coding agents.
+
+    Detects installed clients (Claude Code, Cursor, Codex CLI, opencode,
+    Continue), writes each one's MCP config and rules file, and seeds Claude's
+    permission allowlist. Re-running is idempotent.
+    """
+    from archy.install import (
+        InstallError,
+        Scope,
+        detect_all,
+        print_config,
+        resolve_targets,
+        run_install,
+    )
+
+    scope = Scope.LOCAL if location == "local" else Scope.GLOBAL
+    seed_permissions = not no_permissions
+
+    try:
+        if print_id is not None:
+            files = print_config(
+                print_id,
+                scope,
+                project_root=project_root,
+                seed_permissions=seed_permissions,
+            )
+            for path, content in files:
+                click.echo(f"# {path}")
+                click.echo(content)
+            return
+
+        adapters = resolve_targets(target)
+
+        if not yes:
+            detected = {d.adapter.id for d in detect_all() if d.detected}
+            click.echo(f"archy will configure ({location}):")
+            for adapter in adapters:
+                mark = "detected" if adapter.id in detected else "not detected"
+                click.echo(f"  - {adapter.name} ({adapter.id}, {mark})")
+            if not click.confirm("Proceed?", default=True):
+                click.echo("Aborted.")
+                return
+
+        result = run_install(
+            adapters,
+            scope,
+            project_root=project_root,
+            seed_permissions=seed_permissions,
+        )
+    except InstallError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    paths_written = result.all_paths()
+    click.echo(f"Wrote {len(paths_written)} file(s):")
+    for path in paths_written:
+        click.echo(f"  {path}")
+    click.echo("Restart your agent client(s) to pick up the archy MCP server.")
+
+
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     g = build_graph(path, **_graph_kwargs(path))
     if internal_only:

@@ -178,6 +178,12 @@ Per-adapter path table (config paths only; CLI names follow `claude` / `cursor` 
 | opencode | `~/.config/opencode/opencode.json` (+ project-local `opencode.json`) | `%APPDATA%\opencode\opencode.json` (+ project-local) |
 | Continue | `~/.continue/` | `%USERPROFILE%\.continue\` |
 
+Implementation refinements (verified against each client's docs while building the adapters in `src/archy/install/adapters/`):
+
+- **Per-scope write targets.** Each adapter writes to scope-appropriate files. Claude: `~/.claude.json` (user) vs `<project>/.mcp.json` (project); permissions in `~/.claude/settings.json` vs `<project>/.claude/settings.json`. Codex supports a project-scoped `<project>/.codex/config.toml` (trusted projects only) and reads project `AGENTS.md` from the repo root, so local scope writes there rather than falling back to the global `~/.codex`.
+- **Continue uses a YAML block file.** Continue's documented native MCP format is a standalone YAML block (`name` / `version` / `schema` / `mcpServers[]`) under `.continue/mcpServers/`, so the adapter emits `archy.yaml` (not a JSON stanza). Rules go in `.continue/rules/archy.md`.
+- **opencode schema.** opencode does not use the `mcpServers` object; it keys servers under `mcp.<name> = {type: "local", command: [...], enabled: true}`.
+
 Secondary probes (used only when CLI and config probes both miss):
 
 - **macOS app bundles**: `/Applications/Claude.app`, `/Applications/Cursor.app`, plus `~/Applications/...`.

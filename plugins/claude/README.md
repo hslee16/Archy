@@ -7,7 +7,7 @@ The lowest-friction install path for archy on Claude Code. Bundles:
 
 What this plugin does **not** ship (current Claude Code plugin constraints, May 2026):
 
-- **Permission allowlist seeding.** The plugin manifest cannot pre-populate `permissions.allow`. Users have to either approve each `archy_*` tool on first call, or paste the snippet in the project README into their own `~/.claude/settings.json`. The eventual `archy install` installer (Phase 1 remainder of [`docs/SPEC_INDEX_AND_INSTALL.md`](../../docs/SPEC_INDEX_AND_INSTALL.md)) will automate this for users who want it.
+- **Permission allowlist seeding.** The plugin manifest cannot pre-populate `permissions.allow`. Users have to either approve each `archy_*` tool on first call, paste the snippet in the project README into their own `~/.claude/settings.json`, or run `uvx archy install` (Phase 1's installer, [`docs/SPEC_INDEX_AND_INSTALL.md`](../../docs/SPEC_INDEX_AND_INSTALL.md) Part 4), which detects this plugin, skips re-registering the MCP server to avoid double-registration, and seeds the allowlist for you.
 - **A project-level `CLAUDE.md` snippet.** The plugin contributes instruction context only through the bundled skill, which is the documented mechanism.
 
 ## Before you install

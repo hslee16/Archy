@@ -1,0 +1,57 @@
+name: Installer tests
+
+# Layers 1-4 of docs/SPEC_INSTALL_TESTING.md for the `archy install` registry.
+# Layer 5 (real-client E2E) is gated separately in install-e2e.yml.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  fast:
+    # Layers 1 (unit) + 2 (snapshot). Pure renders + mocked detection, so one
+    # Linux runner covers all three simulated OSes in well under a minute.
+    name: unit + snapshot (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Unit + snapshot tests
+        run: uv run pytest tests/install/unit tests/install/snapshot
+
+  cross-os:
+    # Layers 3 (filesystem integration) + 4 (contract). Real os.replace, real
+    # path resolution, and Windows file-locking must run on each OS itself.
+    name: integration + contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Integration + contract tests
+        run: uv run pytest tests/install/integration tests/install/contract
