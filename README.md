@@ -438,6 +438,10 @@ See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for style rules. Notably: no em-dash characters (U+2014) anywhere in the repo.
 
+## Reporting security issues
+
+Please report vulnerabilities privately via the [Security tab](https://github.com/hslee16/archy/security/advisories/new), not as a public issue. See [`SECURITY.md`](SECURITY.md) for scope and response targets.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).
