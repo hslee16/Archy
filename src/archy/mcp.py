@@ -830,10 +830,14 @@ def _run_diff(path: Path) -> DiffReport | DiffErrorPayload:
     return report.model_copy(update={"summary": summarize_diff(report, graph)})
 
 
+def _resolve_against(path: Path, files: list[Path]) -> list[Path]:
+    """Anchor relative file args against the project root; leave absolutes alone."""
+    return [path / f if not f.is_absolute() else f for f in files]
+
+
 def _run_impact(path: Path, *, files: list[Path]) -> Impact:
     graph = _load_graph(path, internal_only=True)
-    resolved = [path / f if not f.is_absolute() else f for f in files]
-    return find_impact(graph, resolved)
+    return find_impact(graph, _resolve_against(path, files))
 
 
 def _run_affected(
@@ -844,7 +848,7 @@ def _run_affected(
     test_filter: str | None,
 ) -> Affected:
     graph = _load_graph(path, internal_only=True)
-    resolved = [path / f if not f.is_absolute() else f for f in files]
+    resolved = _resolve_against(path, files)
     return find_affected(
         graph,
         resolved,

@@ -11,6 +11,8 @@ the cached path re-resolves globally every call.
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 
 import pytest
@@ -57,14 +59,15 @@ def test_cold_cache_matches_cold_build(project: Path, tmp_path: Path):
 
 def test_noop_resync_matches(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
-    build_graph_cached(project, db_path=db)  # warm it
+    build_graph_cached(project, db_path=db)  # populate so this run exercises the all-cached path
     assert _equal(project, db)
 
 
 def test_edit_file_picked_up(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
     build_graph_cached(project, db_path=db)
-    # b.py gains an import edge it did not have before.
+    # A new import edge must survive the cache: the changed file is re-parsed and
+    # the global re-resolve picks the edge up.
     _write(project / "pkg", "b.py", "from pkg import a\nVALUE = 2\n")
     assert _equal(project, db)
 
@@ -97,8 +100,10 @@ def test_delete_then_readd(project: Path, tmp_path: Path):
     build_graph_cached(project, db_path=db)
     body = (project / "pkg" / "b.py").read_text()
     (project / "pkg" / "b.py").unlink()
-    build_graph_cached(project, db_path=db)  # sync sees the deletion
-    _write(project / "pkg", "b.py", body)  # bring it back, same content
+    # The intermediate sync must record the absence, so re-adding identical
+    # content is not silently served from the pre-deletion cache row.
+    build_graph_cached(project, db_path=db)
+    _write(project / "pkg", "b.py", body)
     assert _equal(project, db)
 
 
@@ -128,8 +133,9 @@ def test_circular_imports(tmp_path: Path):
 def test_deleting_db_is_safe(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
     build_graph_cached(project, db_path=db)
-    db.unlink()  # nuke the cache
-    assert _equal(project, db)  # cold-rebuilds transparently
+    # An external deletion of the cache must not break a build: it cold-rebuilds.
+    db.unlink()
+    assert _equal(project, db)
 
 
 # --- sync accounting -------------------------------------------------------
@@ -171,9 +177,6 @@ def test_touch_without_content_change_is_unchanged(project: Path, tmp_path: Path
     # Rewrite identical bytes so size matches but mtime advances.
     b = project / "pkg" / "b.py"
     content = b.read_text()
-    import os
-    import time
-
     future = time.time() + 10
     os.utime(b, (future, future))
     b.write_text(content, encoding="utf-8")  # same content
@@ -207,5 +210,7 @@ def test_parse_json_is_valid_json(project: Path, tmp_path: Path):
     conn = open_index(tmp_path / "index.db")
     sync(conn, discover_modules(project))
     row = conn.execute("SELECT parse_json FROM files LIMIT 1").fetchone()
-    json.loads(row["parse_json"])  # round-trippable
+    # A truncated or non-JSON blob would silently break every later cache read,
+    # so assert what we stored is parseable.
+    json.loads(row["parse_json"])
     conn.close()
