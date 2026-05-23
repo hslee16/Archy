@@ -22,7 +22,7 @@ archy mcp             # expose 17 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.26.0. Usable today via:
+**Status:** v0.27.0. Usable today via:
 
 | Mode | Command |
 |---|---|
