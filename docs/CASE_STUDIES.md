@@ -321,12 +321,13 @@ A validation pass on three large, widely-used codebases (the same trees used for
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | Django | 2,910 | 9,602 | 0.556 | 0.922 | 17 | 24 | 94 |
 | pytorch | 4,488 | 27,192 | 0.536 | 0.699 | 22 | 21 | 201 |
+| Home Assistant | 17,299 | 93,799 | 0.626 | 0.950 | 108 | 17 | 95 |
 
-(Home Assistant, ~17.3k modules / ~142k edges, is in the index perf benchmark; its project-wide `propagation_cost` is expensive enough at that scale that scoring is a multi-second operation, which is itself the motivation for the assembled-graph-blob follow-up noted in [`FUTURE.md`](FUTURE.md).)
+(On Home Assistant the project-wide `propagation_cost` is expensive enough at ~17k modules / ~94k internal edges that scoring is a multi-second operation even with the parse cache warm; that is exactly the motivation for the assembled-graph-blob follow-up noted in [`FUTURE.md`](FUTURE.md).)
 
 What this shows:
 
-- **archy surfaces real import cycles in both** (Django 17, pytorch 22). These are tangles in code that thousands of developers review; they are invisible to a per-file diff review because a cycle is a whole-graph property. pytorch's acyclicity of 0.70 quantifies a materially more tangled import graph than Django's 0.92.
+- **archy surfaces real import cycles in all three** (Django 17, pytorch 22, Home Assistant 108). These are tangles in code that thousands of developers review; they are invisible to a per-file diff review because a cycle is a whole-graph property. pytorch's acyclicity of 0.70 quantifies a materially more tangled import graph than Django's 0.92 or Home Assistant's 0.95 (HA carries the most *cycles* in absolute terms, but as a small fraction of its 17k modules, so its acyclicity axis stays high).
 - **It localizes extreme complexity hotspots**: pytorch has a function with cyclomatic complexity **201** (`cc_max`), the kind of "edit at your peril" site `archy_hotspots` and `archy_high_risk_modules` are built to flag before an agent touches it.
 - **The numbers are stable and comparable** because the cache-backed build is byte-identical to a cold build (see the persistent-index work), so these can be re-run in CI on every commit to trend architecture erosion over time.
 
