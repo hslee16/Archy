@@ -41,7 +41,8 @@ def test_resolve_empty_raises():
 
 
 def test_resolve_auto_uses_detection(monkeypatch):
-    # Force only cursor to "detect".
+    # Stub detect_all so resolution is tested independent of the host's real
+    # installed clients; only cursor "detects" here.
     monkeypatch.setattr(
         runner,
         "detect_all",
@@ -67,7 +68,8 @@ def test_detect_all_covers_registry(simulate_os):
     simulate_os("linux")
     detections = detect_all()
     assert {d.adapter.id for d in detections} == set(adapter_ids())
-    # Empty fake home: nothing detected.
+    # simulate_os hands out an empty tmp home with no CLIs on PATH, so the
+    # detection ladder must miss for every adapter.
     assert all(d.detected is False for d in detections)
 
 
@@ -77,8 +79,8 @@ def test_run_install_dry_run_records_without_writing(simulate_os):
     adapters = resolve_targets("cursor")
     result = run_install(adapters, Scope.GLOBAL, write_system=ws)
     assert result.results[0].adapter_id == "cursor"
-    # Two files for cursor (mcp + instructions), nothing actually on disk.
     assert len(ws.records) == 2
+    # The dry-run system must capture writes, never touch disk.
     assert all(not r.path.exists() for r in ws.records)
 
 

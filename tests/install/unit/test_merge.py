@@ -11,6 +11,11 @@ import sys
 
 import yaml
 
+if sys.version_info >= (3, 11):
+    import tomllib
+else:  # pragma: no cover
+    import tomli as tomllib
+
 from archy.install.base import permission_patterns
 from archy.install.merge import (
     render_claude_permissions,
@@ -19,11 +24,6 @@ from archy.install.merge import (
     render_opencode_mcp,
     render_toml_mcp,
 )
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib
 
 
 def test_json_mcp_fresh():

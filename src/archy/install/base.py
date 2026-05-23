@@ -17,9 +17,10 @@ from __future__ import annotations
 import shutil
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 from archy.install import paths
 from archy.install.writer import WriteSystem
@@ -124,14 +125,15 @@ class Scope(str, Enum):
     LOCAL = "local"
 
 
-@dataclass(frozen=True)
-class FileAction:
+class FileAction(BaseModel):
     """One file the installer will write, as a pure render over its current text.
 
     ``render`` takes the file's existing content (``None`` if absent) and returns
     the full new content. ``kind`` is one of ``mcp`` / ``instructions`` /
     ``permissions`` for reporting and selective skipping.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     path: Path
     kind: str

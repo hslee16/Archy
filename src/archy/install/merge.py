@@ -41,7 +41,8 @@ def _mcp_entry() -> JsonObj:
 
 
 def _dump_json(obj: JsonObj) -> str:
-    # indent=2, no key sorting (preserve the user's ordering), trailing newline.
+    # No sort_keys: a round-trip must preserve the user's existing key order
+    # rather than reshuffle their config. Trailing newline keeps git/POSIX happy.
     return json.dumps(obj, indent=2) + "\n"
 
 
@@ -54,6 +55,19 @@ def _load_json_obj(existing: str | None) -> JsonObj:
     return cast(JsonObj, loaded)
 
 
+def _ensure_dict(obj: JsonObj, key: str) -> JsonObj:
+    """Return ``obj[key]`` as a dict, creating it when absent or the wrong type.
+
+    Mutates ``obj`` in place, so the caller's reference stays valid. Used to
+    walk-or-create the nested config tables every JSON merge below shares.
+    """
+    sub = obj.get(key)
+    if not isinstance(sub, dict):
+        sub = {}
+        obj[key] = sub
+    return cast(JsonObj, sub)
+
+
 def render_json_mcp(existing: str | None, *, servers_key: str = "mcpServers") -> str:
     """Merge `<servers_key>.archy = {command, args}` into a JSON config.
 
@@ -62,11 +76,7 @@ def render_json_mcp(existing: str | None, *, servers_key: str = "mcpServers") ->
     object shape (`mcpServers` for most; opencode overrides via ``servers_key``).
     """
     obj = _load_json_obj(existing)
-    servers = obj.get(servers_key)
-    if not isinstance(servers, dict):
-        servers = {}
-        obj[servers_key] = servers
-    cast(JsonObj, servers)[SERVER_KEY] = _mcp_entry()
+    _ensure_dict(obj, servers_key)[SERVER_KEY] = _mcp_entry()
     return _dump_json(obj)
 
 
@@ -77,11 +87,7 @@ def render_opencode_mcp(existing: str | None) -> str:
     ``mcp.<name> = {type: "local", command: [...], enabled: true}``.
     """
     obj = _load_json_obj(existing)
-    mcp = obj.get("mcp")
-    if not isinstance(mcp, dict):
-        mcp = {}
-        obj["mcp"] = mcp
-    cast(JsonObj, mcp)[SERVER_KEY] = {
+    _ensure_dict(obj, "mcp")[SERVER_KEY] = {
         "type": "local",
         "command": [MCP_COMMAND, *MCP_ARGS],
         "enabled": True,
@@ -124,11 +130,7 @@ def render_claude_permissions(existing: str | None) -> str:
     this closes.
     """
     obj = _load_json_obj(existing)
-    permissions = obj.get("permissions")
-    if not isinstance(permissions, dict):
-        permissions = {}
-        obj["permissions"] = permissions
-    perms = cast(JsonObj, permissions)
+    perms = _ensure_dict(obj, "permissions")
     allow = perms.get("allow")
     if not isinstance(allow, list):
         allow = []
@@ -149,11 +151,7 @@ def render_toml_mcp(existing: str | None) -> str:
     tables and scalars are preserved by round-tripping through tomllib/tomli-w.
     """
     data: JsonObj = cast(JsonObj, tomllib.loads(existing)) if existing and existing.strip() else {}
-    servers = data.get("mcp_servers")
-    if not isinstance(servers, dict):
-        servers = {}
-        data["mcp_servers"] = servers
-    cast(JsonObj, servers)[SERVER_KEY] = {
+    _ensure_dict(data, "mcp_servers")[SERVER_KEY] = {
         "command": MCP_COMMAND,
         "args": list(MCP_ARGS),
     }

@@ -9,10 +9,10 @@ snapshots are stable regardless of tmp_path or the runner's real OS.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from pydantic import BaseModel, ConfigDict
 
 from archy.install import base, paths
 
@@ -20,15 +20,18 @@ from archy.install import base, paths
 PLATFORMS = ["linux", "darwin", "win32"]
 
 
-@dataclass
-class FakeOS:
+class FakeOS(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     platform: str
     home: Path
     appdata: Path | None
     local_appdata: Path | None
 
     def tokenize(self, path: Path) -> str:
-        """Replace volatile roots with stable tokens, normalize to POSIX."""
+        # Snapshots must stay stable across runners and tmp_path values, so the
+        # volatile absolute roots are swapped for tokens and separators forced to
+        # POSIX rather than baking OS-specific assertions into each test.
         text = str(path)
         roots = [
             (self.local_appdata, "<LOCALAPPDATA>"),
@@ -65,6 +68,6 @@ def simulate_os(monkeypatch, tmp_path):
         monkeypatch.setattr(paths, "appdata", lambda: appdata)
         monkeypatch.setattr(paths, "local_appdata", lambda: local_appdata)
         monkeypatch.setattr(base.shutil, "which", lambda _name: None)
-        return FakeOS(platform, home, appdata, local_appdata)
+        return FakeOS(platform=platform, home=home, appdata=appdata, local_appdata=local_appdata)
 
     return _simulate

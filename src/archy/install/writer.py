@@ -22,14 +22,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from pydantic import BaseModel, ConfigDict
+
 
 class InstallError(Exception):
     """User-facing installer failure. Carries a message safe to print as-is."""
 
 
-@dataclass(frozen=True)
-class WriteRecord:
+class WriteRecord(BaseModel):
     """A write that a :class:`DryRunWriteSystem` captured instead of performing."""
+
+    model_config = ConfigDict(frozen=True)
 
     path: Path
     content: str

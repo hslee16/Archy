@@ -14,6 +14,12 @@ def _kinds(plan):
     return [a.kind for a in plan]
 
 
+def _write_plugin_manifest(home, plugin_name):
+    manifest = home / ".claude" / "plugins" / plugin_name / ".claude-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"name": plugin_name}), encoding="utf-8")
+
+
 def test_global_paths(simulate_os):
     fake = simulate_os("linux")
     assert ADAPTER.config_paths(Scope.GLOBAL) == [fake.home / ".claude.json"]
@@ -61,9 +67,7 @@ def test_plan_no_permissions_flag_drops_permission_action(simulate_os):
 
 def test_plan_skips_mcp_when_plugin_installed(simulate_os):
     fake = simulate_os("linux")
-    manifest = fake.home / ".claude" / "plugins" / "archy" / ".claude-plugin" / "plugin.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text(json.dumps({"name": "archy"}), encoding="utf-8")
+    _write_plugin_manifest(fake.home, "archy")
     assert ADAPTER.plugin_installed() is True
     plan = ADAPTER.plan(Scope.GLOBAL, seed_permissions=True)
     # Plugin already registers MCP + ships the skill; only permissions remain.
@@ -72,9 +76,7 @@ def test_plan_skips_mcp_when_plugin_installed(simulate_os):
 
 def test_plugin_detection_ignores_foreign_manifests(simulate_os):
     fake = simulate_os("linux")
-    manifest = fake.home / ".claude" / "plugins" / "other" / ".claude-plugin" / "plugin.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text(json.dumps({"name": "other"}), encoding="utf-8")
+    _write_plugin_manifest(fake.home, "other")
     assert ADAPTER.plugin_installed() is False
 
 

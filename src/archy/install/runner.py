@@ -7,8 +7,9 @@ driven directly by unit tests without going through ``CliRunner``.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict
 
 from archy.install.base import AgentAdapter, FileAction, Scope, apply_plan
 from archy.install.registry import all_adapters, get_adapter
@@ -19,26 +20,37 @@ from archy.install.writer import (
     WriteSystem,
 )
 
-# Sentinel target selectors accepted by --target in addition to explicit ids.
+# Named so callers and tests never depend on the raw "auto"/"all" string literals.
 TARGET_AUTO = "auto"
 TARGET_ALL = "all"
 
 
-@dataclass(frozen=True)
-class Detection:
+class Detection(BaseModel):
+    """Whether one adapter's client was found on this machine."""
+
+    # arbitrary_types_allowed: `adapter` is an AgentAdapter instance (an ABC),
+    # not a pydantic-native type.
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
     adapter: AgentAdapter
     detected: bool
 
 
-@dataclass
-class AdapterResult:
+class AdapterResult(BaseModel):
+    """The files one adapter wrote during an install."""
+
+    model_config = ConfigDict(frozen=True)
+
     adapter_id: str
-    written: list[Path] = field(default_factory=list)
+    written: tuple[Path, ...] = ()
 
 
-@dataclass
-class InstallResult:
-    results: list[AdapterResult] = field(default_factory=list)
+class InstallResult(BaseModel):
+    """All files written across the adapters in one install run."""
+
+    model_config = ConfigDict(frozen=True)
+
+    results: tuple[AdapterResult, ...] = ()
 
     def all_paths(self) -> list[Path]:
         return [p for r in self.results for p in r.written]
@@ -103,7 +115,7 @@ def run_install(
 ) -> InstallResult:
     """Apply each adapter's plan through ``write_system`` (real by default)."""
     ws = write_system if write_system is not None else RealWriteSystem()
-    result = InstallResult()
+    results: list[AdapterResult] = []
     for adapter in adapters:
         plan = plan_for(
             adapter,
@@ -112,8 +124,8 @@ def run_install(
             seed_permissions=seed_permissions,
         )
         written = apply_plan(plan, ws)
-        result.results.append(AdapterResult(adapter_id=adapter.id, written=written))
-    return result
+        results.append(AdapterResult(adapter_id=adapter.id, written=tuple(written)))
+    return InstallResult(results=tuple(results))
 
 
 def print_config(

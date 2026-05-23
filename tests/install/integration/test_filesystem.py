@@ -38,7 +38,8 @@ def test_install_writes_files_that_exist(on_real_os, adapter_id):
     for path in result.all_paths():
         assert path.exists()
         assert path.read_text(encoding="utf-8")
-    # local scope also writes successfully into a project dir.
+    # LOCAL scope takes a project_root and must resolve independently of the
+    # GLOBAL run above, so exercise it as a separate write.
     local = run_install(
         adapters, Scope.LOCAL, project_root=project_root, write_system=RealWriteSystem()
     )
@@ -83,7 +84,9 @@ def test_windows_open_handle_surfaces_clear_error(on_real_os):
     target = on_real_os.home / ".cursor" / "mcp.json"
     run_install(resolve_targets("cursor"), Scope.GLOBAL, write_system=RealWriteSystem())
     # Hold an exclusive handle the way a running Electron client would.
-    with open(target, "r+", encoding="utf-8"):  # need a raw OS-level handle
+    # Keep a real fd open so os.replace inside RealWriteSystem hits an actual
+    # Windows lock, which a mock could not reproduce.
+    with open(target, "r+", encoding="utf-8"):
         with pytest.raises(InstallError) as exc:
             run_install(resolve_targets("cursor"), Scope.GLOBAL, write_system=RealWriteSystem())
         assert "close" in str(exc.value).lower()
