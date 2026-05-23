@@ -109,13 +109,21 @@ What every adapter must have at every layer before its PR can merge.
 | 4 contract (parse-roundtrip) | required | required | required | required | required |
 | 5 E2E (real client, headless) | required | required | best-effort | best-effort | excluded |
 
+### Uninstall coverage
+
+`archy uninstall` is the inverse of install and is covered by the same layers, not a parallel suite, because it reuses the install plan (each `FileAction` carries paired `render`/`unrender`). The load-bearing assertions:
+
+- **Unit:** each `strip_*` render is idempotent, removes only archy's keys/patterns, and preserves unrelated structure; `remove_instructions` returns `None` only when the archy block was the file's sole content; `apply_uninstall` skips absent files, strips shared ones, deletes owned ones.
+- **Integration (matrix):** install -> uninstall round-trip leaves no file mentioning archy on a previously-clean machine; a second uninstall is a byte-for-byte no-op (idempotency); a pre-existing user `~/.claude.json` and `CLAUDE.md` survive with only archy's parts removed.
+- **Contract:** every stripped shared config still parses with the client's parser and no longer contains the archy server; Continue's owned files resolve to deletion, not a parse target.
+
 ## What we explicitly do not do
 
 - **Cron-scheduled E2E.** See "Why E2E is gated" above.
 - **nektos/act for cross-OS.** Linux-only; misleads more than it helps.
 - **BuildJet / depot.dev / Cirrus.** Premature optimization. GHA Windows runners are slow but free; revisit only if the `cross-os` job exceeds about five minutes steady state.
 - **Docker-based Linux distro variants.** archy is Python; the interpreter abstracts distro. Add only if a real distro-specific bug surfaces.
-- **End-to-end Continue.** VS Code extension, no headless mode worth the cost. Layer 4 contract test on `~/.continue/mcpServers/mcp.json` is the right ceiling.
+- **End-to-end Continue.** VS Code extension, no headless mode worth the cost. Layer 4 contract test on `~/.continue/mcpServers/archy.yaml` is the right ceiling.
 - **Snapshot-testing end-to-end flows.** Snapshots are for writer outputs only; behavior is asserted.
 
 ## Cost estimate

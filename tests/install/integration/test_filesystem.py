@@ -15,7 +15,7 @@ import pytest
 
 from archy.install.base import Scope
 from archy.install.registry import adapter_ids
-from archy.install.runner import resolve_targets, run_install
+from archy.install.runner import resolve_targets, run_install, run_uninstall
 from archy.install.writer import InstallError, RealWriteSystem
 
 REAL_PLATFORM = sys.platform if sys.platform in {"linux", "darwin", "win32"} else "linux"
@@ -77,6 +77,54 @@ def test_merge_preserves_unrelated_existing_config(on_real_os):
     assert obj["numStartups"] == 3
     assert obj["mcpServers"]["other"] == {"command": "x"}
     assert obj["mcpServers"]["archy"]["command"] == "uvx"
+
+
+@pytest.mark.parametrize("adapter_id", ALL_IDS)
+def test_uninstall_round_trip_removes_all_archy_traces(on_real_os, adapter_id):
+    adapters = resolve_targets(adapter_id)
+    run_install(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+    run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+    # A leftover "archy" reference in any config would silently re-activate the
+    # tool the user just removed, so uninstall must leave zero footprint.
+    for path in _all_files(on_real_os.home):
+        assert "archy" not in path.read_text(encoding="utf-8").lower()
+
+
+@pytest.mark.parametrize("adapter_id", ALL_IDS)
+def test_uninstall_is_idempotent(on_real_os, adapter_id):
+    adapters = resolve_targets(adapter_id)
+    run_install(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+    run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+    after_first = {p: p.read_bytes() for p in _all_files(on_real_os.home)}
+    # Re-running uninstall (e.g. a package manager retrying) must never corrupt
+    # an already-clean tree or raise on the files that are already gone.
+    run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+    assert {p: p.read_bytes() for p in _all_files(on_real_os.home)} == after_first
+
+
+def test_uninstall_preserves_unrelated_config_and_user_instructions(on_real_os):
+    claude_json = on_real_os.home / ".claude.json"
+    claude_md = on_real_os.home / ".claude" / "CLAUDE.md"
+    claude_md.parent.mkdir(parents=True, exist_ok=True)
+    claude_json.write_text(
+        json.dumps({"numStartups": 5, "mcpServers": {"other": {"command": "x"}}}),
+        encoding="utf-8",
+    )
+    claude_md.write_text("# My rules\n\nDo the thing.\n", encoding="utf-8")
+
+    adapters = resolve_targets("claude")
+    run_install(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+    run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+
+    obj = json.loads(claude_json.read_text(encoding="utf-8"))
+    assert obj["numStartups"] == 5
+    assert obj["mcpServers"]["other"] == {"command": "x"}
+    assert "archy" not in obj["mcpServers"]
+    # Removing the user's own instructions along with archy's block would be a
+    # data-loss bug, so uninstall must be non-destructive to their content.
+    text = claude_md.read_text(encoding="utf-8")
+    assert text.startswith("# My rules")
+    assert "archy" not in text.lower()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="file locking is Windows-specific")

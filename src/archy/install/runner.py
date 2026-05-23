@@ -7,11 +7,12 @@ driven directly by unit tests without going through ``CliRunner``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from archy.install.base import AgentAdapter, FileAction, Scope, apply_plan
+from archy.install.base import AgentAdapter, FileAction, Scope, apply_plan, apply_uninstall
 from archy.install.registry import all_adapters, get_adapter
 from archy.install.writer import (
     DryRunWriteSystem,
@@ -105,6 +106,27 @@ def plan_for(
     return adapter.plan(scope, project_root=project_root, seed_permissions=seed_permissions)
 
 
+def _run_for_adapters(
+    adapters: list[AgentAdapter],
+    scope: Scope,
+    *,
+    project_root: Path | None,
+    seed_permissions: bool,
+    write_system: WriteSystem | None,
+    apply_fn: Callable[[list[FileAction], WriteSystem], list[Path]],
+) -> InstallResult:
+    """Plan each adapter and run ``apply_fn`` over it. Shared by install/uninstall."""
+    ws = write_system if write_system is not None else RealWriteSystem()
+    results: list[AdapterResult] = []
+    for adapter in adapters:
+        plan = plan_for(
+            adapter, scope, project_root=project_root, seed_permissions=seed_permissions
+        )
+        touched = apply_fn(plan, ws)
+        results.append(AdapterResult(adapter_id=adapter.id, written=tuple(touched)))
+    return InstallResult(results=tuple(results))
+
+
 def run_install(
     adapters: list[AgentAdapter],
     scope: Scope,
@@ -114,18 +136,38 @@ def run_install(
     write_system: WriteSystem | None = None,
 ) -> InstallResult:
     """Apply each adapter's plan through ``write_system`` (real by default)."""
-    ws = write_system if write_system is not None else RealWriteSystem()
-    results: list[AdapterResult] = []
-    for adapter in adapters:
-        plan = plan_for(
-            adapter,
-            scope,
-            project_root=project_root,
-            seed_permissions=seed_permissions,
-        )
-        written = apply_plan(plan, ws)
-        results.append(AdapterResult(adapter_id=adapter.id, written=tuple(written)))
-    return InstallResult(results=tuple(results))
+    return _run_for_adapters(
+        adapters,
+        scope,
+        project_root=project_root,
+        seed_permissions=seed_permissions,
+        write_system=write_system,
+        apply_fn=apply_plan,
+    )
+
+
+def run_uninstall(
+    adapters: list[AgentAdapter],
+    scope: Scope,
+    *,
+    project_root: Path | None = None,
+    seed_permissions: bool = True,
+    write_system: WriteSystem | None = None,
+) -> InstallResult:
+    """Reverse each adapter's plan: strip archy from configs, delete owned files.
+
+    ``seed_permissions`` mirrors install so the Claude permission entries that
+    install seeded are the ones uninstall removes (pass it through unchanged).
+    Reports the paths touched (stripped or deleted) in the same result shape.
+    """
+    return _run_for_adapters(
+        adapters,
+        scope,
+        project_root=project_root,
+        seed_permissions=seed_permissions,
+        write_system=write_system,
+        apply_fn=apply_uninstall,
+    )
 
 
 def print_config(

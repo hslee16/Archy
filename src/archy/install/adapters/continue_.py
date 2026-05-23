@@ -21,6 +21,8 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    delete_file,
+    local_root,
     upsert_instructions,
 )
 from archy.install.merge import render_continue_yaml
@@ -33,7 +35,7 @@ class ContinueAdapter(AgentAdapter):
 
     def _root(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / ".continue"
+            return local_root(project_root) / ".continue"
         return paths.home() / ".continue"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
@@ -63,10 +65,12 @@ class ContinueAdapter(AgentAdapter):
                 path=root / "mcpServers" / "archy.yaml",
                 kind="mcp",
                 render=render_continue_yaml,
+                unrender=delete_file,
             ),
             FileAction(
                 path=root / "rules" / "archy.md",
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=delete_file,
             ),
         ]

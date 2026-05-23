@@ -19,9 +19,11 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    local_root,
+    remove_instructions,
     upsert_instructions,
 )
-from archy.install.merge import render_opencode_mcp
+from archy.install.merge import render_opencode_mcp, strip_opencode_mcp
 
 
 class OpencodeAdapter(AgentAdapter):
@@ -37,7 +39,7 @@ class OpencodeAdapter(AgentAdapter):
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         if scope is Scope.LOCAL:
-            return [(project_root or Path.cwd()) / "opencode.json"]
+            return [local_root(project_root) / "opencode.json"]
         return [self._global_dir() / "opencode.json"]
 
     def detection_paths(self) -> list[Path]:
@@ -50,16 +52,18 @@ class OpencodeAdapter(AgentAdapter):
         project_root: Path | None = None,
         seed_permissions: bool = True,
     ) -> list[FileAction]:
-        root = (project_root or Path.cwd()) if scope is Scope.LOCAL else self._global_dir()
+        root = local_root(project_root) if scope is Scope.LOCAL else self._global_dir()
         return [
             FileAction(
                 path=root / "opencode.json",
                 kind="mcp",
                 render=render_opencode_mcp,
+                unrender=strip_opencode_mcp,
             ),
             FileAction(
                 path=root / "AGENTS.md",
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=remove_instructions,
             ),
         ]

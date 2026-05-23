@@ -241,6 +241,15 @@ Yes. The Claude plugin is strictly better DX *for Claude Code users*, and Claude
 
 The installer should *detect* when a Claude plugin is already installed and skip re-writing the Claude config to avoid double-registration.
 
+### Uninstall (symmetric inverse)
+
+`archy uninstall` mirrors `archy install` and takes the same flags (`--target`, `--location`, `--project-root`, `--yes`, `--no-permissions`, plus `--dry-run`). It is the inverse rather than a separate code path: each adapter declares paired `render` (install) and `unrender` (uninstall) functions per file on a single `FileAction`, so adding a client wires both directions at once and they cannot drift. The inverse rules:
+
+- **Shared files** (`~/.claude.json`, Cursor/opencode JSON, Codex TOML, `settings.json`, the user's own `CLAUDE.md`/`AGENTS.md`): strip *only* archy's contribution (the `archy` server key, the 16 permission patterns, or the marker-fenced instruction block) and leave everything else byte-for-byte.
+- **Archy-owned files** (Continue's `archy.yaml`, the `archy.mdc`/`archy.md` rule files, and any instruction file left empty after removing archy's block): delete the file.
+
+Idempotent: uninstalling a clean machine is a no-op. The marker fences on the instruction block and the dedicated config keys are what make targeted removal tractable. User-facing documentation lives in [`INSTALL.md`](INSTALL.md).
+
 ### What we explicitly do not do
 
 - Ship a Node-based installer just because CodeGraph does. `uvx` is the Python-native equivalent and avoids dragging in a JS toolchain.

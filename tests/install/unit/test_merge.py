@@ -23,6 +23,10 @@ from archy.install.merge import (
     render_json_mcp,
     render_opencode_mcp,
     render_toml_mcp,
+    strip_claude_permissions,
+    strip_json_mcp,
+    strip_opencode_mcp,
+    strip_toml_mcp,
 )
 
 
@@ -112,3 +116,47 @@ def test_toml_mcp_preserves_existing_tables():
 def test_toml_mcp_idempotent():
     first = render_toml_mcp(None)
     assert render_toml_mcp(first) == first
+
+
+# --- inverse (strip) functions --------------------------------------------
+
+
+def test_strip_json_mcp_removes_archy_keeps_others():
+    installed = render_json_mcp(json.dumps({"mcpServers": {"other": {"command": "x"}}}))
+    obj = json.loads(strip_json_mcp(installed))
+    assert "archy" not in obj["mcpServers"]
+    assert obj["mcpServers"]["other"] == {"command": "x"}
+
+
+def test_strip_json_mcp_idempotent_and_safe_when_absent():
+    clean = json.dumps({"mcpServers": {"other": {}}})
+    once = strip_json_mcp(clean)
+    assert "archy" not in json.loads(once)["mcpServers"]
+    assert strip_json_mcp(once) == once
+
+
+def test_strip_round_trip_restores_unrelated_config():
+    original = {"numStartups": 4, "mcpServers": {"other": {"command": "x"}}}
+    after = json.loads(strip_json_mcp(render_json_mcp(json.dumps(original))))
+    assert after == original
+
+
+def test_strip_opencode_removes_archy():
+    installed = render_opencode_mcp(json.dumps({"theme": "dark"}))
+    obj = json.loads(strip_opencode_mcp(installed))
+    assert obj["theme"] == "dark"
+    assert "archy" not in obj.get("mcp", {})
+
+
+def test_strip_toml_removes_archy_keeps_others():
+    installed = render_toml_mcp('[mcp_servers.other]\ncommand = "foo"\n')
+    data = tomllib.loads(strip_toml_mcp(installed))
+    assert "archy" not in data["mcp_servers"]
+    assert data["mcp_servers"]["other"]["command"] == "foo"
+
+
+def test_strip_claude_permissions_removes_only_archy_patterns():
+    installed = render_claude_permissions(json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}}))
+    allow = json.loads(strip_claude_permissions(installed))["permissions"]["allow"]
+    assert allow == ["Bash(ls:*)"]
+    assert not any(p in allow for p in permission_patterns())

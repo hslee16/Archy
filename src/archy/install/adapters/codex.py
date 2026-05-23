@@ -18,9 +18,11 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    local_root,
+    remove_instructions,
     upsert_instructions,
 )
-from archy.install.merge import render_toml_mcp
+from archy.install.merge import render_toml_mcp, strip_toml_mcp
 
 
 class CodexAdapter(AgentAdapter):
@@ -30,7 +32,7 @@ class CodexAdapter(AgentAdapter):
 
     def _codex_dir(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / ".codex"
+            return local_root(project_root) / ".codex"
         return paths.home() / ".codex"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
@@ -39,7 +41,7 @@ class CodexAdapter(AgentAdapter):
     def _instructions_path(self, scope: Scope, project_root: Path | None) -> Path:
         # Project AGENTS.md lives at the repo root, not under .codex/.
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / "AGENTS.md"
+            return local_root(project_root) / "AGENTS.md"
         return paths.home() / ".codex" / "AGENTS.md"
 
     def detection_paths(self) -> list[Path]:
@@ -63,10 +65,12 @@ class CodexAdapter(AgentAdapter):
                 path=self.config_paths(scope, project_root)[0],
                 kind="mcp",
                 render=render_toml_mcp,
+                unrender=strip_toml_mcp,
             ),
             FileAction(
                 path=self._instructions_path(scope, project_root),
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=remove_instructions,
             ),
         ]

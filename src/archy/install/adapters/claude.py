@@ -23,9 +23,16 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    local_root,
+    remove_instructions,
     upsert_instructions,
 )
-from archy.install.merge import render_claude_permissions, render_json_mcp
+from archy.install.merge import (
+    render_claude_permissions,
+    render_json_mcp,
+    strip_claude_permissions,
+    strip_json_mcp,
+)
 
 
 class ClaudeAdapter(AgentAdapter):
@@ -35,8 +42,7 @@ class ClaudeAdapter(AgentAdapter):
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         if scope is Scope.LOCAL:
-            root = project_root or Path.cwd()
-            return [root / ".mcp.json"]
+            return [local_root(project_root) / ".mcp.json"]
         return [paths.home() / ".claude.json"]
 
     def detection_paths(self) -> list[Path]:
@@ -57,14 +63,12 @@ class ClaudeAdapter(AgentAdapter):
 
     def _permissions_path(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            root = project_root or Path.cwd()
-            return root / ".claude" / "settings.json"
+            return local_root(project_root) / ".claude" / "settings.json"
         return paths.home() / ".claude" / "settings.json"
 
     def _instructions_path(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            root = project_root or Path.cwd()
-            return root / "CLAUDE.md"
+            return local_root(project_root) / "CLAUDE.md"
         return paths.home() / ".claude" / "CLAUDE.md"
 
     def plugin_installed(self) -> bool:
@@ -106,6 +110,7 @@ class ClaudeAdapter(AgentAdapter):
                     path=self.config_paths(scope, project_root)[0],
                     kind="mcp",
                     render=render_json_mcp,
+                    unrender=strip_json_mcp,
                 )
             )
             actions.append(
@@ -113,6 +118,7 @@ class ClaudeAdapter(AgentAdapter):
                     path=self._instructions_path(scope, project_root),
                     kind="instructions",
                     render=upsert_instructions,
+                    unrender=remove_instructions,
                 )
             )
         if seed_permissions:
@@ -121,6 +127,7 @@ class ClaudeAdapter(AgentAdapter):
                     path=self._permissions_path(scope, project_root),
                     kind="permissions",
                     render=render_claude_permissions,
+                    unrender=strip_claude_permissions,
                 )
             )
         return actions
