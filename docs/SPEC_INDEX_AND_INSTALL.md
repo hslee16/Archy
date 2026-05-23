@@ -65,7 +65,7 @@ The single subtle failure mode is metric drift: a module's complexity score depe
 
 `watchdog` (already cross-platform, uses FSEvents on macOS, inotify on Linux, ReadDirectoryChangesW on Windows; the same OS primitives CodeGraph uses through `chokidar`).
 
-- Started by the MCP server only when serving (`archy serve --mcp`). The CLI does not need it.
+- Started by the MCP server only when serving (`archy mcp`). The CLI does not need it.
 - Debounces with a 2-second quiet window via `threading.Timer` reset on each event.
 - Filters to source files matching configured `languages`/`exclude` (initially just Python, matching archy's current scope).
 - On debounce fire: runs the same incremental sync as Part 1.
@@ -122,7 +122,7 @@ Alternatively `pipx run archy install` for users without `uv`. Both go in the RE
 
 Claude Code plugins package an MCP server, slash commands, agents, hooks, and CLAUDE.md snippets into a single installable unit. A user runs `/plugin install archy` and everything is wired up: MCP server registered, `permissions.allow` seeded, the agent-facing instruction snippet appended to CLAUDE.md.
 
-Recommendation: yes, publish a Claude plugin. It is the lowest-friction path for the largest segment of archy's users. The plugin manifest points at `uvx archy serve --mcp` so there is no separate binary to distribute. The plugin repo can live under the `archy/` GitHub org as `archy-claude-plugin`, or inline in this repo under `plugins/claude/`.
+Recommendation: yes, publish a Claude plugin. It is the lowest-friction path for the largest segment of archy's users. The plugin manifest points at `uvx archy mcp` so there is no separate binary to distribute. The plugin repo can live under the `archy/` GitHub org as `archy-claude-plugin`, or inline in this repo under `plugins/claude/`.
 
 **(b) `archy install` interactive installer (covers everything else)**
 
@@ -195,6 +195,8 @@ Secondary probes (used only when CLI and config probes both miss):
 
 The install code is the kind that silently breaks on the platform you don't develop on. The CI matrix runs at least `archy install --print-config <id>` (dry-run mode) on `ubuntu-latest`, `macos-latest`, and `windows-latest` for each adapter, with emitted-config snapshots validated per OS. Detection logic is unit-tested by monkeypatching `Path.exists` / `shutil.which` / `sys.platform`.
 
+Full testing strategy (five layers: unit, snapshot, filesystem integration, contract, gated E2E) lives in [`SPEC_INSTALL_TESTING.md`](SPEC_INSTALL_TESTING.md).
+
 **(c) Manual MCP config (always available, for power users and unknown clients)**
 
 The README keeps the current manual snippet for users on tools the installer does not know about. Anything that speaks MCP can wire archy in by hand:
@@ -202,7 +204,7 @@ The README keeps the current manual snippet for users on tools the installer doe
 ```json
 {
   "mcpServers": {
-    "archy": { "command": "uvx", "args": ["archy", "serve", "--mcp"] }
+    "archy": { "command": "uvx", "args": ["archy", "mcp"] }
   }
 }
 ```
@@ -229,7 +231,7 @@ Five adapters at launch: Claude Code, Cursor, Codex CLI, opencode, Continue. Add
 
 ### Plugin vs installer: do we need both?
 
-Yes. The Claude plugin is strictly better DX *for Claude Code users*, and Claude Code is the largest single audience. The installer covers everyone else and remains the fallback when a user is on multiple agents. Maintenance cost is low because the plugin manifest is ~20 lines and points at the same `uvx archy serve --mcp` entry point the installer configures.
+Yes. The Claude plugin is strictly better DX *for Claude Code users*, and Claude Code is the largest single audience. The installer covers everyone else and remains the fallback when a user is on multiple agents. Maintenance cost is low because the plugin manifest is ~20 lines and points at the same `uvx archy mcp` entry point the installer configures.
 
 The installer should *detect* when a Claude plugin is already installed and skip re-writing the Claude config to avoid double-registration.
 
@@ -257,7 +259,7 @@ This phase is mostly CLI plumbing and packaging. Days, not weeks.
 **Phase 2: persistent index + watcher**
 
 5. SQLite cache layer behind the existing parser. Cold-path unchanged, warm-path fast.
-6. `watchdog`-driven debounced sync inside `archy serve --mcp`.
+6. `watchdog`-driven debounced sync inside `archy mcp`.
 7. `archy_status` surfaces `last_synced_at` and cache stats.
 8. Churn column populated lazily from git log; surface in `archy_hotspots` as a follow-up.
 
