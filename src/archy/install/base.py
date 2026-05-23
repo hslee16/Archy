@@ -94,6 +94,11 @@ def instructions_block() -> str:
     return f"{INSTRUCTIONS_BEGIN}\n{INSTRUCTIONS_BODY}{INSTRUCTIONS_END}\n"
 
 
+def _drop_leading_newline(text: str) -> str:
+    """Drop one leading newline so removing a fenced block doesn't leave a gap."""
+    return text[1:] if text.startswith("\n") else text
+
+
 def upsert_instructions(existing: str | None) -> str:
     """Insert or replace the archy instruction block, leaving the rest intact.
 
@@ -110,13 +115,11 @@ def upsert_instructions(existing: str | None) -> str:
         return f"{existing}{sep}\n{block}"
     end = existing.find(INSTRUCTIONS_END, start)
     if end == -1:
-        # Truncated/corrupt block: replace from the marker to end of file.
+        # No closing marker: recover by overwriting from the marker rather than
+        # raising, so a hand-corrupted file still re-installs cleanly.
         return f"{existing[:start]}{block}"
     end += len(INSTRUCTIONS_END)
-    tail = existing[end:]
-    if tail.startswith("\n"):
-        tail = tail[1:]
-    return f"{existing[:start]}{block}{tail}"
+    return f"{existing[:start]}{block}{_drop_leading_newline(existing[end:])}"
 
 
 def remove_instructions(existing: str | None) -> str | None:
@@ -134,13 +137,12 @@ def remove_instructions(existing: str | None) -> str | None:
         return existing
     end = existing.find(INSTRUCTIONS_END, start)
     if end == -1:
-        remainder = existing[:start]  # truncated block: cut from the marker on
+        # No closing marker: recover by discarding from the marker on rather
+        # than raising, so uninstall stays idempotent on a corrupted file.
+        remainder = existing[:start]
     else:
         end += len(INSTRUCTIONS_END)
-        tail = existing[end:]
-        if tail.startswith("\n"):
-            tail = tail[1:]
-        remainder = existing[:start] + tail
+        remainder = existing[:start] + _drop_leading_newline(existing[end:])
     return None if not remainder.strip() else remainder
 
 

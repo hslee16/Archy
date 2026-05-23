@@ -101,7 +101,7 @@ def test_reset_timer_coalesces(project: Path, tmp_path: Path, monkeypatch):
             time.sleep(0.02)  # all within the debounce window
         # Only one timer is ever pending.
         assert m._timer is not None
-        time.sleep(0.3)  # let it fire
+        time.sleep(0.3)  # 2x the debounce window: the timer must have fired by now
         assert m.last_synced_at is not None
     finally:
         m.stop()
@@ -127,7 +127,7 @@ def test_start_watching_falls_back_when_missing(project: Path, tmp_path: Path, m
     try:
         assert m.start_watching() is False
         assert m.watching is False
-        m.build_graph()  # still works without a watcher
+        m.build_graph()  # watcher unavailability must not block the build path
     finally:
         m.stop()
 
@@ -141,7 +141,8 @@ def test_real_watcher_syncs_on_change(project: Path, tmp_path: Path, monkeypatch
         m.sync_now()
         before = m.cached_file_count()
         _write(project / "pkg", "c.py", "from pkg import b\n")
-        # Poll for the background sync to pick up the new file.
+        # The sync runs on the watcher's background thread, so we must poll for
+        # convergence rather than assert immediately after the write.
         deadline = time.time() + 5
         while time.time() < deadline and m.cached_file_count() <= before:
             time.sleep(0.1)
