@@ -731,3 +731,27 @@ def test_dsm_ascii_rejects_oversized_with_helpful_message(tmp_path: Path):
     assert result.exit_code == 0
     assert "exceeds max_nodes" in result.output
     assert "--focus" in result.output
+
+
+def test_index_sync_reports_stats_and_caches(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    first = CliRunner().invoke(main, ["index", "sync", str(project)])
+    assert first.exit_code == 0
+    assert "reparsed" in first.output
+    assert (project / ".archy" / "index.db").exists()
+    # Second sync reuses the cache: nothing reparsed.
+    second = CliRunner().invoke(main, ["index", "sync", str(project)])
+    assert second.exit_code == 0
+    assert "0 reparsed" in second.output
+
+
+def test_index_clear_removes_db(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    CliRunner().invoke(main, ["index", "sync", str(project)])
+    result = CliRunner().invoke(main, ["index", "clear", str(project)])
+    assert result.exit_code == 0
+    assert not (project / ".archy" / "index.db").exists()
+    # Clearing again is a clean no-op.
+    again = CliRunner().invoke(main, ["index", "clear", str(project)])
+    assert again.exit_code == 0
+    assert "no cache" in again.output

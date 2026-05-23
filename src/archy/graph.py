@@ -67,9 +67,39 @@ def build_graph(
     """
     ignored = frozenset(ignored_dirs)
     modules = _discover_modules(root, ignored, tuple(extra_roots))
-    qualname_set = {m.qualname for m in modules}
-
     parse_results: dict[str, ParseResult] = {m.qualname: parse_file(m.path) for m in modules}
+    return assemble_graph(root, modules, parse_results)
+
+
+def discover_modules(
+    root: Path,
+    *,
+    ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
+    extra_roots: Iterable[str] = (),
+) -> list[Module]:
+    """Discover internal modules under `root` (the FS-walk half of `build_graph`).
+
+    Exposed so the persistent index (`archy.index`) can enumerate the module set
+    and decide which files to (re)parse without committing to a parse up front.
+    """
+    return _discover_modules(root, frozenset(ignored_dirs), tuple(extra_roots))
+
+
+def assemble_graph(
+    root: Path,
+    modules: list[Module],
+    parse_results: dict[str, ParseResult],
+) -> nx.DiGraph:
+    """Build the import + call graph from already-parsed modules.
+
+    This is the resolution-and-assembly half of `build_graph`, split out so the
+    cold path and the cache-backed path (`archy.index.build_graph_cached`) share
+    one resolution implementation. Resolution is global (relative imports,
+    re-export chains, and alias tables all need the full `parse_results` set), so
+    keeping a single code path is what guarantees the cached graph is identical
+    to a cold build. `parse_results` is keyed by module qualname.
+    """
+    qualname_set = {m.qualname for m in modules}
 
     graph: nx.DiGraph = nx.DiGraph()
     for m in modules:

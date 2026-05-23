@@ -29,7 +29,7 @@ from archy.diff import (
     write_snapshot,
 )
 from archy.diff_summary import summarize_diff
-from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict
+from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, discover_modules, graph_to_dict
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
@@ -744,6 +744,60 @@ def mcp() -> None:
     from archy.mcp import create_server
 
     create_server().run()
+
+
+@main.group()
+def index() -> None:
+    """Manage the persistent parse cache at `.archy/index.db`.
+
+    The cache speeds up repeated graph builds by storing each file's parse
+    result keyed by content hash; it is a pure optimization and safe to delete.
+    """
+
+
+@index.command("sync")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+def index_sync(path: Path) -> None:
+    """Refresh the cache for PATH and report what changed.
+
+    Re-parses only files whose content changed since the last sync, prunes
+    entries for deleted files, and leaves the rest untouched.
+    """
+    from archy.index import default_db_path, open_index
+    from archy.index import sync as sync_index
+
+    conn = open_index(default_db_path(path))
+    try:
+        modules = discover_modules(path, **_graph_kwargs(path))
+        _results, stats = sync_index(conn, modules)
+    finally:
+        conn.close()
+    click.echo(
+        f"synced {stats.total} module(s): "
+        f"{stats.reparsed} reparsed, {stats.unchanged} unchanged, {stats.pruned} pruned."
+    )
+
+
+@index.command("clear")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+def index_clear(path: Path) -> None:
+    """Delete the cache database for PATH (the next build cold-rebuilds it)."""
+    from archy.index import default_db_path
+
+    db = default_db_path(path)
+    if db.exists():
+        db.unlink()
+        click.echo(f"removed {db}")
+    else:
+        click.echo("no cache to remove.")
 
 
 @main.command()

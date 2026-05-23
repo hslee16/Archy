@@ -13,6 +13,8 @@ metadata:
 
 Archy turns the structural health of a Python codebase into numbers and rule violations an agent can act on between edits. This skill explains when to reach for it and how to drive its MCP tools as a tight feedback loop.
 
+Archy keeps a persistent parse cache (`.archy/index.db`), so its tools stay cheap to call: warm graph builds take a few seconds even on 10k+ module repos because only files whose content changed are re-parsed. Lean on that. Consult archy on *each* edit to keep your working surface relevant (impact before, diff after), not only at the start and end of a task.
+
 ## Prerequisites
 
 The agent must have access to the `archy` MCP server. The user wires it up once in their MCP client config:

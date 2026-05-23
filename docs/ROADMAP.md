@@ -15,7 +15,9 @@ When deciding whether to ship a feature, the load-bearing question is "what does
 
 Things actively in flight or planned for the next 2-3 releases. Items previously in this section shipped in v0.21.0 / v0.22.0 / v0.24.0 / v0.25.0; the queue below promotes from "Next" as work picks up.
 
-Phase 1 of the install-DX work (`archy affected`, the Claude Code plugin, and the agent-detecting installer) has shipped; see "Shipped from this section" below. Phase 2 (persistent SQLite index + `watchdog` watcher) is the next major lift and sits behind it.
+Phase 1 of the install-DX work (`archy affected`, the Claude Code plugin, and the agent-detecting installer) has shipped; see "Shipped from this section" below.
+
+- **Phase 2: persistent index + file watcher.** Part 1 (the persistent parse cache) has landed: `src/archy/index.py` caches each file's `ParseResult` in `.archy/index.db` keyed by content hash and re-parses only what changed, then re-runs the existing global resolution, so a cache-backed build is byte-identical to a cold one (the property the test suite asserts). Benchmarked 7-9x warm-path speedups on Django (2.9k modules), pytorch (4.5k), and Home Assistant (17.3k); parsing is ~85% of cold build cost and resolution stays ~3%, which is why the cache boundary is the parse, not the resolved graph, and why incremental resolution was rejected. Wired transparently under `archy mcp` with `archy index sync` / `archy index clear` for explicit control. **Part 2 still to come: a `watchdog` FS watcher inside `archy mcp` that runs the sync in the background on a 2-second debounce, plus an `archy_status` tool exposing `last_synced_at`.** Spec: [`SPEC_INDEX_AND_INSTALL.md`](SPEC_INDEX_AND_INSTALL.md) Parts 1-2.
 
 ### Shipped from this section
 
