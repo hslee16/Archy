@@ -81,6 +81,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         client: [claude-code, cursor]
+        exclude:
+          # Cursor's official CLI is Linux/macOS only (Windows is WSL); the
+          # windows x cursor cell is excluded. Cursor is covered on ubuntu + macos.
+          - { os: windows-latest, client: cursor }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -107,7 +111,7 @@ What every adapter must have at every layer before its PR can merge.
 | 2 snapshot (write per OS x scope) | required | required | required | required | required |
 | 3 integration (real fs, all 3 OSes) | required | required | required | required | required |
 | 4 contract (parse-roundtrip) | required | required | required | required | required |
-| 5 E2E (real client, headless) | required | required | best-effort | best-effort | excluded |
+| 5 E2E (real client, headless) | required (all OSes) | required (Unix only) | best-effort | best-effort | excluded |
 
 ### Uninstall coverage
 
