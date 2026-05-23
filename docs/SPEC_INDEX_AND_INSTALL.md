@@ -141,13 +141,59 @@ $ uvx archy install
 
 The installer:
 
-1. Auto-detects installed agents by probing well-known config paths.
-2. Writes the MCP server config in each target's expected format (Claude `~/.claude.json`, Cursor `~/.cursor/mcp.json`, Codex `~/.codex/config.toml`, opencode `opencode.json`, etc.).
+1. Auto-detects installed agents using a layered probe (see "Detection" below). Cross-platform across Linux, macOS, and Windows, matching archy's existing OS support matrix.
+2. Writes the MCP server config in each target's expected format (Claude `~/.claude.json`, Cursor `~/.cursor/mcp.json`, Codex `~/.codex/config.toml`, opencode `opencode.json`, etc.); per-OS path table in "Detection" below.
 3. Writes the rules/instructions file (`CLAUDE.md` snippet, `.cursor/rules/archy.mdc`, `~/.codex/AGENTS.md`).
 4. Seeds permission allowlist (Claude only, today; others as they ship the feature).
 5. Supports non-interactive mode for CI/scripting: `--yes`, `--target=cursor,claude`, `--location=local|global`, `--print-config <id>`.
 
 The installer is the same binary as everything else, just a different subcommand. Code-wise it is a registry of "agent adapters," each adapter knowing how to detect, where to write, and what content to emit.
+
+### Detection
+
+Each adapter's `detect()` is a layered probe across three signals; any hit returns true. This catches "agent installed but never launched" (CLI on PATH but no config dir yet) and "agent launched but not on PATH" (Electron desktop apps that don't register a CLI), in addition to the baseline "agent has been run before" (config dir exists).
+
+```python
+def detect(self) -> bool:
+    if shutil.which(self.cli_name):                       # CLI on PATH (all OSes)
+        return True
+    if any(p.exists() for p in self.config_paths()):      # platform-aware config dirs
+        return True
+    if sys.platform == "darwin" and any(p.exists() for p in self.mac_app_bundles):
+        return True
+    if sys.platform == "win32" and any(p.exists() for p in self.windows_install_dirs):
+        return True
+    return False
+```
+
+Resolve all paths via `pathlib.Path` and `os.environ` lookups (`APPDATA`, `LOCALAPPDATA`, `USERPROFILE`) or `Path.home()`. No hardcoded separators.
+
+Per-adapter path table (config paths only; CLI names follow `claude` / `cursor` / `codex` / `opencode` / `continue`):
+
+| Client | Linux / macOS | Windows |
+|---|---|---|
+| Claude Code | `~/.claude.json` | `%USERPROFILE%\.claude.json` |
+| Cursor | `~/.cursor/mcp.json` | `%USERPROFILE%\.cursor\mcp.json` |
+| Codex CLI | `~/.codex/config.toml` | `%USERPROFILE%\.codex\config.toml` |
+| opencode | `~/.config/opencode/opencode.json` (+ project-local `opencode.json`) | `%APPDATA%\opencode\opencode.json` (+ project-local) |
+| Continue | `~/.continue/` | `%USERPROFILE%\.continue\` |
+
+Secondary probes (used only when CLI and config probes both miss):
+
+- **macOS app bundles**: `/Applications/Claude.app`, `/Applications/Cursor.app`, plus `~/Applications/...`.
+- **Windows per-user install dirs**: `%LOCALAPPDATA%\Programs\cursor\Cursor.exe`, `%LOCALAPPDATA%\AnthropicClaude\` (or `%LOCALAPPDATA%\Programs\Claude\`), `%LOCALAPPDATA%\Programs\Microsoft VS Code\` (for the Continue-via-VS-Code case). Registry walks of `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall` via stdlib `winreg` are available as a fallback if a specific adapter needs them, gated behind `sys.platform == "win32"`; not used at launch.
+
+### Cross-platform write-side considerations
+
+- **Atomic writes.** Use write-temp-then-`os.replace` for every config write. On Windows, `os.replace` can fail with `PermissionError` if the target file is held open by a running agent client (Electron apps hold exclusive handles); the installer surfaces a clear "please close $CLIENT and re-run" error rather than retrying indefinitely.
+- **Paths in emitted configs.** Emit OS-native paths (forward slashes on Unix, backslashes on Windows) and let each client normalize; do not hand-rewrite separators. JSON files written via `json.dump` are safe; TOML via `tomllib`/`tomli-w` is safe.
+- **Line endings.** Open config files in text mode and let Python pick the platform default. Do not hand-format with explicit `\n`.
+- **No `chmod` calls on Windows.** Gate any executable-bit manipulation behind `sys.platform != "win32"`.
+- **Permission allowlist seeding** (Claude Code) uses the same homedir `~/.claude.json` on Windows, so no OS-specific branching for that adapter beyond path resolution.
+
+### CI coverage
+
+The install code is the kind that silently breaks on the platform you don't develop on. The CI matrix runs at least `archy install --print-config <id>` (dry-run mode) on `ubuntu-latest`, `macos-latest`, and `windows-latest` for each adapter, with emitted-config snapshots validated per OS. Detection logic is unit-tested by monkeypatching `Path.exists` / `shutil.which` / `sys.platform`.
 
 **(c) Manual MCP config (always available, for power users and unknown clients)**
 
@@ -169,6 +215,10 @@ CodeGraph took the registry approach (their installer ships adapters for Claude/
 class AgentAdapter(Protocol):
     id: str                       # "claude", "cursor", ...
     name: str
+    cli_name: str                 # binary name probed via shutil.which
+    def config_paths(self) -> list[Path]: ...       # platform-aware (Linux/macOS/Windows)
+    def mac_app_bundles(self) -> list[Path]: ...    # macOS fallback, may be empty
+    def windows_install_dirs(self) -> list[Path]: ...  # Windows fallback, may be empty
     def detect(self) -> bool: ...
     def write_mcp_config(self, scope: Scope) -> None: ...
     def write_instructions(self, scope: Scope) -> None: ...
