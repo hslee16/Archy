@@ -19,6 +19,7 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    local_root,
     remove_instructions,
     upsert_instructions,
 )
@@ -38,7 +39,7 @@ class OpencodeAdapter(AgentAdapter):
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         if scope is Scope.LOCAL:
-            return [(project_root or Path.cwd()) / "opencode.json"]
+            return [local_root(project_root) / "opencode.json"]
         return [self._global_dir() / "opencode.json"]
 
     def detection_paths(self) -> list[Path]:
@@ -51,7 +52,7 @@ class OpencodeAdapter(AgentAdapter):
         project_root: Path | None = None,
         seed_permissions: bool = True,
     ) -> list[FileAction]:
-        root = (project_root or Path.cwd()) if scope is Scope.LOCAL else self._global_dir()
+        root = local_root(project_root) if scope is Scope.LOCAL else self._global_dir()
         return [
             FileAction(
                 path=root / "opencode.json",

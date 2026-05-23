@@ -123,7 +123,7 @@ What every adapter must have at every layer before its PR can merge.
 - **nektos/act for cross-OS.** Linux-only; misleads more than it helps.
 - **BuildJet / depot.dev / Cirrus.** Premature optimization. GHA Windows runners are slow but free; revisit only if the `cross-os` job exceeds about five minutes steady state.
 - **Docker-based Linux distro variants.** archy is Python; the interpreter abstracts distro. Add only if a real distro-specific bug surfaces.
-- **End-to-end Continue.** VS Code extension, no headless mode worth the cost. Layer 4 contract test on `~/.continue/mcpServers/mcp.json` is the right ceiling.
+- **End-to-end Continue.** VS Code extension, no headless mode worth the cost. Layer 4 contract test on `~/.continue/mcpServers/archy.yaml` is the right ceiling.
 - **Snapshot-testing end-to-end flows.** Snapshots are for writer outputs only; behavior is asserted.
 
 ## Cost estimate

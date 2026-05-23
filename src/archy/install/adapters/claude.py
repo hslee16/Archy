@@ -23,6 +23,7 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    local_root,
     remove_instructions,
     upsert_instructions,
 )
@@ -41,8 +42,7 @@ class ClaudeAdapter(AgentAdapter):
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         if scope is Scope.LOCAL:
-            root = project_root or Path.cwd()
-            return [root / ".mcp.json"]
+            return [local_root(project_root) / ".mcp.json"]
         return [paths.home() / ".claude.json"]
 
     def detection_paths(self) -> list[Path]:
@@ -63,14 +63,12 @@ class ClaudeAdapter(AgentAdapter):
 
     def _permissions_path(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            root = project_root or Path.cwd()
-            return root / ".claude" / "settings.json"
+            return local_root(project_root) / ".claude" / "settings.json"
         return paths.home() / ".claude" / "settings.json"
 
     def _instructions_path(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            root = project_root or Path.cwd()
-            return root / "CLAUDE.md"
+            return local_root(project_root) / "CLAUDE.md"
         return paths.home() / ".claude" / "CLAUDE.md"
 
     def plugin_installed(self) -> bool:

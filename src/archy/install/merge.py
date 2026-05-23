@@ -55,6 +55,13 @@ def _load_json_obj(existing: str | None) -> JsonObj:
     return cast(JsonObj, loaded)
 
 
+def _load_toml_obj(existing: str | None) -> JsonObj:
+    """Parse a TOML document to a dict (empty when the file is absent/blank)."""
+    if not existing or not existing.strip():
+        return {}
+    return cast(JsonObj, tomllib.loads(existing))
+
+
 def _ensure_dict(obj: JsonObj, key: str) -> JsonObj:
     """Return ``obj[key]`` as a dict, creating it when absent or the wrong type.
 
@@ -150,7 +157,7 @@ def render_toml_mcp(existing: str | None) -> str:
     Codex keys MCP servers under the snake_case `mcp_servers` table. Existing
     tables and scalars are preserved by round-tripping through tomllib/tomli-w.
     """
-    data: JsonObj = cast(JsonObj, tomllib.loads(existing)) if existing and existing.strip() else {}
+    data = _load_toml_obj(existing)
     _ensure_dict(data, "mcp_servers")[SERVER_KEY] = {
         "command": MCP_COMMAND,
         "args": list(MCP_ARGS),
@@ -189,7 +196,7 @@ def strip_opencode_mcp(existing: str | None) -> str:
 
 def strip_toml_mcp(existing: str | None) -> str:
     """Inverse of :func:`render_toml_mcp`."""
-    data: JsonObj = cast(JsonObj, tomllib.loads(existing)) if existing and existing.strip() else {}
+    data = _load_toml_obj(existing)
     _drop_server(data, "mcp_servers")
     return tomli_w.dumps(data)
 

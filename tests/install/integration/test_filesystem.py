@@ -84,8 +84,8 @@ def test_uninstall_round_trip_removes_all_archy_traces(on_real_os, adapter_id):
     adapters = resolve_targets(adapter_id)
     run_install(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
     run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
-    # No file archy created on a clean machine should survive, and no surviving
-    # file should still mention archy.
+    # A leftover "archy" reference in any config would silently re-activate the
+    # tool the user just removed, so uninstall must leave zero footprint.
     for path in _all_files(on_real_os.home):
         assert "archy" not in path.read_text(encoding="utf-8").lower()
 
@@ -96,7 +96,8 @@ def test_uninstall_is_idempotent(on_real_os, adapter_id):
     run_install(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
     run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
     after_first = {p: p.read_bytes() for p in _all_files(on_real_os.home)}
-    # A second uninstall on the already-clean tree changes nothing and raises nothing.
+    # Re-running uninstall (e.g. a package manager retrying) must never corrupt
+    # an already-clean tree or raise on the files that are already gone.
     run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
     assert {p: p.read_bytes() for p in _all_files(on_real_os.home)} == after_first
 
@@ -119,7 +120,8 @@ def test_uninstall_preserves_unrelated_config_and_user_instructions(on_real_os):
     assert obj["numStartups"] == 5
     assert obj["mcpServers"]["other"] == {"command": "x"}
     assert "archy" not in obj["mcpServers"]
-    # The user's own CLAUDE.md content survives; only the archy block is gone.
+    # Removing the user's own instructions along with archy's block would be a
+    # data-loss bug, so uninstall must be non-destructive to their content.
     text = claude_md.read_text(encoding="utf-8")
     assert text.startswith("# My rules")
     assert "archy" not in text.lower()

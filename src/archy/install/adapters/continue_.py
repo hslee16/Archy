@@ -22,6 +22,7 @@ from archy.install.base import (
     FileAction,
     Scope,
     delete_file,
+    local_root,
     upsert_instructions,
 )
 from archy.install.merge import render_continue_yaml
@@ -34,7 +35,7 @@ class ContinueAdapter(AgentAdapter):
 
     def _root(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / ".continue"
+            return local_root(project_root) / ".continue"
         return paths.home() / ".continue"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:

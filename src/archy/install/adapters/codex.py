@@ -18,6 +18,7 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    local_root,
     remove_instructions,
     upsert_instructions,
 )
@@ -31,7 +32,7 @@ class CodexAdapter(AgentAdapter):
 
     def _codex_dir(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / ".codex"
+            return local_root(project_root) / ".codex"
         return paths.home() / ".codex"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
@@ -40,7 +41,7 @@ class CodexAdapter(AgentAdapter):
     def _instructions_path(self, scope: Scope, project_root: Path | None) -> Path:
         # Project AGENTS.md lives at the repo root, not under .codex/.
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / "AGENTS.md"
+            return local_root(project_root) / "AGENTS.md"
         return paths.home() / ".codex" / "AGENTS.md"
 
     def detection_paths(self) -> list[Path]:

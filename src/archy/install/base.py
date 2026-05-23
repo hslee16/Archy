@@ -148,6 +148,11 @@ def delete_file(_existing: str | None) -> None:
     return None
 
 
+def local_root(project_root: Path | None) -> Path:
+    """Anchor for local-scope writes: the given project root, or the cwd."""
+    return project_root or Path.cwd()
+
+
 class Scope(str, Enum):
     """Where config is written: every project, or just this one."""
 

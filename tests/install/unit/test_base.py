@@ -105,7 +105,8 @@ def test_apply_uninstall_strips_existing_and_deletes_owned(tmp_path):
         FileAction(path=absent, kind="mcp", render=lambda _e: "x", unrender=delete_file),
     ]
     touched = apply_uninstall(plan, ws)
-    # absent file is skipped (idempotent); shared is stripped, owned is deleted.
+    # apply_uninstall must tolerate files that were never written, so a partial
+    # or re-run uninstall does not error on the missing ones (idempotency).
     assert touched == [shared, owned]
     assert [(r.path, r.content) for r in ws.records] == [(shared, "keep")]
     assert ws.removed == [owned]

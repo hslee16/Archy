@@ -18,6 +18,7 @@ from archy.install.base import (
     FileAction,
     Scope,
     delete_file,
+    local_root,
     upsert_instructions,
 )
 from archy.install.merge import render_json_mcp, strip_json_mcp
@@ -30,7 +31,7 @@ class CursorAdapter(AgentAdapter):
 
     def _root(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
-            return (project_root or Path.cwd()) / ".cursor"
+            return local_root(project_root) / ".cursor"
         return paths.home() / ".cursor"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
