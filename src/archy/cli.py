@@ -847,6 +847,109 @@ def install(
     click.echo("Restart your agent client(s) to pick up the archy MCP server.")
 
 
+@main.command()
+@click.option(
+    "--target",
+    default="auto",
+    show_default=True,
+    metavar="auto|all|<id>[,<id>...]",
+    help="Which agents to clean up: auto-detected, all, or a comma list of ids.",
+)
+@click.option(
+    "--location",
+    type=click.Choice(["global", "local"]),
+    default="global",
+    show_default=True,
+    help="Remove from every project (global) or just this one (local).",
+)
+@click.option(
+    "--project-root",
+    type=click.Path(file_okay=False, path_type=Path),
+    default=None,
+    help="Project root for --location=local removals (defaults to the cwd).",
+)
+@click.option("--yes", "-y", is_flag=True, help="Skip the confirmation prompt.")
+@click.option(
+    "--no-permissions",
+    is_flag=True,
+    help="Leave Claude's permission allowlist untouched.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Show what would be removed or stripped, then exit without changing anything.",
+)
+def uninstall(
+    target: str,
+    location: str,
+    project_root: Path | None,
+    yes: bool,
+    no_permissions: bool,
+    dry_run: bool,
+) -> None:
+    """Remove archy from your AI coding agents.
+
+    The inverse of `archy install`: strips archy's MCP stanza, permission
+    entries, and instruction block from each client's config (leaving the rest
+    untouched) and deletes the files archy owns outright. Idempotent.
+    """
+    from archy.install import (
+        InstallError,
+        Scope,
+        detect_all,
+        resolve_targets,
+        run_uninstall,
+    )
+    from archy.install.writer import DryRunWriteSystem
+
+    scope = Scope.LOCAL if location == "local" else Scope.GLOBAL
+    seed_permissions = not no_permissions
+
+    try:
+        adapters = resolve_targets(target)
+
+        if dry_run:
+            ws = DryRunWriteSystem()
+            run_uninstall(
+                adapters,
+                scope,
+                project_root=project_root,
+                seed_permissions=seed_permissions,
+                write_system=ws,
+            )
+            for path in ws.removed:
+                click.echo(f"delete {path}")
+            for record in ws.records:
+                click.echo(f"strip  {record.path}")
+            if not ws.removed and not ws.records:
+                click.echo("Nothing to remove; archy is not installed for these targets.")
+            return
+
+        if not yes:
+            detected = {d.adapter.id for d in detect_all() if d.detected}
+            click.echo(f"archy will be removed from ({location}):")
+            for adapter in adapters:
+                mark = "detected" if adapter.id in detected else "not detected"
+                click.echo(f"  - {adapter.name} ({adapter.id}, {mark})")
+            if not click.confirm("Proceed?", default=True):
+                click.echo("Aborted.")
+                return
+
+        result = run_uninstall(
+            adapters,
+            scope,
+            project_root=project_root,
+            seed_permissions=seed_permissions,
+        )
+    except InstallError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    touched = result.all_paths()
+    click.echo(f"Cleaned up {len(touched)} file(s):")
+    for path in touched:
+        click.echo(f"  {path}")
+
+
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     g = build_graph(path, **_graph_kwargs(path))
     if internal_only:

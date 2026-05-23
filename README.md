@@ -34,7 +34,7 @@ archy mcp             # expose 16 tools to Claude Code, Cursor, any MCP client
 | Refactor priority | `archy hotspots` (CC x git churn) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | MCP server | `archy mcp` |
-| Agent install | `archy install` (auto-detects Claude Code, Cursor, Codex, opencode, Continue and wires in the MCP server) |
+| Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue; wire in or cleanly remove the MCP server) |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
 
@@ -74,6 +74,8 @@ pip install archy
 # or: uv tool install archy
 # or: pipx install archy
 ```
+
+Using archy as an MCP server inside an AI coding agent? Skip the manual config and run `uvx archy install` to wire it into Claude Code, Cursor, Codex, opencode, or Continue automatically. See [`docs/INSTALL.md`](docs/INSTALL.md).
 
 All examples below use the installed `archy` command. If you're working from a checkout, prefix them with `uv run` (e.g. `uv run archy graph .`).
 
@@ -257,87 +259,18 @@ archy mcp
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
-#### One command: `archy install`
+#### Wiring it into your agents
 
-The fastest path across every supported client. `archy install` detects which agents are present on the machine, writes each one's MCP config in its own format, drops the rules/instructions file each expects, and (for Claude Code) seeds the `permissions.allow` snippet shown below. Re-running is idempotent and unrelated config is preserved.
-
-```bash
-uvx archy install                 # detect installed agents, confirm, wire them all
-uvx archy install --target cursor,codex --yes   # non-interactive, specific clients
-uvx archy install --location local              # configure just this project
-uvx archy install --print-config claude         # preview what would be written, write nothing
-```
-
-Supported clients and what each receives:
-
-| Client | MCP config (global / local) | Instructions | Permissions |
-|---|---|---|---|
-| Claude Code | `~/.claude.json` / `<project>/.mcp.json` | `CLAUDE.md` | `settings.json` allowlist (seeded) |
-| Cursor | `~/.cursor/mcp.json` / `<project>/.cursor/mcp.json` | `.cursor/rules/archy.mdc` | n/a |
-| Codex CLI | `~/.codex/config.toml` / `<project>/.codex/config.toml` | `AGENTS.md` | n/a |
-| opencode | `~/.config/opencode/opencode.json` / `<project>/opencode.json` | `AGENTS.md` | n/a |
-| Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` | `.continue/rules/archy.md` | n/a |
-
-If the Claude Code plugin (below) is already installed, `archy install` detects it and skips re-registering the MCP server, only seeding the permission allowlist the plugin can't write itself. Adding a new client is one small adapter in `src/archy/install/adapters/`; the design and cross-OS detection strategy are in [`docs/SPEC_INDEX_AND_INSTALL.md`](docs/SPEC_INDEX_AND_INSTALL.md) Part 4.
-
-#### Claude Code: install as a plugin
-
-The fastest path on Claude Code is the bundled plugin at [`plugins/claude/`](plugins/claude/). It registers the MCP server (via `uvx archy mcp` so users without a global archy install still get the tools) and ships the canonical `archy` skill so the agent knows when and how to call each tool. Local install from a checkout:
+One command detects your installed clients (Claude Code, Cursor, Codex CLI, opencode, Continue) and wires each one up:
 
 ```bash
-claude --plugin-dir /path/to/archy/plugins/claude
+uvx archy install        # detect, confirm, register the MCP server in each client
+uvx archy uninstall      # the exact inverse; --dry-run to preview
 ```
 
-Restart Claude Code after installing for the MCP server to be picked up. A marketplace listing will land later; until then, the `--plugin-dir` route is the supported install.
+This registers the `uvx archy mcp` server, drops a short rules file so the agent knows when to call the tools, and (on Claude Code) seeds the `permissions.allow` allowlist. It does not install a binary or the Claude plugin. The full guide, including the per-client path matrix, the manual stanza for unknown clients, plugin-vs-installer guidance, and troubleshooting, is in **[`docs/INSTALL.md`](docs/INSTALL.md)**.
 
-Optional: paste the snippet below into `~/.claude/settings.json` to skip the per-tool approval prompt the first time each `archy_*` tool is called. The plugin manifest cannot seed this directly (current Claude Code plugin constraint, May 2026):
-
-```json
-{
-  "permissions": {
-    "allow": [
-      "mcp__archy__archy_score",
-      "mcp__archy__archy_cycles",
-      "mcp__archy__archy_check",
-      "mcp__archy__archy_contracts",
-      "mcp__archy__archy_trend",
-      "mcp__archy__archy_impact",
-      "mcp__archy__archy_affected",
-      "mcp__archy__archy_snapshot",
-      "mcp__archy__archy_diff",
-      "mcp__archy__archy_record_baseline",
-      "mcp__archy__archy_graph_focus",
-      "mcp__archy__archy_graph_summary",
-      "mcp__archy__archy_graph",
-      "mcp__archy__archy_high_risk_modules",
-      "mcp__archy__archy_hotspots",
-      "mcp__archy__archy_dsm"
-    ]
-  }
-}
-```
-
-#### Any other MCP client: manual stanza
-
-Wire it into Cursor, Windsurf, OpenCode, or any MCP client with this stanza in your config:
-
-```json
-{
-  "mcpServers": {
-    "archy": { "command": "archy", "args": ["mcp"] }
-  }
-}
-```
-
-If you're running from a checkout instead of an install, use:
-
-```json
-{
-  "mcpServers": {
-    "archy": { "command": "uv", "args": ["run", "archy", "mcp"] }
-  }
-}
-```
+The lowest-friction path specifically on Claude Code is the bundled plugin at [`plugins/claude/`](plugins/claude/) (`claude --plugin-dir /path/to/archy/plugins/claude`); see [`docs/INSTALL.md`](docs/INSTALL.md#plugin-vs-installer-which-should-i-use) for when to prefer it over the installer.
 
 ### Regression-gate semantics
 

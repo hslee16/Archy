@@ -156,3 +156,53 @@ def render_toml_mcp(existing: str | None) -> str:
         "args": list(MCP_ARGS),
     }
     return tomli_w.dumps(data)
+
+
+# --- inverse operations (uninstall) ---------------------------------------
+# Each strip_* is the inverse of the matching render_* above: it removes only
+# archy's contribution and leaves everything else byte-for-byte. They are
+# idempotent (stripping an already-clean config is a no-op) and never delete the
+# file; deleting archy-owned files (Continue's block, the .mdc/.md rule files) is
+# the adapter's job via the dedicated delete action.
+
+
+def _drop_server(obj: JsonObj, table_key: str) -> None:
+    """Remove ``archy`` from ``obj[table_key]`` if both the table and key exist."""
+    table = obj.get(table_key)
+    if isinstance(table, dict):
+        cast(JsonObj, table).pop(SERVER_KEY, None)
+
+
+def strip_json_mcp(existing: str | None, *, servers_key: str = "mcpServers") -> str:
+    """Inverse of :func:`render_json_mcp`: drop the archy server, keep the rest."""
+    obj = _load_json_obj(existing)
+    _drop_server(obj, servers_key)
+    return _dump_json(obj)
+
+
+def strip_opencode_mcp(existing: str | None) -> str:
+    """Inverse of :func:`render_opencode_mcp`."""
+    obj = _load_json_obj(existing)
+    _drop_server(obj, "mcp")
+    return _dump_json(obj)
+
+
+def strip_toml_mcp(existing: str | None) -> str:
+    """Inverse of :func:`render_toml_mcp`."""
+    data: JsonObj = cast(JsonObj, tomllib.loads(existing)) if existing and existing.strip() else {}
+    _drop_server(data, "mcp_servers")
+    return tomli_w.dumps(data)
+
+
+def strip_claude_permissions(existing: str | None) -> str:
+    """Inverse of :func:`render_claude_permissions`: drop only archy's patterns."""
+    obj = _load_json_obj(existing)
+    permissions = obj.get("permissions")
+    if isinstance(permissions, dict):
+        allow = cast(JsonObj, permissions).get("allow")
+        if isinstance(allow, list):
+            archy = set(permission_patterns())
+            cast(JsonObj, permissions)["allow"] = [
+                p for p in cast(list[object], allow) if p not in archy
+            ]
+    return _dump_json(obj)

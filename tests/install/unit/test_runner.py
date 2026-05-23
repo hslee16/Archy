@@ -12,6 +12,7 @@ from archy.install.runner import (
     print_config,
     resolve_targets,
     run_install,
+    run_uninstall,
 )
 from archy.install.writer import DryRunWriteSystem, InstallError
 
@@ -90,3 +91,13 @@ def test_print_config_returns_paths_and_content(simulate_os):
     names = [p.name for p, _ in files]
     assert "config.toml" in names
     assert "AGENTS.md" in names
+
+
+def test_run_uninstall_on_clean_machine_touches_nothing(simulate_os):
+    # Empty fake home: nothing archy ever wrote, so uninstall is a no-op.
+    simulate_os("linux")
+    ws = DryRunWriteSystem()
+    result = run_uninstall(resolve_targets("all"), Scope.GLOBAL, write_system=ws)
+    assert result.all_paths() == []
+    assert ws.removed == []
+    assert ws.records == []

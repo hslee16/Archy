@@ -13,7 +13,10 @@ from archy.install.base import (
     FileAction,
     Scope,
     apply_plan,
+    apply_uninstall,
+    delete_file,
     instructions_block,
+    remove_instructions,
     upsert_instructions,
 )
 from archy.install.writer import DryRunWriteSystem
@@ -58,8 +61,12 @@ def test_upsert_recovers_from_truncated_block():
 def test_apply_plan_routes_renders_through_write_system():
     ws = DryRunWriteSystem()
     plan = [
-        FileAction(path=Path("/a/x.json"), kind="mcp", render=lambda _e: "X"),
-        FileAction(path=Path("/a/y.md"), kind="instructions", render=lambda _e: "Y"),
+        FileAction(
+            path=Path("/a/x.json"), kind="mcp", render=lambda _e: "X", unrender=lambda _e: ""
+        ),
+        FileAction(
+            path=Path("/a/y.md"), kind="instructions", render=lambda _e: "Y", unrender=delete_file
+        ),
     ]
     written = apply_plan(plan, ws)
     assert written == [Path("/a/x.json"), Path("/a/y.md")]
@@ -67,6 +74,41 @@ def test_apply_plan_routes_renders_through_write_system():
         (Path("/a/x.json"), "X"),
         (Path("/a/y.md"), "Y"),
     ]
+
+
+def test_remove_instructions_strips_block_and_keeps_user_content():
+    existing = f"# mine\n\n{INSTRUCTIONS_BEGIN}\nbody\n{INSTRUCTIONS_END}\n"
+    out = remove_instructions(existing)
+    assert out is not None
+    assert INSTRUCTIONS_BEGIN not in out
+    assert out.startswith("# mine")
+
+
+def test_remove_instructions_returns_none_when_only_block_remains():
+    assert remove_instructions(upsert_instructions(None)) is None
+
+
+def test_remove_instructions_idempotent_on_clean_file():
+    assert remove_instructions("# just mine\n") == "# just mine\n"
+
+
+def test_apply_uninstall_strips_existing_and_deletes_owned(tmp_path):
+    shared = tmp_path / "shared.txt"
+    owned = tmp_path / "owned.txt"
+    absent = tmp_path / "absent.txt"
+    shared.write_text("keep+archy", encoding="utf-8")
+    owned.write_text("archy only", encoding="utf-8")
+    ws = DryRunWriteSystem()
+    plan = [
+        FileAction(path=shared, kind="mcp", render=lambda _e: "x", unrender=lambda _e: "keep"),
+        FileAction(path=owned, kind="mcp", render=lambda _e: "x", unrender=delete_file),
+        FileAction(path=absent, kind="mcp", render=lambda _e: "x", unrender=delete_file),
+    ]
+    touched = apply_uninstall(plan, ws)
+    # absent file is skipped (idempotent); shared is stripped, owned is deleted.
+    assert touched == [shared, owned]
+    assert [(r.path, r.content) for r in ws.records] == [(shared, "keep")]
+    assert ws.removed == [owned]
 
 
 class _Probe(AgentAdapter):

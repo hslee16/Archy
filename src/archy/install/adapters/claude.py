@@ -23,9 +23,15 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    remove_instructions,
     upsert_instructions,
 )
-from archy.install.merge import render_claude_permissions, render_json_mcp
+from archy.install.merge import (
+    render_claude_permissions,
+    render_json_mcp,
+    strip_claude_permissions,
+    strip_json_mcp,
+)
 
 
 class ClaudeAdapter(AgentAdapter):
@@ -106,6 +112,7 @@ class ClaudeAdapter(AgentAdapter):
                     path=self.config_paths(scope, project_root)[0],
                     kind="mcp",
                     render=render_json_mcp,
+                    unrender=strip_json_mcp,
                 )
             )
             actions.append(
@@ -113,6 +120,7 @@ class ClaudeAdapter(AgentAdapter):
                     path=self._instructions_path(scope, project_root),
                     kind="instructions",
                     render=upsert_instructions,
+                    unrender=remove_instructions,
                 )
             )
         if seed_permissions:
@@ -121,6 +129,7 @@ class ClaudeAdapter(AgentAdapter):
                     path=self._permissions_path(scope, project_root),
                     kind="permissions",
                     render=render_claude_permissions,
+                    unrender=strip_claude_permissions,
                 )
             )
         return actions

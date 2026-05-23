@@ -19,9 +19,10 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    remove_instructions,
     upsert_instructions,
 )
-from archy.install.merge import render_opencode_mcp
+from archy.install.merge import render_opencode_mcp, strip_opencode_mcp
 
 
 class OpencodeAdapter(AgentAdapter):
@@ -56,10 +57,12 @@ class OpencodeAdapter(AgentAdapter):
                 path=root / "opencode.json",
                 kind="mcp",
                 render=render_opencode_mcp,
+                unrender=strip_opencode_mcp,
             ),
             FileAction(
                 path=root / "AGENTS.md",
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=remove_instructions,
             ),
         ]

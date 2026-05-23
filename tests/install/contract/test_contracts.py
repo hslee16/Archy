@@ -88,3 +88,50 @@ def test_instruction_file_is_nonempty_text(adapter_id, simulate_os):
     instruction_files = [c for name, c in files.items() if name in rule_names]
     assert instruction_files, f"{adapter_id} emitted no instruction file"
     assert all("archy" in c for c in instruction_files)
+
+
+def _strip_each(adapter_id: str, simulate_os, scope: Scope = Scope.GLOBAL) -> dict[str, str]:
+    """Render then unrender each action; map basename -> stripped content.
+
+    Only actions that produce content (not file deletions) are returned, so this
+    covers the shared configs whose strip output must still parse.
+    """
+    fake = simulate_os("linux")
+    adapter = get_adapter(adapter_id)
+    out: dict[str, str] = {}
+    for action in adapter.plan(scope, project_root=fake.home / "proj", seed_permissions=True):
+        stripped = action.unrender(action.render(None))
+        if stripped is not None:
+            out[action.path.name] = stripped
+    return out
+
+
+def test_stripped_claude_configs_parse_without_archy(simulate_os):
+    files = _strip_each("claude", simulate_os)
+    assert "archy" not in json.loads(files[".claude.json"]).get("mcpServers", {})
+    allow = json.loads(files["settings.json"])["permissions"]["allow"]
+    assert not any(p in allow for p in permission_patterns())
+
+
+def test_stripped_cursor_config_parses_without_archy(simulate_os):
+    files = _strip_each("cursor", simulate_os)
+    assert "archy" not in json.loads(files["mcp.json"]).get("mcpServers", {})
+
+
+def test_stripped_codex_config_parses_without_archy(simulate_os):
+    files = _strip_each("codex", simulate_os)
+    assert "archy" not in tomllib.loads(files["config.toml"]).get("mcp_servers", {})
+
+
+def test_stripped_opencode_config_parses_without_archy(simulate_os):
+    files = _strip_each("opencode", simulate_os)
+    assert "archy" not in json.loads(files["opencode.json"]).get("mcp", {})
+
+
+def test_continue_owned_files_are_deleted_not_stripped(simulate_os):
+    # Continue's files are archy-owned: uninstall deletes them, so unrender
+    # returns None for every action (nothing left to parse).
+    fake = simulate_os("linux")
+    adapter = get_adapter("continue")
+    plan = adapter.plan(Scope.GLOBAL, project_root=fake.home / "proj")
+    assert all(a.unrender(a.render(None)) is None for a in plan)

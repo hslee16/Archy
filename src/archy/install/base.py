@@ -118,6 +118,36 @@ def upsert_instructions(existing: str | None) -> str:
     return f"{existing[:start]}{block}{tail}"
 
 
+def remove_instructions(existing: str | None) -> str | None:
+    """Inverse of :func:`upsert_instructions`: drop only the archy block.
+
+    Returns the file content with the marker-fenced block removed, preserving
+    everything the user wrote around it. Returns ``None`` (signalling "delete the
+    file") when nothing but the archy block remains, since in that case archy is
+    the only reason the file exists. Idempotent and a no-op if no block present.
+    """
+    if not existing:
+        return None
+    start = existing.find(INSTRUCTIONS_BEGIN)
+    if start == -1:
+        return existing
+    end = existing.find(INSTRUCTIONS_END, start)
+    if end == -1:
+        remainder = existing[:start]  # truncated block: cut from the marker on
+    else:
+        end += len(INSTRUCTIONS_END)
+        tail = existing[end:]
+        if tail.startswith("\n"):
+            tail = tail[1:]
+        remainder = existing[:start] + tail
+    return None if not remainder.strip() else remainder
+
+
+def delete_file(_existing: str | None) -> None:
+    """Unrender for files archy owns outright: always remove them on uninstall."""
+    return None
+
+
 class Scope(str, Enum):
     """Where config is written: every project, or just this one."""
 
@@ -126,10 +156,14 @@ class Scope(str, Enum):
 
 
 class FileAction(BaseModel):
-    """One file the installer will write, as a pure render over its current text.
+    """One file archy manages, as paired pure functions over its current text.
 
-    ``render`` takes the file's existing content (``None`` if absent) and returns
-    the full new content. ``kind`` is one of ``mcp`` / ``instructions`` /
+    ``render`` (install) takes the file's existing content (``None`` if absent)
+    and returns the full new content. ``unrender`` (uninstall) takes the existing
+    content and returns either the content with archy's part removed, or ``None``
+    to delete the file (used for files archy owns outright). Pairing both
+    directions on one object keeps install and uninstall symmetric per file, so a
+    new adapter declares both at once. ``kind`` is ``mcp`` / ``instructions`` /
     ``permissions`` for reporting and selective skipping.
     """
 
@@ -138,6 +172,7 @@ class FileAction(BaseModel):
     path: Path
     kind: str
     render: Callable[[str | None], str]
+    unrender: Callable[[str | None], str | None]
 
 
 class AgentAdapter(ABC):
@@ -212,3 +247,24 @@ def apply_plan(plan: list[FileAction], write_system: WriteSystem) -> list[Path]:
         write_system.write_text(action.path, action.render(existing))
         written.append(action.path)
     return written
+
+
+def apply_uninstall(plan: list[FileAction], write_system: WriteSystem) -> list[Path]:
+    """Run each action's ``unrender`` in reverse: strip archy or delete the file.
+
+    A file that does not exist is skipped (uninstall is idempotent). When
+    ``unrender`` returns ``None`` the file is removed; otherwise the stripped
+    content is written back. Returns the paths actually touched.
+    """
+    touched: list[Path] = []
+    for action in plan:
+        existing = write_system.read_text(action.path)
+        if existing is None:
+            continue
+        result = action.unrender(existing)
+        if result is None:
+            write_system.remove(action.path)
+        else:
+            write_system.write_text(action.path, result)
+        touched.append(action.path)
+    return touched

@@ -50,6 +50,10 @@ class WriteSystem(Protocol):
 
     def write_text(self, path: Path, content: str) -> None: ...
 
+    def remove(self, path: Path) -> None:
+        """Delete the file. A missing file is a no-op (uninstall is idempotent)."""
+        ...
+
 
 def _read_text(path: Path) -> str | None:
     try:
@@ -60,15 +64,23 @@ def _read_text(path: Path) -> str | None:
 
 @dataclass
 class RealWriteSystem:
-    """Atomic, real-filesystem writes. Tracks written paths for reporting."""
+    """Atomic, real-filesystem writes. Tracks written and removed paths."""
 
     written: list[Path] = field(default_factory=list)
+    removed: list[Path] = field(default_factory=list)
 
     def read_text(self, path: Path) -> str | None:
         return _read_text(path)
 
     def exists(self, path: Path) -> bool:
         return path.exists()
+
+    def remove(self, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
+        self.removed.append(path)
 
     def write_text(self, path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -99,9 +111,10 @@ class RealWriteSystem:
 
 @dataclass
 class DryRunWriteSystem:
-    """Reads the real filesystem; captures writes instead of performing them."""
+    """Reads the real filesystem; captures writes and removals, performs neither."""
 
     records: list[WriteRecord] = field(default_factory=list)
+    removed: list[Path] = field(default_factory=list)
 
     def read_text(self, path: Path) -> str | None:
         return _read_text(path)
@@ -111,3 +124,6 @@ class DryRunWriteSystem:
 
     def write_text(self, path: Path, content: str) -> None:
         self.records.append(WriteRecord(path=path, content=content))
+
+    def remove(self, path: Path) -> None:
+        self.removed.append(path)

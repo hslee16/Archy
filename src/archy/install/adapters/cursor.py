@@ -17,9 +17,10 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    delete_file,
     upsert_instructions,
 )
-from archy.install.merge import render_json_mcp
+from archy.install.merge import render_json_mcp, strip_json_mcp
 
 
 class CursorAdapter(AgentAdapter):
@@ -59,10 +60,16 @@ class CursorAdapter(AgentAdapter):
     ) -> list[FileAction]:
         root = self._root(scope, project_root)
         return [
-            FileAction(path=root / "mcp.json", kind="mcp", render=render_json_mcp),
+            FileAction(
+                path=root / "mcp.json",
+                kind="mcp",
+                render=render_json_mcp,
+                unrender=strip_json_mcp,
+            ),
             FileAction(
                 path=root / "rules" / "archy.mdc",
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=delete_file,
             ),
         ]

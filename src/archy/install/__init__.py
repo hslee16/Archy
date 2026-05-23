@@ -19,6 +19,7 @@ from archy.install.runner import (
     print_config,
     resolve_targets,
     run_install,
+    run_uninstall,
 )
 from archy.install.writer import InstallError
 
@@ -36,4 +37,5 @@ __all__ = [
     "print_config",
     "resolve_targets",
     "run_install",
+    "run_uninstall",
 ]

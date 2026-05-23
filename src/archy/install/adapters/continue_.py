@@ -21,6 +21,7 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    delete_file,
     upsert_instructions,
 )
 from archy.install.merge import render_continue_yaml
@@ -63,10 +64,12 @@ class ContinueAdapter(AgentAdapter):
                 path=root / "mcpServers" / "archy.yaml",
                 kind="mcp",
                 render=render_continue_yaml,
+                unrender=delete_file,
             ),
             FileAction(
                 path=root / "rules" / "archy.md",
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=delete_file,
             ),
         ]

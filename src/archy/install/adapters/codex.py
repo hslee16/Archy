@@ -18,9 +18,10 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    remove_instructions,
     upsert_instructions,
 )
-from archy.install.merge import render_toml_mcp
+from archy.install.merge import render_toml_mcp, strip_toml_mcp
 
 
 class CodexAdapter(AgentAdapter):
@@ -63,10 +64,12 @@ class CodexAdapter(AgentAdapter):
                 path=self.config_paths(scope, project_root)[0],
                 kind="mcp",
                 render=render_toml_mcp,
+                unrender=strip_toml_mcp,
             ),
             FileAction(
                 path=self._instructions_path(scope, project_root),
                 kind="instructions",
                 render=upsert_instructions,
+                unrender=remove_instructions,
             ),
         ]
