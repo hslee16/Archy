@@ -312,3 +312,22 @@ equality:    0.476  (Gini=0.524)
 archy outscores every library in the benchmark above, mostly because it has zero cycles (the layer rules block them in CI) and a shallow dependency tree. Equality is the weakest axis: `archy.cli` aggregates all user-facing surfaces and naturally has higher fan-out than the modules below it. Expected for a CLI app.
 
 For the design-side comparison with sentrux's quality-signal model, see [`docs/LEARNINGS.md`](LEARNINGS.md#v020---score-comparison-with-sentrux).
+
+## Large real-world repos (v0.27.0)
+
+A validation pass on three large, widely-used codebases (the same trees used for the persistent-index benchmark), run with the v0.27.0 scorer. The point is not the leaderboard; it is that archy finds *real* structural issues in heavily-reviewed, production code that per-file review does not track.
+
+| Repo | Modules | Edges (internal) | Overall | Acyclicity | Cycles found | Max depth | cc_max |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Django | 2,910 | 9,602 | 0.556 | 0.922 | 17 | 24 | 94 |
+| pytorch | 4,488 | 27,192 | 0.536 | 0.699 | 22 | 21 | 201 |
+
+(Home Assistant, ~17.3k modules / ~142k edges, is in the index perf benchmark; its project-wide `propagation_cost` is expensive enough at that scale that scoring is a multi-second operation, which is itself the motivation for the assembled-graph-blob follow-up noted in [`FUTURE.md`](FUTURE.md).)
+
+What this shows:
+
+- **archy surfaces real import cycles in both** (Django 17, pytorch 22). These are tangles in code that thousands of developers review; they are invisible to a per-file diff review because a cycle is a whole-graph property. pytorch's acyclicity of 0.70 quantifies a materially more tangled import graph than Django's 0.92.
+- **It localizes extreme complexity hotspots**: pytorch has a function with cyclomatic complexity **201** (`cc_max`), the kind of "edit at your peril" site `archy_hotspots` and `archy_high_risk_modules` are built to flag before an agent touches it.
+- **The numbers are stable and comparable** because the cache-backed build is byte-identical to a cold build (see the persistent-index work), so these can be re-run in CI on every commit to trend architecture erosion over time.
+
+This is the mission in one table: a single per-commit number plus a short list of concrete, agent-actionable structural findings, on codebases far too large to hold in any review (or context window) at once.
