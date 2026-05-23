@@ -34,6 +34,7 @@ archy mcp             # expose 16 tools to Claude Code, Cursor, any MCP client
 | Refactor priority | `archy hotspots` (CC x git churn) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | MCP server | `archy mcp` |
+| Agent install | `archy install` (auto-detects Claude Code, Cursor, Codex, opencode, Continue and wires in the MCP server) |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
 
@@ -255,6 +256,29 @@ archy mcp
 | `archy_dsm` | Design Structure Matrix view of the import graph. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md). |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
+
+#### One command: `archy install`
+
+The fastest path across every supported client. `archy install` detects which agents are present on the machine, writes each one's MCP config in its own format, drops the rules/instructions file each expects, and (for Claude Code) seeds the `permissions.allow` snippet shown below. Re-running is idempotent and unrelated config is preserved.
+
+```bash
+uvx archy install                 # detect installed agents, confirm, wire them all
+uvx archy install --target cursor,codex --yes   # non-interactive, specific clients
+uvx archy install --location local              # configure just this project
+uvx archy install --print-config claude         # preview what would be written, write nothing
+```
+
+Supported clients and what each receives:
+
+| Client | MCP config (global / local) | Instructions | Permissions |
+|---|---|---|---|
+| Claude Code | `~/.claude.json` / `<project>/.mcp.json` | `CLAUDE.md` | `settings.json` allowlist (seeded) |
+| Cursor | `~/.cursor/mcp.json` / `<project>/.cursor/mcp.json` | `.cursor/rules/archy.mdc` | n/a |
+| Codex CLI | `~/.codex/config.toml` / `<project>/.codex/config.toml` | `AGENTS.md` | n/a |
+| opencode | `~/.config/opencode/opencode.json` / `<project>/opencode.json` | `AGENTS.md` | n/a |
+| Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` | `.continue/rules/archy.md` | n/a |
+
+If the Claude Code plugin (below) is already installed, `archy install` detects it and skips re-registering the MCP server, only seeding the permission allowlist the plugin can't write itself. Adding a new client is one small adapter in `src/archy/install/adapters/`; the design and cross-OS detection strategy are in [`docs/SPEC_INDEX_AND_INSTALL.md`](docs/SPEC_INDEX_AND_INSTALL.md) Part 4.
 
 #### Claude Code: install as a plugin
 

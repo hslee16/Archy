@@ -28,6 +28,12 @@ dependencies = [
     # Pydantic is already pulled in transitively by `mcp`; declared
     # explicitly because all archy value types are pydantic models.
     "pydantic>=2.0",
+    # `archy install` writes Codex's `~/.codex/config.toml`. There is no
+    # stdlib TOML *writer*, so `tomli-w` is a hard runtime dep. Reading an
+    # existing config to merge into uses stdlib `tomllib` on 3.11+ and the
+    # `tomli` backport on 3.10 (archy's floor).
+    "tomli-w>=1.0",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.optional-dependencies]
@@ -54,6 +60,15 @@ dev = [
     "ruff>=0.6",
     "ty>=0.0.1a1",
     "import-linter>=2.11,<2.12",
+    # `tomli` is a *runtime* dep only on 3.10 (see [project] markers), but the
+    # type checker assumes the 3.10 floor on every interpreter, so it must be
+    # importable in the dev env regardless of the local Python version.
+    "tomli>=2.0",
+    # Snapshot tests for the installer's emitted config (layer 2 of
+    # docs/SPEC_INSTALL_TESTING.md). Writers are pure functions of
+    # (scope, paths), so all three OSes are snapshotted from one Linux
+    # runner by parameterizing the path roots.
+    "syrupy>=4.0",
 ]
 # Optional group that pulls in numpy/scipy so the PageRank parity test in
 # tests/test_mcp.py can compare our hand-rolled `_pagerank` against

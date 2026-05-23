@@ -1,0 +1,1267 @@
+# serializer version: 1
+# name: test_emitted_config_snapshot[claude-global-darwin]
+  dict({
+    '<HOME>/.claude.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/.claude/CLAUDE.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.claude/settings.json': '''
+      {
+        "permissions": {
+          "allow": [
+            "mcp__archy__archy_score",
+            "mcp__archy__archy_cycles",
+            "mcp__archy__archy_check",
+            "mcp__archy__archy_contracts",
+            "mcp__archy__archy_trend",
+            "mcp__archy__archy_impact",
+            "mcp__archy__archy_affected",
+            "mcp__archy__archy_snapshot",
+            "mcp__archy__archy_diff",
+            "mcp__archy__archy_record_baseline",
+            "mcp__archy__archy_graph_focus",
+            "mcp__archy__archy_graph_summary",
+            "mcp__archy__archy_graph",
+            "mcp__archy__archy_high_risk_modules",
+            "mcp__archy__archy_hotspots",
+            "mcp__archy__archy_dsm"
+          ]
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[claude-global-linux]
+  dict({
+    '<HOME>/.claude.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/.claude/CLAUDE.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.claude/settings.json': '''
+      {
+        "permissions": {
+          "allow": [
+            "mcp__archy__archy_score",
+            "mcp__archy__archy_cycles",
+            "mcp__archy__archy_check",
+            "mcp__archy__archy_contracts",
+            "mcp__archy__archy_trend",
+            "mcp__archy__archy_impact",
+            "mcp__archy__archy_affected",
+            "mcp__archy__archy_snapshot",
+            "mcp__archy__archy_diff",
+            "mcp__archy__archy_record_baseline",
+            "mcp__archy__archy_graph_focus",
+            "mcp__archy__archy_graph_summary",
+            "mcp__archy__archy_graph",
+            "mcp__archy__archy_high_risk_modules",
+            "mcp__archy__archy_hotspots",
+            "mcp__archy__archy_dsm"
+          ]
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[claude-global-win32]
+  dict({
+    '<HOME>/.claude.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/.claude/CLAUDE.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.claude/settings.json': '''
+      {
+        "permissions": {
+          "allow": [
+            "mcp__archy__archy_score",
+            "mcp__archy__archy_cycles",
+            "mcp__archy__archy_check",
+            "mcp__archy__archy_contracts",
+            "mcp__archy__archy_trend",
+            "mcp__archy__archy_impact",
+            "mcp__archy__archy_affected",
+            "mcp__archy__archy_snapshot",
+            "mcp__archy__archy_diff",
+            "mcp__archy__archy_record_baseline",
+            "mcp__archy__archy_graph_focus",
+            "mcp__archy__archy_graph_summary",
+            "mcp__archy__archy_graph",
+            "mcp__archy__archy_high_risk_modules",
+            "mcp__archy__archy_hotspots",
+            "mcp__archy__archy_dsm"
+          ]
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[claude-local-darwin]
+  dict({
+    '<HOME>/myproject/.claude/settings.json': '''
+      {
+        "permissions": {
+          "allow": [
+            "mcp__archy__archy_score",
+            "mcp__archy__archy_cycles",
+            "mcp__archy__archy_check",
+            "mcp__archy__archy_contracts",
+            "mcp__archy__archy_trend",
+            "mcp__archy__archy_impact",
+            "mcp__archy__archy_affected",
+            "mcp__archy__archy_snapshot",
+            "mcp__archy__archy_diff",
+            "mcp__archy__archy_record_baseline",
+            "mcp__archy__archy_graph_focus",
+            "mcp__archy__archy_graph_summary",
+            "mcp__archy__archy_graph",
+            "mcp__archy__archy_high_risk_modules",
+            "mcp__archy__archy_hotspots",
+            "mcp__archy__archy_dsm"
+          ]
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/.mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/CLAUDE.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[claude-local-linux]
+  dict({
+    '<HOME>/myproject/.claude/settings.json': '''
+      {
+        "permissions": {
+          "allow": [
+            "mcp__archy__archy_score",
+            "mcp__archy__archy_cycles",
+            "mcp__archy__archy_check",
+            "mcp__archy__archy_contracts",
+            "mcp__archy__archy_trend",
+            "mcp__archy__archy_impact",
+            "mcp__archy__archy_affected",
+            "mcp__archy__archy_snapshot",
+            "mcp__archy__archy_diff",
+            "mcp__archy__archy_record_baseline",
+            "mcp__archy__archy_graph_focus",
+            "mcp__archy__archy_graph_summary",
+            "mcp__archy__archy_graph",
+            "mcp__archy__archy_high_risk_modules",
+            "mcp__archy__archy_hotspots",
+            "mcp__archy__archy_dsm"
+          ]
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/.mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/CLAUDE.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[claude-local-win32]
+  dict({
+    '<HOME>/myproject/.claude/settings.json': '''
+      {
+        "permissions": {
+          "allow": [
+            "mcp__archy__archy_score",
+            "mcp__archy__archy_cycles",
+            "mcp__archy__archy_check",
+            "mcp__archy__archy_contracts",
+            "mcp__archy__archy_trend",
+            "mcp__archy__archy_impact",
+            "mcp__archy__archy_affected",
+            "mcp__archy__archy_snapshot",
+            "mcp__archy__archy_diff",
+            "mcp__archy__archy_record_baseline",
+            "mcp__archy__archy_graph_focus",
+            "mcp__archy__archy_graph_summary",
+            "mcp__archy__archy_graph",
+            "mcp__archy__archy_high_risk_modules",
+            "mcp__archy__archy_hotspots",
+            "mcp__archy__archy_dsm"
+          ]
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/.mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/CLAUDE.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[codex-global-darwin]
+  dict({
+    '<HOME>/.codex/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.codex/config.toml': '''
+      [mcp_servers.archy]
+      command = "uvx"
+      args = [
+          "archy",
+          "mcp",
+      ]
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[codex-global-linux]
+  dict({
+    '<HOME>/.codex/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.codex/config.toml': '''
+      [mcp_servers.archy]
+      command = "uvx"
+      args = [
+          "archy",
+          "mcp",
+      ]
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[codex-global-win32]
+  dict({
+    '<HOME>/.codex/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.codex/config.toml': '''
+      [mcp_servers.archy]
+      command = "uvx"
+      args = [
+          "archy",
+          "mcp",
+      ]
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[codex-local-darwin]
+  dict({
+    '<HOME>/myproject/.codex/config.toml': '''
+      [mcp_servers.archy]
+      command = "uvx"
+      args = [
+          "archy",
+          "mcp",
+      ]
+  
+    ''',
+    '<HOME>/myproject/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[codex-local-linux]
+  dict({
+    '<HOME>/myproject/.codex/config.toml': '''
+      [mcp_servers.archy]
+      command = "uvx"
+      args = [
+          "archy",
+          "mcp",
+      ]
+  
+    ''',
+    '<HOME>/myproject/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[codex-local-win32]
+  dict({
+    '<HOME>/myproject/.codex/config.toml': '''
+      [mcp_servers.archy]
+      command = "uvx"
+      args = [
+          "archy",
+          "mcp",
+      ]
+  
+    ''',
+    '<HOME>/myproject/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[continue-global-darwin]
+  dict({
+    '<HOME>/.continue/mcpServers/archy.yaml': '''
+      name: archy
+      version: 0.0.1
+      schema: v1
+      mcpServers:
+      - name: archy
+        type: stdio
+        command: uvx
+        args:
+        - archy
+        - mcp
+  
+    ''',
+    '<HOME>/.continue/rules/archy.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[continue-global-linux]
+  dict({
+    '<HOME>/.continue/mcpServers/archy.yaml': '''
+      name: archy
+      version: 0.0.1
+      schema: v1
+      mcpServers:
+      - name: archy
+        type: stdio
+        command: uvx
+        args:
+        - archy
+        - mcp
+  
+    ''',
+    '<HOME>/.continue/rules/archy.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[continue-global-win32]
+  dict({
+    '<HOME>/.continue/mcpServers/archy.yaml': '''
+      name: archy
+      version: 0.0.1
+      schema: v1
+      mcpServers:
+      - name: archy
+        type: stdio
+        command: uvx
+        args:
+        - archy
+        - mcp
+  
+    ''',
+    '<HOME>/.continue/rules/archy.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[continue-local-darwin]
+  dict({
+    '<HOME>/myproject/.continue/mcpServers/archy.yaml': '''
+      name: archy
+      version: 0.0.1
+      schema: v1
+      mcpServers:
+      - name: archy
+        type: stdio
+        command: uvx
+        args:
+        - archy
+        - mcp
+  
+    ''',
+    '<HOME>/myproject/.continue/rules/archy.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[continue-local-linux]
+  dict({
+    '<HOME>/myproject/.continue/mcpServers/archy.yaml': '''
+      name: archy
+      version: 0.0.1
+      schema: v1
+      mcpServers:
+      - name: archy
+        type: stdio
+        command: uvx
+        args:
+        - archy
+        - mcp
+  
+    ''',
+    '<HOME>/myproject/.continue/rules/archy.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[continue-local-win32]
+  dict({
+    '<HOME>/myproject/.continue/mcpServers/archy.yaml': '''
+      name: archy
+      version: 0.0.1
+      schema: v1
+      mcpServers:
+      - name: archy
+        type: stdio
+        command: uvx
+        args:
+        - archy
+        - mcp
+  
+    ''',
+    '<HOME>/myproject/.continue/rules/archy.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[cursor-global-darwin]
+  dict({
+    '<HOME>/.cursor/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[cursor-global-linux]
+  dict({
+    '<HOME>/.cursor/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[cursor-global-win32]
+  dict({
+    '<HOME>/.cursor/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[cursor-local-darwin]
+  dict({
+    '<HOME>/myproject/.cursor/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[cursor-local-linux]
+  dict({
+    '<HOME>/myproject/.cursor/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[cursor-local-win32]
+  dict({
+    '<HOME>/myproject/.cursor/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[opencode-global-darwin]
+  dict({
+    '<HOME>/.config/opencode/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.config/opencode/opencode.json': '''
+      {
+        "mcp": {
+          "archy": {
+            "type": "local",
+            "command": [
+              "uvx",
+              "archy",
+              "mcp"
+            ],
+            "enabled": true
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[opencode-global-linux]
+  dict({
+    '<HOME>/.config/opencode/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/.config/opencode/opencode.json': '''
+      {
+        "mcp": {
+          "archy": {
+            "type": "local",
+            "command": [
+              "uvx",
+              "archy",
+              "mcp"
+            ],
+            "enabled": true
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[opencode-global-win32]
+  dict({
+    '<APPDATA>/opencode/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<APPDATA>/opencode/opencode.json': '''
+      {
+        "mcp": {
+          "archy": {
+            "type": "local",
+            "command": [
+              "uvx",
+              "archy",
+              "mcp"
+            ],
+            "enabled": true
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[opencode-local-darwin]
+  dict({
+    '<HOME>/myproject/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/myproject/opencode.json': '''
+      {
+        "mcp": {
+          "archy": {
+            "type": "local",
+            "command": [
+              "uvx",
+              "archy",
+              "mcp"
+            ],
+            "enabled": true
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[opencode-local-linux]
+  dict({
+    '<HOME>/myproject/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/myproject/opencode.json': '''
+      {
+        "mcp": {
+          "archy": {
+            "type": "local",
+            "command": [
+              "uvx",
+              "archy",
+              "mcp"
+            ],
+            "enabled": true
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[opencode-local-win32]
+  dict({
+    '<HOME>/myproject/AGENTS.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
+      architectural health, finds cycles and layer violations, and maps the blast
+      radius of a change. Use it on the edit loop, not just on demand.
+      
+      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
+        files) to see what a module change reaches.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      - When asked "is this codebase healthy / where is the risk", reach for
+        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
+        rather than guessing from file names.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/myproject/opencode.json': '''
+      {
+        "mcp": {
+          "archy": {
+            "type": "local",
+            "command": [
+              "uvx",
+              "archy",
+              "mcp"
+            ],
+            "enabled": true
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---

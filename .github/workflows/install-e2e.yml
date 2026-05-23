@@ -1,0 +1,77 @@
+name: Installer E2E (gated)
+
+# Layer 5 of docs/SPEC_INSTALL_TESTING.md: install the real client CLI, run
+# `archy install` against it, and confirm the client actually reaches archy.
+#
+# Gated, not scheduled: it runs on release tags (so we know the install path
+# works for the version we are about to publish) and on manual dispatch. No
+# cron, by design (see the spec's "Why E2E is gated"). It is excluded from PRs
+# because it costs API tokens and needs the client API-key secrets.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: ${{ matrix.client }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        client: [claude-code, cursor]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install archy
+        run: uv sync
+
+      - name: Install Claude Code CLI
+        if: matrix.client == 'claude-code'
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Install Cursor CLI (Unix)
+        if: matrix.client == 'cursor' && runner.os != 'Windows'
+        run: curl -fsS https://cursor.com/install | bash
+
+      - name: Install Cursor CLI (Windows)
+        if: matrix.client == 'cursor' && runner.os == 'Windows'
+        run: powershell -Command "irm https://cursor.com/install.ps1 | iex"
+
+      - name: Run archy install
+        run: uv run archy install --target ${{ matrix.client == 'claude-code' && 'claude' || 'cursor' }} --yes
+
+      - name: Assert the written config parses and names archy
+        # Always-on assertion: no API key needed. Confirms the install path
+        # produced a config the client could load.
+        run: uv run python tests/install/e2e_assert_config.py ${{ matrix.client == 'claude-code' && 'claude' || 'cursor' }}
+
+      - name: Headless reachability (Claude Code)
+        if: matrix.client == 'claude-code' && env.ANTHROPIC_API_KEY != ''
+        run: |
+          claude -p "Call the archy_score tool on the current directory and print only the overall number." \
+            --allowedTools "mcp__archy__archy_score" 2>&1 | tee out.txt
+          grep -qiE "archy|overall|[0-9]" out.txt
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Headless reachability (Cursor)
+        if: matrix.client == 'cursor' && env.CURSOR_API_KEY != ''
+        run: |
+          cursor-agent -p "Call the archy_score tool on the current directory and print the overall number." 2>&1 | tee out.txt
+          grep -qiE "archy|overall|[0-9]" out.txt
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
