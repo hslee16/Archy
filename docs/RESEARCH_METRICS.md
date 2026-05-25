@@ -872,13 +872,12 @@ items):
   a pattern was already implemented). archy today is purely negative -
   it ranks violations (`archy check`) and fragile modules
   (`archy_high_risk_modules`); the inverse, ranking the *cleanest*
-  existing module in a layer as a copy-me template, is the
-  highest-payoff technique in the thread and has no roadmap item. It is
-  **not small**: it depends on the per-module score breakdown
-  ([`FUTURE.md`](FUTURE.md) / ROADMAP "Next", #129) landing first, and
-  "cleanest exemplar" needs a defended definition (which axes, how to
-  exclude clean-but-trivial modules) plus a validation pass against the
-  bench before it can claim signal.
+  existing module as a copy-me template, is the highest-payoff
+  technique in the thread and has no roadmap item. It is **not small**,
+  and the obvious framing (build a corpus of patterns) is a trap; the
+  design question - corpus vs project-relative, and what archy can
+  legitimately claim given it only sees the graph - is worked through
+  in §14c.5 below.
 - *Rule-rot / constraint-staleness detection.* One commenter names a
   failure the paper does not measure: agents obey constraints but
   cannot judge when a constraint itself should *change*, so a stale
@@ -891,6 +890,104 @@ items):
   from "the code is wrong" is the hard part and needs the same FP-rate
   discipline as the dead-code study (§12) before anything ships.
 
+### 14c.5. Positive exemplar surfacing: why it is project-relative, not a corpus
+
+Of the two §14c.4 epics, exemplar surfacing has the larger design
+trap, and it is worth resolving on paper before any code. The naive
+reading - "ship a curated corpus of good patterns and best practices
+the agent can copy" - is wrong for archy on five independent grounds,
+and the literature is unusually clear about each.
+
+**1. The pattern space is combinatorial and the implementations vary
+without bound.** Design-pattern-detection research has a standing
+result that "patterns are only a guideline ... each pattern can be
+implemented in various ways," which is exactly why classical static
+detectors "struggle with the complexity and variability of real-world
+pattern implementations" and the field has moved to LLM-based
+detection ([LLM-Based Design Pattern Detection][dp-llm],
+`arxiv:2502.18458`). Layer in per-language idiom (the
+[Pythonic-idioms refactoring][pythonic-idioms] work, `arxiv:2207.05613`,
+enumerates *nine* Python idioms and treats that as a research
+contribution) and a "corpus of patterns" is unbounded and contested
+before it ships. The user's intuition here is correct and
+literature-backed.
+
+**2. Curated example/template catalogs rot, and the rot is the
+dominant failure mode even for teams whose whole job is to maintain
+them.** The platform-engineering "golden path / paved road" literature
+([Spotify golden paths][spotify-golden], [The New Stack][newstack-paths])
+is the closest thing to a working exemplar corpus in industry, and its
+catalogued failure modes are *railroads* and *golden cages*: templates
+whose "documentation is outdated and refers to tools that no longer
+exist," left "to rot" once the platform team is reassigned, which
+developers then bypass by "copying YAML from old repos." A corpus archy
+shipped would rot faster, because archy is one tool, not a staffed
+platform team. By contrast, a **project-relative exemplar is recomputed
+from the live repo on every call and is therefore current by
+construction** - it cannot go stale.
+
+**3. The "find similar code" half is already owned, and doing it badly
+actively hurts.** In-repo semantic retrieval is the core competence of
+Cursor (local index + custom retrieval, "writes code that matches your
+style"), Cody (org-wide semantic search, cites sources), Copilot, and
+the embeddings-RAG stack generally. And the RAG-for-code literature is
+blunt that naive similarity retrieval is *net-negative* if quality
+isn't controlled: retrieved similar code "often introduces noise,
+degrading results by up to 15%" ([What to Retrieve...][what-to-retrieve],
+`arxiv:2503.20589`), there is a "[When More Retrieval Hurts][more-hurts]"
+result (`arxiv:2511.05302`), and the consistent finding is that ICL
+performance "is highly dominated by the quality of selected examples,"
+with diversity-aware selection (MMR) beating pure similarity. archy
+trying to be a retriever would be redundant *and* off-positioning (it
+is not a semantic/embedding tool).
+
+**4. A corpus is a different product and breaks three archy
+anti-goals.** A curated pattern/template library is scaffolding
+(Backstage), a linter/idiom-fixer (ruff, the Pythonic-idioms tool), or
+a pattern catalog (refactoring.guru) - none of which is a static
+graph-shape sensor. Shipping one would violate "no replacement of
+linters," "not the single source of truth for codebase health," and
+the graph-shape-sensor focus. It also imposes *external* taste on the
+user's repo, whereas archy's whole stance is to judge the repo on its
+own structure.
+
+**5. Nobody ships the thing archy could uniquely ship.** The gap-check
+turned up knowledge-graph repo-level code-gen ([KG-based code
+gen][kg-codegen], `arxiv:2505.14394`) and noise-reduction-by-pruning
+work, but no tool that *ranks an exemplar by structural quality*. That
+is precisely the seam the ICL literature says matters most and the
+retrieval tools leave open.
+
+**The resolution.** archy should not enumerate patterns or normalize
+against the universe of "best practice." It should treat **"pattern" =
+a structural peer group that already exists in this repo** (siblings in
+a layer, a directory, a graph community, or a naming convention - all
+detectable from the graph archy already builds, and from the #122
+layer-inference machinery) and **"best practice" = best structural
+health relative to those peers** (low `edit_risk`, respects layer
+direction, not in a cycle, low propagation cost, healthy local Newman
+Q, moderate `cc_mean`), normalized as a within-group percentile rather
+than against any external baseline. The combinatorial-explosion and
+language-idiosyncrasy problems *dissolve* because archy never names a
+pattern: it points at the healthiest instance of whatever the repo
+already does.
+
+This reframes the role precisely and complementarily: **archy is the
+quality ranker, not the retriever.** The IDE / RAG layer supplies
+*similarity* (which existing files are relevant to this task); archy
+supplies the *structural-quality* filter the ICL literature says
+dominates outcomes (of those candidates, which one is the cleanest to
+copy). The honest scope limit is that structural health is *necessary,
+not sufficient* - a module can be graph-clean but a poor semantic
+example - so archy's claim must be narrow: "the structurally cleanest
+peer," never "the best example, period." Semantic correctness stays
+with the agent. With that framing the feature is corpus-free,
+never-stale, on-positioning, and a genuine gap; it remains an epic only
+because it is gated on the per-module score breakdown (#129) and needs
+a bench validation that "structurally cleanest peer" actually
+correlates with "useful exemplar," plus the clean-but-trivial guard (a
+one-function module must not win by default).
+
 [nav-paradox]: https://arxiv.org/html/2602.20048v1
 [constraint-decay]: https://arxiv.org/html/2605.06445v1
 [constraint-decay-hn]: https://news.ycombinator.com/item?id=48256912
@@ -898,6 +995,13 @@ items):
 [daplab-9-patterns]: https://daplab.cs.columbia.edu/general/2026/01/08/9-critical-failure-patterns-of-coding-agents.html
 [anthropic-harnesses]: https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
 [so-bugs-coding-agents]: https://stackoverflow.blog/2026/01/28/are-bugs-and-incidents-inevitable-with-ai-coding-agents/
+[dp-llm]: https://arxiv.org/pdf/2502.18458
+[pythonic-idioms]: https://arxiv.org/pdf/2207.05613
+[spotify-golden]: https://engineering.atspotify.com/2020/08/how-we-use-golden-paths-to-solve-fragmentation-in-our-software-ecosystem
+[newstack-paths]: https://thenewstack.io/paved-roads-golden-paths-guardrails-and-railroads/
+[what-to-retrieve]: https://arxiv.org/abs/2503.20589
+[more-hurts]: https://arxiv.org/pdf/2511.05302
+[kg-codegen]: https://arxiv.org/html/2505.14394v1
 
 ---
 
