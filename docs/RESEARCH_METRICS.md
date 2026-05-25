@@ -623,7 +623,7 @@ cases). Annotation coverage is the cheap win.
 moving from 30% annotation coverage to 90% has measurably improved
 maintainability in a way no graph-level metric will catch.
 
-**Fit:** could be a fifth sub-metric (`typing` axis), or a
+**Fit:** could be a sixth sub-metric (`typing` axis), or a
 companion stat reported alongside the score. The former changes
 the geometric-mean exponent and shifts absolute scores; the latter
 is additive.
@@ -1161,10 +1161,10 @@ additive unless marked **Replace**.
 2. **Reflexion: Forbidden + Independence contracts** in
    `archy.yaml`. Closes the gap with import-linter; purely additive
    to `archy check`. No score impact.
-3. **NCCD / ACD / propagation cost** - *Add* as a fifth score axis.
+3. **NCCD / ACD / propagation cost** - *Add* as a sixth score axis.
    Validated to be orthogonal to depth (Pearson r=0.000 on the
    9-library benchmark), so it earns its place in the geometric
-   mean. Note: adding a fifth axis shifts absolute scores; document
+   mean. Note: adding a sixth axis shifts absolute scores; document
    the change.
 4. **Martin's `I` per-module + SDP-violation check rule.** *Done.*
    Shipped in `src/archy/instability.py` and
