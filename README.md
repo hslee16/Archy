@@ -403,12 +403,17 @@ uv run pytest              # the test now runs instead of being skipped
 
 ## Roadmap
 
-Next up:
+Executive summary below; [`docs/ROADMAP.md`](docs/ROADMAP.md) is the canonical Now / Next / Deferred / Rejected view, and [`docs/FUTURE.md`](docs/FUTURE.md) is the long-form list with citations to the literature each idea came from.
 
-- [x] ~~Call-weighted Newman Q as a refinement of the modularity axis~~ shipped in v0.21.0 as a *parallel diagnostic* on `archy score` rather than an axis replacement. The gap between unweighted and weighted Q is the load-bearing signal (it detects mismatch between import-graph and call-graph community structure). Full empirical study, three-paths analysis, and decision rationale in [`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](docs/CALL_WEIGHTED_Q_EMPIRICS.md).
-- [ ] Type-hint coverage as the candidate 6th score axis. Same AST surface as v0.17 cyclomatic complexity. Empirics first: distribution across the 27-project bench, correlation with existing axes, normalization shape. See [`docs/AXIS_REVIEW.md`](docs/AXIS_REVIEW.md).
-- [x] `archy hotspots = CC x per-file churn` (shipped in v0.18.0: per-file refactor-priority list from `cc_sum * commit_count` over the git history, single `git log --name-only` pass; filters zero-CC and zero-churn rows)
-- [x] ~~Design Structure Matrix (`archy dsm`)~~ shipped. CLI `archy dsm PATH` and MCP tool `archy_dsm` with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package` for large projects, and `--diff` for back-edge regression detection. ASCII for terminal, JSON for tool consumption. Visualization-only per [`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md): empirical study ruled out a DSM-derived score axis or diagnostic scalar.
+Both phases of the index-and-install work have shipped (Phase 1 install-DX in v0.25.0 / v0.26.0, Phase 2 persistent index + watcher in v0.27.0). The core mission is built; the current frontier is adoption and validation, not new features.
+
+Next up (validated, queued, not yet started):
+
+- **Per-module score breakdown** so an agent can ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
+- **`archy_what_to_refactor_next` MCP tool**: combines `archy_hotspots` and `archy_high_risk_modules` into one ranked list with structured reasoning (one call instead of two-plus-synthesis).
+- **Change coupling (temporal coupling)**: rank module *pairs* that frequently change together in git history but share no import or call edge (a hidden dependency the structural graph can't see). Same Tornhill / CodeScene lineage as `archy_hotspots`; needs an empirical-validation pass first (co-change is noisy).
+- **Opt-in agent hooks (`archy install --hooks`)**: register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, ...) that runs the archy gate automatically after edits, so the loop fires whether or not the agent remembers to call the tools. Spec: [`docs/SPEC_INSTALL_HOOKS.md`](docs/SPEC_INSTALL_HOOKS.md).
+- **Duplicate-function detection** via AST-shape hashing, and a **static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Both advisory, not score axes.
 
 Shipped:
 
@@ -425,12 +430,24 @@ Shipped:
 - Import-linter contract wrap: `archy contracts`, `archy[contracts]`.
 - Graph-navigation MCP tools: `archy_graph_focus`, `archy_graph_summary`, `archy_graph` (design in [`docs/SPEC_GRAPH_MCP.md`](docs/SPEC_GRAPH_MCP.md)).
 - Per-module `edit_risk` composite + `archy_high_risk_modules` MCP tool: geometric mean of propagation cost, normalized fan-in, and instability; surfaced on every graph payload.
+- **v0.24, risk-weighted `archy_diff` summary**: additive `DiffSummary` (`headline`, `top_regressions`, `top_improvements`) ranked by `edit_risk` so the loop-closer reads one sentence instead of re-ranking raw deltas.
+- **v0.25, `archy affected`**: depth-capped reverse-impact walk mapping changed files to impacted modules and test files (`git diff --name-only HEAD | archy affected . --stdin -q | xargs pytest`); CLI + `archy_affected` MCP tool.
+- **v0.27, persistent index + file watcher**: SQLite parse cache (`.archy/index.db`) keyed by content hash (7-9x warm-path speedup, byte-identical to a cold build) plus a `watchdog` observer that keeps the index warm inside `archy mcp`; new `archy_status` MCP tool (17th) reports `last_synced_at`.
 
 **Diagnostics**
 
 - **v0.16, call-graph edges** as a second edge type: `kinds`, `call_lines`, `call_count` on every edge; `total_calls` / `calls_per_edge` on `archy score`; static import-alias resolution per LocAgent's invoke-edge framing.
-- **v0.17, per-function cyclomatic complexity**: per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every internal node; project-wide `function_count` / `cc_total` / `cc_max` / `cc_mean` on `archy score`; tree-sitter McCabe walker in `src/archy/complexity.py`.
-- **v0.18, `archy hotspots`**: per-file refactor-priority ranking from `cc_sum x git-commit-count`; single `git log --name-only` pass; Tornhill/CodeScene's "Code Red" formulation; filters zero-CC and zero-churn rows.
+- **v0.17, per-function cyclomatic complexity**: per-module `function_count` / `cc_sum` / `cc_max` / `cc_mean` on every internal node; project-wide aggregates on `archy score`; tree-sitter McCabe walker in `src/archy/complexity.py`. Promoted to the `complexity` score axis in v0.20 (recalibrated `/8` in v0.23).
+- **v0.18, `archy hotspots`**: per-file refactor-priority ranking from `cc_sum x git-commit-count`; single `git log --name-only` pass; Tornhill/CodeScene's "Code Red" formulation; filters zero-CC and zero-churn rows. MCP surface (`archy_hotspots`) followed in v0.19.
+- **v0.21, call-weighted Newman Q** as a *parallel diagnostic* on `archy score` (not an axis replacement): the gap between unweighted and weighted Q flags mismatch between import-graph and call-graph community structure ([`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](docs/CALL_WEIGHTED_Q_EMPIRICS.md)).
+- **v0.22, `archy dsm`** (Design Structure Matrix): CLI + `archy_dsm` MCP tool with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package`, and `--diff` for back-edge regression detection. Visualization-only per [`docs/DSM_EMPIRICS.md`](docs/DSM_EMPIRICS.md): no DSM-derived score axis or diagnostic scalar.
+
+**Install / distribution**
+
+- **v0.25, Claude Code plugin** (`plugins/claude/`): bundles the MCP server registration and the canonical `archy` skill into an installable unit.
+- **v0.26, agent-detecting installer** (`archy install` / `archy uninstall`): auto-detects which clients (Claude Code, Cursor, Codex CLI, opencode, Continue) are present, writes each one's MCP stanza and rules file, and seeds Claude's `permissions.allow`. Adapter registry in `src/archy/install/`; user docs in [`docs/INSTALL.md`](docs/INSTALL.md).
+
+Empirically rejected (kept here so they don't get re-proposed): type-hint coverage in any form, `calls_per_edge` as a 6th axis, HTML output formats, dead-function detection, multi-language analysis. See [`docs/ROADMAP.md`](docs/ROADMAP.md#rejected-explicitly-will-not-ship) for the evidence behind each.
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
