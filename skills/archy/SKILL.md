@@ -106,7 +106,7 @@ archy_dsm(path=".", group_by="community")
 # or: archy_dsm(path=".", package="src.app")
 ```
 
-Returns a structured DSM: ordered row/col list plus a sparse cell list, grouped into block-diagonal blocks. `group_by="community"` orients in an unfamiliar codebase via Newman-community blocks; `"layer"` makes cross-layer dependencies visible as off-block entries; `"topological"` puts cycles above the diagonal so back-edges localize to specific module pairs. `weight="calls"` exposes `call_count` instead of binary edge presence. Pass `focus=<qualname>` to keep just the focus + its N-hop neighborhood, or `package=<prefix>` to scope to a single subpackage. The DSM is *visualization-only*, never a score input; agents read it positionally, not as a number ([`docs/DSM_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/DSM_EMPIRICS.md) for why).
+Returns a structured DSM: ordered row/col list plus a sparse cell list, grouped into block-diagonal blocks. `group_by="community"` orients in an unfamiliar codebase via Newman-community blocks; `"layer"` makes cross-layer dependencies visible as off-block entries; `"topological"` puts cycles above the diagonal so back-edges localize to specific module pairs. `weight="calls"` exposes `call_count` instead of binary edge presence. Pass `focus=<qualname>` to keep just the focus + its N-hop neighborhood, or `package=<prefix>` to scope to a single subpackage. The DSM is *visualization-only*, never a score input; agents read it positionally, not as a number ([`docs/research/DSM_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/research/DSM_EMPIRICS.md) for why).
 
 For refactor priority across the whole codebase:
 
@@ -212,7 +212,7 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 - "Is this module's neighborhood healthy?" → any grouping with `focus=<qualname>` to keep the matrix focused on the relevant rows and columns
 - "Show me only this subpackage" → any grouping with `package=<prefix>`
 
-**Reading the score breakdown.** `archy_score` returns five axes plus a call-weighted Q diagnostic. The diagnostic appears alongside the unweighted `modularity` line: the *gap* between unweighted and call-weighted raw Q is the load-bearing signal (it detects mismatch between the import-graph community structure and the call-graph community structure). The headline `overall` is the geometric mean of the five axes only; the call-weighted Q diagnostic is for context, not score. See [`docs/CALL_WEIGHTED_Q_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/CALL_WEIGHTED_Q_EMPIRICS.md) for what the gap means in practice.
+**Reading the score breakdown.** `archy_score` returns five axes plus a call-weighted Q diagnostic. The diagnostic appears alongside the unweighted `modularity` line: the *gap* between unweighted and call-weighted raw Q is the load-bearing signal (it detects mismatch between the import-graph community structure and the call-graph community structure). The headline `overall` is the geometric mean of the five axes only; the call-weighted Q diagnostic is for context, not score. See [`docs/research/CALL_WEIGHTED_Q_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/research/CALL_WEIGHTED_Q_EMPIRICS.md) for what the gap means in practice.
 
 **Score vs. snapshot/diff:**
 
@@ -304,8 +304,8 @@ archy_high_risk_modules(path=".", top_n=10)
 - Repository: https://github.com/hslee16/Archy
 - Agent loop playbook: https://github.com/hslee16/Archy/blob/main/docs/AGENT_LOOP.md
 - Score formulas (five axes + call-weighted Q diagnostic): https://github.com/hslee16/Archy/blob/main/docs/SCORING.md
-- Axis review (why 5 axes, why no 6th from calls_per_edge): https://github.com/hslee16/Archy/blob/main/docs/AXIS_REVIEW.md
-- Call-weighted Q empirical study: https://github.com/hslee16/Archy/blob/main/docs/CALL_WEIGHTED_Q_EMPIRICS.md
-- DSM empirical study (why DSM ships as visualization, not a scalar): https://github.com/hslee16/Archy/blob/main/docs/DSM_EMPIRICS.md
+- Axis review (why 5 axes, why no 6th from calls_per_edge): https://github.com/hslee16/Archy/blob/main/docs/research/AXIS_REVIEW.md
+- Call-weighted Q empirical study: https://github.com/hslee16/Archy/blob/main/docs/research/CALL_WEIGHTED_Q_EMPIRICS.md
+- DSM empirical study (why DSM ships as visualization, not a scalar): https://github.com/hslee16/Archy/blob/main/docs/research/DSM_EMPIRICS.md
 - Layer rules and `archy.yaml` syntax: https://github.com/hslee16/Archy#layer-rules-archy-check
 - Benchmarks across 27 projects: https://github.com/hslee16/Archy/blob/main/bench/results.md

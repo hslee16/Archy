@@ -19,7 +19,7 @@ five score axes (modularity, acyclicity, depth, equality, complexity)
 to evaluate the orthogonality criterion the AXIS_REVIEW.md framework
 requires before any axis-promotion decision.
 
-This is the empirical input to docs/AXIS_REVIEW.md's "next 6th-axis
+This is the empirical input to docs/research/AXIS_REVIEW.md's "next 6th-axis
 candidate" recommendation. Output should drive the ship/no-ship
 decision, not pre-suppose it.
 

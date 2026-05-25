@@ -7,8 +7,8 @@ specifically**. Intended as input to roadmap discussions; nothing
 here is committed.
 
 For the four metrics archy already ships, see
-[`SCORING.md`](SCORING.md). For the concrete near-term roadmap, see
-[`FUTURE.md`](FUTURE.md). This doc is wider than both: it catalogues
+[`SCORING.md`](../SCORING.md). For the concrete near-term roadmap, see
+[`FUTURE.md`](../FUTURE.md). This doc is wider than both: it catalogues
 the candidate space.
 
 ---
@@ -16,7 +16,7 @@ the candidate space.
 ## Why a Python-centric survey
 
 archy is Python-only by deliberate design choice
-([`FUTURE.md`](FUTURE.md): "no multi-language support"). The
+([`FUTURE.md`](../FUTURE.md): "no multi-language support"). The
 academic and industry literature on architecture metrics, however,
 overwhelmingly comes from C++ (Lakos), Java (ArchUnit, Sonargraph),
 and .NET (NDepend) - languages with explicit interfaces, header
@@ -36,7 +36,7 @@ idioms. The features that move the needle:
 - **`__init__.py` re-exports.** Python packages publish their public
   API by importing names into `__init__.py`. This creates phantom
   back-edges in the import graph (already documented as a known archy
-  resolver bug in [`docs/CASE_STUDIES.md`](CASE_STUDIES.md)).
+  resolver bug in [`docs/CASE_STUDIES.md`](../CASE_STUDIES.md)).
 - **`if TYPE_CHECKING:` imports.** Imports used only for type
   annotations are conditional on `typing.TYPE_CHECKING`, which is
   always `False` at runtime. They appear as edges in static analysis
@@ -51,7 +51,7 @@ idioms. The features that move the needle:
   airflow, and many others rely on this.
 - **Dynamic imports.** `importlib.import_module(name)` resolves at
   runtime; archy correctly flags these as opaque
-  ([`FUTURE.md`](FUTURE.md): "acceptable").
+  ([`FUTURE.md`](../FUTURE.md): "acceptable").
 
 These features mean some metrics from the literature translate
 cleanly, others need redefinition, and a few are not worth shipping
@@ -63,7 +63,7 @@ exceed the signal.
 ## 1. Already implemented
 
 For reference, archy ships these and they're documented in
-[`SCORING.md`](SCORING.md):
+[`SCORING.md`](../SCORING.md):
 
 | Metric         | What it captures                                |
 | -------------- | ----------------------------------------------- |
@@ -237,12 +237,12 @@ academic work to identify ["key classes"][pagerank-key-classes].
 specific Python quirk: `__init__.py` re-exports inflate PageRank for
 package roots that re-export everything (because every importer of a
 sub-name pulls in `__init__.py`). archy's planned re-export-aware
-resolver ([`FUTURE.md`](FUTURE.md), already noted) cleans this up.
+resolver ([`FUTURE.md`](../FUTURE.md), already noted) cleans this up.
 
 **Feasibility:** ~15-line hand-rolled power iteration (archy avoids
 the numpy dependency `nx.pagerank` now pulls in). Linear per
 iteration, fast. Live in `archy_graph_summary`'s `top_pagerank`
-field; see [`SPEC_GRAPH_MCP.md`](SPEC_GRAPH_MCP.md).
+field; see [`SPEC_GRAPH_MCP.md`](../SPEC_GRAPH_MCP.md).
 
 **Signal:** Useful as a per-module *diagnostic*, weak as a
 graph-level summary. Better than raw in-degree because it weights by
@@ -482,7 +482,7 @@ deferred). The Python case is *worse* than the general case.
 
 **Empirical validation.** Vulture 2.16 was run with default settings
 (60% confidence) and at 90% confidence on the full 27-project
-benchmark (see [`bench/projects.yaml`](../bench/projects.yaml)),
+benchmark (see [`bench/projects.yaml`](../../bench/projects.yaml)),
 captured 2026-05-13:
 
 | Project        |    LOC | Vulture @ 60% | Vulture @ 90% |
@@ -611,7 +611,7 @@ gap between "types written" and "types verified" is itself a signal.
 type-hint graph (which classes reference which, via parameters and
 returns) is a *third edge type* alongside imports and function calls.
 sentrux's `tags.scm` already includes type-reference queries
-([`FUTURE.md`](FUTURE.md) deferred item). Catching layer violations
+([`FUTURE.md`](../FUTURE.md) deferred item). Catching layer violations
 that hide behind `if TYPE_CHECKING:` is precisely what this enables.
 
 **Feasibility:** annotation coverage is a tree-sitter pass over
@@ -632,7 +632,7 @@ measured, max `|r| = 0.551`; discriminant validity is contested) *and*
 against shipping it as a diagnostic (mypy / pyright own the typing
 niche, the signal is not structural, and the "single sensor for
 everything" framing dilutes archy's graph-shape focus). See
-[`ROADMAP.md`](ROADMAP.md) "Rejected". The text above is kept
+[`ROADMAP.md`](../ROADMAP.md) "Rejected". The text above is kept
 as the pre-study survey rationale, not a live recommendation.
 
 ---
@@ -742,7 +742,7 @@ per-module risk composite that surfaces the "navigational salience"
 the Navigation Paradox paper §c.1 names as the residual failure mode
 after large context windows (shipped v0.14.0 as
 `archy_high_risk_modules` / `edit_risk`). Detailed roadmap entries in
-[`FUTURE.md`](FUTURE.md). The §c.4 paper below
+[`FUTURE.md`](../FUTURE.md). The §c.4 paper below
 adds two more, both low-cost and both reusing the existing layer
 machinery: convention-based layer inference and a layer-presence
 check.
@@ -869,7 +869,7 @@ checker frees the agent's budget for the *functional* one, which is
 precisely archy's role.
 
 **Two features these threads motivate, both larger than they first
-look** (filed as Deferred epics in [`FUTURE.md`](FUTURE.md), not Next
+look** (filed as Deferred epics in [`FUTURE.md`](../FUTURE.md), not Next
 items):
 
 - *Positive exemplar surfacing.* The thread's most-repeated practical
@@ -1057,7 +1057,7 @@ longest internal prefix. `self`/`cls`/`super` calls and a small list
 of common builtins are skipped at extraction time.
 
 **Empirical orthogonality.** 27-project bench captured 2026-05-14,
-SHAs pinned in [`bench/projects.yaml`](../bench/projects.yaml):
+SHAs pinned in [`bench/projects.yaml`](../../bench/projects.yaml):
 
 | signal           |   r vs calls_per_edge |
 | ---------------- | --------------------: |
@@ -1077,7 +1077,7 @@ pair *involving* `calls_per_edge` sits at `|r| ≤ 0.23`.
 **Score-axis promotion: reviewed and rejected (2026-05).** This section's
 original language called `calls_per_edge` "a strong candidate for
 promotion to a score axis." A deliberate review after the v0.20 cc_mean
-promotion concluded the opposite: see [`AXIS_REVIEW.md`](../docs/AXIS_REVIEW.md).
+promotion concluded the opposite: see [`AXIS_REVIEW.md`](AXIS_REVIEW.md).
 The short version is that orthogonality is necessary but not sufficient,
 and `calls_per_edge` fails three of the four OECD composite-indicator
 criteria (directionality is shape-driven not quality-driven, no canonical
@@ -1166,7 +1166,7 @@ entire geomean on a single axis. Below the small-project threshold
 (< 20 functions) the axis returns 1.0 vacuously since `cc_mean` is
 statistically unstable on tiny inputs. The normalization, anchor
 points, and the score-shape-versioning implications are in
-[`SCORING.md`](SCORING.md). The orthogonality data below is what
+[`SCORING.md`](../SCORING.md). The orthogonality data below is what
 justified the original promotion.
 
 Implementation in `src/archy/complexity.py`: a tree-sitter
@@ -1189,7 +1189,7 @@ promoted `cc_mean` to the fifth score axis (`complexity`) after the
 existing four axes.
 
 **Empirical orthogonality.** 27-project bench captured 2026-05-14,
-SHAs pinned in [`bench/projects.yaml`](../bench/projects.yaml):
+SHAs pinned in [`bench/projects.yaml`](../../bench/projects.yaml):
 
 | signal           |  r vs cc_mean |
 | ---------------- | ------------: |
@@ -1355,15 +1355,15 @@ additive unless marked **Replace**.
 ### Group B - depends on AST or git infrastructure
 
 6. **Per-function cyclomatic + cognitive complexity** (already in
-   [`FUTURE.md`](FUTURE.md)). Both come from the same tree-sitter
+   [`FUTURE.md`](../FUTURE.md)). Both come from the same tree-sitter
    pass; cognitive is free given CC.
 7. ~~**Type-hint coverage**~~ - **rejected (2026-05).** The original
    survey queued this as a sub-stat or candidate sixth axis; the
    empirical study ([`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md))
    concluded against both forms (weakest independence archy has
    measured, max `|r| = 0.551`; niche owned by mypy / pyright; not a
-   structural signal). See [`ROADMAP.md`](ROADMAP.md) "Rejected".
-8. **Call-graph edges** ([`FUTURE.md`](FUTURE.md)). Once shipped,
+   structural signal). See [`ROADMAP.md`](../ROADMAP.md) "Rejected".
+8. **Call-graph edges** ([`FUTURE.md`](../FUTURE.md)). Once shipped,
    modularity and propagation cost both gain resolution.
 9. **Hotspots = CC × per-file churn.** Needs CC + a one-pass
    `git log --name-only` parser. Runs as a standalone command.
@@ -1385,13 +1385,13 @@ additive unless marked **Replace**.
 Empirical checks supporting load-bearing claims in the doc.
 
 The benchmark is now driven by a checked-in manifest at
-[`bench/projects.yaml`](../bench/projects.yaml) with **27 pinned
+[`bench/projects.yaml`](../../bench/projects.yaml) with **27 pinned
 SHAs** spanning small CLI tools to very large frameworks across web
 / async / scientific / ORM / plugin-host / devops / build-tooling /
 syntax-highlighting / generated-SDK domains. The
-benchmark runner is [`bench/run.py`](../bench/run.py); run with
+benchmark runner is [`bench/run.py`](../../bench/run.py); run with
 `uv run --with networkx --with pyyaml python bench/run.py --vulture`.
-Raw output checked into [`bench/results.md`](../bench/results.md).
+Raw output checked into [`bench/results.md`](../../bench/results.md).
 
 Specific validations referenced above:
 

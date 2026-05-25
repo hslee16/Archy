@@ -13,7 +13,7 @@ computes Pearson correlation of `Q_weighted_normalized` against the
 other four score axes to check whether call-weighting preserves the
 v0.20 orthogonality picture.
 
-Read by `docs/AXIS_REVIEW.md` recommendation 2; output drives the
+Read by `docs/research/AXIS_REVIEW.md` recommendation 2; output drives the
 decision on whether to refine the modularity axis with call weights.
 
 Usage:

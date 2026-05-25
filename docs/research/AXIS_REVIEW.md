@@ -49,7 +49,7 @@ The gap is real but it is **coupling-strength and type-coverage shaped**, not ca
 
 ## The empirical case for `calls_per_edge`
 
-From the 27-project bench ([`bench/results.md`](../bench/results.md), captured 2026-05-14):
+From the 27-project bench ([`bench/results.md`](../../bench/results.md), captured 2026-05-14):
 
 **Orthogonality.** Max `|r| = 0.229` against modularity, acyclicity, depth, equality, propagation_cost. Below the OECD redundancy threshold (`|r| > 0.7`) by a wide margin. Substantially more orthogonal than any existing inter-axis pair (median `|r| ~ 0.45`).
 
@@ -177,13 +177,13 @@ The OECD Handbook explicitly warns against the temptation to keep adding indicat
 
 3. ~~**If a 6th axis is ever desired, prioritize type-hint coverage** over call density.~~ Type-hint coverage was studied empirically in 2026-05 ([`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md)) and ruled out in any form (axis or diagnostic): independence and discriminant validity fail the OECD axis-promotion check, and the value-prop argument rules out even a diagnostic surface (mypy / pyright own the typing niche; archy's distinct value is graph-shape). No 6th-axis candidate is currently active.
 
-4. **Update [`docs/ROADMAP.md`](ROADMAP.md) and [`docs/RESEARCH_METRICS.md`](RESEARCH_METRICS.md)** to reflect these conclusions. (This PR makes those updates.) Currently both list "promote call-density to a score axis" as a candidate; the candidacy is downgraded with the reasoning above, and "type-hint coverage as a candidate 6th axis" is promoted.
+4. **Update [`docs/ROADMAP.md`](../ROADMAP.md) and [`docs/research/RESEARCH_METRICS.md`](RESEARCH_METRICS.md)** to reflect these conclusions. (This PR makes those updates.) Currently both list "promote call-density to a score axis" as a candidate; the candidacy is downgraded with the reasoning above, and "type-hint coverage as a candidate 6th axis" is promoted.
 
 ## Open questions (future work)
 
 - **The 10-expert ranking study.** Would substantially raise the rigor of the axis-promotion process for any future candidate. Out of scope for this review.
 - **Call-weighted Newman Q empirics.** Concrete: does it shift the modularity ranking on the 27-project bench, and in which direction for which projects? In scope for a follow-up PR.
 - **Type-hint coverage empirics.** Distribution across the bench, correlation with the existing axes, candidate normalization shapes. In scope for a follow-up PR before any axis promotion is attempted.
-- **Equality axis redesign.** [`SCORING.md`](SCORING.md) flags `gini(out_degree)` as a proxy for the long-term target `gini(per_function_cc)`. A redesign using CC-Gini for equality could absorb part of what `calls_per_edge` was thought to add (call concentration). Worth analyzing in concert with any future call-data work.
+- **Equality axis redesign.** [`SCORING.md`](../SCORING.md) flags `gini(out_degree)` as a proxy for the long-term target `gini(per_function_cc)`. A redesign using CC-Gini for equality could absorb part of what `calls_per_edge` was thought to add (call concentration). Worth analyzing in concert with any future call-data work.
 
 [^oecd]: OECD / JRC, *Handbook on Constructing Composite Indicators: Methodology and User Guide* (2008). The four-condition framing for sub-indicator inclusion appears across sections 2-6; the warning about adding indicators that lack discriminant validity is section 3.5.

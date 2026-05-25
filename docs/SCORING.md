@@ -17,7 +17,7 @@ orthogonal signal archy has ever measured against the existing four
 (max `|r| = 0.197` at the time; `|r| = 0.159` on the current
 28-project bench after pytorch was added); the validation evidence
 lives in
-[`docs/RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md).
+[`docs/research/RESEARCH_METRICS.md` section 17](research/RESEARCH_METRICS.md).
 archy defers sentrux's redundancy axis; see
 [Deferred metrics](#deferred-metrics) below.
 
@@ -115,7 +115,7 @@ weighted Q is the load-bearing signal:
 
 This is a diagnostic, not a score axis. The empirical analysis and the
 rejected "ship as axis replacement" alternative are in
-[`CALL_WEIGHTED_Q_EMPIRICS.md`](CALL_WEIGHTED_Q_EMPIRICS.md). The gap
+[`CALL_WEIGHTED_Q_EMPIRICS.md`](research/CALL_WEIGHTED_Q_EMPIRICS.md). The gap
 is the unique signal among archy's outputs that compares two views of
 the same codebase (import structure vs call structure) rather than
 looking at one view in isolation.
@@ -262,7 +262,7 @@ complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)
 ```
 
 Anchor points from the 28-project benchmark
-([`RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md)):
+([`RESEARCH_METRICS.md` section 17](research/RESEARCH_METRICS.md)):
 
 - mkdocs at `cc_mean = 1.77` -> `complexity = 0.904`
 - archy at `cc_mean = 3.73` -> `complexity = 0.659`
@@ -295,7 +295,7 @@ single dispatcher / parser functions and does not correlate with the
 overall coding style: setuptools shows `cc_max = 340` (one extreme
 function) alongside `cc_mean = 2.91` (typical restraint elsewhere).
 The mean is the stable signal; `cc_max` is preserved as a diagnostic
-on `Score.inputs`. The [`archy hotspots`](RESEARCH_METRICS.md)
+on `Score.inputs`. The [`archy hotspots`](research/RESEARCH_METRICS.md)
 refactor-priority ranking uses `cc_sum` (total CC per file) rather
 than `cc_max`, because a file with twenty branchy functions is a
 bigger refactoring target than one with a single high-CC dispatcher
@@ -326,7 +326,7 @@ bigger refactoring target than one with a single high-CC dispatcher
 
 The full implementation surface (the walker, the per-module
 aggregates, the bench distribution) lives in
-[`docs/RESEARCH_METRICS.md` section 17](RESEARCH_METRICS.md).
+[`docs/research/RESEARCH_METRICS.md` section 17](research/RESEARCH_METRICS.md).
 
 ## Aggregation
 
@@ -465,7 +465,7 @@ threshold - but the design language in
 [`docs/LEARNINGS.md`](LEARNINGS.md) ("the only way to game the score
 is to actually improve every dimension") was stronger than the data
 supports. The empirical study in
-[`docs/SCORE_SHAPE_REDESIGN_EMPIRICS.md`](SCORE_SHAPE_REDESIGN_EMPIRICS.md)
+[`docs/research/SCORE_SHAPE_REDESIGN_EMPIRICS.md`](research/SCORE_SHAPE_REDESIGN_EMPIRICS.md)
 (2026-05) tested seven acyclicity reformulations, three depth
 reformulations, and six aggregator alternatives against the 28-project
 bench and concluded against any axis change: the candidate
@@ -627,7 +627,7 @@ duplicate functions over total functions. archy intentionally omits
 it.
 
 The empirical case for omission is documented in
-[`docs/RESEARCH_METRICS.md`](RESEARCH_METRICS.md) §12: vulture 2.16
+[`docs/research/RESEARCH_METRICS.md`](research/RESEARCH_METRICS.md) §12: vulture 2.16
 was run on 27 popular Python projects in 2026-05; default-confidence
 findings ranged from 10 (msgspec) to 2,017 (django), and 15 random
 findings spot-checked on FastAPI, pytest, and Django were all
@@ -663,11 +663,11 @@ depth, equality, propagation_cost). The original plan was to promote
 it to a score axis at a deliberate version boundary; that plan was
 reviewed after the v0.20 cc_mean promotion and **rejected** on
 directionality, actionability, and discriminant-validity grounds (see
-[`AXIS_REVIEW.md`](AXIS_REVIEW.md)). The call data continues to be
+[`AXIS_REVIEW.md`](research/AXIS_REVIEW.md)). The call data continues to be
 useful as a diagnostic on `archy score`'s output, as a refinement
 candidate for the modularity axis (call-weighted Newman Q), and as
 agent navigation data via the `archy_graph_*` MCP tools. Detailed
-empirics in [`docs/RESEARCH_METRICS.md` §16](RESEARCH_METRICS.md).
+empirics in [`docs/research/RESEARCH_METRICS.md` §16](research/RESEARCH_METRICS.md).
 
 **Cyclomatic complexity (v0.17.0 diagnostic, v0.20.0 promoted).**
 Per-function McCabe CC shipped in v0.17.0 as a *diagnostic only*:
@@ -685,7 +685,7 @@ unchanged. The Gini-of-CC redesign of the equality axis remains
 on the roadmap as a separate question; the v0.20 promotion was
 additive rather than a replacement so the equality redesign can land
 later without undoing this work. Detailed empirics in
-[`docs/RESEARCH_METRICS.md` §17](RESEARCH_METRICS.md).
+[`docs/research/RESEARCH_METRICS.md` §17](research/RESEARCH_METRICS.md).
 
 ## References
 

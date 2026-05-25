@@ -17,7 +17,7 @@ Run:
     uv run --with networkx --with pyyaml python bench/score_redesign.py evaluate
 
 The script deliberately lives in bench/ and never modifies src/archy. The
-companion empirics doc is docs/SCORE_SHAPE_REDESIGN_EMPIRICS.md.
+companion empirics doc is docs/research/SCORE_SHAPE_REDESIGN_EMPIRICS.md.
 """
 
 from __future__ import annotations

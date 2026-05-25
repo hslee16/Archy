@@ -233,8 +233,9 @@ __marimo__/
 # Local-only maintainer notes (PyPI download stats, etc.)
 docs/PYPI_STATS.md
 
-# Local research notes (kept locally, never published)
-research/
+# Local research notes (kept locally, never published).
+# Anchored to repo root so it does NOT match the tracked docs/research/ folder.
+/research/
 
 # Score-redesign per-project archy invocation cache; regenerable via
 # `python bench/score_redesign.py collect`. ~10MB of intermediate JSON.

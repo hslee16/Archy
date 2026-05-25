@@ -147,7 +147,7 @@ Values below `|r| = 0.7` are below the OECD redundancy threshold.
 
 ## Call-weighted modularity diagnostic (v0.21)
 
-Per-project unweighted vs call-weighted raw Newman Q. The gap (weighted - unweighted) is the load-bearing signal; see `docs/CALL_WEIGHTED_Q_EMPIRICS.md`.
+Per-project unweighted vs call-weighted raw Newman Q. The gap (weighted - unweighted) is the load-bearing signal; see `docs/research/CALL_WEIGHTED_Q_EMPIRICS.md`.
 
 | project | sha | unweighted Q | weighted Q | gap |
 | --- | --- | ---: | ---: | ---: |

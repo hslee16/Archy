@@ -10,7 +10,7 @@ community grouping, and layer violations are off-block entries under
 layer grouping.
 
 archy ships DSM as a visualization-only output (no axis, no diagnostic
-scalar) per `docs/DSM_EMPIRICS.md`. The intended consumer is an LLM
+scalar) per `docs/research/DSM_EMPIRICS.md`. The intended consumer is an LLM
 coding agent that reads the matrix as structured context, not a human
 browsing a dashboard.
 """
@@ -67,7 +67,7 @@ class DSMDiff(BaseModel):
     """Structured diff between two DSMs over the same set of nodes (intersected).
 
     `new_back_edges` is the load-bearing field for agent scenario 2 in
-    `docs/DSM_EMPIRICS.md`: cells that appeared above the diagonal in
+    `docs/research/DSM_EMPIRICS.md`: cells that appeared above the diagonal in
     `after` but did not exist in `before`, meaning the edit introduced a
     new back-edge in the chosen ordering.
     """
