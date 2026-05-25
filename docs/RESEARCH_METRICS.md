@@ -623,10 +623,17 @@ cases). Annotation coverage is the cheap win.
 moving from 30% annotation coverage to 90% has measurably improved
 maintainability in a way no graph-level metric will catch.
 
-**Fit:** could be a sixth sub-metric (`typing` axis), or a
-companion stat reported alongside the score. The former changes
-the geometric-mean exponent and shifts absolute scores; the latter
-is additive.
+**Fit:** the original survey rated this a candidate sixth sub-metric
+(`typing` axis) or companion stat. **Status: rejected (2026-05), in
+both forms.** The empirical study in
+[`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md)
+concluded against axis promotion (independence is the weakest archy has
+measured, max `|r| = 0.551`; discriminant validity is contested) *and*
+against shipping it as a diagnostic (mypy / pyright own the typing
+niche, the signal is not structural, and the "single sensor for
+everything" framing dilutes archy's graph-shape focus). See
+[`ROADMAP.md`](ROADMAP.md) "Rejected". The text above is kept
+as the pre-study survey rationale, not a live recommendation.
 
 ---
 
@@ -801,7 +808,7 @@ framework-specific DB/ORM package allowlist; a user who has defined
 layers can already express it as their own `forbid` rule.
 
 *Reception and caveats* ([HN discussion][constraint-decay-hn]).
-Three threads sharpen archy's reading. **Supporting:** the top
+Several threads sharpen archy's reading. **Supporting:** the top
 architecture comment proposes exactly archy's model - adopt an
 ArchUnit-style framework to "spoon feed the LLM what exactly it's
 doing wrong," treating architectural rules as *executable constraints
@@ -814,15 +821,179 @@ a failure the paper does not measure but archy is well-placed to fix,
 Monday don't reach the agent making the next change on Tuesday." A
 persisted `.importlinter` / `archy.yaml` plus an always-on MCP server
 *is* the durable cross-session architecture memory that prose
-CLAUDE.md notes are not - and this argument is independent of model
-strength. **Tempering:** the single top comment flags that **frontier
-models were not fully tested, for cost reasons**, so the absolute
-pass-rate numbers are directional, not definitive; others argue the
-effect may partly rebrand known long-context degradation ("context
-rot") and that some of it erodes as models improve. Net: treat the
--9.1 pp layering penalty as *evidence the feedback loop has value, not
-as a fixed constant*, and lean hardest on the cross-session-
-persistence argument.
+CLAUDE.md notes are not. One commenter correctly counters that
+Markdown prompts *also* persist across model generations (and survive
+dependency/API churn better than code), so durability alone is not the
+wedge: the distinction is that prose persists but is never *enforced*,
+whereas a config is persisted **and checked deterministically every
+session**. Durable-and-enforced is the claim, not durability; and that
+is the part independent of model strength. **Tempering:** the single
+top comment flags that **frontier models were not fully tested, for
+cost reasons**, so the absolute pass-rate numbers are directional, not
+definitive; others argue the effect may partly rebrand known
+long-context degradation ("context rot") and that some of it erodes as
+models improve. Net: treat the -9.1 pp layering penalty as *evidence
+the feedback loop has value, not as a fixed constant*, and lean
+hardest on the cross-session-persistence argument.
+
+**A sharper mechanism than the paper states: aspiration vs consequence
+constraints.** The thread's most load-bearing observation is that
+agents *ignore* aspirational constraints ("be modular", "follow Clean
+Architecture") but *obey* brief, precise, preventative rules ("a file
+in this layer must not import that one") "because it is brief,
+unambiguous, and precise." This is the mechanism behind the paper's
+own -9.1 pp layering penalty: Clean Architecture, as handed to the
+agent in prose, *is* an aspiration, so it decays; the identical
+constraint expressed as a directional `forbid` edge is a consequence,
+and consequences get obeyed. The implication sharpens the #122/#135
+inference design directly: the inferred layering report must emit
+**consequence-shaped negative rules** (resolved `X must not import Y`
+pairs), never aspirational prose, or it reproduces the exact failure
+the paper measures. It also yields the cleanest one-line statement of
+archy's value the docs currently lack: **archy converts architectural
+aspirations into checkable consequences.**
+
+Two further threads converge on *timing* and *division of labor*.
+**Calcification** (one commenter, 2B tokens on a C compiler):
+architectural patterns self-reinforce once they dominate the context,
+so constraints applied up front stick while constraints retrofitted
+after the agent has calcified a different pattern do not. This is
+independent support for the timing of archy's loop (risk/affected
+*before* edits; the pre-edit `archy install --hooks` framing) and
+argues for surfacing the dominant existing pattern at task start.
+**Single-objective optimization**: a separate commenter frames
+constraint decay as the impossibility of optimizing two objectives at
+once (functional + non-functional); the design consequence is that
+offloading the *structural* objective to an external deterministic
+checker frees the agent's budget for the *functional* one, which is
+precisely archy's role.
+
+**Two features these threads motivate, both larger than they first
+look** (filed as Deferred epics in [`FUTURE.md`](FUTURE.md), not Next
+items):
+
+- *Positive exemplar surfacing.* The thread's most-repeated practical
+  claim is that showing the agent a good example beats describing the
+  rule ("exemplar-based constraints proved phenomenally powerful"; a
+  separate report of ~75-80% style-match when the agent could see how
+  a pattern was already implemented). archy today is purely negative -
+  it ranks violations (`archy check`) and fragile modules
+  (`archy_high_risk_modules`); the inverse, ranking the *cleanest*
+  existing module as a copy-me template, is the highest-payoff
+  technique in the thread and has no roadmap item. It is **not small**,
+  and the obvious framing (build a corpus of patterns) is a trap; the
+  design question - corpus vs project-relative, and what archy can
+  legitimately claim given it only sees the graph - is worked through
+  in §14c.5 below.
+- *Rule-rot / constraint-staleness detection.* One commenter names a
+  failure the paper does not measure: agents obey constraints but
+  cannot judge when a constraint itself should *change*, so a stale
+  rule gets satisfied by inelegant indirection rather than revised. The
+  mirror image of constraint decay is rule rot, and archy can see the
+  symptom (a `forbid` rule carrying many `ignore_imports` exceptions,
+  or a layer boundary accumulating indirection edges that exist only to
+  route around it - the psycopg-through-db-engine shape from the v0.15
+  lesson). This is **also large**: distinguishing "the rule is stale"
+  from "the code is wrong" is the hard part and needs the same FP-rate
+  discipline as the dead-code study (§12) before anything ships.
+
+### 14c.5. Positive exemplar surfacing: why it is project-relative, not a corpus
+
+Of the two §14c.4 epics, exemplar surfacing has the larger design
+trap, and it is worth resolving on paper before any code. The naive
+reading - "ship a curated corpus of good patterns and best practices
+the agent can copy" - is wrong for archy on five independent grounds,
+and the literature is unusually clear about each.
+
+**1. The pattern space is combinatorial and the implementations vary
+without bound.** Design-pattern-detection research has a standing
+result that "patterns are only a guideline ... each pattern can be
+implemented in various ways," which is exactly why classical static
+detectors "struggle with the complexity and variability of real-world
+pattern implementations" and the field has moved to LLM-based
+detection ([LLM-Based Design Pattern Detection][dp-llm],
+`arxiv:2502.18458`). Layer in per-language idiom (the
+[Pythonic-idioms refactoring][pythonic-idioms] work, `arxiv:2207.05613`,
+enumerates *nine* Python idioms and treats that as a research
+contribution) and a "corpus of patterns" is unbounded and contested
+before it ships. The user's intuition here is correct and
+literature-backed.
+
+**2. Curated example/template catalogs rot, and the rot is the
+dominant failure mode even for teams whose whole job is to maintain
+them.** The platform-engineering "golden path / paved road" literature
+([Spotify golden paths][spotify-golden], [The New Stack][newstack-paths])
+is the closest thing to a working exemplar corpus in industry, and its
+catalogued failure modes are *railroads* and *golden cages*: templates
+whose "documentation is outdated and refers to tools that no longer
+exist," left "to rot" once the platform team is reassigned, which
+developers then bypass by "copying YAML from old repos." A corpus archy
+shipped would rot faster, because archy is one tool, not a staffed
+platform team. By contrast, a **project-relative exemplar is recomputed
+from the live repo on every call and is therefore current by
+construction** - it cannot go stale.
+
+**3. The "find similar code" half is already owned, and doing it badly
+actively hurts.** In-repo semantic retrieval is the core competence of
+Cursor (local index + custom retrieval, "writes code that matches your
+style"), Cody (org-wide semantic search, cites sources), Copilot, and
+the embeddings-RAG stack generally. And the RAG-for-code literature is
+blunt that naive similarity retrieval is *net-negative* if quality
+isn't controlled: retrieved similar code "often introduces noise,
+degrading results by up to 15%" ([What to Retrieve...][what-to-retrieve],
+`arxiv:2503.20589`), there is a "[When More Retrieval Hurts][more-hurts]"
+result (`arxiv:2511.05302`), and the consistent finding is that ICL
+performance "is highly dominated by the quality of selected examples,"
+with diversity-aware selection (MMR) beating pure similarity. archy
+trying to be a retriever would be redundant *and* off-positioning (it
+is not a semantic/embedding tool).
+
+**4. A corpus is a different product and breaks three archy
+anti-goals.** A curated pattern/template library is scaffolding
+(Backstage), a linter/idiom-fixer (ruff, the Pythonic-idioms tool), or
+a pattern catalog (refactoring.guru) - none of which is a static
+graph-shape sensor. Shipping one would violate "no replacement of
+linters," "not the single source of truth for codebase health," and
+the graph-shape-sensor focus. It also imposes *external* taste on the
+user's repo, whereas archy's whole stance is to judge the repo on its
+own structure.
+
+**5. Nobody ships the thing archy could uniquely ship.** The gap-check
+turned up knowledge-graph repo-level code-gen ([KG-based code
+gen][kg-codegen], `arxiv:2505.14394`) and noise-reduction-by-pruning
+work, but no tool that *ranks an exemplar by structural quality*. That
+is precisely the seam the ICL literature says matters most and the
+retrieval tools leave open.
+
+**The resolution.** archy should not enumerate patterns or normalize
+against the universe of "best practice." It should treat **"pattern" =
+a structural peer group that already exists in this repo** (siblings in
+a layer, a directory, a graph community, or a naming convention - all
+detectable from the graph archy already builds, and from the #122
+layer-inference machinery) and **"best practice" = best structural
+health relative to those peers** (low `edit_risk`, respects layer
+direction, not in a cycle, low propagation cost, healthy local Newman
+Q, moderate `cc_mean`), normalized as a within-group percentile rather
+than against any external baseline. The combinatorial-explosion and
+language-idiosyncrasy problems *dissolve* because archy never names a
+pattern: it points at the healthiest instance of whatever the repo
+already does.
+
+This reframes the role precisely and complementarily: **archy is the
+quality ranker, not the retriever.** The IDE / RAG layer supplies
+*similarity* (which existing files are relevant to this task); archy
+supplies the *structural-quality* filter the ICL literature says
+dominates outcomes (of those candidates, which one is the cleanest to
+copy). The honest scope limit is that structural health is *necessary,
+not sufficient* - a module can be graph-clean but a poor semantic
+example - so archy's claim must be narrow: "the structurally cleanest
+peer," never "the best example, period." Semantic correctness stays
+with the agent. With that framing the feature is corpus-free,
+never-stale, on-positioning, and a genuine gap; it remains an epic only
+because it is gated on the per-module score breakdown (#129) and needs
+a bench validation that "structurally cleanest peer" actually
+correlates with "useful exemplar," plus the clean-but-trivial guard (a
+one-function module must not win by default).
 
 [nav-paradox]: https://arxiv.org/html/2602.20048v1
 [constraint-decay]: https://arxiv.org/html/2605.06445v1
@@ -831,6 +1002,13 @@ persistence argument.
 [daplab-9-patterns]: https://daplab.cs.columbia.edu/general/2026/01/08/9-critical-failure-patterns-of-coding-agents.html
 [anthropic-harnesses]: https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
 [so-bugs-coding-agents]: https://stackoverflow.blog/2026/01/28/are-bugs-and-incidents-inevitable-with-ai-coding-agents/
+[dp-llm]: https://arxiv.org/pdf/2502.18458
+[pythonic-idioms]: https://arxiv.org/pdf/2207.05613
+[spotify-golden]: https://engineering.atspotify.com/2020/08/how-we-use-golden-paths-to-solve-fragmentation-in-our-software-ecosystem
+[newstack-paths]: https://thenewstack.io/paved-roads-golden-paths-guardrails-and-railroads/
+[what-to-retrieve]: https://arxiv.org/abs/2503.20589
+[more-hurts]: https://arxiv.org/pdf/2511.05302
+[kg-codegen]: https://arxiv.org/html/2505.14394v1
 
 ---
 
@@ -1131,7 +1309,7 @@ The "Role" column distinguishes:
 | Cyclomatic complexity per function        | High   | Medium | **Shipped as a score axis in v0.20**; v0.23 widened divisor: `complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)`; per-module function_count/cc_sum/cc_max/cc_mean still surfaced as diagnostics | ✓ orthogonal: max `\|r\| = 0.197` against 6 existing signals on 27-project bench | **Shipped (score axis, v0.20; recalibrated v0.23)** |
 | Reflexion: Forbidden + Independence       | High   | Low    | Check rule          | -                | **Yes**   |
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
-| Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |
+| Type-hint coverage                        | High   | Low    | -                   | ✓ rejected 2026-05: independence weakest measured (max `\|r\| = 0.551`), niche owned by mypy/pyright ([`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md)) | **No** (axis or diagnostic) |
 | Cognitive complexity                      | Medium | Trivial| Sub-stat (free with CC) | -            | **Yes (free)** |
 | Hotspots (CC × per-file churn)            | High   | Medium | **Shipped** as `archy hotspots` (v0.18.0): `cc_sum * commit_count` per internal module, single `git log --name-only` pass, zero-component rows filtered; `--since` window default settled at full history via the 27-project sweep in `bench/hotspots_results.md` | ✓ window choice empirically validated: median J(full, 12mo) = 0.60, J(12mo, 6mo) = 0.74, stale_full_frac = 0.25 on the bench | **Shipped (diagnostic)** |
 | Martin's `I` + SDP-violation rule         | Medium | Low    | Sub-stat + check rule | ✓ shipped: `instability.py`, `layers.find_sdp_violations`, surfaced in `archy graph --format json` and `archy check` | **Shipped** |
@@ -1179,9 +1357,12 @@ additive unless marked **Replace**.
 6. **Per-function cyclomatic + cognitive complexity** (already in
    [`FUTURE.md`](FUTURE.md)). Both come from the same tree-sitter
    pass; cognitive is free given CC.
-7. **Type-hint coverage** - same tree-sitter pass scope. Could be
-   added as a sub-stat or eventually promoted to a sixth score axis
-   if the signal proves load-bearing.
+7. ~~**Type-hint coverage**~~ - **rejected (2026-05).** The original
+   survey queued this as a sub-stat or candidate sixth axis; the
+   empirical study ([`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md))
+   concluded against both forms (weakest independence archy has
+   measured, max `|r| = 0.551`; niche owned by mypy / pyright; not a
+   structural signal). See [`ROADMAP.md`](ROADMAP.md) "Rejected".
 8. **Call-graph edges** ([`FUTURE.md`](FUTURE.md)). Once shipped,
    modularity and propagation cost both gain resolution.
 9. **Hotspots = CC × per-file churn.** Needs CC + a one-pass
