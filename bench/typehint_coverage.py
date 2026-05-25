@@ -16,15 +16,15 @@ annotation.
 
 Also computes Pearson correlation of project coverage against archy's
 five score axes (modularity, acyclicity, depth, equality, complexity)
-to evaluate the orthogonality criterion the AXIS_REVIEW.md framework
-requires before any axis-promotion decision.
+to evaluate the orthogonality criterion the docs/research/AXIS_REVIEW.md
+framework requires before any axis-promotion decision.
 
 This is the empirical input to docs/research/AXIS_REVIEW.md's "next 6th-axis
 candidate" recommendation. Output should drive the ship/no-ship
 decision, not pre-suppose it.
 
 Usage:
-    uv run --with networkx --with pyyaml --with tree-sitter \
+    uv run --with networkx --with pyyaml --with pydantic --with tree-sitter \
         --with tree-sitter-python python bench/typehint_coverage.py
 """
 
@@ -33,10 +33,10 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 
 import tree_sitter_python
+from pydantic import BaseModel, ConfigDict
 from tree_sitter import Language, Node, Parser
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -46,8 +46,9 @@ PY_LANG = Language(tree_sitter_python.language())
 PARSER = Parser(PY_LANG)
 
 
-@dataclass(frozen=True)
-class ProjectCoverage:
+class ProjectCoverage(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     name: str
     public_functions: int
     annotated_positions: int
@@ -67,11 +68,16 @@ def _is_public(name: str) -> bool:
     return name.startswith("__") and name.endswith("__")
 
 
+def _text(node: Node, source: bytes) -> str:
+    """Decode a node's source span; central helper so the byte-slice idiom isn't repeated."""
+    return source[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
+
+
 def _name_of(func_node: Node, source: bytes) -> str:
     name_node = func_node.child_by_field_name("name")
     if name_node is None:
         return "<anon>"
-    return source[name_node.start_byte : name_node.end_byte].decode("utf-8", errors="replace")
+    return _text(name_node, source)
 
 
 def _count_function(func_node: Node, source: bytes) -> tuple[int, int] | None:
@@ -93,7 +99,7 @@ def _count_function(func_node: Node, source: bytes) -> tuple[int, int] | None:
             # self / cls are method-receiver conventions and not part of
             # the typed surface; skip them entirely.
             if param.type == "identifier":
-                ident = source[param.start_byte : param.end_byte].decode("utf-8", errors="replace")
+                ident = _text(param, source)
                 if ident in ("self", "cls"):
                     continue
                 total += 1
@@ -104,16 +110,17 @@ def _count_function(func_node: Node, source: bytes) -> tuple[int, int] | None:
                 total += 1
                 continue
             if param.type in ("typed_parameter", "typed_default_parameter"):
-                # `x: T` or `x: T = 1` - explicitly annotated.
+                # typed_parameter / typed_default_parameter are the only param nodes
+                # that carry a type, so these are the positions that count as annotated.
                 annotated += 1
                 total += 1
                 continue
             if param.type == "list_splat_pattern":
-                # `*args` with no annotation. Counts as an unannotated position.
+                # bare `*args` carries no type, so it counts toward total but not annotated.
                 total += 1
                 continue
             if param.type == "dictionary_splat_pattern":
-                # `**kwargs` with no annotation.
+                # bare `**kwargs`, likewise: a position, but unannotated.
                 total += 1
                 continue
             if param.type == "typed_splat_pattern":

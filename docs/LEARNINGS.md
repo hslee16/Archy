@@ -65,7 +65,7 @@ archy's score follows sentrux's [`quality-signal-design.md`](https://github.com/
 | Aggregation | geometric mean of 5 | geometric mean of 4 | Same rationale (Pareto + symmetry + independence). |
 | Display scale | integer 0-10000 | float `[0, 1]` to three decimals | Cosmetic. |
 
-What we get from being faithful: a v0.2.0 archy score on a given codebase is directly comparable to whatever sentrux would produce on its four-metric subset. What we lose: redundancy. When `archy redundancy` ships (FUTURE.md, deferred), aggregation will widen back to five and the numeric scale will line up with sentrux's.
+What we get from being faithful: a v0.2.0 archy score on a given codebase is directly comparable to whatever sentrux would produce on its four-metric subset. What we lose: redundancy. When this was written archy had four axes to sentrux's five, and aggregation was expected to "widen back to five" if `archy redundancy` shipped. v0.20 instead took the fifth slot with `complexity` (the score is now `(mod * acy * dep * eq * cpx) ** 0.2`), so a future `archy redundancy` would be a sixth axis rather than restoring parity with sentrux's four-metric subset.
 
 The deeper agreement is methodological - sentrux's argument for geometric mean (the only aggregator that's Pareto-optimal, symmetric, and independent) is the load-bearing claim. That's why score gaming works only by improving every axis. (Refined in 2026-05 by `docs/research/SCORE_SHAPE_REDESIGN_EMPIRICS.md`: the 28-project empirics found that `depth` correlates only weakly with `overall` under every tested aggregator (`|r| ≤ 0.187`), so depth-side gaming is essentially toothless in practice. The non-compensatory property bites hardest on the other four axes - modularity, acyclicity, equality, complexity - which all have non-trivial leverage on `overall`.)
 
@@ -133,7 +133,7 @@ Detailed citations, a failure-mode-to-archy-capability mapping, and the implied 
 
 ## v0.16.0 - call edges as a second edge type (diagnostic)
 
-LocAgent (ACL 2025) ablated four edge types in a heterogeneous code graph and found invoke edges contributed more to LLM-agent code-localization accuracy than imports - the empirical justification for archy adding a second edge type. v0.16.0 ships call edges as a *diagnostic*, mirroring the [`MacCormack v0.13.3 propagation-cost rollout`](research/RESEARCH_METRICS.md): ship the signal, validate orthogonality on the 27-project benchmark, promote to a score axis at a deliberate version boundary once the design choice (weighted-Newman-Q vs new fifth axis) is settled.
+LocAgent (ACL 2025) ablated four edge types in a heterogeneous code graph and found invoke edges contributed more to LLM-agent code-localization accuracy than imports - the empirical justification for archy adding a second edge type. v0.16.0 ships call edges as a *diagnostic*, mirroring the [`MacCormack v0.13.3 propagation-cost rollout`](research/RESEARCH_METRICS.md): ship the signal, validate orthogonality on the 27-project benchmark, promote to a score axis at a deliberate version boundary once the design choice (weighted-Newman-Q vs a new sixth axis, the fifth slot having gone to `complexity` in v0.20) is settled.
 
 Three things that shaped the implementation:
 

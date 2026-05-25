@@ -29,6 +29,7 @@ import math
 import statistics
 import subprocess
 import sys
+from collections.abc import Callable
 from itertools import combinations
 from pathlib import Path
 
@@ -534,6 +535,42 @@ def correlation_matrix(axes_map: dict[str, list[float]]) -> dict[tuple[str, str]
     return {(a, b): pearson(axes_map[a], axes_map[b]) for a, b in combinations(axes, 2)}
 
 
+def _emit_correlation_matrix(
+    emit: Callable[[str], None],
+    cand: str,
+    cm: dict[tuple[str, str], float],
+    *,
+    show_moderate: bool,
+) -> tuple[float, float, float]:
+    """Render one candidate's correlation table and summary; return (ad, md, max_abs).
+
+    Shared by the acyclicity and depth loops, which differed only in whether the
+    OECD "moderate coupling" count (pairs at |r| >= 0.5) is shown.
+    """
+    emit(f"### {cand}")
+    emit("")
+    emit("| pair | r |")
+    emit("| --- | ---: |")
+    max_abs = 0.0
+    moderate_count = 0
+    for (a, b), r in cm.items():
+        marker = " **" if abs(r) >= 0.5 else ""
+        emit(f"| {a} ↔ {b}{marker} | {r:+.3f}{marker} |")
+        max_abs = max(max_abs, abs(r))
+        if abs(r) >= 0.5:
+            moderate_count += 1
+    ad = cm[("acyclicity", "depth")]
+    md = cm[("modularity", "depth")]
+    emit("")
+    emit(f"- acyclicity ↔ depth: **{ad:+.3f}**")
+    emit(f"- modularity ↔ depth: **{md:+.3f}**")
+    if show_moderate:
+        emit(f"- pairs at |r| ≥ 0.5: **{moderate_count}/10**")
+    emit(f"- max |r|: **{max_abs:.3f}**")
+    emit("")
+    return ad, md, max_abs
+
+
 def evaluate() -> None:
     corpus = load_corpus()
     if not corpus:
@@ -559,27 +596,7 @@ def evaluate() -> None:
     for cand in ACYCLICITY_CANDIDATES:
         axes_map = axis_values(corpus, cand)
         cm = correlation_matrix(axes_map)
-        emit(f"### {cand}")
-        emit("")
-        emit("| pair | r |")
-        emit("| --- | ---: |")
-        max_abs = 0.0
-        moderate_count = 0
-        for (a, b), r in cm.items():
-            marker = " **" if abs(r) >= 0.5 else ""
-            emit(f"| {a} ↔ {b}{marker} | {r:+.3f}{marker} |")
-            if abs(r) > max_abs:
-                max_abs = abs(r)
-            if abs(r) >= 0.5:
-                moderate_count += 1
-        ad = cm[("acyclicity", "depth")]
-        md = cm[("modularity", "depth")]
-        emit("")
-        emit(f"- acyclicity ↔ depth: **{ad:+.3f}**")
-        emit(f"- modularity ↔ depth: **{md:+.3f}**")
-        emit(f"- pairs at |r| ≥ 0.5: **{moderate_count}/10**")
-        emit(f"- max |r|: **{max_abs:.3f}**")
-        emit("")
+        ad, md, max_abs = _emit_correlation_matrix(emit, cand, cm, show_moderate=True)
         summary_rows.append((cand, ad, md, max_abs))
 
     emit("## Acyclicity candidate summary")
@@ -600,21 +617,7 @@ def evaluate() -> None:
     for cand in DEPTH_CANDIDATES:
         axes_map = axis_values(corpus, "baseline_tangle", cand)
         cm = correlation_matrix(axes_map)
-        emit(f"### {cand}")
-        emit("")
-        emit("| pair | r |")
-        emit("| --- | ---: |")
-        max_abs = 0.0
-        for (a, b), r in cm.items():
-            marker = " **" if abs(r) >= 0.5 else ""
-            emit(f"| {a} ↔ {b}{marker} | {r:+.3f}{marker} |")
-            if abs(r) > max_abs:
-                max_abs = abs(r)
-        ad = cm[("acyclicity", "depth")]
-        md = cm[("modularity", "depth")]
-        emit(f"\n- acyclicity ↔ depth: **{ad:+.3f}**")
-        emit(f"- modularity ↔ depth: **{md:+.3f}**")
-        emit(f"- max |r|: **{max_abs:.3f}**\n")
+        ad, md, max_abs = _emit_correlation_matrix(emit, cand, cm, show_moderate=False)
         depth_summary.append((cand, ad, md, max_abs))
 
     emit("## Depth candidate summary\n")

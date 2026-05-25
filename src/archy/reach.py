@@ -48,7 +48,9 @@ def compute_propagation_cost(graph: nx.DiGraph) -> tuple[float, dict[str, float]
     total = 0
     for node in internal:
         ancestors = nx.ancestors(graph, node) & internal
-        reach = len(ancestors) + 1  # +1 for self
+        # Reverse closure includes the node itself, so an isolated module
+        # contributes 1/N rather than 0 to propagation cost.
+        reach = len(ancestors) + 1
         per_module[node] = reach / n
         total += reach
     return total / (n * n), per_module
