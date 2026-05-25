@@ -801,7 +801,7 @@ framework-specific DB/ORM package allowlist; a user who has defined
 layers can already express it as their own `forbid` rule.
 
 *Reception and caveats* ([HN discussion][constraint-decay-hn]).
-Three threads sharpen archy's reading. **Supporting:** the top
+Several threads sharpen archy's reading. **Supporting:** the top
 architecture comment proposes exactly archy's model - adopt an
 ArchUnit-style framework to "spoon feed the LLM what exactly it's
 doing wrong," treating architectural rules as *executable constraints
@@ -814,15 +814,82 @@ a failure the paper does not measure but archy is well-placed to fix,
 Monday don't reach the agent making the next change on Tuesday." A
 persisted `.importlinter` / `archy.yaml` plus an always-on MCP server
 *is* the durable cross-session architecture memory that prose
-CLAUDE.md notes are not - and this argument is independent of model
-strength. **Tempering:** the single top comment flags that **frontier
-models were not fully tested, for cost reasons**, so the absolute
-pass-rate numbers are directional, not definitive; others argue the
-effect may partly rebrand known long-context degradation ("context
-rot") and that some of it erodes as models improve. Net: treat the
--9.1 pp layering penalty as *evidence the feedback loop has value, not
-as a fixed constant*, and lean hardest on the cross-session-
-persistence argument.
+CLAUDE.md notes are not. One commenter correctly counters that
+Markdown prompts *also* persist across model generations (and survive
+dependency/API churn better than code), so durability alone is not the
+wedge: the distinction is that prose persists but is never *enforced*,
+whereas a config is persisted **and checked deterministically every
+session**. Durable-and-enforced is the claim, not durability; and that
+is the part independent of model strength. **Tempering:** the single
+top comment flags that **frontier models were not fully tested, for
+cost reasons**, so the absolute pass-rate numbers are directional, not
+definitive; others argue the effect may partly rebrand known
+long-context degradation ("context rot") and that some of it erodes as
+models improve. Net: treat the -9.1 pp layering penalty as *evidence
+the feedback loop has value, not as a fixed constant*, and lean
+hardest on the cross-session-persistence argument.
+
+**A sharper mechanism than the paper states: aspiration vs consequence
+constraints.** The thread's most load-bearing observation is that
+agents *ignore* aspirational constraints ("be modular", "follow Clean
+Architecture") but *obey* brief, precise, preventative rules ("a file
+in this layer must not import that one") "because it is brief,
+unambiguous, and precise." This is the mechanism behind the paper's
+own -9.1 pp layering penalty: Clean Architecture, as handed to the
+agent in prose, *is* an aspiration, so it decays; the identical
+constraint expressed as a directional `forbid` edge is a consequence,
+and consequences get obeyed. The implication sharpens the #122/#135
+inference design directly: the inferred layering report must emit
+**consequence-shaped negative rules** (resolved `X must not import Y`
+pairs), never aspirational prose, or it reproduces the exact failure
+the paper measures. It also yields the cleanest one-line statement of
+archy's value the docs currently lack: **archy converts architectural
+aspirations into checkable consequences.**
+
+Two further threads converge on *timing* and *division of labor*.
+**Calcification** (one commenter, 2B tokens on a C compiler):
+architectural patterns self-reinforce once they dominate the context,
+so constraints applied up front stick while constraints retrofitted
+after the agent has calcified a different pattern do not. This is
+independent support for the timing of archy's loop (risk/affected
+*before* edits; the pre-edit `archy install --hooks` framing) and
+argues for surfacing the dominant existing pattern at task start.
+**Single-objective optimization**: a separate commenter frames
+constraint decay as the impossibility of optimizing two objectives at
+once (functional + non-functional); the design consequence is that
+offloading the *structural* objective to an external deterministic
+checker frees the agent's budget for the *functional* one, which is
+precisely archy's role.
+
+**Two features these threads motivate, both larger than they first
+look** (filed as Deferred epics in [`FUTURE.md`](FUTURE.md), not Next
+items):
+
+- *Positive exemplar surfacing.* The thread's most-repeated practical
+  claim is that showing the agent a good example beats describing the
+  rule ("exemplar-based constraints proved phenomenally powerful"; a
+  separate report of ~75-80% style-match when the agent could see how
+  a pattern was already implemented). archy today is purely negative -
+  it ranks violations (`archy check`) and fragile modules
+  (`archy_high_risk_modules`); the inverse, ranking the *cleanest*
+  existing module in a layer as a copy-me template, is the
+  highest-payoff technique in the thread and has no roadmap item. It is
+  **not small**: it depends on the per-module score breakdown
+  ([`FUTURE.md`](FUTURE.md) / ROADMAP "Next", #129) landing first, and
+  "cleanest exemplar" needs a defended definition (which axes, how to
+  exclude clean-but-trivial modules) plus a validation pass against the
+  bench before it can claim signal.
+- *Rule-rot / constraint-staleness detection.* One commenter names a
+  failure the paper does not measure: agents obey constraints but
+  cannot judge when a constraint itself should *change*, so a stale
+  rule gets satisfied by inelegant indirection rather than revised. The
+  mirror image of constraint decay is rule rot, and archy can see the
+  symptom (a `forbid` rule carrying many `ignore_imports` exceptions,
+  or a layer boundary accumulating indirection edges that exist only to
+  route around it - the psycopg-through-db-engine shape from the v0.15
+  lesson). This is **also large**: distinguishing "the rule is stale"
+  from "the code is wrong" is the hard part and needs the same FP-rate
+  discipline as the dead-code study (§12) before anything ships.
 
 [nav-paradox]: https://arxiv.org/html/2602.20048v1
 [constraint-decay]: https://arxiv.org/html/2605.06445v1
