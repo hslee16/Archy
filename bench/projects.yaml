@@ -2,7 +2,7 @@
 #
 # Used by `bench/run.py` to clone, pin, and analyze a curated set of
 # Python projects. SHAs are pinned so benchmark numbers in `docs/SCORING.md`
-# and `docs/RESEARCH_METRICS.md` stay reproducible.
+# and `docs/research/RESEARCH_METRICS.md` stay reproducible.
 #
 # To refresh SHAs: edit by hand or run `bench/run.py --update-shas`.
 # To add a project: append below with a one-line `why` rationale so the

@@ -248,7 +248,7 @@ def main() -> int:
             "cc_mean": inputs.get("cc_mean", 0.0),
             # Call-weighted Newman Q diagnostic shipped in v0.21. The gap
             # between unweighted and weighted raw Q is the load-bearing
-            # signal; see docs/CALL_WEIGHTED_Q_EMPIRICS.md.
+            # signal; see docs/research/CALL_WEIGHTED_Q_EMPIRICS.md.
             "raw_modularity": inputs.get("raw_modularity", 0.0),
             "raw_modularity_weighted": inputs.get("raw_modularity_weighted", 0.0),
         }
@@ -373,7 +373,7 @@ def main() -> int:
     emit(
         "Per-project unweighted vs call-weighted raw Newman Q. The gap "
         "(weighted - unweighted) is the load-bearing signal; see "
-        "`docs/CALL_WEIGHTED_Q_EMPIRICS.md`."
+        "`docs/research/CALL_WEIGHTED_Q_EMPIRICS.md`."
     )
     emit()
     emit("| project | sha | unweighted Q | weighted Q | gap |")

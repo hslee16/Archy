@@ -246,7 +246,7 @@ uniform sensitivity).
 ## Methodology
 
 - **Corpus**: 27 projects pinned in `bench/projects.yaml` (the
-  benchmark population behind `docs/RESEARCH_METRICS.md`) plus
+  benchmark population behind `docs/research/RESEARCH_METRICS.md`) plus
   `governingdocs/backend` as a 28th data point (validator/parser-heavy
   backend, `cc_mean = 6.48`, 209 modules, archy.yaml-configured src
   scope). All 28 captured 2026-05-17 against `archy v0.23.0`.
@@ -264,8 +264,8 @@ uniform sensitivity).
 - **Rank stability**: Spearman ρ of each candidate's overall ranking
   vs v0.23 baseline overall ranking.
 - **OECD discriminant-validity gate**: same gate that killed
-  call-weighted-Q-as-axis (`docs/CALL_WEIGHTED_Q_EMPIRICS.md`) and the
-  DSM scalars (`docs/DSM_EMPIRICS.md`). Per axis change: independence,
+  call-weighted-Q-as-axis (`docs/research/CALL_WEIGHTED_Q_EMPIRICS.md`) and the
+  DSM scalars (`docs/research/DSM_EMPIRICS.md`). Per axis change: independence,
   directionality, actionability, ordering stability. Per aggregator
   change: rank stability `>= 0.9`, sensitivity profile no flatter than
   the existing geomean by more than 50%, single-line implementation.

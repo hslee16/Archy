@@ -13,7 +13,7 @@ computes Pearson correlation of `Q_weighted_normalized` against the
 other four score axes to check whether call-weighting preserves the
 v0.20 orthogonality picture.
 
-Read by `docs/AXIS_REVIEW.md` recommendation 2; output drives the
+Read by `docs/research/AXIS_REVIEW.md` recommendation 2; output drives the
 decision on whether to refine the modularity axis with call weights.
 
 Usage:
@@ -34,7 +34,7 @@ import networkx as nx
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run import clone_or_update, load_manifest, pearson
 
-# Importing archy from the working tree (we are inside the repo).
+# Measure the working-tree src, not an installed archy, so the bench reflects unreleased changes.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from archy.graph import build_graph
 from archy.score import (
@@ -114,13 +114,14 @@ def main() -> int:
             print(f"#   SKIPPED ({type(exc).__name__}: {exc})", file=sys.stderr)
             continue
 
-        # Reference axes for orthogonality math.
+        # Recompute the four production axes inline so the weighted-Q signal can be
+        # correlated against them below (orthogonality is the bar for a new axis).
         mod_norm, _, raw_q_unweighted = compute_modularity(graph)
         acy_norm, _, _ = compute_acyclicity(graph)
         dep_norm, _ = compute_depth(graph)
         eq_norm, _ = compute_equality(graph)
 
-        # CC for the complexity axis.
+        # The complexity axis has no graph-level shortcut, so aggregate per-node CC by hand.
         n_funcs = 0
         cc_total = 0
         for _, data in graph.nodes(data=True):
@@ -132,7 +133,7 @@ def main() -> int:
         cc_mean = (cc_total / n_funcs) if n_funcs else 0.0
         cpx_norm = compute_complexity(cc_mean, n_funcs)
 
-        # The experimental signal.
+        # Same [0,1] normalization as the modularity axis, so delta and Pearson r are comparable.
         raw_q_weighted, _ = _qw(graph)
         q_weighted_norm = _normalize_q(raw_q_weighted)
 
@@ -177,7 +178,8 @@ def main() -> int:
         f"min = {min(deltas):+.3f}; max = {max(deltas):+.3f}.\n"
     )
 
-    # Rank shift: how much does the project ordering change between the two Q values?
+    # Rank shift gauges axis stability: large reorderings would mean call-weighting
+    # changes what the axis measures, not just its magnitude.
     by_un = {r["name"]: i for i, r in enumerate(sorted(rows, key=lambda r: -r["q_unweighted"]))}
     by_w = {r["name"]: i for i, r in enumerate(sorted(rows, key=lambda r: -r["q_weighted"]))}
     shifts = sorted(
@@ -190,9 +192,12 @@ def main() -> int:
     for name, shift in shifts:
         print(f"| {name} | {by_un[name] + 1} | {by_w[name] + 1} | {shift:+d} |")
 
-    # Orthogonality picture under the weighted signal.
+    # A new axis must be orthogonal to the existing ones; this is the discriminating test.
     print("\n## Pearson r of Q_weighted_normalized against the other axes\n")
-    print("(Compare against the unweighted-Q correlations in `RESEARCH_METRICS.md` sec 16.)\n")
+    print(
+        "(Compare against the unweighted-Q correlations in"
+        " `docs/research/RESEARCH_METRICS.md` sec 16.)\n"
+    )
     qw = [r["q_weighted_norm"] for r in rows]
     for label, vals in [
         ("acyclicity", [r["acy"] for r in rows]),

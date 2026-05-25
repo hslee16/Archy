@@ -1,6 +1,6 @@
 # Test protocol: agent-loop with `archy_contracts`
 
-Context: `docs/RESEARCH_METRICS.md` §10 (Forbidden + Independence contracts) and the conversation thread that produced this PR motivate the wrap. The load-bearing question we're testing is:
+Context: `docs/research/RESEARCH_METRICS.md` §10 (Forbidden + Independence contracts) and the conversation thread that produced this PR motivate the wrap. The load-bearing question we're testing is:
 
 > **Does proactive architectural feedback via MCP actually change agent behavior?**
 

@@ -88,7 +88,7 @@ if you want to confirm it explicitly.
    pairs; off-block entries under layer grouping show which
    dependencies cross declared layers. Save the JSON output as a DSM
    snapshot before editing so step 4 can diff against it. See
-   [`docs/DSM_EMPIRICS.md`](DSM_EMPIRICS.md) for why DSM ships as a
+   [`docs/research/DSM_EMPIRICS.md`](research/DSM_EMPIRICS.md) for why DSM ships as a
    visualization rather than a score axis.
 
 3. **Edit** the code as you normally would.
@@ -184,4 +184,4 @@ Why this loop exists in this shape, with citations:
 - **LocAgent ablation** (ACL 2025, [aclanthology:2025.acl-long.426](https://aclanthology.org/2025.acl-long.426/)) finds that removing graph traversal from an LLM agent significantly degrades function-level code localization. The whole-graph view alone is not enough either; bounded local neighborhoods matter, which is why `archy_graph_focus` returns a subgraph rather than the full dump.
 - **Coding-agent failure-mode literature** (Columbia DAPLab, Anthropic, Stack Overflow synthesis, 2026) names "scope drift", "context exhaustion", and "cross-file reasoning failure" as recurring patterns. The snapshot/diff cycle in steps 1, 4, and 5 of the loop above is built to catch the first; the bounded `archy_graph_focus` and `archy_impact` calls in step 2 are built to catch the third.
 
-The detailed failure-mode-to-capability mapping and the implied roadmap priority order live in [`RESEARCH_METRICS.md` §14c](RESEARCH_METRICS.md).
+The detailed failure-mode-to-capability mapping and the implied roadmap priority order live in [`RESEARCH_METRICS.md` §14c](research/RESEARCH_METRICS.md).

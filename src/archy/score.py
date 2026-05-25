@@ -59,14 +59,14 @@ class ScoreInputs(BaseModel):
     propagation_cost: float = 0.0
     # Call-graph diagnostics. Not folded into the four-axis geometric mean
     # in v0.16 - shipped as a diagnostic first per the MacCormack v0.13.3
-    # precedent. The v0.20 axis-promotion review (docs/AXIS_REVIEW.md)
+    # precedent. The v0.20 axis-promotion review (docs/research/AXIS_REVIEW.md)
     # decided against promoting `calls_per_edge` to a score axis on
     # directionality / actionability / discriminant-validity grounds.
     call_edge_count: int = 0
     total_calls: int = 0
     calls_per_edge: float = 0.0
     # Call-weighted Newman Q as a parallel diagnostic next to the
-    # unweighted modularity score. Shipped per docs/CALL_WEIGHTED_Q_EMPIRICS.md
+    # unweighted modularity score. Shipped per docs/research/CALL_WEIGHTED_Q_EMPIRICS.md
     # (Path B: parallel diagnostic, not axis replacement). The gap between
     # `raw_modularity` and `raw_modularity_weighted` is the load-bearing
     # signal: it detects mismatch between the import-graph decomposition
@@ -223,7 +223,7 @@ def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
     The gap between the unweighted and weighted raw Q is the load-bearing
     signal: a wider positive gap means call traffic amplifies the
     structural community shape; a negative gap means call traffic crosses
-    community boundaries. See ``docs/CALL_WEIGHTED_Q_EMPIRICS.md`` for the
+    community boundaries. See ``docs/research/CALL_WEIGHTED_Q_EMPIRICS.md`` for the
     empirical justification of this shape over axis replacement.
 
     Done on a copy so the input graph is never mutated; the per-edge ``_w``

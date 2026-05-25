@@ -6,7 +6,7 @@ Companion artifacts: `bench/typehint_coverage.py` (the script) and `bench/typehi
 
 ## Decision
 
-**Do not ship type-hint coverage in any form — not as a score axis, not as a diagnostic.** archy is a graph-shape sensor; type-hint coverage is per-function metadata at a different level of abstraction and is already handled well by existing tooling (`mypy --strict`, `pyright --strict`). Adding it to archy would widen the surface without deepening the niche.
+**Do not ship type-hint coverage in any form, neither as a score axis nor as a diagnostic.** archy is a graph-shape sensor; type-hint coverage is per-function metadata at a different level of abstraction and is already handled well by existing tooling (`mypy --strict`, `pyright --strict`). Adding it to archy would widen the surface without deepening the niche.
 
 This document is retained as a "we measured this, considered it, decided no" reference. The bench script and raw numbers stay in `bench/` so future reconsiderations have a starting point.
 
@@ -103,7 +103,7 @@ Same problem `calls_per_edge` had: the metric penalizes intentional or legacy de
 
 The OECD scorecard rules out axis promotion. A separate argument rules out diagnostic shipment.
 
-The argument by analogy to v0.21's call-weighted Newman Q decision (ship as parallel diagnostic when axis case is contested) does *not* apply here. Call-weighted Q earned a diagnostic slot because the *gap* between two values was the load-bearing signal — you can only read it when both values sit side by side. Type-hint coverage is one number; there is no gap to surface. "Consistency with the v0.21 precedent" was a rhetorical match, not a substantive one.
+The argument by analogy to v0.21's call-weighted Newman Q decision (ship as parallel diagnostic when axis case is contested) does *not* apply here. Call-weighted Q earned a diagnostic slot because the *gap* between two values was the load-bearing signal (you can only read it when both values sit side by side). Type-hint coverage is one number; there is no gap to surface. "Consistency with the v0.21 precedent" was a rhetorical match, not a substantive one.
 
 Five concrete arguments against the diagnostic:
 
