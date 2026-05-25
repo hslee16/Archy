@@ -719,21 +719,23 @@ these failure modes to archy capabilities:
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Scope drift causes regression         | Did this PR introduce new cycles / layer violations / score drops?                                               | **Shipping** (`archy_snapshot` + `archy_diff`).                     |
 | Hidden cross-file impact              | Blast radius, weighted by propagation cost                                                                       | **Partially shipping** (`archy_impact` returns reverse-closure set; propagation-cost weighting on the roadmap). |
-| Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Roadmap** (composite of existing signals + NCCD).                 |
+| Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Shipping** (`archy_high_risk_modules` / `edit_risk`, v0.14.0).                 |
 | Agent should read X first             | Top-N by PageRank / fan-in                                                                                       | **Shipping** (`archy_graph_summary`).                                |
 | Deprecated-pattern propagation        | Out of scope for archy (handled by ruff / mypy / pattern lints).                                                 | **Not shipping; not planned.**                                       |
 | Edit affects a hotspot                | CC × per-file churn                                                                                              | **Shipping** (`archy hotspots` CLI v0.18.0; `archy_hotspots` MCP tool v0.19.0).               |
 | Cross-file reasoning failure          | Bounded subgraph navigation, edge-level metadata                                                                 | **Shipping** (`archy_graph_focus` with import line numbers).         |
 
 **Implication for archy's roadmap.** The three top-priority
-additions, in order of evidence weight: (1) ship call graph as a
-second edge type (LocAgent ablation §14c.2); (2) ship NCCD/
-propagation cost as a diagnostic and as a weighting for
-`archy_impact` (MacCormack literature plus §c.3 mapping above);
-(3) ship a per-module risk composite that surfaces the
-"navigational salience" the Navigation Paradox paper §c.1 names as
-the residual failure mode after large context windows. Detailed
-roadmap entries in [`FUTURE.md`](FUTURE.md). The §c.4 paper below
+additions identified here, in order of evidence weight, have all
+since shipped: (1) call graph as a second edge type (LocAgent
+ablation §14c.2; shipped v0.16.0); (2) NCCD/propagation cost as a
+diagnostic and as a weighting input for `archy_impact` (MacCormack
+literature plus §c.3 mapping above; shipped v0.13.3); (3) a
+per-module risk composite that surfaces the "navigational salience"
+the Navigation Paradox paper §c.1 names as the residual failure mode
+after large context windows (shipped v0.14.0 as
+`archy_high_risk_modules` / `edit_risk`). Detailed roadmap entries in
+[`FUTURE.md`](FUTURE.md). The §c.4 paper below
 adds two more, both low-cost and both reusing the existing layer
 machinery: convention-based layer inference and a layer-presence
 check.
