@@ -623,10 +623,17 @@ cases). Annotation coverage is the cheap win.
 moving from 30% annotation coverage to 90% has measurably improved
 maintainability in a way no graph-level metric will catch.
 
-**Fit:** could be a sixth sub-metric (`typing` axis), or a
-companion stat reported alongside the score. The former changes
-the geometric-mean exponent and shifts absolute scores; the latter
-is additive.
+**Fit:** the original survey rated this a candidate sixth sub-metric
+(`typing` axis) or companion stat. **Status: rejected (2026-05), in
+both forms.** The empirical study in
+[`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md)
+concluded against axis promotion (independence is the weakest archy has
+measured, max `|r| = 0.551`; discriminant validity is contested) *and*
+against shipping it as a diagnostic (mypy / pyright own the typing
+niche, the signal is not structural, and the "single sensor for
+everything" framing dilutes archy's graph-shape focus). See
+[`ROADMAP.md`](ROADMAP.md) "Rejected". The text above is kept
+as the pre-study survey rationale, not a live recommendation.
 
 ---
 
@@ -1302,7 +1309,7 @@ The "Role" column distinguishes:
 | Cyclomatic complexity per function        | High   | Medium | **Shipped as a score axis in v0.20**; v0.23 widened divisor: `complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)`; per-module function_count/cc_sum/cc_max/cc_mean still surfaced as diagnostics | ✓ orthogonal: max `\|r\| = 0.197` against 6 existing signals on 27-project bench | **Shipped (score axis, v0.20; recalibrated v0.23)** |
 | Reflexion: Forbidden + Independence       | High   | Low    | Check rule          | -                | **Yes**   |
 | NCCD / ACD / propagation cost (one axis)  | High   | Low    | **Score axis**      | ✓ orthogonal to depth (r=0.000) on 9-lib benchmark | **Yes** |
-| Type-hint coverage                        | High   | Low    | Score axis or sub-stat | -             | **Yes**   |
+| Type-hint coverage                        | High   | Low    | -                   | ✓ rejected 2026-05: independence weakest measured (max `\|r\| = 0.551`), niche owned by mypy/pyright ([`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md)) | **No** (axis or diagnostic) |
 | Cognitive complexity                      | Medium | Trivial| Sub-stat (free with CC) | -            | **Yes (free)** |
 | Hotspots (CC × per-file churn)            | High   | Medium | **Shipped** as `archy hotspots` (v0.18.0): `cc_sum * commit_count` per internal module, single `git log --name-only` pass, zero-component rows filtered; `--since` window default settled at full history via the 27-project sweep in `bench/hotspots_results.md` | ✓ window choice empirically validated: median J(full, 12mo) = 0.60, J(12mo, 6mo) = 0.74, stale_full_frac = 0.25 on the bench | **Shipped (diagnostic)** |
 | Martin's `I` + SDP-violation rule         | Medium | Low    | Sub-stat + check rule | ✓ shipped: `instability.py`, `layers.find_sdp_violations`, surfaced in `archy graph --format json` and `archy check` | **Shipped** |
@@ -1350,9 +1357,12 @@ additive unless marked **Replace**.
 6. **Per-function cyclomatic + cognitive complexity** (already in
    [`FUTURE.md`](FUTURE.md)). Both come from the same tree-sitter
    pass; cognitive is free given CC.
-7. **Type-hint coverage** - same tree-sitter pass scope. Could be
-   added as a sub-stat or eventually promoted to a sixth score axis
-   if the signal proves load-bearing.
+7. ~~**Type-hint coverage**~~ - **rejected (2026-05).** The original
+   survey queued this as a sub-stat or candidate sixth axis; the
+   empirical study ([`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md))
+   concluded against both forms (weakest independence archy has
+   measured, max `|r| = 0.551`; niche owned by mypy / pyright; not a
+   structural signal). See [`ROADMAP.md`](ROADMAP.md) "Rejected".
 8. **Call-graph edges** ([`FUTURE.md`](FUTURE.md)). Once shipped,
    modularity and propagation cost both gain resolution.
 9. **Hotspots = CC × per-file churn.** Needs CC + a one-pass
