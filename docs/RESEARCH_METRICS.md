@@ -733,9 +733,98 @@ propagation cost as a diagnostic and as a weighting for
 (3) ship a per-module risk composite that surfaces the
 "navigational salience" the Navigation Paradox paper §c.1 names as
 the residual failure mode after large context windows. Detailed
-roadmap entries in [`FUTURE.md`](FUTURE.md).
+roadmap entries in [`FUTURE.md`](FUTURE.md). The §c.4 paper below
+adds two more, both low-cost and both reusing the existing layer
+machinery: convention-based layer inference and a layer-presence
+check.
+
+**c.4. Constraint Decay (May 2026)**
+([arxiv:2605.06445][constraint-decay]). The paper asks whether LLM
+coding agents can generate backend systems that satisfy *structural*
+constraints (architecture, database, ORM) rather than merely passing
+functional tests, across 80 greenfield and 20 feature-implementation
+tasks built from a shared OpenAPI spec (RealWorld Conduit). The
+headline result is **Constraint Decay**: as structural requirements
+accumulate from baseline (L0) to fully specified (L3), assertion pass
+rates fall ~30 percentage points (the strongest configuration drops
+95.6% to 78.6%), and the single most expensive *architectural*
+constraint is **Clean Architecture layering at -9.1±1.6 pp** in
+isolation (specifying a database engine costs more, -19.3 pp; ORM
+adherence is near-zero, -0.6 to -1.5 pp). The failures persist on
+feature-implementation tasks against existing codebases, so they are
+not an artifact of building from scratch. Crucially, the agents
+received static prompts describing the architecture but **no dynamic
+course-correction** on violations during generation. The study's
+ground-truth oracle is a static verifier checking (1) **layer
+presence** (at least 3 of 4 canonical layers - routes, services,
+repositories, models - exist as separate directories, with an alias
+map so `routes`/`handlers`/`routers`/`views` all count as one layer)
+and (2) **dependency direction** (a file in a lower-rank layer
+importing from a higher-rank layer is a violation).
+
+Two implications for archy, both sharper than the earlier citations:
+
+- The verifier's dependency-direction rule **is** archy's `forbid`-rule
+  check (`find_violations` in `src/archy/layers.py`), and the
+  transitive version is `archy contracts`. The paper independently
+  reinvented archy's core check as its measurement instrument, which
+  validates the *category*, not just individual metrics: archy already
+  ships the harder version of the thing the study had to build, and
+  the quantified -9.1 pp is the cleanest external evidence yet that the
+  architectural feedback loop has measurable value at generation time.
+- The study's explicit gap, "no dynamic course-correction", is exactly
+  archy's MCP loop. But it surfaces two capabilities archy does *not*
+  yet have, both motivated directly. **Convention-based layer
+  inference**: the verifier's alias map lets it check any repo with
+  zero config, whereas archy requires a hand-written `layers:` block,
+  so a greenfield repo or an agent on an unfamiliar codebase gets no
+  layering feedback at all. **Layer-presence check**: archy gates
+  forbidden edges but never asserts that an expected layer *exists*, so
+  the degenerate single-file solution the paper says agents produce
+  passes archy's layer gate silently. Both become roadmap items in
+  `FUTURE.md`. The v0.15.0 lesson (archy.yaml-to-Forbidden auto-
+  translation was demoted because it manufactured permanent CI false-
+  positives it could not whitelist) constrains the design: inference
+  ships as an **advisory, agent-facing report, not a CI gate**, in the
+  same diagnostic-not-axis spirit as `archy dsm`.
+
+The paper's largest failure cluster - data-layer defects (bad query
+composition 25.5%, ORM runtime violations 21.2%, auth misconfiguration
+22.6%; logic errors are ~71% of all failures) - is semantic, not
+structural, and stays out of archy's scope per the anti-goals (no
+replacement of linters / type checkers). The structural-leak variant
+(forbidding DB/ORM imports above the repository layer) was considered
+and rejected as a built-in because it would require maintaining a
+framework-specific DB/ORM package allowlist; a user who has defined
+layers can already express it as their own `forbid` rule.
+
+*Reception and caveats* ([HN discussion][constraint-decay-hn]).
+Three threads sharpen archy's reading. **Supporting:** the top
+architecture comment proposes exactly archy's model - adopt an
+ArchUnit-style framework to "spoon feed the LLM what exactly it's
+doing wrong," treating architectural rules as *executable constraints
+rather than prose guidelines* (archy is that, for Python, over MCP);
+a second thread notes agents do markedly better when a *deterministic
+feedback loop* like a compiler lets them iterate, which is the
+structural analog archy provides for the import graph; a third names
+a failure the paper does not measure but archy is well-placed to fix,
+**cross-session decay**: "architectural rules an agent wrote down on
+Monday don't reach the agent making the next change on Tuesday." A
+persisted `.importlinter` / `archy.yaml` plus an always-on MCP server
+*is* the durable cross-session architecture memory that prose
+CLAUDE.md notes are not - and this argument is independent of model
+strength. **Tempering:** the single top comment flags that **frontier
+models were not fully tested, for cost reasons**, so the absolute
+pass-rate numbers are directional, not definitive; others argue the
+effect may partly rebrand known long-context degradation ("context
+rot") and that some of it erodes as models improve. Net: treat the
+-9.1 pp layering penalty as *evidence the feedback loop has value, not
+as a fixed constant*, and lean hardest on the cross-session-
+persistence argument.
 
 [nav-paradox]: https://arxiv.org/html/2602.20048v1
+[constraint-decay]: https://arxiv.org/html/2605.06445v1
+[constraint-decay-hn]: https://news.ycombinator.com/item?id=48256912
 [locagent]: https://aclanthology.org/2025.acl-long.426/
 [daplab-9-patterns]: https://daplab.cs.columbia.edu/general/2026/01/08/9-critical-failure-patterns-of-coding-agents.html
 [anthropic-harnesses]: https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents
