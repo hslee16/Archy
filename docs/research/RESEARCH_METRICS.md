@@ -644,7 +644,10 @@ archy positions itself as architecture-feedback for AI agents
 speculative: a small but growing empirical literature directly
 validates the structural-graph-feedback thesis for coding agents.
 See §14c below for the citations. The §14a and §14b framings
-predate that literature and now have empirical grounding.
+predate that literature and now have empirical grounding. For the
+*positioning* counterpart - where archy sits on an autonomy maturity
+model and how its gating should scale with autonomy - see
+[`AUTONOMY_CONTINUUM_SYNTHESIS.md`](AUTONOMY_CONTINUUM_SYNTHESIS.md).
 
 Two AI-specific framings worth noting, both Python-relevant:
 
