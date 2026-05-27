@@ -197,8 +197,6 @@ def build_graph_cached(
     finally:
         if own_conn:
             conn.close()
-    # A module whose file vanished mid-sync is absent from parse_results; keep
-    # assemble_graph's module list aligned with it, since assemble_graph indexes
-    # parse_results by every module's qualname.
-    surviving = [m for m in modules if m.qualname in parse_results]
-    return assemble_graph(root, surviving, parse_results)
+    # A module whose file vanished mid-sync is absent from parse_results;
+    # assemble_graph drops such modules, so passing the full list is safe.
+    return assemble_graph(root, modules, parse_results)

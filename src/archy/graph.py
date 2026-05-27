@@ -68,18 +68,16 @@ def build_graph(
     ignored = frozenset(ignored_dirs)
     modules = _discover_modules(root, ignored, tuple(extra_roots))
     parse_results: dict[str, ParseResult] = {}
-    surviving: list[Module] = []
     for m in modules:
         try:
             parse_results[m.qualname] = parse_file(m.path)
         except OSError:
             # The file vanished or became unreadable between discovery and parse
             # (a branch switch, a concurrent edit, or the `archy mcp` watcher
-            # rebuilding mid-flight). Drop the module rather than crash the whole
-            # build; the next build picks it up once the filesystem settles.
+            # rebuilding mid-flight). Skip it; assemble_graph drops modules with
+            # no parse result, and the next build picks it up once disk settles.
             continue
-        surviving.append(m)
-    return assemble_graph(root, surviving, parse_results)
+    return assemble_graph(root, modules, parse_results)
 
 
 def discover_modules(
@@ -108,8 +106,12 @@ def assemble_graph(
     one resolution implementation. Resolution is global (relative imports,
     re-export chains, and alias tables all need the full `parse_results` set), so
     keeping a single code path is what guarantees the cached graph is identical
-    to a cold build. `parse_results` is keyed by module qualname.
+    to a cold build. `parse_results` is keyed by module qualname; a module with
+    no entry (its file vanished between discovery and parse) is dropped here, so
+    every caller -- build_graph, build_graph_cached, the mcp watcher -- is safe
+    without repeating the guard.
     """
+    modules = [m for m in modules if m.qualname in parse_results]
     qualname_set = {m.qualname for m in modules}
 
     graph: nx.DiGraph = nx.DiGraph()
