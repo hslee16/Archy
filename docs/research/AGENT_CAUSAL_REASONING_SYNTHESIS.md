@@ -342,15 +342,18 @@ distinction between "needs evidence" and "needs filing" stays clear.
 
 ### Research questions (need evidence, not just a decision)
 
-1. **The load-bearing, still-unanswered question: does archy-in-the-loop measurably reduce
-   structurally-bad edits?** Everything in §6-§7 (and [#144](https://github.com/hslee16/archy/issues/144))
-   assumes that supplying an agent with `archy_impact` / `archy_simulate` causes safer changes (fewer
-   introduced cycles, fewer layer violations) than not. The KG-grounding literature supports this
-   *in principle* but only for factual QA (see item 3 below). The archy-shaped test is a behavioural,
-   longitudinal one in the spirit of [*Evaluating AI Systems*][evaluate] ("measure real system
-   behaviour, not synthetic benchmarks"): run the dogfood corpus with and without archy in the loop
-   and count introduced structural regressions. **Blocked on a usage signal** (does anyone run archy
-   inside an agent loop?), which the maintainer deprioritized on 2026-05-26. Recorded, not pursued.
+1. **The load-bearing question: does archy-in-the-loop measurably reduce structurally-bad edits?**
+   **Q1a (prevalence) is now answered empirically** in
+   [`INLOOP_PREVALENCE_EMPIRICS.md`](INLOOP_PREVALENCE_EMPIRICS.md): across 1,072 human-authored
+   commits in 11 mature repos, the FP-free signal archy gates on (a new import cycle) appears in only
+   **0.5%** of commits, but those commits are large (median 7 `.py` files changed vs 1) and non-trivial
+   (multi-module tangles, new-SCC median 3), and the composite score drops on 29% of commits but 98% of
+   those drops are sub-0.005 noise. The reframed value prop: archy is a **rare-firing, low-FP gate on
+   severe structural damage concentrated in large transformative changes**, the regime agents produce
+   most. **Q1b (the causal claim, does archy-in-loop reduce agent regressions) remains open** but now
+   has a powered, executable A/B protocol and a control baseline (this study). Q1b is gated on a usage
+   signal (does anyone run archy inside an agent loop?), which the maintainer deprioritized on
+   2026-05-26.
 2. **Temporal coupling ([#131](https://github.com/hslee16/archy/issues/131)) still needs its
    FP-validation pass.** Unchanged by this note except that the article is independent motivation:
    it is the only proposed feature that addresses the article's true blind spot (persistent / temporal
