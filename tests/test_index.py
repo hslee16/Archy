@@ -214,3 +214,38 @@ def test_parse_json_is_valid_json(project: Path, tmp_path: Path):
     # so assert what we stored is parseable.
     json.loads(row["parse_json"])
     conn.close()
+
+
+def test_sync_skips_file_that_vanishes_after_discovery(project: Path, tmp_path: Path):
+    """A module listed by discovery can be gone by the time sync stats it
+    (branch switch, concurrent edit, watcher mid-rebuild). sync must skip it,
+    not crash on the stat()."""
+    modules = discover_modules(project)
+    next(m for m in modules if m.qualname == "pkg.b").path.unlink()
+    conn = open_index(tmp_path / "index.db")
+    results, _stats = sync(conn, modules)  # must not raise
+    conn.close()
+    assert "pkg.b" not in results  # vanished module skipped
+    assert "pkg.a" in results  # the rest still parsed
+
+
+def test_build_graph_cached_survives_vanished_file(project: Path, tmp_path: Path, monkeypatch):
+    """If a file vanishes after hashing but before parse, sync drops it; the
+    cached build must keep assemble_graph's module list aligned with the parse
+    results so it does not KeyError on the dropped module."""
+    import archy.index as index_mod
+
+    real_parse_file = index_mod.parse_file
+
+    def flaky_parse_file(path: Path):
+        if path.name == "b.py":
+            raise FileNotFoundError(path)
+        return real_parse_file(path)
+
+    monkeypatch.setattr(index_mod, "parse_file", flaky_parse_file)
+
+    g = build_graph_cached(project, db_path=tmp_path / "index.db")  # must not raise
+
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+    assert "pkg.b" not in internal
+    assert "pkg.a" in internal

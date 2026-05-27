@@ -80,6 +80,8 @@ class IndexManager:
         """Sync the cache and assemble the graph. Always fresh w.r.t. disk."""
         with self._lock:
             modules, results, _ = self._sync_locked()
+            # assemble_graph drops any module whose file vanished mid-sync (absent
+            # from results), so passing the full list is safe.
             return assemble_graph(self.root, modules, results)
 
     def sync_now(self) -> SyncStats:

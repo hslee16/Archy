@@ -122,8 +122,15 @@ def sync(
 
     for module in modules:
         path = str(module.path)
+        try:
+            stat = module.path.stat()
+        except OSError:
+            # The file vanished between discovery and sync (a branch switch, a
+            # concurrent edit, or the `archy mcp` watcher rebuilding mid-flight).
+            # Skip it; any stale cache row is pruned below since `path` never
+            # enters current_paths.
+            continue
         current_paths.add(path)
-        stat = module.path.stat()
         mtime, size = stat.st_mtime, stat.st_size
         row = existing.get(path)
 
@@ -132,7 +139,10 @@ def sync(
             unchanged += 1
             continue
 
-        sha = _sha256(module.path)
+        try:
+            sha = _sha256(module.path)
+        except OSError:
+            continue  # vanished after stat; skip this build, re-parsed next time
         if row is not None and row["sha256"] == sha:
             # Stat changed (e.g. a git checkout touched mtime) but content did
             # not: refresh the stat columns, reuse the cached parse.
@@ -141,7 +151,10 @@ def sync(
             unchanged += 1
             continue
 
-        result = parse_file(module.path)
+        try:
+            result = parse_file(module.path)
+        except OSError:
+            continue  # vanished after hashing; skip this build
         conn.execute(
             "INSERT INTO files (path, mtime, size, sha256, parse_json, last_parsed_at) "
             "VALUES (?, ?, ?, ?, ?, ?) "
@@ -184,4 +197,6 @@ def build_graph_cached(
     finally:
         if own_conn:
             conn.close()
+    # A module whose file vanished mid-sync is absent from parse_results;
+    # assemble_graph drops such modules, so passing the full list is safe.
     return assemble_graph(root, modules, parse_results)

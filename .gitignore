@@ -240,3 +240,6 @@ docs/PYPI_STATS.md
 # Score-redesign per-project archy invocation cache; regenerable via
 # `python bench/score_redesign.py collect`. ~10MB of intermediate JSON.
 bench/cache/
+
+# Prevalence-study git clones; regenerable via bench/inloop_prevalence.py
+bench/replay_cache/
