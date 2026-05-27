@@ -67,8 +67,19 @@ def build_graph(
     """
     ignored = frozenset(ignored_dirs)
     modules = _discover_modules(root, ignored, tuple(extra_roots))
-    parse_results: dict[str, ParseResult] = {m.qualname: parse_file(m.path) for m in modules}
-    return assemble_graph(root, modules, parse_results)
+    parse_results: dict[str, ParseResult] = {}
+    surviving: list[Module] = []
+    for m in modules:
+        try:
+            parse_results[m.qualname] = parse_file(m.path)
+        except OSError:
+            # The file vanished or became unreadable between discovery and parse
+            # (a branch switch, a concurrent edit, or the `archy mcp` watcher
+            # rebuilding mid-flight). Drop the module rather than crash the whole
+            # build; the next build picks it up once the filesystem settles.
+            continue
+        surviving.append(m)
+    return assemble_graph(root, surviving, parse_results)
 
 
 def discover_modules(

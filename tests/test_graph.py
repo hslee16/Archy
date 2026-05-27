@@ -521,3 +521,25 @@ def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path):
     resolved, unresolved = resolve_modules(graph, ["requests"], project_root=tmp_path)
     assert resolved == []
     assert unresolved == ["requests"]
+
+
+def test_build_graph_skips_file_that_vanishes_mid_build(project: Path, monkeypatch):
+    """A file discovered by the FS walk can disappear before it is parsed (a
+    branch switch, a concurrent edit, or the `archy mcp` watcher rebuilding
+    mid-flight). build_graph must drop that module, not crash the whole build."""
+    import archy.graph as graph_mod
+
+    real_parse_file = graph_mod.parse_file
+
+    def flaky_parse_file(path: Path):
+        if path.name == "utils.py":
+            raise FileNotFoundError(path)
+        return real_parse_file(path)
+
+    monkeypatch.setattr(graph_mod, "parse_file", flaky_parse_file)
+
+    g = build_graph(project)  # must not raise
+
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+    assert "myapp.utils" not in internal  # the vanished module is dropped
+    assert "myapp.core" in internal  # the rest of the build survives
