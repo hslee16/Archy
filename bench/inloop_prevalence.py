@@ -24,7 +24,8 @@ Package dir per repo matches bench/projects.yaml src_dir so numbers are
 apples-to-apples with archy's published benchmarks (test/doc noise excluded).
 
 Usage:
-    uv run python bench/inloop_prevalence.py --per-repo 40 --out bench/inloop_prevalence_results.json
+    uv run python bench/inloop_prevalence.py \
+        --per-repo 40 --out bench/inloop_prevalence_results.json
 """
 
 from __future__ import annotations
@@ -39,8 +40,8 @@ from pathlib import Path
 import networkx as nx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from archy.graph import build_graph  # noqa: E402
-from archy.score import compute_score  # noqa: E402
+from archy.graph import build_graph
+from archy.score import compute_score
 
 # (repo, package subdir) — small-to-medium pure-Python projects with years of
 # history and many contributors, spanning CLI / HTTP / web / terminal domains.
@@ -246,7 +247,10 @@ def summarize(rows: list[dict]) -> None:
         tot_score += sco
         tot_either += either
         print(f"{repo:22} {n:>4} {pct(cyc, n):>10} {pct(sco, n):>10} {pct(either, n):>8}")
-    print(f"{'TOTAL':22} {tot_n:>4} {pct(tot_cyc, tot_n):>10} {pct(tot_score, tot_n):>10} {pct(tot_either, tot_n):>8}")
+    print(
+        f"{'TOTAL':22} {tot_n:>4} {pct(tot_cyc, tot_n):>10} "
+        f"{pct(tot_score, tot_n):>10} {pct(tot_either, tot_n):>8}"
+    )
 
     print("\n=== Cycle-regression characterization ===")
     cyc_rows = [r for r in rows if r["cycle_regression"]]
@@ -255,17 +259,24 @@ def summarize(rows: list[dict]) -> None:
         sccs = [r["max_new_scc"] for r in cyc_rows]
         twos = sum(1 for x in sccs if x == 2)
         print(f"  new-SCC size: min={min(sccs)} median={statistics.median(sccs)} max={max(sccs)}")
-        print(f"  2-module cycles (easiest to flag/fix): {twos}/{len(cyc_rows)} ({pct(twos, len(cyc_rows))})")
+        print(
+            f"  2-module cycles (easiest to flag/fix): "
+            f"{twos}/{len(cyc_rows)} ({pct(twos, len(cyc_rows))})"
+        )
 
     print("\n=== Commit-size relationship (cycle regressions) ===")
     small = [r for r in rows if 0 <= r["files_changed"] <= 3]
     large = [r for r in rows if r["files_changed"] >= 10]
-    print(f"  small commits (<=3 .py files): {pct(sum(r['cycle_regression'] for r in small), len(small))} cycle-reg over N={len(small)}")
-    print(f"  large commits (>=10 .py files): {pct(sum(r['cycle_regression'] for r in large), len(large))} cycle-reg over N={len(large)}")
+    small_reg = pct(sum(r["cycle_regression"] for r in small), len(small))
+    large_reg = pct(sum(r["cycle_regression"] for r in large), len(large))
+    print(f"  small commits (<=3 .py files): {small_reg} cycle-reg over N={len(small)}")
+    print(f"  large commits (>=10 .py files): {large_reg} cycle-reg over N={len(large)}")
 
     print("\n=== Score-delta distribution ===")
     deltas = [r["overall_delta"] for r in rows]
-    print(f"  overall delta: min={min(deltas)} median={statistics.median(deltas)} max={max(deltas)}")
+    print(
+        f"  overall delta: min={min(deltas)} median={statistics.median(deltas)} max={max(deltas)}"
+    )
     print(f"  commits with any score drop: {pct(tot_score, tot_n)}")
 
 
@@ -279,7 +290,7 @@ def main() -> int:
     for repo, pkg in REPOS:
         try:
             all_rows.extend(run_repo(repo, pkg, args.per_repo))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             print(f"[{repo}] FAILED: {exc}", file=sys.stderr)
     args.out.write_text(json.dumps(all_rows, indent=2))
     summarize(all_rows)
