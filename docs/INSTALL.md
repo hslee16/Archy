@@ -66,9 +66,15 @@ From a checkout:
 claude --plugin-dir /path/to/archy/plugins/claude
 ```
 
-A marketplace listing (one-click `/plugin install` from inside Claude Code) is a
-planned distribution step; until then the `--plugin-dir` route is supported. See
-[plugin vs installer](#plugin-vs-installer-which-should-i-use) for when to
+Or install it from inside Claude Code via the marketplace (updates managed by
+Claude Code):
+
+```text
+/plugin marketplace add hslee16/archy
+/plugin install archy@archy
+```
+
+See [plugin vs installer](#plugin-vs-installer-which-should-i-use) for when to
 choose which.
 
 ### 3. Manual MCP stanza (any client)
@@ -103,7 +109,7 @@ distribution channels.
 | | `archy install` | Claude Code plugin |
 |---|---|---|
 | Clients | Claude Code, Cursor, Codex, opencode, Continue | Claude Code only |
-| Acquisition | run a command in your shell | (planned) browse/install from the marketplace inside Claude Code |
+| Acquisition | run a command in your shell | `/plugin marketplace add hslee16/archy` then `/plugin install archy@archy` |
 | Seeds Claude `permissions.allow` | yes | no (loader limitation) |
 | Ships the `archy` skill as a first-class skill | no (drops a `CLAUDE.md` block) | yes |
 | Updates | you re-run / edit config | managed by Claude Code |

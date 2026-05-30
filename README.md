@@ -274,7 +274,7 @@ uvx archy uninstall      # the exact inverse; --dry-run to preview
 
 This registers the `uvx archy mcp` server, drops a short rules file so the agent knows when to call the tools, and (on Claude Code) seeds the `permissions.allow` allowlist. It does not install a binary or the Claude plugin. The full guide, including the per-client path matrix, the manual stanza for unknown clients, plugin-vs-installer guidance, and troubleshooting, is in **[`docs/INSTALL.md`](docs/INSTALL.md)**.
 
-The lowest-friction path specifically on Claude Code is the bundled plugin at [`plugins/claude/`](plugins/claude/) (`claude --plugin-dir /path/to/archy/plugins/claude`); see [`docs/INSTALL.md`](docs/INSTALL.md#plugin-vs-installer-which-should-i-use) for when to prefer it over the installer.
+The lowest-friction path specifically on Claude Code is the bundled plugin at [`plugins/claude/`](plugins/claude/): `/plugin marketplace add hslee16/archy` then `/plugin install archy@archy` from inside Claude Code (or `claude --plugin-dir /path/to/archy/plugins/claude` from a checkout). See [`docs/INSTALL.md`](docs/INSTALL.md#plugin-vs-installer-which-should-i-use) for when to prefer it over the installer.
 
 ### Regression-gate semantics
 
