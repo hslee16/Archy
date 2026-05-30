@@ -1,0 +1,22 @@
+{
+  "name": "archy",
+  "owner": {
+    "name": "hslee16",
+    "url": "https://github.com/hslee16"
+  },
+  "metadata": {
+    "description": "Architectural sensor for Python codebases: trended score, cycle detection, layer rules, blast radius, and CI test selection over MCP.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "archy",
+      "source": "./plugins/claude",
+      "description": "Architectural health for Python codebases: trended five-axis score, cycle detection, layer rules, blast radius, CI test selection. Exposes 17 MCP tools and bundles the archy skill so Claude can run the snapshot/impact/edit/diff loop without manual prompting.",
+      "version": "0.1.0",
+      "homepage": "https://github.com/hslee16/archy",
+      "license": "MIT",
+      "category": "developer-tools"
+    }
+  ]
+}

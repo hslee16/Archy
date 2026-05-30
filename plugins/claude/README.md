@@ -30,11 +30,15 @@ Restart Claude Code after installing for the MCP server to be picked up.
 
 ## Install (marketplace)
 
-Not yet published. When the archy marketplace entry is live, the install will be:
+Add the archy marketplace, then install the plugin, from inside Claude Code:
 
-```bash
-claude plugin install archy@<marketplace>
+```text
+/plugin marketplace add hslee16/archy
+/plugin install archy@archy
 ```
+
+This pulls the plugin straight from the GitHub repo, with updates managed by
+Claude Code.
 
 ## Layout
 
