@@ -65,6 +65,7 @@ from archy.layers import (
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 from archy.score import Score, ScoreInputs, compute_score
+from archy.simulate import EdgeSpec, SimulateReport, find_simulate
 from archy.watcher import IndexManager
 
 _AGENT_LOOP_PROMPT = """\
@@ -100,6 +101,12 @@ confirm freshness explicitly. The loop is:
    `archy_high_risk_modules(path)` to see whether your target sits in
    the project's central-and-fragile zone (high blast radius combined
    with high instability); if it does, scope down or pause for review.
+
+   If the edit changes imports (adds or removes a dependency), call
+   `archy_simulate(path, add=[{from, to}], remove=[...])` first: it
+   returns the would-be cycles, layer violations, and score delta with
+   no file written, so you can abandon or reshape a plan that introduces
+   a cycle before touching code instead of catching it in step 4.
 3. **Edit** the code as you normally would.
 4. **Diff** after the edit to see what got better, what got worse, and
    exactly which cycles or layer rules changed:
@@ -611,6 +618,38 @@ def _register_tools(server: FastMCP) -> None:
         return _run_diff(Path(path))
 
     @server.tool(
+        name="archy_simulate",
+        description=(
+            "Counterfactual pre-edit check: given a proposed import-edge delta "
+            "(`add` / `remove` lists of {from, to} module-or-path pairs), return "
+            "the structural consequence BEFORE any file is written -- new/resolved "
+            "cycles, new topological back-edges, new layer/SDP violations, "
+            "per-axis score delta, and the blast-radius (propagation_cost) change. "
+            "Use it to test a refactoring hypothesis: if the simulation shows a "
+            "new cycle or layer violation, reshape the plan before editing instead "
+            "of discovering it in the diff afterward. `summary` carries the same "
+            "risk-ranked judgment prompts as archy_diff, phrased conditionally "
+            "('would form a cycle'). Endpoints that match no internal module are "
+            "returned in `applied.unresolved`; self-loops in `applied.rejected`. "
+            "Caveat: this models the graph delta you describe, not arbitrary code "
+            "edits -- it cannot change content-derived metrics (the complexity "
+            "axis), and `from`/`to` are the resolved import targets. One import "
+            "can map to several graph edges: importing a submodule `a.b.c` also "
+            "creates edges to its ancestor packages (`a.b`, `a`), whose __init__ "
+            "runs. To model a real submodule import exactly, include those "
+            "ancestor edges in `add`; a lone submodule edge is a lower bound on "
+            "the true impact (empirically ~94% of single-line imports map 1:1; "
+            "see docs/research/SIMULATE_ORACLE_EMPIRICS.md)."
+        ),
+    )
+    def archy_simulate(
+        path: str,
+        add: list[EdgeSpec] | None = None,
+        remove: list[EdgeSpec] | None = None,
+    ) -> SimulateReport:
+        return _run_simulate(Path(path), add=add or [], remove=remove or [])
+
+    @server.tool(
         name="archy_record_baseline",
         description=(
             "Compute the score for a Python project AND append it to "
@@ -984,6 +1023,17 @@ def _run_diff(path: Path) -> DiffReport | DiffErrorPayload:
     current = take_snapshot(graph, config_path=discover_config(path))
     report = compute_diff(baseline, current)
     return report.model_copy(update={"summary": summarize_diff(report, graph)})
+
+
+def _run_simulate(path: Path, *, add: list[EdgeSpec], remove: list[EdgeSpec]) -> SimulateReport:
+    graph = _load_graph(path, internal_only=True)
+    return find_simulate(
+        graph,
+        add=[e.as_pair() for e in add],
+        remove=[e.as_pair() for e in remove],
+        config_path=discover_config(path),
+        project_root=path,
+    )
 
 
 def _resolve_against(path: Path, files: list[Path]) -> list[Path]:

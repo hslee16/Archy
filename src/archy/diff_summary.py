@@ -41,16 +41,21 @@ _SCORE_MAGNITUDE_SCALER = 5.0
 _MAX_CYCLE_MEMBERS_IN_DESCRIPTION = 5
 
 
-def summarize_diff(diff: DiffReport, graph: nx.DiGraph, *, top_n: int = 5) -> DiffSummary:
+def summarize_diff(
+    diff: DiffReport, graph: nx.DiGraph, *, top_n: int = 5, hypothetical: bool = False
+) -> DiffSummary:
     """Rank diff items by risk and produce a structured headline.
 
     `graph` is the current (post-edit) graph; risk is computed once over it.
     Items are sorted by risk descending, ties broken by description for
-    determinism.
+    determinism. When `hypothetical` is set (the `archy_simulate` path, where the
+    delta has not been written), each item's `prompt` is phrased in conditional
+    mood ("would form a cycle… Proceed?") instead of indicative past tense
+    ("formed a cycle… Intended?").
     """
     risk = compute_edit_risk(graph)
-    regressions = _collect_regressions(diff, risk)
-    improvements = _collect_improvements(diff, risk)
+    regressions = _collect_regressions(diff, risk, hypothetical)
+    improvements = _collect_improvements(diff, risk, hypothetical)
     return DiffSummary(
         headline=_make_headline(diff),
         top_regressions=_rank(regressions, top_n),
@@ -58,7 +63,90 @@ def summarize_diff(diff: DiffReport, graph: nx.DiGraph, *, top_n: int = 5) -> Di
     )
 
 
-def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffSummaryItem]:
+# Prompt wording. Indicative (a real diff, the edit happened) vs conditional
+# (a simulation, the edit has not happened). Kept side by side so the two moods
+# stay in sync as the vocabulary evolves.
+
+
+def _cycle_added_prompt(members: str, hypothetical: bool) -> str:
+    if hypothetical:
+        return (
+            f"Acyclicity would drop because {members} would form an import cycle. "
+            "Proceed, or pick a different seam?"
+        )
+    return (
+        f"Acyclicity dropped because {members} now form an import cycle. "
+        "Intended, or should an edge be inverted or removed to break it?"
+    )
+
+
+def _violation_added_prompt(source: str, target: str, boundary: str, hypothetical: bool) -> str:
+    if hypothetical:
+        return (
+            f"{source} -> {target} would cross the forbidden {boundary} boundary. "
+            "Proceed, or route through an allowed seam?"
+        )
+    return (
+        f"{source} -> {target} now crosses the forbidden {boundary} boundary. "
+        "Intended, or a leak to route through an allowed seam?"
+    )
+
+
+def _sdp_added_prompt(
+    source: str, target: str, before: float, after: float, hypothetical: bool
+) -> str:
+    tail = f"(I={before:.2f} -> {after:.2f})"
+    if hypothetical:
+        return (
+            f"{source} would depend on the less-stable {target} {tail}. "
+            "Proceed, or keep the dependency in the stable direction?"
+        )
+    return (
+        f"{source} now depends on the less-stable {target} {tail}. "
+        "Intended, or should the dependency follow stability?"
+    )
+
+
+def _score_drop_prompt(name: str, delta: float, hypothetical: bool) -> str:
+    if hypothetical:
+        return f"{name} would drop {delta:+.3f}. Acceptable, or pick a different approach?"
+    return (
+        f"{name} dropped {delta:+.3f}. Acceptable for this change, "
+        "or a regression to address before committing?"
+    )
+
+
+def _cycle_resolved_prompt(members: str, hypothetical: bool) -> str:
+    if hypothetical:
+        return f"Cycle {members} would be resolved. Confirm that is the intended decoupling."
+    return f"Cycle {members} is gone. Confirm this was the intended decoupling."
+
+
+def _violation_resolved_prompt(source: str, target: str, boundary: str, hypothetical: bool) -> str:
+    if hypothetical:
+        return f"{source} -> {target} would no longer cross {boundary}. Confirm that is intended."
+    return (
+        f"{source} -> {target} no longer crosses {boundary}. "
+        "Confirm the dependency was meant to be removed."
+    )
+
+
+def _sdp_resolved_prompt(source: str, target: str, hypothetical: bool) -> str:
+    verb = "would no longer" if hypothetical else "no longer"
+    return (
+        f"{source} -> {target} {verb} violate the Stable Dependencies Principle. "
+        "Confirm this is intended."
+    )
+
+
+def _score_gain_prompt(name: str, delta: float, hypothetical: bool) -> str:
+    verb = "would improve" if hypothetical else "improved"
+    return f"{name} {verb} {delta:+.3f}. No action needed; noted for context."
+
+
+def _collect_regressions(
+    diff: DiffReport, risk: dict[str, float], hypothetical: bool
+) -> list[DiffSummaryItem]:
     items: list[DiffSummaryItem] = []
     for cycle in diff.cycles.added:
         members = _format_modules(cycle.modules)
@@ -68,10 +156,7 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
                 risk=_max_module_risk(cycle.modules, risk),
                 modules=tuple(cycle.modules),
                 description=f"new cycle: {members}",
-                prompt=(
-                    f"Acyclicity dropped because {members} now form an import cycle. "
-                    "Intended, or should an edge be inverted or removed to break it?"
-                ),
+                prompt=_cycle_added_prompt(members, hypothetical),
             )
         )
     for v in diff.violations.added:
@@ -82,10 +167,7 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
                 risk=_max_module_risk((v.source, v.target), risk),
                 modules=(v.source, v.target),
                 description=(f"new layer violation: {v.source} -> {v.target} ({boundary})"),
-                prompt=(
-                    f"{v.source} -> {v.target} now crosses the forbidden {boundary} "
-                    "boundary. Intended, or a leak to route through an allowed seam?"
-                ),
+                prompt=_violation_added_prompt(v.source, v.target, boundary, hypothetical),
             )
         )
     for v in diff.sdp_violations.added:
@@ -98,10 +180,8 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
                     f"new SDP violation: {v.source} (I={v.source_instability:.2f}) -> "
                     f"{v.target} (I={v.target_instability:.2f})"
                 ),
-                prompt=(
-                    f"{v.source} now depends on the less-stable {v.target} "
-                    f"(I={v.source_instability:.2f} -> {v.target_instability:.2f}). "
-                    "Intended, or should the dependency follow stability?"
+                prompt=_sdp_added_prompt(
+                    v.source, v.target, v.source_instability, v.target_instability, hypothetical
                 ),
             )
         )
@@ -114,16 +194,15 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
                     risk=_score_risk(delta),
                     modules=(),
                     description=f"{name} dropped {delta:+.3f}",
-                    prompt=(
-                        f"{name} dropped {delta:+.3f}. Acceptable for this change, "
-                        "or a regression to address before committing?"
-                    ),
+                    prompt=_score_drop_prompt(name, delta, hypothetical),
                 )
             )
     return items
 
 
-def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[DiffSummaryItem]:
+def _collect_improvements(
+    diff: DiffReport, risk: dict[str, float], hypothetical: bool
+) -> list[DiffSummaryItem]:
     items: list[DiffSummaryItem] = []
     for cycle in diff.cycles.resolved:
         members = _format_modules(cycle.modules)
@@ -133,7 +212,7 @@ def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[Diff
                 risk=_max_module_risk(cycle.modules, risk),
                 modules=tuple(cycle.modules),
                 description=f"cycle resolved: {members}",
-                prompt=f"Cycle {members} is gone. Confirm this was the intended decoupling.",
+                prompt=_cycle_resolved_prompt(members, hypothetical),
             )
         )
     for v in diff.violations.resolved:
@@ -144,10 +223,7 @@ def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[Diff
                 risk=_max_module_risk((v.source, v.target), risk),
                 modules=(v.source, v.target),
                 description=(f"layer violation resolved: {v.source} -> {v.target} ({boundary})"),
-                prompt=(
-                    f"{v.source} -> {v.target} no longer crosses {boundary}. "
-                    "Confirm the dependency was meant to be removed."
-                ),
+                prompt=_violation_resolved_prompt(v.source, v.target, boundary, hypothetical),
             )
         )
     for v in diff.sdp_violations.resolved:
@@ -157,10 +233,7 @@ def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[Diff
                 risk=_max_module_risk((v.source, v.target), risk),
                 modules=(v.source, v.target),
                 description=f"SDP violation resolved: {v.source} -> {v.target}",
-                prompt=(
-                    f"{v.source} -> {v.target} no longer violates the Stable "
-                    "Dependencies Principle. Confirm this was intended."
-                ),
+                prompt=_sdp_resolved_prompt(v.source, v.target, hypothetical),
             )
         )
     for name in _COMPONENT_NAMES:
@@ -172,7 +245,7 @@ def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[Diff
                     risk=_score_risk(delta),
                     modules=(),
                     description=f"{name} improved {delta:+.3f}",
-                    prompt=f"{name} improved {delta:+.3f}. No action needed; noted for context.",
+                    prompt=_score_gain_prompt(name, delta, hypothetical),
                 )
             )
     return items

@@ -172,6 +172,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_snapshot` | `(path)` | Once at session start. Writes `.archy/baseline.json`. |
 | `archy_diff` | `(path)` | After every edit. Compares current state to the snapshot. |
 | `archy_impact` | `(path, files: list[str])` | Sizing a refactor or removal by transitive reverse-dependents. |
+| `archy_simulate` | `(path, add: list[{from,to}]=[], remove=[])` | Predict an import-edge change *before writing it*: would-be cycles, layer violations, score + blast-radius delta. Reshape a plan that introduces a cycle before editing. |
 | `archy_affected` | `(path, files: list[str], depth=5, test_filter=None)` | CI-shaped impact: given changed files, return modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped so monorepos stay tractable. Use for "which tests should I run for this diff?". |
 | `archy_graph_focus` | `(path, modules: list[str], depth=1, direction="both", internal_only=True)` | Bounded local neighborhood with edges + line numbers. |
 | `archy_graph_summary` | `(path, top_n=20)` | Top-N overview by fan-in / fan-out / PageRank. |
@@ -200,6 +201,7 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 **Which graph tool to reach for:**
 
 - "What breaks if I remove this?" → `archy_impact` (full blast radius, unbounded)
+- "If I add/remove this import, what breaks, before I write it?" → `archy_simulate` (would-be cycles / violations / score delta, no file written)
 - "Which tests should I run for this diff / PR?" → `archy_affected` (depth-capped, tests vs. modules separated)
 - "What does this module depend on?" → `archy_graph_focus(direction="out")`
 - "Who uses this and what edges?" → `archy_graph_focus(direction="both")` (carries import line numbers)

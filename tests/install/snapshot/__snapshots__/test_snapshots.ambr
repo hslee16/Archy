@@ -55,7 +55,8 @@
             "mcp__archy__archy_high_risk_modules",
             "mcp__archy__archy_hotspots",
             "mcp__archy__archy_dsm",
-            "mcp__archy__archy_status"
+            "mcp__archy__archy_status",
+            "mcp__archy__archy_simulate"
           ]
         }
       }
@@ -119,7 +120,8 @@
             "mcp__archy__archy_high_risk_modules",
             "mcp__archy__archy_hotspots",
             "mcp__archy__archy_dsm",
-            "mcp__archy__archy_status"
+            "mcp__archy__archy_status",
+            "mcp__archy__archy_simulate"
           ]
         }
       }
@@ -183,7 +185,8 @@
             "mcp__archy__archy_high_risk_modules",
             "mcp__archy__archy_hotspots",
             "mcp__archy__archy_dsm",
-            "mcp__archy__archy_status"
+            "mcp__archy__archy_status",
+            "mcp__archy__archy_simulate"
           ]
         }
       }
@@ -213,7 +216,8 @@
             "mcp__archy__archy_high_risk_modules",
             "mcp__archy__archy_hotspots",
             "mcp__archy__archy_dsm",
-            "mcp__archy__archy_status"
+            "mcp__archy__archy_status",
+            "mcp__archy__archy_simulate"
           ]
         }
       }
@@ -277,7 +281,8 @@
             "mcp__archy__archy_high_risk_modules",
             "mcp__archy__archy_hotspots",
             "mcp__archy__archy_dsm",
-            "mcp__archy__archy_status"
+            "mcp__archy__archy_status",
+            "mcp__archy__archy_simulate"
           ]
         }
       }
@@ -341,7 +346,8 @@
             "mcp__archy__archy_high_risk_modules",
             "mcp__archy__archy_hotspots",
             "mcp__archy__archy_dsm",
-            "mcp__archy__archy_status"
+            "mcp__archy__archy_status",
+            "mcp__archy__archy_simulate"
           ]
         }
       }

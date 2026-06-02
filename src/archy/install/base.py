@@ -53,6 +53,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "archy_hotspots",
     "archy_dsm",
     "archy_status",
+    "archy_simulate",
 )
 
 # Server key used both as the MCP stanza key and in the Claude permission
