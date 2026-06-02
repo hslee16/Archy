@@ -146,6 +146,17 @@ class ScoreComponents(BaseModel):
     complexity: float
 
 
+def _score_components(score: Score) -> ScoreComponents:
+    """Project a Score's five axes into the MCP ScoreComponents shape."""
+    return ScoreComponents(
+        modularity=score.modularity,
+        acyclicity=score.acyclicity,
+        depth=score.depth,
+        equality=score.equality,
+        complexity=score.complexity,
+    )
+
+
 class ScoreGate(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -842,13 +853,7 @@ def _run_score(
 
     return ScorePayload(
         overall=score.overall,
-        components=ScoreComponents(
-            modularity=score.modularity,
-            acyclicity=score.acyclicity,
-            depth=score.depth,
-            equality=score.equality,
-            complexity=score.complexity,
-        ),
+        components=_score_components(score),
         inputs=score.inputs,
         gate=gate,
     )
@@ -947,13 +952,7 @@ def _build_invariant_brief(
         forbidden_edges=forbidden,
         acyclic=not cycles,
         overall=score.overall,
-        components=ScoreComponents(
-            modularity=score.modularity,
-            acyclicity=score.acyclicity,
-            depth=score.depth,
-            equality=score.equality,
-            complexity=score.complexity,
-        ),
+        components=_score_components(score),
         load_bearing=load_bearing,
     )
 
