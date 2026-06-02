@@ -119,3 +119,51 @@ def test_giant_cycle_description_is_truncated(tmp_path: Path):
     [cycle_item] = [it for it in summary.top_regressions if it.kind == "cycle_added"]
     assert "more)" in cycle_item.description
     assert len(cycle_item.modules) == n
+
+
+def test_every_summary_item_carries_a_judgment_prompt(tmp_path: Path):
+    summary = _make_cycle_summary(tmp_path)
+    items = summary.top_regressions + summary.top_improvements
+    assert items  # the new-cycle diff produces at least one regression
+    for item in items:
+        assert item.prompt
+        assert item.prompt != item.description
+
+
+def test_new_cycle_prompt_is_a_causal_question(tmp_path: Path):
+    summary = _make_cycle_summary(tmp_path)
+    [cycle_item] = [it for it in summary.top_regressions if it.kind == "cycle_added"]
+    # The prompt states the "because" (the cycle) and asks for a decision,
+    # rather than just reporting a number.
+    assert "cycle" in cycle_item.prompt.lower()
+    assert "?" in cycle_item.prompt
+
+
+def test_layer_violation_prompt_names_the_forbidden_boundary(tmp_path: Path):
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    core = pkg / "core"
+    core.mkdir()
+    (core / "__init__.py").write_text("")
+    (core / "api.py").write_text("")
+    cli = pkg / "cli"
+    cli.mkdir()
+    (cli / "__init__.py").write_text("")
+    (cli / "runner.py").write_text("")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  core: {modules: [myapp.core.**]}\n"
+        "  cli: {modules: [myapp.cli.**]}\n"
+        "forbid:\n"
+        "  - {from: core, to: cli}\n"
+    )
+    config_path = tmp_path / "archy.yaml"
+    baseline = take_snapshot(build_graph(tmp_path), config_path=config_path)
+    (core / "api.py").write_text("from myapp.cli.runner import go\n")
+    current_graph = build_graph(tmp_path)
+    current = take_snapshot(current_graph, config_path=config_path)
+    summary = summarize_diff(compute_diff(baseline, current), current_graph)
+    [v_item] = [it for it in summary.top_regressions if it.kind == "violation_added"]
+    assert "core -> cli" in v_item.prompt
+    assert "?" in v_item.prompt

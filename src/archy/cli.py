@@ -1268,6 +1268,7 @@ def _summary_to_text(summary: DiffSummary) -> list[str]:
         lines.append("## top regressions (risk-weighted):")
         for item in summary.top_regressions:
             lines.append(f"  risk={item.risk:.2f}  {item.description}")
+            lines.append(f"      ? {item.prompt}")
     if summary.top_improvements:
         lines.append("")
         lines.append("## top improvements (risk-weighted):")

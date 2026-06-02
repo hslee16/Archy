@@ -82,6 +82,11 @@ class DiffSummaryItem(BaseModel):
     risk: float
     modules: tuple[str, ...]
     description: str
+    # `description` states the delta ("new cycle: a, b"); `prompt` reframes
+    # it as the judgment question a reviewer should answer ("...intended, or
+    # should an edge be inverted?"). Numbers don't tell a reviewer what to
+    # decide; the question does.
+    prompt: str
 
 
 class DiffSummary(BaseModel):

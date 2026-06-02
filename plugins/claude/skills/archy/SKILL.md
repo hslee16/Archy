@@ -148,7 +148,7 @@ After the edit:
 archy_diff(path=".")
 ```
 
-Returns per-axis score deltas plus the cycles and violations `added` / `resolved` since the snapshot.
+Returns per-axis score deltas plus the cycles and violations `added` / `resolved` since the snapshot, and a risk-weighted `summary`. Read `summary.top_regressions` first: each item carries a `prompt` that frames the delta as a judgment question with its cause ("Acyclicity dropped because `models -> services -> models` now form an import cycle. Intended, or should an edge be inverted?"), so you act on the decision rather than re-reading raw numbers.
 
 Decision rule:
 

@@ -110,8 +110,12 @@ if you want to confirm it explicitly.
    `summary.headline` first, then walk `summary.top_regressions` in
    order; each item carries a 0-1 `risk` weight derived from
    `compute_edit_risk`, so the most central-and-fragile breakage
-   surfaces first. The raw blocks remain available when you need the
-   full list, but the summary is the right starting point.
+   surfaces first, plus a `prompt` that reframes the delta as the
+   judgment question to answer ("Acyclicity dropped because
+   `a -> b -> a` is now a cycle; intended, or invert an edge?"), so you
+   act on the decision rather than re-deriving it from numbers. The raw
+   blocks remain available when you need the full list, but the summary
+   is the right starting point.
 
    If `acyclicity` dropped or `cycles.added` is non-empty, the
    companion DSM diff names the specific edge that closed the cycle:
