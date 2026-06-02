@@ -175,7 +175,8 @@ def _run_repo(name: str, root: Path, n: int) -> dict:
                 s["add_back"] += 1
         return sim
 
-    # removals
+    # Removals first: blanking an import's known source lines is the only exactly
+    # reversible mutation available on the real corpus, so it is the gold case.
     for u, v, lines in _stride(_import_edges_with_lines(g0), n):
         if not paths.get(u):
             continue

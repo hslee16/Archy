@@ -98,8 +98,7 @@ def test_added_layer_violation_is_surfaced(tmp_path: Path):
         "forbid:\n"
         "  - {from: core, to: cli}\n"
     )
-    g = build_graph(tmp_path)
-    g.remove_nodes_from([n for n, d in g.nodes(data=True) if d.get("external")])
+    g = _internal(tmp_path)
     result = find_simulate(
         g,
         add=[("myapp.core.api", "myapp.cli.runner")],
@@ -132,7 +131,7 @@ def test_oracle_add_matches_real_edit(tmp_path: Path):
     g0 = _internal(project)
     sim = find_simulate(g0, add=[("app.a", "app.b")], remove=[], project_root=project)
 
-    # Actually write the import and rebuild.
+    # Materialize the simulated edit so the oracle compares against a real re-parse.
     (project / "app" / "a.py").write_text("import app.b\n")
     g1 = _internal(project)
     real = compute_diff(take_snapshot(g0), take_snapshot(g1))
@@ -151,7 +150,7 @@ def test_oracle_remove_matches_real_edit(tmp_path: Path):
     g0 = _internal(project)
     sim = find_simulate(g0, add=[], remove=[("app.a", "app.b")], project_root=project)
 
-    (project / "app" / "a.py").write_text("")  # drop the import
+    (project / "app" / "a.py").write_text("")  # materialize the simulated removal
     g1 = _internal(project)
     real = compute_diff(take_snapshot(g0), take_snapshot(g1))
 

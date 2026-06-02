@@ -46,7 +46,7 @@ class EdgeSpec(BaseModel):
     keyword, so the field is `from_` with the wire alias `from`.
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(frozen=True, populate_by_name=True)
 
     from_: str = Field(alias="from")
     to: str
