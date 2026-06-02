@@ -250,7 +250,7 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 | `archy_trend` | Read recent score history. |
 | `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. |
 | `archy_affected` | CI-shaped impact lookup: given changed files (typically from `git diff --name-only`), return the impacted modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes on a monorepo. Test detection uses pytest conventions unless `test_filter` overrides with a recursive glob. Internal modules only. |
-| `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. |
+| `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. Also returns an `invariant_brief` (declared layers, forbidden edges, acyclic invariant, baseline score, load-bearing modules) to read before the first edit. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations and per-component score deltas. |
 | `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
 | `archy_graph_focus` | Bounded subgraph around one or more modules (qualnames or file paths). `depth` caps hops; `direction` is `in`/`out`/`both`. Each edge carries import line numbers. Use before editing for a richer view than `archy_impact`. |

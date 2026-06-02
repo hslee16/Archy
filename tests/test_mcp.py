@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from archy.mcp import (
+    ForbiddenEdge,
     GraphPayload,
     GraphTooLargePayload,
     _run_check,
@@ -245,6 +246,55 @@ def test_run_snapshot_writes_baseline_and_returns_payload(acyclic_project: Path)
     assert payload.baseline_path.endswith("baseline.json")
     assert payload.score.overall > 0
     assert (acyclic_project / ".archy" / "baseline.json").exists()
+
+
+def test_snapshot_brief_mirrors_score_and_acyclic_invariant(acyclic_project: Path):
+    payload = _run_snapshot(acyclic_project)
+    brief = payload.invariant_brief
+    # The brief is a recombination of the snapshot's own numbers, not a
+    # second computation, so it must agree with the payload exactly.
+    assert brief.acyclic is (payload.cycles == ())
+    assert brief.acyclic is True
+    assert brief.overall == payload.score.overall
+    assert brief.components.modularity == payload.score.modularity
+    assert brief.components.complexity == payload.score.complexity
+
+
+def test_snapshot_brief_load_bearing_ranked_and_capped(acyclic_project: Path):
+    brief = _run_snapshot(acyclic_project).invariant_brief
+    risks = [m.edit_risk for m in brief.load_bearing]
+    assert risks == sorted(risks, reverse=True)
+    assert len(brief.load_bearing) <= 5
+
+
+def test_snapshot_brief_reports_layers_and_forbidden_edges(tmp_path: Path):
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    core = pkg / "core"
+    core.mkdir()
+    (core / "__init__.py").write_text("")
+    (core / "api.py").write_text("")
+    cli = pkg / "cli"
+    cli.mkdir()
+    (cli / "__init__.py").write_text("")
+    (cli / "runner.py").write_text("from myapp.core.api import go\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  core: {modules: [myapp.core.**]}\n"
+        "  cli: {modules: [myapp.cli.**]}\n"
+        "forbid:\n"
+        "  - {from: core, to: cli}\n"
+    )
+    brief = _run_snapshot(tmp_path).invariant_brief
+    assert {layer.name for layer in brief.layers} == {"core", "cli"}
+    assert ForbiddenEdge(from_layer="core", to_layer="cli") in brief.forbidden_edges
+
+
+def test_snapshot_brief_no_config_has_empty_layers(acyclic_project: Path):
+    brief = _run_snapshot(acyclic_project).invariant_brief
+    assert brief.layers == ()
+    assert brief.forbidden_edges == ()
 
 
 def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
