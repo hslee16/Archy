@@ -11,7 +11,7 @@
   "mcpServers": {
     "archy": {
       "command": "uvx",
-      "args": ["archy>=0.27", "mcp"]
+      "args": ["archy>=0.27,<1.0", "mcp"]
     }
   }
 }
