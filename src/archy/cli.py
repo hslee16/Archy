@@ -1396,8 +1396,7 @@ def _impact_to_dict(result: Impact) -> dict:
                 "changed": c.changed,
                 "via": list(c.via),
                 "hops": [
-                    {"source": h.source, "target": h.target, "lines": list(h.lines)}
-                    for h in c.hops
+                    {"source": h.source, "target": h.target, "lines": list(h.lines)} for h in c.hops
                 ],
             }
             for c in result.chains
@@ -1456,9 +1455,7 @@ def _impact_to_text(result: Impact) -> str:
         for c in result.chains:
             lines.append(f"  - {' -> '.join(c.via)}")
             for h in c.hops:
-                lines.append(
-                    f"      {h.source} imports {h.target}  {_format_lines(h.lines)}"
-                )
+                lines.append(f"      {h.source} imports {h.target}  {_format_lines(h.lines)}")
         if result.chains_omitted:
             lines.append(
                 f"  # {result.chains_omitted} more impacted module(s) not shown "

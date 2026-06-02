@@ -136,9 +136,7 @@ def test_impact_chains_give_shortest_import_path_to_changed(tmp_path: Path):
     auth = by_module["app.services.auth"]
     assert auth.changed == "app.libs.db"
     assert auth.via == ("app.services.auth", "app.libs.db")
-    assert [(h.source, h.target) for h in auth.hops] == [
-        ("app.services.auth", "app.libs.db")
-    ]
+    assert [(h.source, h.target) for h in auth.hops] == [("app.services.auth", "app.libs.db")]
 
     user = by_module["app.routers.user"]
     assert user.via == ("app.routers.user", "app.services.auth", "app.libs.db")

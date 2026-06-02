@@ -156,9 +156,7 @@ def _build_chains(
             CausalHop(source=u, target=v, lines=_edge_lines(graph, u, v))
             for u, v in pairwise(forward)
         )
-        chains.append(
-            CausalChain(impacted=m, changed=forward[-1], via=forward, hops=hops)
-        )
+        chains.append(CausalChain(impacted=m, changed=forward[-1], via=forward, hops=hops))
     return tuple(chains), len(ranked) - len(selected)
 
 

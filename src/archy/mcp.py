@@ -487,9 +487,7 @@ def _register_tools(server: FastMCP) -> None:
         files: list[str],
         max_chains: int = DEFAULT_MAX_CHAINS,
     ) -> Impact:
-        return _run_impact(
-            Path(path), files=[Path(f) for f in files], max_chains=max_chains
-        )
+        return _run_impact(Path(path), files=[Path(f) for f in files], max_chains=max_chains)
 
     @server.tool(
         name="archy_affected",
@@ -890,9 +888,7 @@ def _resolve_against(path: Path, files: list[Path]) -> list[Path]:
     return [path / f if not f.is_absolute() else f for f in files]
 
 
-def _run_impact(
-    path: Path, *, files: list[Path], max_chains: int = DEFAULT_MAX_CHAINS
-) -> Impact:
+def _run_impact(path: Path, *, files: list[Path], max_chains: int = DEFAULT_MAX_CHAINS) -> Impact:
     graph = _load_graph(path, internal_only=True)
     return find_impact(graph, _resolve_against(path, files), max_chains=max_chains)
 
