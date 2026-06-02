@@ -66,6 +66,8 @@ For pure blast radius (who depends on me, transitively):
 archy_impact(path=".", files=["src/app/db.py"])
 ```
 
+`impacted` lists the transitive dependents; `chains` tells you *why* each is reachable, the shortest import path back to a changed module with the line numbers on each hop. Cite that edge when you make the edit (e.g. "preserve `billing.invoice -> auth.session -> auth.tokens`") instead of guessing which dependents matter. Chains are ranked closest-first and capped (`max_chains`, `chains_omitted` reports the remainder).
+
 For a richer bidirectional neighborhood with import line numbers and module instability scores, use focus instead:
 
 ```

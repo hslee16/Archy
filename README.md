@@ -248,7 +248,7 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 | `archy_check` | Run layer rules from `archy.yaml`. |
 | `archy_contracts` | Run import-linter contracts (transitive Layers, Forbidden, Independence, Protected, AcyclicSiblings). Stricter than `archy_check`; requires `archy[contracts]`. |
 | `archy_trend` | Read recent score history. |
-| `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius). |
+| `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. |
 | `archy_affected` | CI-shaped impact lookup: given changed files (typically from `git diff --name-only`), return the impacted modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes on a monorepo. Test detection uses pytest conventions unless `test_filter` overrides with a recursive glob. Internal modules only. |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations and per-component score deltas. |

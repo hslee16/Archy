@@ -51,7 +51,7 @@ from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import compute_hotspots, git_churn
-from archy.impact import Impact, find_impact
+from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
     LayerConfigError,
@@ -473,14 +473,21 @@ def _register_tools(server: FastMCP) -> None:
             "blast-radius scalar: fraction of the project's internal module "
             "count that this edit set can reach (changed plus impacted, over "
             "total internal modules). Higher values mean the edit is more "
-            "structurally consequential."
+            "structurally consequential. `chains` explains *why* each impacted "
+            "module is reachable: the shortest import path back to a changed "
+            "module, one hop at a time with the line numbers where each import "
+            "lives. Cite the specific edge(s) you must preserve when you edit "
+            "the changed module instead of guessing which dependents matter. "
+            "Chains are ranked closest-first and capped at `max_chains` "
+            "(negative for all); `chains_omitted` reports how many were left out."
         ),
     )
     def archy_impact(
         path: str,
         files: list[str],
+        max_chains: int = DEFAULT_MAX_CHAINS,
     ) -> Impact:
-        return _run_impact(Path(path), files=[Path(f) for f in files])
+        return _run_impact(Path(path), files=[Path(f) for f in files], max_chains=max_chains)
 
     @server.tool(
         name="archy_affected",
@@ -881,9 +888,9 @@ def _resolve_against(path: Path, files: list[Path]) -> list[Path]:
     return [path / f if not f.is_absolute() else f for f in files]
 
 
-def _run_impact(path: Path, *, files: list[Path]) -> Impact:
+def _run_impact(path: Path, *, files: list[Path], max_chains: int = DEFAULT_MAX_CHAINS) -> Impact:
     graph = _load_graph(path, internal_only=True)
-    return find_impact(graph, _resolve_against(path, files))
+    return find_impact(graph, _resolve_against(path, files), max_chains=max_chains)
 
 
 def _run_affected(
