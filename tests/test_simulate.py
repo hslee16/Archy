@@ -150,7 +150,8 @@ def test_oracle_remove_matches_real_edit(tmp_path: Path):
     g0 = _internal(project)
     sim = find_simulate(g0, add=[], remove=[("app.a", "app.b")], project_root=project)
 
-    (project / "app" / "a.py").write_text("")  # materialize the simulated removal
+    # Materialize the simulated removal so the oracle compares against a real re-parse.
+    (project / "app" / "a.py").write_text("")
     g1 = _internal(project)
     real = compute_diff(take_snapshot(g0), take_snapshot(g1))
 

@@ -123,6 +123,23 @@ def _blank(text: str, lines: tuple[int, ...]) -> str:
     return "".join(rows)
 
 
+def _try_mutation(p: Path, transform, run) -> None:
+    """Write `transform(original)` to `p`, run `run()`, then always restore `p`.
+
+    No-op if `p` is unreadable. Centralizes the read/mutate/restore guard so a
+    sample never leaves a corpus file modified even if the evaluation raises.
+    """
+    try:
+        original = p.read_text()
+    except OSError:
+        return
+    p.write_text(transform(original))
+    try:
+        run()
+    finally:
+        p.write_text(original)
+
+
 def _run_repo(name: str, root: Path, n: int) -> dict:
     g0 = _internal(root)
     base = _edges(g0)
@@ -180,18 +197,16 @@ def _run_repo(name: str, root: Path, n: int) -> dict:
     for u, v, lines in _stride(_import_edges_with_lines(g0), n):
         if not paths.get(u):
             continue
-        p = Path(paths[u])
-        try:
-            original = p.read_text()
-        except OSError:
-            continue
-        p.write_text(_blank(original, lines))
-        try:
-            evaluate("rm", f"{u}->{v}", base - {(u, v)}, {"add": [], "remove": [(u, v)]}, u)
-        finally:
-            p.write_text(original)
+        _try_mutation(
+            Path(paths[u]),
+            lambda o, _l=lines: _blank(o, _l),
+            lambda _u=u, _v=v: evaluate(
+                "rm", f"{_u}->{_v}", base - {(_u, _v)}, {"add": [], "remove": [(_u, _v)]}, _u
+            ),
+        )
 
-    # additions: pick non-edges, biased to also include cycle-creating pairs
+    # Skew toward cycle-creating pairs: random non-edges rarely close a cycle, but
+    # the cycle path is the highest-value thing to stress, so bias the selection.
     nodes = sorted(g0.nodes)
     pairs = []
     for i, a in enumerate(_stride(nodes, n * 3)):
@@ -199,16 +214,13 @@ def _run_repo(name: str, root: Path, n: int) -> dict:
         if a != b and (a, b) not in base and paths.get(a):
             pairs.append((a, b))
     for a, b in _stride(pairs, n):
-        p = Path(paths[a])
-        try:
-            original = p.read_text()
-        except OSError:
-            continue
-        p.write_text(f"import {b}\n" + original)
-        try:
-            evaluate("add", f"{a}->{b}", base | {(a, b)}, {"add": [(a, b)], "remove": []}, a)
-        finally:
-            p.write_text(original)
+        _try_mutation(
+            Path(paths[a]),
+            lambda o, _b=b: f"import {_b}\n" + o,
+            lambda _a=a, _b=b: evaluate(
+                "add", f"{_a}->{_b}", base | {(_a, _b)}, {"add": [(_a, _b)], "remove": []}, _a
+            ),
+        )
 
     return s
 
@@ -289,7 +301,8 @@ def _violation_smoke(n: int = 400) -> tuple[bool, bool]:
         + "".join(f"  l{k}: {{modules: [L{k}.**]}}\n" for k in range(4))
         + "forbid:\n  - {from: l0, to: l1}\n"
     )
-    # A forbidden L0 -> L1 edge that does not already exist.
+    # Must be a non-existing edge so simulate reports it as a new addition;
+    # an existing l0 -> l1 edge would be a no-op delta and prove nothing.
     l0 = [x for x in g.nodes if x.startswith("L0.")]
     l1 = [x for x in g.nodes if x.startswith("L1.")]
     forb = next((a, b) for a in l0 for b in l1 if not g.has_edge(a, b))
@@ -308,7 +321,7 @@ def _agg(results, key, idx):
 
 
 def _format(results: list[dict]) -> str:
-    L = ["# archy_simulate validation (adversarial)", ""]
+    out = ["# archy_simulate validation (adversarial)", ""]
 
     total = _agg(results, "rm", 0) + _agg(results, "add", 0)
     clean = _agg(results, "rm", 1) + _agg(results, "add", 1)
@@ -317,77 +330,77 @@ def _format(results: list[dict]) -> str:
     dirty = total - clean
     bug_fails = [f for r in results for f in r["bug_fails"]]
 
-    L.append(f"Samples: {total} ({clean} clean, {dirty} dirty).")
-    L.append(
+    out.append(f"Samples: {total} ({clean} clean, {dirty} dirty).")
+    out.append(
         f"**Fidelity (clean rate): {clean}/{total} = {100 * clean / total:.0f}%** "
         "-- intended single-edge delta maps 1:1 to the written import."
     )
-    L.append(
+    out.append(
         f"**Oracle on clean samples: {matched_clean}/{clean} matched** "
         f"({len(bug_fails)} bug-level mismatches). This is the real correctness gate."
     )
     if dirty:
-        L.append(
+        out.append(
             f"Oracle on dirty samples: {matched_dirty}/{dirty} matched -- "
             f"i.e. simulate diverged from the written edit on {dirty - matched_dirty} "
             "of them (the resolved-edge caveat, quantified)."
         )
-    L.append(
+    out.append(
         f"Overall agent-facing match: {matched_clean + matched_dirty}/{total} = "
         f"{100 * (matched_clean + matched_dirty) / total:.0f}%."
     )
     cx = sum(r["complexity_nonzero"] for r in results)
-    L.append(f"Complexity-axis nonzero on an edge delta (must be 0): {cx}.")
+    out.append(f"Complexity-axis nonzero on an edge delta (must be 0): {cx}.")
     sim_t = sum(r["sim_time"] for r in results)
     diff_t = sum(r["diff_time"] for r in results)
     if diff_t:
-        L.append(f"simulate vs diff wall-clock: {sim_t / diff_t:.2f}x (corpus <= 174 modules).")
-    L.append("")
-    L.append(
+        out.append(f"simulate vs diff wall-clock: {sim_t / diff_t:.2f}x (corpus <= 174 modules).")
+    out.append("")
+    out.append(
         "| repo | mods | edges | rm clean/tot | rm match(clean) | "
         "add clean/tot | add match(clean) | add->cycle | add->back |"
     )
-    L.append("|---|--:|--:|--:|--:|--:|--:|--:|--:|")
+    out.append("|---|--:|--:|--:|--:|--:|--:|--:|--:|")
     for r in sorted(results, key=lambda r: -r["modules"]):
         rm, ad = r["rm"], r["add"]
-        L.append(
+        out.append(
             f"| {r['name']} | {r['modules']} | {r['edges']} | "
             f"{rm[1]}/{rm[0]} | {rm[2]}/{rm[1]} | {ad[1]}/{ad[0]} | {ad[2]}/{ad[1]} | "
             f"{r['add_cycle']} | {r['add_back']} |"
         )
 
     if bug_fails:
-        L.append("")
-        L.append("## BUG: clean-sample mismatches (must be empty)")
-        L += [f"- {f}" for f in bug_fails]
+        out.append("")
+        out.append("## BUG: clean-sample mismatches (must be empty)")
+        out += [f"- {f}" for f in bug_fails]
 
     examples = [e for r in results for e in r["dirty_examples"]][:12]
     if examples:
-        L.append("")
-        L.append("## Dirty-sample characterization (why intended != written)")
-        L += [f"- {e}" for e in examples]
+        out.append("")
+        out.append("## Dirty-sample characterization (why intended != written)")
+        out += [f"- {e}" for e in examples]
 
-    return "\n".join(L) + "\n"
+    return "\n".join(out) + "\n"
 
 
 def _format_scale(rows, smoke) -> str:
-    L = ["", "## Scale + perf (synthetic graphs, closes the corpus gap)", ""]
-    L.append("| nodes | simulate | diff | ratio | cycles_added |")
-    L.append("|--:|--:|--:|--:|--:|")
+    out = ["", "## Scale + perf (synthetic graphs, closes the corpus gap)", ""]
+    out.append("| nodes | simulate | diff | ratio | cycles_added |")
+    out.append("|--:|--:|--:|--:|--:|")
     for n, st, dt, cyc in rows:
-        L.append(f"| {n} | {st:.2f}s | {dt:.2f}s | {st / dt:.2f}x | {cyc} |")
-    L.append("")
-    L.append(
+        out.append(f"| {n} | {st:.2f}s | {dt:.2f}s | {st / dt:.2f}x | {cyc} |")
+    out.append("")
+    out.append(
         "simulate's overhead over a diff stays ~constant at scale (the extra DSM + "
         "propagation passes are cheap next to the shared snapshot cost); absolute "
         "latency grows with the snapshot work, not with simulate."
     )
     forb, allow = smoke
-    L.append("")
-    L.append("## Layer-violation smoke (synthetic, 4 layers, forbid l0->l1)")
-    L.append(f"- forbidden edge flagged: {forb}")
-    L.append(f"- allowed edge stays silent: {allow}")
-    return "\n".join(L) + "\n"
+    out.append("")
+    out.append("## Layer-violation smoke (synthetic, 4 layers, forbid l0->l1)")
+    out.append(f"- forbidden edge flagged: {forb}")
+    out.append(f"- allowed edge stays silent: {allow}")
+    return "\n".join(out) + "\n"
 
 
 def main() -> None:
