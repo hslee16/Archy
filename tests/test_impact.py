@@ -122,3 +122,70 @@ def test_impact_outputs_sorted_for_deterministic_json(tmp_path: Path):
     g = build_graph(project)
     result = find_impact(g, [project / "app" / "libs" / "db.py"])
     assert list(result.impacted) == sorted(result.impacted)
+
+
+def test_impact_chains_give_shortest_import_path_to_changed(tmp_path: Path):
+    # app.routers.user -> app.services.auth -> app.libs.db. Editing db, the
+    # direct dependent (auth) gets a one-hop chain and the transitive one
+    # (user) a two-hop chain, each ending at the changed module.
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"])
+    by_module = {c.impacted: c for c in result.chains}
+
+    auth = by_module["app.services.auth"]
+    assert auth.changed == "app.libs.db"
+    assert auth.via == ("app.services.auth", "app.libs.db")
+    assert [(h.source, h.target) for h in auth.hops] == [
+        ("app.services.auth", "app.libs.db")
+    ]
+
+    user = by_module["app.routers.user"]
+    assert user.via == ("app.routers.user", "app.services.auth", "app.libs.db")
+    assert user.changed == "app.libs.db"
+
+
+def test_impact_chain_hops_carry_import_line_numbers(tmp_path: Path):
+    # The "because" must be citable: each hop names the line where the
+    # import lives in its source module. Both fixture imports are on line 1.
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"])
+    auth = next(c for c in result.chains if c.impacted == "app.services.auth")
+    assert auth.hops[0].lines == (1,)
+
+
+def test_impact_chains_ranked_shortest_first(tmp_path: Path):
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"])
+    lengths = [len(c.via) for c in result.chains]
+    assert lengths == sorted(lengths)
+
+
+def test_impact_max_chains_caps_and_reports_omitted(tmp_path: Path):
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"], max_chains=1)
+    assert len(result.chains) == 1
+    # Two modules are impacted; one chain shown leaves one omitted.
+    assert result.chains_omitted == len(result.impacted) - 1
+    # The closest dependent is the one kept.
+    assert result.chains[0].impacted == "app.services.auth"
+
+
+def test_impact_negative_max_chains_returns_all(tmp_path: Path):
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(g, [project / "app" / "libs" / "db.py"], max_chains=-1)
+    assert len(result.chains) == len(result.impacted)
+    assert result.chains_omitted == 0
+
+
+def test_impact_no_changed_modules_has_no_chains(tmp_path: Path):
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    bogus = project / "app" / "libs" / "nonexistent.py"
+    result = find_impact(g, [bogus])
+    assert result.chains == ()
+    assert result.chains_omitted == 0

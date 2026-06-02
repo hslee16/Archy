@@ -34,7 +34,7 @@ from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import Hotspot, compute_hotspots, git_churn
-from archy.impact import Impact, find_impact
+from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.layers import (
     LayerConfigError,
     SdpViolation,
@@ -349,14 +349,28 @@ def trend(path: Path, last_n: int, fmt: str) -> None:
     default="text",
     help="Output format.",
 )
-def impact(path: Path, files: tuple[Path, ...], fmt: str) -> None:
+@click.option(
+    "--max-chains",
+    type=int,
+    default=DEFAULT_MAX_CHAINS,
+    show_default=True,
+    help="Max causal chains (shortest import path to a changed module) to "
+    "report, ranked closest-first. Use a negative value for all.",
+)
+def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> None:
     """List internal modules that depend on the given file(s).
 
     Resolves each --file to a qualname via the import graph and prints
-    every module that transitively imports any of them.
+    every module that transitively imports any of them, with the shortest
+    import path back to a changed module (the "because") for the closest
+    dependents.
     """
     g = _load_graph(path, internal_only=True)
-    result = find_impact(g, [path / f if not f.is_absolute() else f for f in files])
+    result = find_impact(
+        g,
+        [path / f if not f.is_absolute() else f for f in files],
+        max_chains=max_chains,
+    )
 
     if fmt == "json":
         click.echo(json.dumps(_impact_to_dict(result), indent=2, sort_keys=True))
@@ -1376,6 +1390,19 @@ def _impact_to_dict(result: Impact) -> dict:
         "changed": list(result.changed),
         "unresolved": list(result.unresolved),
         "impacted": list(result.impacted),
+        "chains": [
+            {
+                "impacted": c.impacted,
+                "changed": c.changed,
+                "via": list(c.via),
+                "hops": [
+                    {"source": h.source, "target": h.target, "lines": list(h.lines)}
+                    for h in c.hops
+                ],
+            }
+            for c in result.chains
+        ],
+        "chains_omitted": result.chains_omitted,
     }
 
 
@@ -1423,6 +1450,20 @@ def _impact_to_text(result: Impact) -> str:
         lines.append("Impacted (transitive dependents):")
         for q in result.impacted:
             lines.append(f"  - {q}")
+    if result.chains:
+        lines.append("")
+        lines.append("Why (shortest import path to a changed module):")
+        for c in result.chains:
+            lines.append(f"  - {' -> '.join(c.via)}")
+            for h in c.hops:
+                lines.append(
+                    f"      {h.source} imports {h.target}  {_format_lines(h.lines)}"
+                )
+        if result.chains_omitted:
+            lines.append(
+                f"  # {result.chains_omitted} more impacted module(s) not shown "
+                "(raise --max-chains)."
+            )
     return "\n".join(lines)
 
 
