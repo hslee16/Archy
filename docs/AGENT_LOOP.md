@@ -25,7 +25,12 @@ if you want to confirm it explicitly.
 
    Captures the current score, cycle list, and layer-violation list to
    `.archy/baseline.json`. Write-once; the file is overwritten on each
-   call so a session always starts from a known point.
+   call so a session always starts from a known point. The MCP tool also
+   returns an `invariant_brief` (declared layers, forbidden edges, the
+   acyclic invariant, baseline score per axis, and the load-bearing /
+   highest-`edit_risk` modules) so the agent is told the constraints up
+   front and can avoid a cross-layer or cycle-introducing edit before
+   making it, not just catch it in the step-4 diff.
 
 2. **Look up impact** before editing a module so you know who breaks
    if the change is wrong.

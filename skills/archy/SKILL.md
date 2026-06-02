@@ -56,6 +56,8 @@ archy_snapshot(path=".")
 
 This writes `.archy/baseline.json` (score, cycles, layer violations). The file is overwritten on each call, so a re-snapshot mid-session discards prior context. Do not re-snapshot unless the user explicitly restarts.
 
+Read the `invariant_brief` in the result before your first edit: the declared layers and the forbidden edges between them, whether the graph is currently acyclic, the baseline score per axis, and the load-bearing modules (highest `edit_risk`, treat as high blast radius). Knowing the constraints up front lets you avoid proposing a cross-layer or cycle-introducing edit in the first place, instead of finding out from the step-5 diff.
+
 ### 2. Look up impact before editing
 
 Before modifying a module, understand what it touches.

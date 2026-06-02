@@ -82,6 +82,13 @@ confirm freshness explicitly. The loop is:
 
 1. **Snapshot** at session start so you have a baseline:
    `archy_snapshot(path)`
+
+   Read `invariant_brief` in the result first: the declared layers and
+   the forbidden edges between them, whether the graph is currently
+   acyclic, the baseline score per axis, and the load-bearing modules
+   (highest `edit_risk`, treat as high blast radius). Knowing these up
+   front lets you avoid proposing a cross-layer or cycle-introducing
+   edit in the first place, instead of discovering it in step 4's diff.
 2. **Look up impact** before editing a module so you know who breaks if
    the change is wrong:
    `archy_impact(path, files=[<file you plan to edit>])`
@@ -182,6 +189,48 @@ class ContractsPayload(BaseModel):
     contracts: tuple[ContractCheck, ...] = ()
 
 
+class BriefLayer(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    patterns: tuple[str, ...]
+
+
+class ForbiddenEdge(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    from_layer: str
+    to_layer: str
+
+
+class LoadBearingModule(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    edit_risk: float
+
+
+class InvariantBrief(BaseModel):
+    """Constraints to hand a stateless agent up front, before its first edit.
+
+    A recombination of data the snapshot already computes, surfaced at
+    session start so the agent is *told the rules in advance* (prevention)
+    instead of only after a check fails (correction): the declared layers
+    and the forbidden edges between them, whether the graph is currently
+    acyclic, the baseline score per axis, and the top load-bearing modules
+    (highest `edit_risk`) to treat as high-blast-radius. No new analysis.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    layers: tuple[BriefLayer, ...]
+    forbidden_edges: tuple[ForbiddenEdge, ...]
+    acyclic: bool
+    overall: float
+    components: ScoreComponents
+    load_bearing: tuple[LoadBearingModule, ...]
+
+
 class SnapshotPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -190,6 +239,7 @@ class SnapshotPayload(BaseModel):
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
     baseline_path: str
+    invariant_brief: InvariantBrief
 
 
 class DiffErrorPayload(BaseModel):
@@ -523,7 +573,13 @@ def _register_tools(server: FastMCP) -> None:
         description=(
             "Capture score, cycles, and layer violations to .archy/baseline.json "
             "as a baseline that archy_diff will compare against. Call at the "
-            "start of an editing session. See the `loop` prompt for full usage."
+            "start of an editing session. Also returns `invariant_brief`: the "
+            "constraints to know before your first edit (declared layers, "
+            "forbidden inter-layer edges, whether the graph is acyclic, the "
+            "baseline score per axis, and the top load-bearing / highest-risk "
+            "modules). Read it up front to avoid proposing a cross-layer or "
+            "cycle-introducing edit, rather than being told after the diff. "
+            "See the `loop` prompt for full usage."
         ),
     )
     def archy_snapshot(path: str) -> SnapshotPayload:
@@ -855,6 +911,53 @@ def _run_contracts(path: Path, *, config_filename: Path | None) -> ContractsPayl
     )
 
 
+_BRIEF_LOAD_BEARING_N = 5
+
+
+def _build_invariant_brief(
+    graph, config_path: Path | None, score: Score, cycles: tuple[Cycle, ...]
+) -> InvariantBrief:
+    """Recombine the snapshot's own data into the session-start brief.
+
+    Layers/forbidden edges come from the same archy.yaml `take_snapshot`
+    already loaded (so a malformed config has failed before reaching here);
+    load-bearing modules are the top `edit_risk` nodes, the same ranking
+    `archy_high_risk_modules` reports.
+    """
+    layers: tuple[BriefLayer, ...] = ()
+    forbidden: tuple[ForbiddenEdge, ...] = ()
+    if config_path is not None:
+        config = load_config(config_path)
+        layers = tuple(
+            BriefLayer(name=layer.name, patterns=layer.patterns) for layer in config.layers
+        )
+        forbidden = tuple(
+            ForbiddenEdge(from_layer=rule.from_layer, to_layer=rule.to_layer)
+            for rule in config.forbid
+        )
+
+    ranked = sorted(compute_edit_risk(graph).items(), key=lambda t: (-t[1], t[0]))
+    load_bearing = tuple(
+        LoadBearingModule(module=name, edit_risk=risk)
+        for name, risk in ranked[:_BRIEF_LOAD_BEARING_N]
+    )
+
+    return InvariantBrief(
+        layers=layers,
+        forbidden_edges=forbidden,
+        acyclic=not cycles,
+        overall=score.overall,
+        components=ScoreComponents(
+            modularity=score.modularity,
+            acyclicity=score.acyclicity,
+            depth=score.depth,
+            equality=score.equality,
+            complexity=score.complexity,
+        ),
+        load_bearing=load_bearing,
+    )
+
+
 def _run_snapshot(path: Path) -> SnapshotPayload:
     graph = _load_graph(path, internal_only=True)
     config_path = discover_config(path)
@@ -867,6 +970,7 @@ def _run_snapshot(path: Path) -> SnapshotPayload:
         violations=snap.violations,
         sdp_violations=snap.sdp_violations,
         baseline_path=str(target),
+        invariant_brief=_build_invariant_brief(graph, config_path, snap.score, snap.cycles),
     )
 
 
