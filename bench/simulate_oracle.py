@@ -17,8 +17,8 @@ on EVERY sample and split the result two ways:
 * **fidelity (clean rate)** -- how often an agent's intended single-edge delta
   actually maps 1:1 to the written import. The interesting, honest number: when
   it is < 100%, an agent that says "add a -> b" and writes the import gets a
-  different graph than it asked simulate about (multi-target import lines on
-  removal; re-export / indirection on addition -- the resolved-edge caveat).
+  different graph than it asked simulate about: importing a submodule also pulls
+  in its ancestor packages, and a removed line may carry several targets.
 * **oracle match** -- does simulate's report equal the real diff's report? On
   CLEAN samples this should be 100% (a failure is a real bug). On DIRTY samples
   it will diverge, and we quantify by how much: that is the cost of the caveat.
@@ -50,6 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from archy.diff import compute_diff, take_snapshot
 from archy.dsm import build_dsm, diff_dsm
 from archy.graph import build_graph
+from archy.reach import compute_propagation_cost
 from archy.simulate import find_simulate
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -97,13 +98,30 @@ def _violation_keys(vd):
     return (frozenset(key(v) for v in vd.added), frozenset(key(v) for v in vd.resolved))
 
 
+def _sdp_keys(sd):
+    return (
+        frozenset((v.source, v.target) for v in sd.added),
+        frozenset((v.source, v.target) for v in sd.resolved),
+    )
+
+
 def _matches(sim, real, g0, g1) -> bool:
+    """Compare every comparable SimulateReport field against the real diff.
+
+    All eight fields except `applied` (an echo of the input with no real
+    counterpart) and `summary` (a deterministic function of the others). The
+    earlier version checked only cycles/violations/score/back-edges, leaving
+    sdp_violations and propagation_cost as unvalidated claims.
+    """
     sim_back = {(e.source, e.target) for e in sim.new_back_edges}
     return (
         _cycle_keys(sim.cycles) == _cycle_keys(real.cycles)
         and _violation_keys(sim.violations) == _violation_keys(real.violations)
+        and _sdp_keys(sim.sdp_violations) == _sdp_keys(real.sdp_violations)
         and sim.score_delta == real.score_delta
         and sim_back == _real_back_edges(g0, g1)
+        and abs(sim.propagation_cost.before - compute_propagation_cost(g0)[0]) < 1e-12
+        and abs(sim.propagation_cost.after - compute_propagation_cost(g1)[0]) < 1e-12
     )
 
 
@@ -113,6 +131,23 @@ def _stride(seq, n):
         return seq
     step = len(seq) / n
     return [seq[int(i * step)] for i in range(n)]
+
+
+def _importable(qualname: str) -> bool:
+    return all(seg.isidentifier() for seg in qualname.split("."))
+
+
+def _import_stmt(qualname: str) -> str:
+    """The import an agent would actually write to depend on `qualname`.
+
+    `from pkg import leaf` for a submodule (the common agent form, which also
+    pulls in the ancestor package `pkg`), plain `import top` for a top-level
+    module. Using the realistic form makes the fidelity rate representative.
+    """
+    if "." in qualname:
+        parent, leaf = qualname.rsplit(".", 1)
+        return f"from {parent} import {leaf}\n"
+    return f"import {qualname}\n"
 
 
 def _blank(text: str, lines: tuple[int, ...]) -> str:
@@ -207,16 +242,19 @@ def _run_repo(name: str, root: Path, n: int) -> dict:
 
     # Skew toward cycle-creating pairs: random non-edges rarely close a cycle, but
     # the cycle path is the highest-value thing to stress, so bias the selection.
+    # `_importable` skips qualnames that aren't valid dotted identifiers (e.g. a
+    # `unicode8-0-0.py` data module): `import` of those is a syntax error, so a
+    # dirty verdict would be a mutation artifact, not a real ancestor-edge effect.
     nodes = sorted(g0.nodes)
     pairs = []
     for i, a in enumerate(_stride(nodes, n * 3)):
         b = nodes[(i * 7 + 3) % len(nodes)]
-        if a != b and (a, b) not in base and paths.get(a):
+        if a != b and (a, b) not in base and paths.get(a) and _importable(b):
             pairs.append((a, b))
     for a, b in _stride(pairs, n):
         _try_mutation(
             Path(paths[a]),
-            lambda o, _b=b: f"import {_b}\n" + o,
+            lambda o, _b=b: _import_stmt(_b) + o,
             lambda _a=a, _b=b: evaluate(
                 "add", f"{_a}->{_b}", base | {(_a, _b)}, {"add": [(_a, _b)], "remove": []}, _a
             ),

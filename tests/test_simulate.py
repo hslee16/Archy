@@ -59,12 +59,48 @@ def test_unresolved_endpoint_reported_and_skipped(tmp_path: Path):
     assert result.applied.added_edges == ()
 
 
-def test_self_loop_rejected(tmp_path: Path):
-    project = _make_pkg(tmp_path, {"a.py": ""})
+def test_self_loop_removal_is_simulable(tmp_path: Path):
+    # archy's resolver does produce self-edges (e.g. `from . import a as a`),
+    # so removing one must be simulable, not rejected. Regression for a bug the
+    # oracle bench caught on rich.box.
+    project = _make_pkg(tmp_path, {"a.py": "from app import a as a\n"})
     g = _internal(project)
-    result = find_simulate(g, add=[("app.a", "app.a")], remove=[], project_root=project)
+    assert g.has_edge("app.a", "app.a")  # the self-edge exists
+    result = find_simulate(g, add=[], remove=[("app.a", "app.a")], project_root=project)
+    assert [(e.source, e.target) for e in result.applied.removed_edges] == [("app.a", "app.a")]
+    assert result.applied.rejected == ()
+
+
+def test_duplicate_remove_does_not_crash(tmp_path: Path):
+    # Regression: a repeated remove used to call remove_edge twice and raise.
+    project = _make_pkg(tmp_path, {"a.py": "from app.b import x\n", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(
+        g, add=[], remove=[("app.a", "app.b"), ("app.a", "app.b")], project_root=project
+    )
+    assert [(e.source, e.target) for e in result.applied.removed_edges] == [("app.a", "app.b")]
+
+
+def test_duplicate_add_is_deduped_in_echo(tmp_path: Path):
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(
+        g, add=[("app.a", "app.b"), ("app.a", "app.b")], remove=[], project_root=project
+    )
+    assert [(e.source, e.target) for e in result.applied.added_edges] == [("app.a", "app.b")]
+
+
+def test_add_and_remove_same_edge_cancels(tmp_path: Path):
+    project = _make_pkg(tmp_path, {"a.py": "from app.b import x\n", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(
+        g, add=[("app.a", "app.b")], remove=[("app.a", "app.b")], project_root=project
+    )
     assert result.applied.added_edges == ()
-    assert any("self-loop" in r for r in result.applied.rejected)
+    assert result.applied.removed_edges == ()
+    assert any("both add and remove" in r for r in result.applied.rejected)
+    # The edge still exists, so nothing structurally changed.
+    assert result.cycles.added == () and result.cycles.resolved == ()
 
 
 def test_no_op_add_and_remove_classified(tmp_path: Path):

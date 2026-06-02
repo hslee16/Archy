@@ -126,9 +126,11 @@ def find_simulate(
 
     hypo = graph.copy()
     for edge in applied.added_edges:
-        hypo.add_edge(edge.source, edge.target, kinds=("import",), lines=())
+        if not hypo.has_edge(edge.source, edge.target):
+            hypo.add_edge(edge.source, edge.target, kinds=("import",), lines=())
     for edge in applied.removed_edges:
-        hypo.remove_edge(edge.source, edge.target)
+        if hypo.has_edge(edge.source, edge.target):
+            hypo.remove_edge(edge.source, edge.target)
 
     before = take_snapshot(graph, config_path=config_path)
     after = take_snapshot(hypo, config_path=config_path)
@@ -167,41 +169,57 @@ def _resolve_delta(
     self-loop is `rejected`; an `add` of an existing edge or a `remove` of a
     missing edge is a no-op. Only genuinely applicable specs land in
     `added_edges` / `removed_edges`.
+
+    Resolved pairs are de-duplicated within each list, and a pair that appears
+    in both `add` and `remove` cancels (recorded in `rejected`, applied to
+    neither). This keeps the echoed `AppliedDelta` consistent with the
+    sequential apply and, critically, stops a repeated `remove` from calling
+    `remove_edge` twice (which would raise).
+
+    Self-loops are NOT rejected: archy's resolver does produce module-imports-
+    itself edges (e.g. `from . import box as box` in rich's box.py), so a
+    self-edge can genuinely exist and removing it must be simulable.
     """
-    existing = set(graph.edges())
-    added: list[EdgeRef] = []
-    removed: list[EdgeRef] = []
-    unresolved: list[str] = []
-    no_op_adds: list[EdgeRef] = []
-    no_op_removes: list[EdgeRef] = []
-    rejected: list[str] = []
 
     def _resolve_one(ref: str) -> str | None:
         res, _ = resolve_modules(graph, [ref], project_root=project_root)
         return res[0] if res else None
 
-    for src_raw, dst_raw in add:
-        src, dst = _resolve_one(src_raw), _resolve_one(dst_raw)
-        if src is None:
-            unresolved.append(src_raw)
-        if dst is None:
-            unresolved.append(dst_raw)
-        if src is None or dst is None:
-            continue
-        if src == dst:
-            rejected.append(f"{src_raw} -> {dst_raw} (self-loop)")
-            continue
+    def _resolve_pairs(
+        specs: list[tuple[str, str]],
+    ) -> tuple[list[tuple[str, str]], list[str]]:
+        pairs: list[tuple[str, str]] = []
+        unresolved: list[str] = []
+        for src_raw, dst_raw in specs:
+            src, dst = _resolve_one(src_raw), _resolve_one(dst_raw)
+            if src is None:
+                unresolved.append(src_raw)
+            if dst is None:
+                unresolved.append(dst_raw)
+            if src is None or dst is None:
+                continue
+            pairs.append((src, dst))
+        return list(dict.fromkeys(pairs)), unresolved
+
+    add_pairs, add_unres = _resolve_pairs(add)
+    remove_pairs, rem_unres = _resolve_pairs(remove)
+    rejected: list[str] = []
+    unresolved = add_unres + rem_unres
+
+    # A pair in both add and remove cancels: applying both would be a no-op, and
+    # the report should not claim it was added or removed.
+    conflicts = set(add_pairs) & set(remove_pairs)
+    for src, dst in sorted(conflicts):
+        rejected.append(f"{src} -> {dst} (both add and remove)")
+    add_pairs = [p for p in add_pairs if p not in conflicts]
+    remove_pairs = [p for p in remove_pairs if p not in conflicts]
+
+    existing = set(graph.edges())
+    added, no_op_adds, removed, no_op_removes = [], [], [], []
+    for src, dst in add_pairs:
         ref = EdgeRef(source=src, target=dst)
         (no_op_adds if (src, dst) in existing else added).append(ref)
-
-    for src_raw, dst_raw in remove:
-        src, dst = _resolve_one(src_raw), _resolve_one(dst_raw)
-        if src is None:
-            unresolved.append(src_raw)
-        if dst is None:
-            unresolved.append(dst_raw)
-        if src is None or dst is None:
-            continue
+    for src, dst in remove_pairs:
         ref = EdgeRef(source=src, target=dst)
         (removed if (src, dst) in existing else no_op_removes).append(ref)
 

@@ -121,8 +121,14 @@ cases are a documented caveat, not a silent divergence.
 - **`remove` removes the entire `SRC -> DST` dependency** (both its import and
   any call sub-edge). Phase 1 does not model "drop the import but keep a call
   that resolves another way." (Caveat, Q6.)
-- **Self-loops** (`SRC == DST`) are rejected: archy's resolver never produces a
-  module importing itself, so simulating one would be meaningless.
+- **Self-loops** (`SRC == DST`) are handled as normal edges, NOT rejected. The
+  resolver *does* produce module-imports-itself edges (e.g. `from . import box
+  as box` in rich's `box.py`), so a self-edge can genuinely exist and removing
+  it must be simulable. (The original spec assumed self-imports were impossible;
+  the oracle bench disproved that, see §12.)
+- **Duplicate / conflicting specs.** Resolved pairs are de-duplicated per list;
+  a pair in both `add` and `remove` cancels (recorded in `rejected`). Without
+  this a repeated `remove` would call `remove_edge` twice and raise.
 
 ## 5. Output (`SimulateReport`)
 
@@ -227,7 +233,7 @@ not tautological: the two graphs are built independently (in-memory edge add vs
 real text edit + re-parse), so the match confirms `lines=()` leaks into no
 reported field. Two findings refined this spec:
 
-- **Fidelity is 94%, and the gap is ancestor-package edges, not "re-export."**
+- **Fidelity is 96%, and the gap is ancestor-package edges, not "re-export."**
   Importing a submodule `a.b.c` also creates edges to its ancestor packages
   (`a.b`, `a`; their `__init__` runs), so ~6% of single-line imports touch more
   than one graph edge. A lone submodule edge is a *lower bound* on real impact.

@@ -30,18 +30,38 @@ The honest design compares on **every** sample and splits the result:
 
 | Metric | Value |
 |---|---|
-| Samples | 327 (308 clean, 19 dirty) |
-| **Fidelity (clean rate)** | **94%** (308/327) |
-| **Oracle on clean samples** | **308/308 matched, 0 bugs** |
-| Oracle on dirty samples | 0/19 (every divergence explained, below) |
+| Samples | 327 (315 clean, 12 dirty) |
+| **Fidelity (clean rate)** | **96%** (315/327) |
+| **Oracle on clean samples** | **315/315 matched, 0 bugs** |
+| Oracle on dirty samples | 0/12 (every divergence explained, below) |
 | Complexity-axis nonzero on an edge delta | 0 (as predicted) |
-| simulate vs diff wall-clock (corpus) | 1.22x |
+| simulate vs diff wall-clock (corpus) | 1.23x |
 
-**The 308/308 with zero bugs is the load-bearing correctness result.** Because
-the comparison runs on graphs built two independent ways (simulate's in-memory
-edge add vs a real text edit + full re-parse), a match is *not* tautological: it
-empirically confirms the `lines=()` synthetic-edge choice leaks into none of the
-reported fields, across 308 real-repo cases.
+Additions use the realistic `from <pkg> import <leaf>` form an agent would write
+(not `import <qualname>`), and the oracle compares **all** comparable
+`SimulateReport` fields: cycles, layer violations, **SDP violations**, score
+delta, new back-edges, **and propagation cost** (only `applied`, an input echo,
+and `summary`, a deterministic function of the rest, are excluded).
+
+**An adversarial review caught a real bug here that a weaker oracle missed.** An
+earlier version of `_matches` compared only 4 of those fields and the additions
+used `import <qualname>`; both were tightened during review. The expanded oracle
+immediately surfaced a clean-sample mismatch on `rich.box`: archy *does* produce
+module-imports-itself edges (`from . import box as box`), which contradicted the
+spec's assumption that self-imports are impossible, so simulate was wrongly
+*rejecting* a self-loop removal. Fixed (self-loops are now handled as normal
+edges); the oracle is **315/315** after the fix.
+
+**On the precision of "315/315."** On a clean sample the real re-parse reproduces
+exactly the simulated edge set, so the two graphs are topologically identical and
+the topology-derived fields *must* agree. What this validates is therefore
+narrow but real: that simulate's **delta application + the `lines=()` synthetic
+edge** produce a graph whose every reported field matches a true re-parse, with
+zero leakage, across 315 real cases. It is *not* evidence that simulate predicts
+something an oracle on identical graphs couldn't; the **fidelity rate (96%)** is
+the separate measure of how often the agent's intended delta *is* that graph.
+Together: simulate is exact for the delta it is given, and the delta matches the
+written import 96% of the time.
 
 ## The fidelity gap is ancestor-package edges, not "re-export"
 
@@ -65,7 +85,10 @@ packages), not a bug. It means an agent's single-edge mental model under-models 
 real submodule import by the ancestor edges. **Actionable guidance (now in the
 tool description):** to model a submodule import exactly, include the ancestor
 edges in the delta; a lone submodule edge is a lower bound on the real impact.
-~6% of single-line import edits in the corpus touch more than one graph edge.
+~4% of single-line import edits in the corpus touch more than one graph edge.
+(The bench skips qualnames that are not valid dotted identifiers, e.g. a
+`unicode8-0-0.py` data module, so a syntactically invalid injected import cannot
+masquerade as an ancestor-edge divergence.)
 
 ## Scale + performance (closes the corpus gap)
 
@@ -82,12 +105,17 @@ measures behavior where it matters:
 Two findings:
 
 1. **simulate's overhead over a diff is ~1.2x and stays flat at scale** -- better
-   than the spec's conservative "~2x." The extra two DSM builds + two propagation
-   passes are cheap next to the shared snapshot cost.
-2. **Absolute latency is the real cost**: ~5s at 5k modules, ~17s at 10k. This is
-   inherited from `take_snapshot` / propagation being super-linear, not from
-   simulate. On a 10k+ module repo, simulate is a deliberate, not interactive-per-
-   keystroke, call. Small/medium repos (<200 modules) stay sub-second.
+   than the spec's conservative "~2x." simulate's extra work is two DSM builds
+   (for `new_back_edges`) plus two propagation passes; these are cheap next to the
+   shared snapshot cost. **Caveat:** this synthetic graph is a sparse near-DAG
+   (out-degree 2, one injected back-edge). On a dense or heavily-cyclic graph the
+   DSM/cycle work is super-linear, so the ratio could rise above 1.2x; the "flat"
+   claim is established only for sparse structure. A density sweep is future work.
+2. **Absolute latency is the real cost, reported plainly**: ~5s at 5k modules,
+   ~17s at 10k. This is inherited from `take_snapshot` / propagation being
+   super-linear, and simulate *adds* ~1-2s of its own DSM/propagation work on top.
+   At 10k+ modules it is a multi-second call, not an interactive-per-keystroke
+   one; small/medium repos (<200 modules) stay sub-second.
 
 ## Layer-violation dimension
 

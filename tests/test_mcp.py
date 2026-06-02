@@ -30,10 +30,12 @@ from archy.mcp import (
     _run_hotspots,
     _run_impact,
     _run_score,
+    _run_simulate,
     _run_snapshot,
     _run_trend,
     create_server,
 )
+from archy.simulate import EdgeSpec, SimulateReport
 
 
 def _internal_graph(root: Path):
@@ -296,6 +298,28 @@ def test_snapshot_brief_no_config_has_empty_layers(acyclic_project: Path):
     brief = _run_snapshot(acyclic_project).invariant_brief
     assert brief.layers == ()
     assert brief.forbidden_edges == ()
+
+
+def test_run_simulate_parses_from_alias(acyclic_project: Path):
+    # `from` is a Python keyword; the wire field must be the alias `from`, not
+    # `from_`. If the alias breaks, agents cannot call the tool at all.
+    payload = _run_simulate(
+        acyclic_project,
+        add=[EdgeSpec.model_validate({"from": "pkg.b", "to": "pkg.a"})],
+        remove=[],
+    )
+    assert isinstance(payload, SimulateReport)
+    # pkg.a imports pkg.b; adding pkg.b -> pkg.a closes a cycle.
+    assert payload.cycles.added
+
+
+def test_simulate_tool_input_schema_uses_from_to_aliases():
+    server = create_server()
+    tools = asyncio.run(server.list_tools())
+    tool = next(t for t in tools if t.name == "archy_simulate")
+    edge_spec = tool.inputSchema["$defs"]["EdgeSpec"]["properties"]
+    # The wire contract the agent sees must be {from, to}, not {from_, to}.
+    assert set(edge_spec) == {"from", "to"}
 
 
 def test_run_diff_without_baseline_returns_error(acyclic_project: Path):

@@ -107,7 +107,7 @@ if you want to confirm it explicitly.
    blast-radius change, no file written. If the simulation shows a new
    cycle, reshape the plan before editing instead of catching it in the
    diff. Empirically the prediction matches the post-edit diff exactly
-   when the import maps 1:1 to the named edge (~94% of single-line
+   when the import maps 1:1 to the named edge (~96% of single-line
    imports; importing a submodule also pulls in its ancestor packages,
    so include those edges to model it exactly). See
    [`docs/research/SIMULATE_ORACLE_EMPIRICS.md`](research/SIMULATE_ORACLE_EMPIRICS.md).
