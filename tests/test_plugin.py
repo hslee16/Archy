@@ -56,4 +56,4 @@ def test_plugin_manifest_is_valid_json():
     assert "archy" in manifest["mcpServers"]
     server = manifest["mcpServers"]["archy"]
     assert server["command"] == "uvx"
-    assert server["args"] == ["archy>=0.27", "mcp"]
+    assert server["args"] == ["archy>=0.27,<1.0", "mcp"]

@@ -2,12 +2,16 @@
   "name": "archy",
   "description": "Architectural health for Python codebases: trended score, cycle detection, layer rules, blast radius, CI test selection. Exposes 17 MCP tools and bundles the archy skill so Claude can run the snapshot/impact/edit/diff loop without manual prompting.",
   "version": "0.1.0",
+  "author": {
+    "name": "Alex Lee",
+    "url": "https://github.com/hslee16"
+  },
   "homepage": "https://github.com/hslee16/archy",
   "license": "MIT",
   "mcpServers": {
     "archy": {
       "command": "uvx",
-      "args": ["archy>=0.27", "mcp"]
+      "args": ["archy>=0.27,<1.0", "mcp"]
     }
   }
 }
