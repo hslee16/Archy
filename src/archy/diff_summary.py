@@ -17,6 +17,12 @@ Score-component items use magnitude rather than module risk because they're
 project-wide signals with no module to weight against. The x5 scaler maps
 a 0.20 drop to risk 1.0, which matches the empirical "big regression" floor
 on the 27-project bench.
+
+Each item also carries a `prompt`: the same delta reframed as the judgment
+question a reviewer should answer ("new cycle a -> b; intended, or should an
+edge be inverted?"). A number tells you *what changed*; the question tells
+you *what to decide*. This is the lightweight human-facing layer the review
+brief consumes.
 """
 
 from __future__ import annotations
@@ -55,23 +61,30 @@ def summarize_diff(diff: DiffReport, graph: nx.DiGraph, *, top_n: int = 5) -> Di
 def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffSummaryItem]:
     items: list[DiffSummaryItem] = []
     for cycle in diff.cycles.added:
+        members = _format_modules(cycle.modules)
         items.append(
             DiffSummaryItem(
                 kind="cycle_added",
                 risk=_max_module_risk(cycle.modules, risk),
                 modules=tuple(cycle.modules),
-                description=f"new cycle: {_format_modules(cycle.modules)}",
+                description=f"new cycle: {members}",
+                prompt=(
+                    f"Acyclicity dropped because {members} now form an import cycle. "
+                    "Intended, or should an edge be inverted or removed to break it?"
+                ),
             )
         )
     for v in diff.violations.added:
+        boundary = f"{v.rule.from_layer} -> {v.rule.to_layer}"
         items.append(
             DiffSummaryItem(
                 kind="violation_added",
                 risk=_max_module_risk((v.source, v.target), risk),
                 modules=(v.source, v.target),
-                description=(
-                    f"new layer violation: {v.source} -> {v.target} "
-                    f"({v.rule.from_layer} -> {v.rule.to_layer})"
+                description=(f"new layer violation: {v.source} -> {v.target} ({boundary})"),
+                prompt=(
+                    f"{v.source} -> {v.target} now crosses the forbidden {boundary} "
+                    "boundary. Intended, or a leak to route through an allowed seam?"
                 ),
             )
         )
@@ -85,6 +98,11 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
                     f"new SDP violation: {v.source} (I={v.source_instability:.2f}) -> "
                     f"{v.target} (I={v.target_instability:.2f})"
                 ),
+                prompt=(
+                    f"{v.source} now depends on the less-stable {v.target} "
+                    f"(I={v.source_instability:.2f} -> {v.target_instability:.2f}). "
+                    "Intended, or should the dependency follow stability?"
+                ),
             )
         )
     for name in _COMPONENT_NAMES:
@@ -96,6 +114,10 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
                     risk=_score_risk(delta),
                     modules=(),
                     description=f"{name} dropped {delta:+.3f}",
+                    prompt=(
+                        f"{name} dropped {delta:+.3f}. Acceptable for this change, "
+                        "or a regression to address before committing?"
+                    ),
                 )
             )
     return items
@@ -104,23 +126,27 @@ def _collect_regressions(diff: DiffReport, risk: dict[str, float]) -> list[DiffS
 def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[DiffSummaryItem]:
     items: list[DiffSummaryItem] = []
     for cycle in diff.cycles.resolved:
+        members = _format_modules(cycle.modules)
         items.append(
             DiffSummaryItem(
                 kind="cycle_resolved",
                 risk=_max_module_risk(cycle.modules, risk),
                 modules=tuple(cycle.modules),
-                description=f"cycle resolved: {_format_modules(cycle.modules)}",
+                description=f"cycle resolved: {members}",
+                prompt=f"Cycle {members} is gone. Confirm this was the intended decoupling.",
             )
         )
     for v in diff.violations.resolved:
+        boundary = f"{v.rule.from_layer} -> {v.rule.to_layer}"
         items.append(
             DiffSummaryItem(
                 kind="violation_resolved",
                 risk=_max_module_risk((v.source, v.target), risk),
                 modules=(v.source, v.target),
-                description=(
-                    f"layer violation resolved: {v.source} -> {v.target} "
-                    f"({v.rule.from_layer} -> {v.rule.to_layer})"
+                description=(f"layer violation resolved: {v.source} -> {v.target} ({boundary})"),
+                prompt=(
+                    f"{v.source} -> {v.target} no longer crosses {boundary}. "
+                    "Confirm the dependency was meant to be removed."
                 ),
             )
         )
@@ -131,6 +157,10 @@ def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[Diff
                 risk=_max_module_risk((v.source, v.target), risk),
                 modules=(v.source, v.target),
                 description=f"SDP violation resolved: {v.source} -> {v.target}",
+                prompt=(
+                    f"{v.source} -> {v.target} no longer violates the Stable "
+                    "Dependencies Principle. Confirm this was intended."
+                ),
             )
         )
     for name in _COMPONENT_NAMES:
@@ -142,6 +172,7 @@ def _collect_improvements(diff: DiffReport, risk: dict[str, float]) -> list[Diff
                     risk=_score_risk(delta),
                     modules=(),
                     description=f"{name} improved {delta:+.3f}",
+                    prompt=f"{name} improved {delta:+.3f}. No action needed; noted for context.",
                 )
             )
     return items
