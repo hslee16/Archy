@@ -26,7 +26,8 @@ def _make_pkg(tmp_path: Path, files: dict[str, str]) -> Path:
 
 
 def test_add_edge_that_closes_a_cycle_is_reported(tmp_path: Path):
-    # a -> b, c -> a. Adding b -> c closes the cycle a -> b -> c -> a.
+    # Minimal indirect (3-node) cycle so the test exercises transitive closure,
+    # not just a direct back-edge: a -> b, c -> a, and the added b -> c closes it.
     project = _make_pkg(
         tmp_path,
         {"a.py": "from app.b import x\n", "b.py": "", "c.py": "from app.a import y\n"},
@@ -65,7 +66,9 @@ def test_self_loop_removal_is_simulable(tmp_path: Path):
     # oracle bench caught on rich.box.
     project = _make_pkg(tmp_path, {"a.py": "from app import a as a\n"})
     g = _internal(project)
-    assert g.has_edge("app.a", "app.a")  # the self-edge exists
+    # Precondition: the resolver must actually produce a self-edge, else the
+    # removal under test is moot and the regression would silently pass.
+    assert g.has_edge("app.a", "app.a")
     result = find_simulate(g, add=[], remove=[("app.a", "app.a")], project_root=project)
     assert [(e.source, e.target) for e in result.applied.removed_edges] == [("app.a", "app.a")]
     assert result.applied.rejected == ()
@@ -99,7 +102,8 @@ def test_add_and_remove_same_edge_cancels(tmp_path: Path):
     assert result.applied.added_edges == ()
     assert result.applied.removed_edges == ()
     assert any("both add and remove" in r for r in result.applied.rejected)
-    # The edge still exists, so nothing structurally changed.
+    # A cancel must be a true no-op: the hypothetical graph equals the baseline,
+    # so no cycle signal may fire either way.
     assert result.cycles.added == () and result.cycles.resolved == ()
 
 
