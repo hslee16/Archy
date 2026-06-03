@@ -3,9 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import click
+import pytest
 from click.testing import CliRunner
 
-from archy.cli import main
+from archy.cli import _parse_edge_spec, main
 
 
 def _make_two_module_project(tmp_path: Path, *, cyclic: bool) -> Path:
@@ -755,3 +757,46 @@ def test_index_clear_removes_db(tmp_path: Path):
     again = CliRunner().invoke(main, ["index", "clear", str(project)])
     assert again.exit_code == 0
     assert "no cache" in again.output
+
+
+def test_parse_edge_spec_valid():
+    assert _parse_edge_spec("pkg.a:pkg.b") == ("pkg.a", "pkg.b")
+
+
+@pytest.mark.parametrize("spec", ["pkg.a", "a:", ":b", "a:b:c", "C:\\x:C:\\y"])
+def test_parse_edge_spec_rejects_bad_input(spec: str):
+    # Includes the documented Windows-drive-path limitation: use MCP {from,to}.
+    with pytest.raises(click.BadParameter):
+        _parse_edge_spec(spec)
+
+
+def test_simulate_cli_predicts_cycle(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)  # pkg.a -> pkg.b
+    result = CliRunner().invoke(main, ["simulate", str(project), "--add", "pkg.b:pkg.a"])
+    assert result.exit_code == 0
+    assert "no files written" in result.output
+    assert "new cycle" in result.output
+    assert "pkg.a" in result.output and "pkg.b" in result.output
+
+
+def test_simulate_cli_json_is_valid(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(
+        main, ["simulate", str(project), "--add", "pkg.b:pkg.a", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert "applied" in payload and "cycles" in payload and "propagation_cost" in payload
+
+
+def test_simulate_cli_empty_delta_renders(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["simulate", str(project)])
+    assert result.exit_code == 0
+    assert "+0 / -0 edge(s)" in result.output
+
+
+def test_simulate_cli_bad_spec_exits_nonzero(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["simulate", str(project), "--add", "foo"])
+    assert result.exit_code != 0

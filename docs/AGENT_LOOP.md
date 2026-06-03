@@ -96,6 +96,22 @@ if you want to confirm it explicitly.
    [`docs/research/DSM_EMPIRICS.md`](research/DSM_EMPIRICS.md) for why DSM ships as a
    visualization rather than a score axis.
 
+   If the edit changes imports, simulate the edge delta first to predict
+   its structural consequence before writing anything:
+
+   - CLI: `archy simulate . --add app.a:app.b --remove app.c:app.d`
+   - MCP: `archy_simulate(path, add=[{from, to}], remove=[...])`
+
+   It applies the delta to an in-memory copy of the graph and returns the
+   would-be cycles, layer/SDP violations, per-axis score delta, and
+   blast-radius change, no file written. If the simulation shows a new
+   cycle, reshape the plan before editing instead of catching it in the
+   diff. Empirically the prediction matches the post-edit diff exactly
+   when the import maps 1:1 to the named edge (~96% of single-line
+   imports; importing a submodule also pulls in its ancestor packages,
+   so include those edges to model it exactly). See
+   [`docs/research/SIMULATE_ORACLE_EMPIRICS.md`](research/SIMULATE_ORACLE_EMPIRICS.md).
+
 3. **Edit** the code as you normally would.
 
 4. **Diff** after editing to see what got better, what got worse, and

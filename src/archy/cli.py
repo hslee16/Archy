@@ -45,6 +45,7 @@ from archy.layers import (
     load_config,
 )
 from archy.score import Score, compute_score
+from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend
 
 
@@ -587,6 +588,69 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int) -> None:
         click.echo(result.model_dump_json(indent=2))
     else:
         click.echo(_diff_to_text(result))
+
+
+def _parse_edge_spec(spec: str) -> tuple[str, str]:
+    """Split a `SRC:DST` CLI edge into `(SRC, DST)`.
+
+    Qualnames use dots, so `:` is an unambiguous separator between them.
+    File paths containing `:` (e.g. a Windows drive) are not supported on the
+    CLI; use the MCP `{from, to}` form for those.
+    """
+    parts = spec.split(":")
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        raise click.BadParameter(f"expected SRC:DST, got {spec!r}")
+    return (parts[0], parts[1])
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--add",
+    "add_specs",
+    metavar="SRC:DST",
+    multiple=True,
+    help="Hypothetical import edge to add (module or file paths). Repeatable.",
+)
+@click.option(
+    "--remove",
+    "remove_specs",
+    metavar="SRC:DST",
+    multiple=True,
+    help="Hypothetical import edge to remove. Repeatable.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def simulate(
+    path: Path, add_specs: tuple[str, ...], remove_specs: tuple[str, ...], fmt: str
+) -> None:
+    """Predict the structural consequence of an import-edge delta, no files written.
+
+    Apply a hypothetical `--add`/`--remove` of import edges to an in-memory copy
+    of the graph and report the new/resolved cycles, new back-edges, new layer
+    rules broken, per-axis score delta, and blast-radius change, before you edit.
+    """
+    g = _load_graph(path, internal_only=True)
+    result = find_simulate(
+        g,
+        add=[_parse_edge_spec(s) for s in add_specs],
+        remove=[_parse_edge_spec(s) for s in remove_specs],
+        config_path=discover_config(path),
+        project_root=path,
+    )
+    if fmt == "json":
+        click.echo(result.model_dump_json(indent=2))
+    else:
+        click.echo(_simulate_to_text(result))
 
 
 @main.command()
@@ -1275,6 +1339,54 @@ def _summary_to_text(summary: DiffSummary) -> list[str]:
         for item in summary.top_improvements:
             lines.append(f"  risk={item.risk:.2f}  {item.description}")
     return lines
+
+
+def _simulate_to_text(result: SimulateReport) -> str:
+    a = result.applied
+    lines = [
+        f"# simulation (no files written): +{len(a.added_edges)} / -{len(a.removed_edges)} edge(s)"
+    ]
+    for note, items in (
+        ("unresolved endpoint", a.unresolved),
+        ("rejected", a.rejected),
+    ):
+        for item in items:
+            lines.append(f"  ! {note}: {item}")
+    for note, edges in (
+        ("no-op add (edge already exists)", a.no_op_adds),
+        ("no-op remove (edge absent)", a.no_op_removes),
+    ):
+        for e in edges:
+            lines.append(f"  ~ {note}: {e.source} -> {e.target}")
+
+    lines.append("")
+    lines.extend(_summary_to_text(result.summary))
+
+    lines.append("")
+    lines.append("# would-be score deltas:")
+    for name in ("overall", "modularity", "acyclicity", "depth", "equality", "complexity"):
+        lines.append(f"  {name:11s} {getattr(result.score_delta, name):+.3f}")
+    p = result.propagation_cost
+    lines.append(f"  {'blast radius':11s} {p.before:.3f} -> {p.after:.3f} ({p.delta:+.3f})")
+
+    if result.cycles.added:
+        lines.append("")
+        lines.append(f"# new cycles (+{len(result.cycles.added)}):")
+        for c in result.cycles.added:
+            lines.append(f"  + {', '.join(c.modules)}")
+    if result.new_back_edges:
+        lines.append("")
+        lines.append(f"# new back-edges (+{len(result.new_back_edges)}):")
+        for e in result.new_back_edges:
+            lines.append(f"  + {e.source} -> {e.target}")
+    if result.violations.added:
+        lines.append("")
+        lines.append(f"# new layer violations (+{len(result.violations.added)}):")
+        for v in result.violations.added:
+            lines.append(
+                f"  + {v.source} -> {v.target}  ({v.rule.from_layer} -> {v.rule.to_layer})"
+            )
+    return "\n".join(lines)
 
 
 def _contracts_to_dict(result: ContractsResult) -> dict:

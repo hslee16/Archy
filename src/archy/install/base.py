@@ -31,7 +31,7 @@ from archy.install.writer import WriteSystem
 MCP_COMMAND = "uvx"
 MCP_ARGS: tuple[str, ...] = ("archy", "mcp")
 
-# The 16 tools the server exposes, in the canonical order used everywhere else
+# The tools the server exposes, in the canonical order used everywhere else
 # (README permission snippet, plugin manifest docs). Kept as a flat tuple so the
 # Claude permission seed and any future allowlist stay in lockstep with the
 # server. tests/install pin this against src/archy/mcp.py so it cannot drift.
@@ -53,6 +53,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "archy_hotspots",
     "archy_dsm",
     "archy_status",
+    "archy_simulate",
 )
 
 # Server key used both as the MCP stanza key and in the Claude permission
