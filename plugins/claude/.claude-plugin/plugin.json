@@ -1,6 +1,6 @@
 {
   "name": "archy",
-  "description": "Architectural health for Python codebases: trended score, cycle detection, layer rules, blast radius, CI test selection. Exposes 17 MCP tools and bundles the archy skill so Claude can run the snapshot/impact/edit/diff loop without manual prompting.",
+  "description": "Architectural health for Python codebases: trended score, cycle detection, layer rules, blast radius, CI test selection. Exposes 18 MCP tools and bundles the archy skill so Claude can run the snapshot/impact/edit/diff loop without manual prompting.",
   "version": "0.1.0",
   "author": {
     "name": "Alex Lee",
@@ -11,7 +11,7 @@
   "mcpServers": {
     "archy": {
       "command": "uvx",
-      "args": ["archy>=0.28,<1.0", "mcp"]
+      "args": ["archy>=0.29,<1.0", "mcp"]
     }
   }
 }
