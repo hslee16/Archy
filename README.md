@@ -22,7 +22,7 @@ archy mcp             # expose 19 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.29.0. Usable today via:
+**Status:** v0.30.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -31,7 +31,7 @@ archy mcp             # expose 19 tools to Claude Code, Cursor, any MCP client
 | Transitive contracts | `archy contracts` (reads `.importlinter` (canonical) or falls back to `archy.yaml`; requires `archy[contracts]`) |
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
-| Refactor priority | `archy hotspots` (CC x git churn) |
+| Refactor priority | `archy hotspots` (CC x git churn), `archy what-to-refactor-next` (fused hotspots + edit-risk) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
@@ -239,7 +239,7 @@ archy mcp
 
 The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, so a cached result is never stale. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
-`archy mcp` exposes eighteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes nineteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -289,7 +289,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.29.0
+- uses: hslee16/archy@v0.30.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -315,7 +315,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.29.0
+    rev: v0.30.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
