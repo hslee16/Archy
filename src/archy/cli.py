@@ -44,6 +44,11 @@ from archy.layers import (
     find_violations,
     load_config,
 )
+from archy.refactor import (
+    DEFAULT_MIN_RISK,
+    RefactorPriority,
+    compute_refactor_priorities,
+)
 from archy.score import Score, compute_score
 from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend
@@ -517,6 +522,75 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_hotspots_to_text(rows, top_n=top_n, since=since))
+
+
+@main.command(name="what-to-refactor-next")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Maximum priorities to show.",
+)
+@click.option(
+    "--since",
+    default=None,
+    help="Restrict churn to commits since this date or refspec (passed to `git log --since`).",
+)
+@click.option(
+    "--min-risk",
+    type=float,
+    default=DEFAULT_MIN_RISK,
+    show_default=True,
+    help="Structural floor: a module must clear this edit-risk to be surfaced.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def what_to_refactor_next(
+    path: Path, top_n: int, since: str | None, min_risk: float, fmt: str
+) -> None:
+    """Fused refactor-priority list: CC x churn hotspots + edit-risk.
+
+    Merges the behavioral lens (`archy hotspots`) and the structural lens
+    (edit-risk) into a summed priority, so a module flagged by both generally
+    outranks a comparable single-lens module (a dominant single-lens signal
+    can still rank first). Without git the behavioral lens is skipped and the
+    ranking is structural-only. An empty list is a real answer: nothing is
+    both complex+churned and nothing is central+fragile above --min-risk.
+    """
+    if top_n <= 0:
+        raise click.ClickException(f"--top must be >= 1; got {top_n}")
+    if not 0.0 <= min_risk <= 1.0:
+        raise click.ClickException(f"--min-risk must be in [0, 1]; got {min_risk}")
+    g = _load_graph(path, internal_only=True)
+    churn = git_churn(path, since=since)
+    rows = compute_refactor_priorities(g, churn=churn, min_risk=min_risk)
+    if fmt == "json":
+        payload = _refactor_to_dict(
+            rows,
+            top_n=top_n,
+            since=since,
+            min_risk=min_risk,
+            git_available=churn is not None,
+        )
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        click.echo(
+            _refactor_to_text(
+                rows, top_n=top_n, min_risk=min_risk, git_available=churn is not None
+            )
+        )
 
 
 @main.command()
@@ -1538,6 +1612,83 @@ def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> 
     lines = [header, "", "  score  churn  cc_sum  module"]
     for r in shown:
         lines.append(f"  {r.score:>5}  {r.churn:>5}  {r.cc_sum:>6}  {r.module}")
+    return "\n".join(lines)
+
+
+def _refactor_note(
+    rows: list[RefactorPriority], *, min_risk: float, git_available: bool
+) -> str | None:
+    """Machine-readable explanation for the empty / git-absent cases.
+
+    Mirrors the `note` the MCP tool returns so the CLI JSON surface carries
+    the same "nothing to prioritize" / "structural-only" signal rather than
+    leaving the caller to infer it from an empty list."""
+    if not rows:
+        if git_available:
+            return (
+                "No refactoring priorities surfaced: no file is both complex "
+                "and frequently changed, and no module is central and fragile "
+                f"above min_risk={min_risk}. Lower min_risk to widen the "
+                "structural lens."
+            )
+        return (
+            "Not a git repository, so the CC x churn lens was skipped and only "
+            f"the structural lens ran; no module is central and fragile above "
+            f"min_risk={min_risk}. Lower min_risk to widen the structural lens."
+        )
+    if not git_available:
+        return (
+            "Not a git repository; the CC x churn lens was skipped and this "
+            "ranking is structural-only (edit-risk)."
+        )
+    return None
+
+
+def _refactor_to_dict(
+    rows: list[RefactorPriority],
+    *,
+    top_n: int,
+    since: str | None,
+    min_risk: float,
+    git_available: bool,
+) -> dict:
+    return {
+        "since": since,
+        "min_risk": min_risk,
+        "git_available": git_available,
+        "total": len(rows),
+        "shown": min(top_n, len(rows)),
+        "priorities": [r.model_dump() for r in rows[:top_n]],
+        "note": _refactor_note(rows, min_risk=min_risk, git_available=git_available),
+    }
+
+
+def _refactor_to_text(
+    rows: list[RefactorPriority],
+    *,
+    top_n: int,
+    min_risk: float,
+    git_available: bool,
+) -> str:
+    if not rows:
+        if git_available:
+            return (
+                "# Nothing to refactor: no file is both complex and churned, and "
+                f"no module is central+fragile above min_risk={min_risk}."
+            )
+        return (
+            "# Not a git repo, so only the structural lens ran; no module is "
+            f"central+fragile above min_risk={min_risk}. Nothing surfaced."
+        )
+    shown = rows[:top_n]
+    header = f"# {len(rows)} refactor candidate(s); showing top {len(shown)}"
+    if not git_available:
+        header += " (structural-only: not a git repo)"
+    lines = [header, ""]
+    for i, r in enumerate(shown, 1):
+        lenses = "+".join(r.lenses)
+        lines.append(f"{i}. {r.module}  [{lenses}]  priority={r.priority:.3f}")
+        lines.append(f"   {r.rationale}")
     return "\n".join(lines)
 
 

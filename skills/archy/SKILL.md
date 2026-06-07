@@ -120,6 +120,14 @@ archy_hotspots(path=".", top_n=20, since=None)
 
 Ranks files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). The top of the list is where refactoring effort pays back the most. `since` is passed straight to `git log --since`; use it for "what should I refactor right now" recency-weighted views. Falls back gracefully on non-git projects (empty list plus a note pointing at `archy_high_risk_modules` as the structural alternative).
 
+To get both refactor-priority lenses fused in one call instead of running `archy_hotspots` and `archy_high_risk_modules` and merging by hand:
+
+```
+archy_what_to_refactor_next(path=".", top_n=10, since=None, min_risk=0.15)
+```
+
+Sums the behavioral lens (CC x churn hotspots) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal, like a giant hotspot at the import-graph leaves, can still rank first). Each entry lists which `lenses` fired and a one-line `rationale`. Without git, the ranking is structural-only (`git_available=false`). An empty `priorities` plus a `note` is a real answer: nothing is both complex+churned and nothing is central+fragile above `min_risk`, so there is nothing for these two lenses to prioritize.
+
 ### 3. Edit the code
 
 Make the change.
@@ -179,6 +187,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_graph` | `(path, internal_only=True, max_nodes=500)` | Full dump. Refuses graphs over `max_nodes`; prefer focus/summary for reasoning. |
 | `archy_high_risk_modules` | `(path, top_n=10, internal_only=True)` | "Is this edit dangerous?" Top-N modules by `edit_risk` (geomean of propagation cost, normalized fan-in, instability). Call before a non-trivial edit. |
 | `archy_hotspots` | `(path, top_n=20, since=None)` | "Where is the refactoring leverage?" Rank files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). Pass `since` (e.g. `"1 year ago"`) for recency-weighted views. |
+| `archy_what_to_refactor_next` | `(path, top_n=10, since=None, min_risk=0.15)` | "What should I refactor first?" One ranked list fusing hotspots (CC x churn) and edit-risk (central+fragile) into a summed `priority`; both-lens modules generally rank above comparable single-lens ones. Each entry names the firing `lenses` + a `rationale`. Empty list + `note` when neither lens has anything to prioritize. |
 | `archy_check` | `(path, config_path=None)` | After import changes. Direct-edge layer + SDP rules from `archy.yaml`. |
 | `archy_contracts` | `(path, config_path=None)` | Transitive layer enforcement via import-linter. Requires `archy[contracts]`. |
 | `archy_cycles` | `(path, min_size=2, internal_only=True)` | Standalone cycle listing (Tarjan SCCs + self-loops). |
@@ -280,20 +289,16 @@ archy_dsm(path=".", group_by="community")
 ### Finding what to refactor next
 
 ```
-archy_hotspots(path=".", top_n=10)
-# Top of the list is the highest `cc_sum * git_commit_count` product.
-# These files cost the most attention per change; refactoring them
-# pays back the most.
-archy_graph_focus(path=".", modules=[<top hotspot>], depth=1, direction="both")
+archy_what_to_refactor_next(path=".", top_n=10)
+# One fused list: both-lens modules (a CC x churn hotspot AND central+fragile)
+# rank first. Read each entry's `lenses` and `rationale`. An empty list with a
+# `note` means there is genuinely nothing to prioritize - take it at face value.
+archy_graph_focus(path=".", modules=[<top entry>], depth=1, direction="both")
 # Decide whether the right move is "extract some functions" (CC-driven)
 # or "split the module" (structure-driven), then snapshot and edit.
 ```
 
-For recency-weighted hotspots ("what's hot in the last quarter"):
-
-```
-archy_hotspots(path=".", top_n=10, since="3 months ago")
-```
+To inspect a single lens directly: `archy_hotspots` for behavioral leverage (CC x churn; needs git, supports `since="3 months ago"` for recency-weighted views) or `archy_high_risk_modules` for structural danger (edit-risk; no git required).
 
 ### Assessing edit risk before touching a module
 

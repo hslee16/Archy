@@ -33,6 +33,7 @@ from archy.mcp import (
     _run_simulate,
     _run_snapshot,
     _run_trend,
+    _run_what_to_refactor_next,
     create_server,
 )
 from archy.simulate import EdgeSpec, SimulateReport
@@ -93,6 +94,7 @@ def test_create_server_registers_expected_tools():
         "archy_graph",
         "archy_high_risk_modules",
         "archy_hotspots",
+        "archy_what_to_refactor_next",
         "archy_dsm",
         "archy_status",
         "archy_simulate",
@@ -783,6 +785,89 @@ def test_hotspots_returns_diagnostic_when_not_in_git_repo(tmp_path: Path):
     assert payload.note is not None
     assert "not inside a git repository" in payload.note
     assert "archy_high_risk_modules" in payload.note
+
+
+def test_what_to_refactor_next_fuses_both_lenses(tmp_path: Path):
+    # `pkg.hot` is churned+complex (hotspot) and, by being imported by peers
+    # while importing a dep, also central+fragile (edit-risk). It should rank
+    # first and report both lenses fired.
+    _init_git_repo(tmp_path)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hot.py").write_text(
+        "from pkg.dep import thing\n\n"
+        "def f(x):\n    if x: return 1\n    elif x == 2: return 2\n    return 0\n"
+    )
+    (pkg / "a.py").write_text("from pkg.hot import f\n")
+    (pkg / "b.py").write_text("from pkg.hot import f\n")
+    (pkg / "c.py").write_text("from pkg.hot import f\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "touch hot")
+
+    payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
+    assert payload.git_available is True
+    assert payload.note is None
+    assert payload.shown == len(payload.priorities)
+    top = payload.priorities[0]
+    assert top.module == "pkg.hot"
+    assert top.lenses == ("hotspot", "edit_risk")
+    assert "Both a complexity" in top.rationale
+
+
+def test_what_to_refactor_next_structural_only_without_git(tmp_path: Path):
+    # No git -> behavioral lens skipped, ranking is structural-only, and a note
+    # explains the degraded mode. The list is still populated structurally.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
+    (pkg / "a.py").write_text("from pkg.hub import x\n")
+    (pkg / "b.py").write_text("from pkg.hub import y\n")
+    (pkg / "c.py").write_text("from pkg.hub import z\n")
+
+    payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
+    assert payload.git_available is False
+    assert payload.priorities
+    assert all(e.lenses == ("edit_risk",) for e in payload.priorities)
+    assert payload.note is not None
+    assert "structural-only" in payload.note
+
+
+def test_what_to_refactor_next_honest_null(tmp_path: Path):
+    # Git present but the floor excludes every module and there is no churn yet
+    # (single commit, files unchanged since) -> a real "nothing to prioritize"
+    # answer with an explanatory note, not a manufactured #1.
+    _init_git_repo(tmp_path)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import thing\n")
+    (pkg / "b.py").write_text("")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+
+    payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=1.0)
+    assert payload.priorities == ()
+    assert payload.total == 0
+    assert payload.note is not None
+    assert "nothing to prioritize" in payload.note
+
+
+def test_what_to_refactor_next_validates_args(acyclic_project: Path):
+    with pytest.raises(ValueError, match="top_n"):
+        _run_what_to_refactor_next(
+            acyclic_project, top_n=0, since=None, min_risk=0.15
+        )
+    with pytest.raises(ValueError, match="min_risk"):
+        _run_what_to_refactor_next(
+            acyclic_project, top_n=5, since=None, min_risk=1.5
+        )
 
 
 def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
