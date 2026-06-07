@@ -77,6 +77,21 @@ if you want to confirm it explicitly.
    `archy_high_risk_modules`. Most useful when planning a refactoring
    sprint, less useful for a single targeted edit.
 
+   To answer "what should I refactor first?" without calling both tools
+   and merging by hand, use the fused list:
+
+   - MCP: `archy_what_to_refactor_next(path)`
+
+   It sums each lens's normalized score (CC x churn and edit-risk) into a
+   `priority`, so a module flagged by *both* generally outranks a comparable
+   single-lens one - though a dominant single-lens signal (a giant hotspot
+   at the import-graph leaves) can still rank first; each entry names which
+   `lenses` fired plus a one-line `rationale`. Without
+   git it degrades to the structural lens alone. An empty list plus a
+   `note` is a real answer - nothing is both complex+churned and nothing
+   is central+fragile above the floor - so take "nothing to prioritize"
+   at face value rather than lowering the bar to manufacture a target.
+
    When you need *where*, not *how much*, reach for the Design Structure
    Matrix:
 

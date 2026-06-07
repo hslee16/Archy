@@ -51,6 +51,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "archy_graph",
     "archy_high_risk_modules",
     "archy_hotspots",
+    "archy_what_to_refactor_next",
     "archy_dsm",
     "archy_status",
     "archy_simulate",

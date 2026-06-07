@@ -63,6 +63,7 @@ from archy.layers import (
     load_config,
 )
 from archy.reach import compute_propagation_cost
+from archy.refactor import DEFAULT_MIN_RISK, compute_refactor_priorities
 from archy.risk import compute_edit_risk
 from archy.score import Score, ScoreInputs, compute_score
 from archy.simulate import EdgeSpec, SimulateReport, find_simulate
@@ -401,6 +402,44 @@ class HotspotsPayload(BaseModel):
     total: int
     shown: int
     hotspots: tuple[HotspotEntry, ...]
+    note: str | None = None
+
+
+class RefactorPriorityEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    path: str | None
+    lenses: tuple[str, ...]
+    priority: float
+    cc_sum: int
+    churn: int
+    hotspot_score: int
+    edit_risk: float
+    propagation_cost: float
+    instability: float
+    fan_in: int
+    rationale: str
+
+
+class WhatToRefactorPayload(BaseModel):
+    """Fused refactor-priority ranking (CC x churn hotspots + edit-risk).
+
+    `total` is the full candidate count; `shown` is the returned slice. An
+    empty `priorities` with a `note` is a meaningful answer: nothing is both
+    complex and churned and nothing is central+fragile above `min_risk`, so
+    there is genuinely nothing to prioritize. `git_available` is False when
+    the project is not under git - the behavioral lens is then skipped and the
+    ranking is structural-only."""
+
+    model_config = ConfigDict(frozen=True)
+
+    since: str | None
+    min_risk: float
+    git_available: bool
+    total: int
+    shown: int
+    priorities: tuple[RefactorPriorityEntry, ...]
     note: str | None = None
 
 
@@ -774,6 +813,39 @@ def _register_tools(server: FastMCP) -> None:
         since: str | None = None,
     ) -> HotspotsPayload:
         return _run_hotspots(Path(path), top=top, since=since)
+
+    @server.tool(
+        name="archy_what_to_refactor_next",
+        description=(
+            "One ranked refactor-priority list that fuses both refactor "
+            "signals so you make a single call instead of `archy_hotspots` "
+            "plus `archy_high_risk_modules` plus your own synthesis. It "
+            "merges the behavioral lens (cyclomatic complexity x git churn) "
+            "and the structural lens (the edit-risk composite: central and "
+            "fragile) into a summed priority, so a module flagged by *both* "
+            "lenses generally outranks a comparable single-lens module - "
+            "though a dominant single-lens signal (e.g. a very high CC x churn "
+            "hotspot at the import-graph leaves) can still rank first. Each "
+            "entry says which lenses fired "
+            "and carries a one-line `rationale`. `min_risk` (default "
+            f"{DEFAULT_MIN_RISK}) is the structural floor below which a module "
+            "is not surfaced. If the project isn't under git, the behavioral "
+            "lens is skipped and the ranking is structural-only "
+            "(`git_available=false`). An empty `priorities` plus a `note` is a "
+            "real answer: nothing is both complex and churned and nothing is "
+            "central+fragile above the floor, so there is genuinely nothing to "
+            "prioritize."
+        ),
+    )
+    def archy_what_to_refactor_next(
+        path: str,
+        top_n: int = 10,
+        since: str | None = None,
+        min_risk: float = DEFAULT_MIN_RISK,
+    ) -> WhatToRefactorPayload:
+        return _run_what_to_refactor_next(
+            Path(path), top_n=top_n, since=since, min_risk=min_risk
+        )
 
     @server.tool(
         name="archy_dsm",
@@ -1343,6 +1415,75 @@ def _run_high_risk_modules(path: Path, *, top_n: int) -> HighRiskPayload:
         for name, risk in ranked[:top_n]
     )
     return HighRiskPayload(module_count=len(edit_risk), modules=entries)
+
+
+def _run_what_to_refactor_next(
+    path: Path, *, top_n: int, since: str | None, min_risk: float
+) -> WhatToRefactorPayload:
+    if top_n <= 0:
+        raise ValueError(f"top_n must be >= 1; got {top_n}")
+    if not 0.0 <= min_risk <= 1.0:
+        raise ValueError(f"min_risk must be in [0, 1]; got {min_risk}")
+
+    graph = _load_graph(path, internal_only=True)
+    churn = git_churn(path, since=since)
+    git_available = churn is not None
+
+    rows = compute_refactor_priorities(graph, churn=churn, min_risk=min_risk)
+    shown = rows[:top_n]
+    entries = tuple(
+        RefactorPriorityEntry(
+            module=r.module,
+            path=r.path,
+            lenses=r.lenses,
+            priority=r.priority,
+            cc_sum=r.cc_sum,
+            churn=r.churn,
+            hotspot_score=r.hotspot_score,
+            edit_risk=r.edit_risk,
+            propagation_cost=r.propagation_cost,
+            instability=r.instability,
+            fan_in=r.fan_in,
+            rationale=r.rationale,
+        )
+        for r in shown
+    )
+
+    note: str | None = None
+    if not rows:
+        if git_available:
+            note = (
+                "No refactoring priorities surfaced: no file is both complex "
+                "and frequently changed (CC x churn hotspots: 0), and no module "
+                f"is central and fragile above min_risk={min_risk} (0). The "
+                "project is likely small, young, or structurally clean - there "
+                "is genuinely nothing to prioritize right now. Lower min_risk to "
+                "widen the structural lens."
+            )
+        else:
+            note = (
+                f"{path} is not inside a git repository (or git is "
+                "unavailable), so the CC x churn behavioral lens was skipped "
+                "and only the structural edit-risk lens ran. No module is "
+                f"central and fragile above min_risk={min_risk}, so nothing was "
+                "surfaced. Lower min_risk to widen the structural lens."
+            )
+    elif not git_available:
+        note = (
+            f"{path} is not inside a git repository (or git is unavailable); "
+            "the CC x churn behavioral lens was skipped and this ranking is "
+            "structural-only (edit-risk). Run inside git for the fused view."
+        )
+
+    return WhatToRefactorPayload(
+        since=since,
+        min_risk=min_risk,
+        git_available=git_available,
+        total=len(rows),
+        shown=len(entries),
+        priorities=entries,
+        note=note,
+    )
 
 
 _MANAGERS: dict[str, IndexManager] = {}
