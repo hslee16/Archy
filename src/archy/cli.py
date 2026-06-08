@@ -121,6 +121,9 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
 )
 def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: bool) -> None:
     """Find import cycles in a Python project rooted at PATH."""
+    if min_size < 1:
+        raise click.ClickException(f"--min-size must be >= 1; got {min_size}")
+
     g = _load_graph(path, internal_only=internal_only)
 
     found = find_cycles(g, min_size=min_size)
@@ -253,6 +256,9 @@ def score(
     strict_tolerance: float,
 ) -> None:
     """Compute the composite architecture quality score for PATH."""
+    if not 0.0 <= strict_tolerance <= 1.0:
+        raise click.ClickException(f"--strict-tolerance must be in [0, 1]; got {strict_tolerance}")
+
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
 
@@ -304,9 +310,12 @@ def score(
 )
 def trend(path: Path, last_n: int, fmt: str) -> None:
     """Show the archy score trend for PATH (reads .archy/history.jsonl)."""
+    if last_n < 1:
+        raise click.ClickException(f"--last must be >= 1; got {last_n}")
+
     rows = read_history(path / ".archy" / "history.jsonl")
     if fmt == "json":
-        window = rows[-last_n:] if last_n > 0 else rows
+        window = rows[-last_n:]
         click.echo(
             json.dumps(
                 [
@@ -371,6 +380,11 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> No
     import path back to a changed module (the "because") for the closest
     dependents.
     """
+    if max_chains == 0:
+        raise click.ClickException(
+            "--max-chains must be negative (for all) or positive (for a limit); got 0"
+        )
+
     g = _load_graph(path, internal_only=True)
     result = find_impact(
         g,
@@ -452,6 +466,8 @@ def affected(
     """
     if as_json and quiet:
         raise click.UsageError("--json and --quiet are mutually exclusive.")
+    if depth < 1:
+        raise click.ClickException(f"--depth must be >= 1; got {depth}")
 
     file_list = list(files)
     if from_stdin:
@@ -850,6 +866,11 @@ def dsm(
     `--package=<prefix>`, or use `--format=json` and let the agent
     consume the structured view.
     """
+    if focus_depth < 0:
+        raise click.ClickException(f"--focus-depth must be >= 0; got {focus_depth}")
+    if max_nodes < 1:
+        raise click.ClickException(f"--max-nodes must be >= 1; got {max_nodes}")
+
     from archy.dsm import (
         GroupBy,
         Weight,

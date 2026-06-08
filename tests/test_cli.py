@@ -80,6 +80,13 @@ def test_cycles_min_size_filters_smaller_cycles(tmp_path: Path):
     assert "No cycles found" in result.output
 
 
+def test_cycles_min_size_rejects_invalid_values(tmp_path: Path):
+    project = _make_cyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["cycles", str(project), "--min-size", "0"])
+    assert result.exit_code != 0
+    assert "--min-size must be >= 1; got 0" in result.output
+
+
 def _make_layered_project(tmp_path: Path, *, with_violation: bool) -> Path:
     """Two-layer project. core imports from cli iff with_violation=True."""
     pkg = tmp_path / "myapp"
@@ -307,6 +314,13 @@ def test_trend_after_recording(tmp_path: Path):
     assert "score" in result.output
 
 
+def test_trend_last_rejects_invalid_values(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["trend", str(project), "--last", "0"])
+    assert result.exit_code != 0
+    assert "--last must be >= 1; got 0" in result.output
+
+
 def test_score_strict_with_no_history_passes(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["score", str(project), "--strict"])
@@ -374,6 +388,16 @@ def test_score_strict_within_tolerance_passes(tmp_path: Path):
     )
     assert result.exit_code == 0
     assert "strict: PASS" in result.output
+
+
+def test_score_strict_tolerance_rejects_out_of_range_values(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(
+        main,
+        ["score", str(project), "--strict", "--strict-tolerance", "-0.5"],
+    )
+    assert result.exit_code != 0
+    assert "--strict-tolerance must be in [0, 1]; got -0.5" in result.output
 
 
 def test_score_strict_passes_when_score_improves(tmp_path: Path):
@@ -539,6 +563,16 @@ def test_impact_lists_transitive_dependents(tmp_path: Path):
     assert payload["unresolved"] == []
 
 
+def test_impact_max_chains_rejects_zero(tmp_path: Path):
+    _make_libs_to_routers_chain(tmp_path)
+    args = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--max-chains", "0"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code != 0
+    assert "--max-chains must be negative (for all) or positive (for a limit); got 0" in (
+        result.output
+    )
+
+
 def test_affected_classifies_tests_and_modules_json(tmp_path: Path):
     _make_libs_to_routers_chain(tmp_path)
     tests = tmp_path / "tests"
@@ -601,6 +635,14 @@ def test_affected_json_and_quiet_mutually_exclusive(tmp_path: Path):
     result = CliRunner().invoke(main, args)
     assert result.exit_code != 0
     assert "mutually exclusive" in result.output
+
+
+def test_affected_depth_rejects_invalid_values(tmp_path: Path):
+    _make_app_with_test_module(tmp_path)
+    args = ["affected", str(tmp_path), "app/core.py", "--depth", "0"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code != 0
+    assert "--depth must be >= 1; got 0" in result.output
 
 
 def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):
@@ -733,6 +775,20 @@ def test_dsm_ascii_rejects_oversized_with_helpful_message(tmp_path: Path):
     assert result.exit_code == 0
     assert "exceeds max_nodes" in result.output
     assert "--focus" in result.output
+
+
+def test_dsm_rejects_negative_focus_depth(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["dsm", str(project), "--focus-depth", "-1"])
+    assert result.exit_code != 0
+    assert "--focus-depth must be >= 0; got -1" in result.output
+
+
+def test_dsm_rejects_invalid_max_nodes(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["dsm", str(project), "--max-nodes", "0"])
+    assert result.exit_code != 0
+    assert "--max-nodes must be >= 1; got 0" in result.output
 
 
 def test_index_sync_reports_stats_and_caches(tmp_path: Path):
