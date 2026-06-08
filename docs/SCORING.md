@@ -473,17 +473,25 @@ combinations that reach `0/10` moderate pairs all require a depth-axis
 redesign that conflates "new long chain" with "new SCC" (fails the
 OECD actionability gate), and every such combination shakes the
 project leaderboard substantially (Spearman ρ vs v0.23 in
-`[0.53, 0.64]`). The honest reading the empirics support is twofold:
-(1) the two moderate pairs both involve `depth`, and under every
-tested aggregator `depth` correlates only weakly with `overall`
-(`|r| ≤ 0.187`), so the OECD breach is operationally cosmetic - depth
-optimization is essentially toothless against the score for the
-unrelated reason that depth barely moves the score; (2) the other
-four axes (modularity, acyclicity, equality, complexity) all have
-non-trivial leverage on `overall` and the geometric mean's
-non-compensatory property does bite on them. Complexity remains the
-most orthogonal axis (max `|r| ≤ 0.14` against any other axis), so
-moving it does not mechanically move anything else.
+`[0.53, 0.64]`). The honest reading the empirics support: the two
+moderate pairs both involve `depth`, and under every tested aggregator
+`depth` correlates only weakly with `overall` (`|r| ≤ 0.187`), so the
+*cross-project* gaming surface those pairs create is small. That low
+correlation is an artifact of low cross-project *variance* in depth
+scores, not low leverage. Under the geometric mean each axis's marginal
+effect on `overall` is `overall / (5 · axis)`, so leverage is inversely
+proportional to an axis's current value: a direct local-sensitivity
+sweep (2026-06 adversarial review, [#176]) measured `d(overall)/d(axis)`
+at the corpus baseline as equality 0.376, depth 0.225, modularity 0.216,
+complexity 0.139, acyclicity 0.133. Depth is the *second* most locally
+influential axis, so a weak depth score does pull `overall` down sharply,
+consistent with design goal 2 for all five axes. (An earlier version of
+this passage said depth was "toothless" / "barely moves the score"; that
+conflated cross-project correlation with local sensitivity and was wrong.
+The four non-depth axes also carry non-trivial leverage, and the
+geometric mean's non-compensatory property bites on every axis.)
+Complexity remains the most orthogonal axis (max `|r| ≤ 0.14` against any
+other axis), so moving it does not mechanically move anything else.
 
 The flip side is that this couples the *diagnostic* signal usefully:
 a regression in just one axis is a stronger localized signal than a
