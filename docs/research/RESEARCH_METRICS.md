@@ -700,15 +700,23 @@ its category, not just its individual metrics.
 
 **c.2. LocAgent ablation (ACL 2025)**
 ([aclanthology:2025.acl-long.426][locagent]). The paper builds a
-heterogeneous code graph with four edge types - **invoke**, import,
-inherit, contain - and ablates each. Invoke edges contribute the
-most to LLM-agent code-localization accuracy, more than imports.
-Removing the graph traversal tool entirely causes "a more
-significant decrease" at function-level localization. This is
-direct evidence that **archy's call-graph roadmap item is the
-highest-impact addition for agent-facing positioning**, not just a
-"nice to have" - the missing edge type is precisely the one with
-the strongest ablation contribution in an agent context.
+heterogeneous code graph with four edge types (**invoke**, import,
+inherit, contain) and ablates the graph structure. The ablations show
+that the structured graph and its traversal tool matter for
+localization: removing graph traversal degrades module- and
+function-level localization, and a contain-only graph is near useless,
+so the import / inherit / invoke edges collectively carry the signal.
+This supports **archy's call-graph roadmap item as a high-impact,
+agent-facing addition** rather than a "nice to have", because a richer
+multi-edge graph is what the ablations reward.
+
+> **Correction (2026-06 adversarial review, [#175]).** An earlier version
+> of this note claimed the paper ranks invoke edges *above* imports and
+> attributed the phrase "a more significant decrease" to the invoke
+> ablation specifically. The paper does not establish that ranking, so
+> the stronger claim is withdrawn; the roadmap justification rests on the
+> multi-edge graph collectively, not on invoke being the single strongest
+> edge type.
 
 **c.3. Coding-agent failure-mode literature (2026)**. Cross-source
 characterization of agent failures yields a small recurring set of
@@ -1044,10 +1052,11 @@ when calls resolve to a deeper internal submodule than the import
 itself - `import pkg; pkg.sub.foo()` adds a call edge to `pkg.sub`
 on top of the existing import edge to `pkg`. The motivation is
 LocAgent's (ACL 2025, [aclanthology:2025.acl-long.426][locagent])
-ablation finding that invoke edges contribute *more* to LLM-agent
-code-localization accuracy than imports, framed in
-[`RESEARCH_METRICS.md §14c.2`](RESEARCH_METRICS.md) as the missing
-edge type with the strongest measured contribution.
+ablation finding that a structured, traversable multi-edge code graph
+materially improves LLM-agent code localization, framed in
+[`RESEARCH_METRICS.md §14c.2`](RESEARCH_METRICS.md) (see the 2026-06
+correction there: the paper does not establish invoke edges as
+contributing more than imports specifically).
 
 **Resolution strategy.** Static. Tree-sitter `(call) @call` query
 extracts the leftmost identifier of each call expression plus the
