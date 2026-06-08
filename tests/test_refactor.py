@@ -235,9 +235,7 @@ def _structural_project(tmp_path: Path) -> Path:
 
 def test_cli_text_structural_only_without_git(tmp_path: Path):
     project = _structural_project(tmp_path)
-    result = CliRunner().invoke(
-        main, ["what-to-refactor-next", str(project), "--min-risk", "0.1"]
-    )
+    result = CliRunner().invoke(main, ["what-to-refactor-next", str(project), "--min-risk", "0.1"])
     assert result.exit_code == 0
     assert "structural-only" in result.output
     assert "pkg.hub" in result.output
@@ -260,9 +258,7 @@ def test_cli_json_includes_note_and_git_available(tmp_path: Path):
 
 def test_cli_validates_top_and_min_risk(tmp_path: Path):
     project = _structural_project(tmp_path)
-    bad_top = CliRunner().invoke(
-        main, ["what-to-refactor-next", str(project), "--top", "0"]
-    )
+    bad_top = CliRunner().invoke(main, ["what-to-refactor-next", str(project), "--top", "0"])
     assert bad_top.exit_code != 0
     assert "--top" in bad_top.output
     bad_risk = CliRunner().invoke(

@@ -587,9 +587,7 @@ def what_to_refactor_next(
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(
-            _refactor_to_text(
-                rows, top_n=top_n, min_risk=min_risk, git_available=churn is not None
-            )
+            _refactor_to_text(rows, top_n=top_n, min_risk=min_risk, git_available=churn is not None)
         )
 
 

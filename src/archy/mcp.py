@@ -843,9 +843,7 @@ def _register_tools(server: FastMCP) -> None:
         since: str | None = None,
         min_risk: float = DEFAULT_MIN_RISK,
     ) -> WhatToRefactorPayload:
-        return _run_what_to_refactor_next(
-            Path(path), top_n=top_n, since=since, min_risk=min_risk
-        )
+        return _run_what_to_refactor_next(Path(path), top_n=top_n, since=since, min_risk=min_risk)
 
     @server.tool(
         name="archy_dsm",

@@ -205,13 +205,9 @@ def compute_refactor_priorities(
                 propagation_cost=propagation_cost.get(module, 0.0),
                 instability=instability.get(module, 0.0),
                 fan_in=sum(
-                    1
-                    for p in graph.predecessors(module)
-                    if not graph.nodes[p].get("external")
+                    1 for p in graph.predecessors(module) if not graph.nodes[p].get("external")
                 ),
-                rationale=_rationale(
-                    tuple(lenses), cc_sum=cc_sum, churn=churn_n, edit_risk=risk
-                ),
+                rationale=_rationale(tuple(lenses), cc_sum=cc_sum, churn=churn_n, edit_risk=risk),
             )
         )
 
