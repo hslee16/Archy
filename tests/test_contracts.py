@@ -106,6 +106,16 @@ def test_run_contracts_missing_config_raises(
         run_contracts(tmp_path)
 
 
+def test_run_contracts_config_filename_directory_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _purge_top(monkeypatch)
+    config_dir = tmp_path / "config-dir"
+    config_dir.mkdir()
+    with pytest.raises(ContractsConfigError, match="must be a file, not a directory"):
+        run_contracts(tmp_path, config_filename=config_dir)
+
+
 def test_contracts_not_available_when_module_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
