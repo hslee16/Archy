@@ -861,13 +861,9 @@ def test_what_to_refactor_next_honest_null(tmp_path: Path):
 
 def test_what_to_refactor_next_validates_args(acyclic_project: Path):
     with pytest.raises(ValueError, match="top_n"):
-        _run_what_to_refactor_next(
-            acyclic_project, top_n=0, since=None, min_risk=0.15
-        )
+        _run_what_to_refactor_next(acyclic_project, top_n=0, since=None, min_risk=0.15)
     with pytest.raises(ValueError, match="min_risk"):
-        _run_what_to_refactor_next(
-            acyclic_project, top_n=5, since=None, min_risk=1.5
-        )
+        _run_what_to_refactor_next(acyclic_project, top_n=5, since=None, min_risk=1.5)
 
 
 def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
