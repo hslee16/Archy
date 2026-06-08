@@ -108,6 +108,10 @@ def run_contracts(
         config_path = Path(config_filename).resolve()
         if not config_path.exists():
             raise ContractsConfigError(f"contracts config not found: {config_path}")
+        if not config_path.is_file():
+            raise ContractsConfigError(
+                f"contracts config must be a file, not a directory: {config_path}"
+            )
         with _ProjectOnSysPath(project_dir):
             return _drive_import_linter(config_path=config_path)
 
