@@ -71,6 +71,27 @@ def test_relative_import_escaping_root_is_dropped(project: Path):
     assert "escapes" not in g.nodes
 
 
+def test_over_dotted_relative_import_from_package_injects_no_node(tmp_path: Path):
+    # Regression for #161: an over-dotted relative import that escapes the
+    # project root (`from ...other import X` in a 2-deep package __init__.py,
+    # which Python itself rejects at runtime) must resolve to None. Before the
+    # graph.py:416 `>` -> `>=` fix it leaked a phantom external node `other`
+    # and rerouted edges, silently corrupting instability/propagation_cost/
+    # edit_risk on unrelated modules and the project score.
+    pkg = tmp_path / "proj"
+    sub = pkg / "sub"
+    sub.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "regular.py").write_text("import os\n")
+    # walk_up == len(src_parts) == 2, suffix='other' -> escapes root.
+    (sub / "__init__.py").write_text("from ...other import X\n")
+    g = build_graph(tmp_path)
+    assert "other" not in g.nodes
+    assert not any(t == "other" for _, t in g.edges)
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+    assert internal == {"proj", "proj.regular", "proj.sub"}
+
+
 def test_internal_only_filtering(project: Path):
     g = build_graph(project)
     external = [n for n, d in g.nodes(data=True) if d.get("external")]
