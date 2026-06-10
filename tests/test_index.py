@@ -25,6 +25,7 @@ from archy.index import (
     open_index,
     sync,
 )
+from archy.parser import ParseResult
 
 
 def _write(root: Path, rel: str, body: str) -> Path:
@@ -214,6 +215,42 @@ def test_parse_json_is_valid_json(project: Path, tmp_path: Path):
     # so assert what we stored is parseable.
     json.loads(row["parse_json"])
     conn.close()
+
+
+@pytest.mark.parametrize(
+    "corrupt_json",
+    [
+        '{"imports": [trunc',  # truncated / non-JSON (interrupted write, disk fault)
+        '{"imports":[],"calls":[],"functions":[]}',  # old schema, missing required field
+    ],
+    ids=["truncated", "schema-stale"],
+)
+def test_corrupt_cache_row_self_heals(project: Path, tmp_path: Path, corrupt_json: str):
+    """Regression for #167: a corrupt/schema-stale parse_json whose mtime+size
+    still match disk must NOT crash the build. The docstring promises a pure
+    cache; an unusable row is a miss that triggers a reparse, not a fatal
+    ValidationError that takes down every graph-building tool until the user
+    deletes .archy/index.db by hand."""
+    db = tmp_path / "index.db"
+    build_graph_cached(project, db_path=db)  # cold build populates the cache
+
+    conn = open_index(db)
+    # Corrupt one row's parse_json, leaving mtime/size intact so sync() takes
+    # the cheap cache-hit branch and would deserialize the bad blob.
+    path = conn.execute("SELECT path FROM files LIMIT 1").fetchone()["path"]
+    conn.execute("UPDATE files SET parse_json = ? WHERE path = ?", (corrupt_json, path))
+    conn.commit()
+    conn.close()
+
+    # Must recover (reparse), matching a cold build, rather than raising.
+    assert _equal(project, db)
+
+    # And the corrupt row must be healed in place, not left to crash next time.
+    conn = open_index(db)
+    healed = conn.execute("SELECT parse_json FROM files WHERE path = ?", (path,)).fetchone()
+    conn.close()
+    assert healed["parse_json"] != corrupt_json
+    ParseResult.model_validate_json(healed["parse_json"])  # round-trips cleanly now
 
 
 def test_sync_skips_file_that_vanishes_after_discovery(project: Path, tmp_path: Path):
