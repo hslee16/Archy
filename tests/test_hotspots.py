@@ -106,6 +106,38 @@ def test_git_churn_counts_commits_per_file(tmp_path: Path):
     assert churn[b_key] == 1
 
 
+def test_git_churn_folds_renamed_file_history_onto_current_path(tmp_path: Path):
+    """Regression for #166: a renamed file must keep its full churn on the
+    current path. Without rename folding, `git log` splits the history across
+    the old and new paths, undercounting the live file and stranding the
+    pre-rename commits on a phantom old-path entry that matches no graph node,
+    which systematically under-ranks reorganized files."""
+    repo = tmp_path
+    _init_repo(repo)
+    (repo / "a.py").write_text("v = 1\n")
+    _git(repo, "add", "a.py")
+    _git(repo, "commit", "-q", "-m", "c1")
+    for v in (2, 3):
+        (repo / "a.py").write_text(f"v = {v}\n")
+        _git(repo, "commit", "-q", "-am", f"c{v}")
+
+    _git(repo, "mv", "a.py", "b.py")
+    _git(repo, "commit", "-q", "-m", "rename a -> b")
+
+    for v in (4, 5):
+        (repo / "b.py").write_text(f"v = {v}\n")
+        _git(repo, "commit", "-q", "-am", f"c{v}")
+
+    churn = git_churn(repo)
+    assert churn is not None
+    b_key = str((repo / "b.py").resolve())
+    a_key = str((repo / "a.py").resolve())
+    # 3 commits on a.py + the rename commit + 2 commits on b.py = 6, all on b.py.
+    assert churn[b_key] == 6
+    # The old path must not survive as a phantom entry.
+    assert a_key not in churn
+
+
 def test_git_churn_filters_non_python(tmp_path: Path):
     repo = tmp_path
     _init_repo(repo)
