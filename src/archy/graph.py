@@ -413,7 +413,11 @@ def _resolve_relative_base(
         src_parts = src_parts[:-1]
 
     walk_up = leading_dots - 1  # `from .` stays in the current package
-    if walk_up > len(src_parts):
+    if walk_up >= len(src_parts):
+        # `==` already consumes the whole package path and lands at the project
+        # root, so any remaining suffix attaches to a bare name outside the
+        # project (e.g. `from ...x` in a 2-deep package). Python rejects this
+        # same import at runtime; dropping it avoids injecting a phantom node.
         return None  # escapes the project root
     base = src_parts[: len(src_parts) - walk_up] if walk_up else src_parts
 
