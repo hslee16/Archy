@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import networkx as nx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
@@ -100,6 +100,21 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _load_cached_parse(parse_json: str) -> ParseResult | None:
+    """Deserialize a cached `parse_json`, or `None` if it is unusable.
+
+    A row can become corrupt (interrupted write, disk fault) or schema-stale (a
+    `ParseResult` change shipped without a `SCHEMA_VERSION` bump). The DB is a
+    pure cache, so an unusable row is a miss, not a fatal error: returning `None`
+    lets `sync()` fall through to a reparse that overwrites it. Mirrors how
+    `history.read()` skips a corrupt line rather than crashing.
+    """
+    try:
+        return ParseResult.model_validate_json(parse_json)
+    except ValidationError:
+        return None
+
+
 def sync(
     conn: sqlite3.Connection, modules: list[Module]
 ) -> tuple[dict[str, ParseResult], SyncStats]:
@@ -135,21 +150,29 @@ def sync(
         row = existing.get(path)
 
         if row is not None and row["mtime"] == mtime and row["size"] == size:
-            results[module.qualname] = ParseResult.model_validate_json(row["parse_json"])
-            unchanged += 1
-            continue
+            cached = _load_cached_parse(row["parse_json"])
+            if cached is not None:
+                results[module.qualname] = cached
+                unchanged += 1
+                continue
+            # Corrupt/schema-incompatible row: fall through to a reparse, which
+            # overwrites it. Keeps the docstring's "pure cache" promise intact.
 
         try:
             sha = _sha256(module.path)
         except OSError:
             continue  # vanished after stat; skip this build, re-parsed next time
         if row is not None and row["sha256"] == sha:
-            # Stat changed (e.g. a git checkout touched mtime) but content did
-            # not: refresh the stat columns, reuse the cached parse.
-            conn.execute("UPDATE files SET mtime = ?, size = ? WHERE path = ?", (mtime, size, path))
-            results[module.qualname] = ParseResult.model_validate_json(row["parse_json"])
-            unchanged += 1
-            continue
+            cached = _load_cached_parse(row["parse_json"])
+            if cached is not None:
+                # Stat changed (e.g. a git checkout touched mtime) but content
+                # did not: refresh the stat columns, reuse the cached parse.
+                conn.execute(
+                    "UPDATE files SET mtime = ?, size = ? WHERE path = ?", (mtime, size, path)
+                )
+                results[module.qualname] = cached
+                unchanged += 1
+                continue
 
         try:
             result = parse_file(module.path)
