@@ -563,7 +563,7 @@ def _register_tools(server: FastMCP) -> None:
         description=(
             "Read the recent score history (.archy/history.jsonl) for a Python "
             "project. Returns up to last_n rows ordered oldest-first so an agent "
-            "can compare deltas."
+            "can compare deltas. last_n must be >= 1."
         ),
     )
     def archy_trend(path: str, last_n: int = 10) -> list[TrendRow]:
@@ -752,9 +752,9 @@ def _register_tools(server: FastMCP) -> None:
         name="archy_graph",
         description=(
             "Full dependency-graph dump matching `archy graph --format json`. "
-            "Refuses to serialize graphs larger than `max_nodes` (default 500) "
-            "to avoid blowing the agent's context; bump the limit explicitly "
-            "if you really want everything. For most reasoning, prefer "
+            "Refuses to serialize graphs larger than `max_nodes` (default 500, "
+            "must be >= 1) to avoid blowing the agent's context; bump the limit "
+            "explicitly if you really want everything. For most reasoning, prefer "
             "archy_graph_focus (local neighborhood) or archy_graph_summary "
             "(top-N overview)."
         ),
@@ -1136,8 +1136,10 @@ def _run_affected(
 
 
 def _run_trend(path: Path, *, last_n: int) -> list[TrendRow]:
+    if last_n < 1:
+        raise ValueError(f"last_n must be >= 1; got {last_n}")
     rows = read_history(path / ".archy" / "history.jsonl")
-    window = rows[-last_n:] if last_n > 0 else rows
+    window = rows[-last_n:]
     return [
         TrendRow(
             timestamp=r.timestamp,
@@ -1297,6 +1299,8 @@ def _run_graph_dump(
     internal_only: bool,
     max_nodes: int,
 ) -> GraphPayload | GraphTooLargePayload:
+    if max_nodes < 1:
+        raise ValueError(f"max_nodes must be >= 1; got {max_nodes}")
     graph = _load_graph(path, internal_only=internal_only)
     node_count = graph.number_of_nodes()
     if node_count > max_nodes:
@@ -1484,20 +1488,36 @@ def _run_what_to_refactor_next(
     )
 
 
-_MANAGERS: dict[str, IndexManager] = {}
+_ManagerKey = tuple[str, frozenset[str], tuple[str, ...]]
+_MANAGERS: dict[_ManagerKey, IndexManager] = {}
 _MANAGERS_LOCK = threading.Lock()
 
 
+def _manager_cache_key(root: Path, kwargs: dict) -> _ManagerKey:
+    """Config-aware cache key for ``_manager_for``.
+
+    The key folds in the graph-building kwargs (``ignored_dirs`` /
+    ``extra_roots``) normalized exactly as ``IndexManager.__init__`` normalizes
+    them, so two calls with the same effective config share a manager while a
+    call with a *different* config gets its own. Keying on ``root`` alone would
+    pin the first config seen and silently ignore later kwargs.
+    """
+    ignored = frozenset(kwargs.get("ignored_dirs", DEFAULT_IGNORED_DIRS))
+    extra = tuple(kwargs.get("extra_roots", ()))
+    return (str(root), ignored, extra)
+
+
 def _manager_for(path: Path, **kwargs) -> IndexManager:
-    """Get-or-create the per-root IndexManager, starting its watcher once.
+    """Get-or-create the per-(root, config) IndexManager, starting its watcher once.
 
     Managers live for the server's lifetime: one persistent cache connection
     and one debounced watcher per project, so repeated tool calls reuse a warm,
-    background-synced index. ``kwargs`` (ignored_dirs / extra_roots) are honored
-    on first creation.
+    background-synced index. ``kwargs`` (ignored_dirs / extra_roots) are part of
+    the cache key, so changing the discovered config produces a fresh manager
+    rather than reusing one built with stale kwargs.
     """
     root = path.resolve()
-    key = str(root)
+    key = _manager_cache_key(root, kwargs)
     with _MANAGERS_LOCK:
         manager = _MANAGERS.get(key)
         if manager is None:

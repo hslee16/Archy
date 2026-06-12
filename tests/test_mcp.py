@@ -235,6 +235,14 @@ def test_run_trend_payload_shape(acyclic_project: Path):
     assert row.score.overall > 0
 
 
+@pytest.mark.parametrize("bad", [0, -1, -10])
+def test_run_trend_validates_last_n(acyclic_project: Path, bad: int):
+    # Previously last_n <= 0 silently returned the entire history; now it is a
+    # clear validation error so an agent doesn't accidentally dump everything.
+    with pytest.raises(ValueError, match="last_n"):
+        _run_trend(acyclic_project, last_n=bad)
+
+
 def test_run_impact_payload_shape(tmp_path: Path):
     pkg = tmp_path / "app"
     pkg.mkdir()
@@ -504,6 +512,51 @@ def test_graph_dump_refuses_oversized_graph(acyclic_project: Path):
     assert payload.max_nodes == 1
     assert payload.node_count > 1
     assert "archy_graph_focus" in payload.error
+
+
+@pytest.mark.parametrize("bad", [0, -1, -500])
+def test_graph_dump_validates_max_nodes(acyclic_project: Path, bad: int):
+    # A non-positive max_nodes used to fall through to the size guard and
+    # return a confusing GraphTooLargePayload; reject it up front instead.
+    with pytest.raises(ValueError, match="max_nodes"):
+        _run_graph_dump(acyclic_project, internal_only=True, max_nodes=bad)
+
+
+def test_manager_cache_key_distinguishes_config(tmp_path: Path):
+    # Regression for the stale-manager blocker: the key must fold in the
+    # graph-building kwargs, not just the root, or a config change is ignored.
+    from archy.mcp import _manager_cache_key
+
+    base = _manager_cache_key(tmp_path, {})
+    same = _manager_cache_key(tmp_path, {"extra_roots": ()})
+    diff_roots = _manager_cache_key(tmp_path, {"extra_roots": ("src",)})
+    diff_ignored = _manager_cache_key(tmp_path, {"ignored_dirs": frozenset({"build"})})
+
+    # Empty kwargs and explicit defaults collapse to the same key (one manager).
+    assert base == same
+    # A different config yields a different key (a fresh manager).
+    assert diff_roots != base
+    assert diff_ignored != base
+    assert diff_roots != diff_ignored
+
+
+def test_manager_for_reuses_or_separates_by_config(tmp_path: Path):
+    from archy.mcp import _MANAGERS, _manager_for
+
+    created = []
+    try:
+        m1 = _manager_for(tmp_path, extra_roots=("src",))
+        m1_again = _manager_for(tmp_path, extra_roots=("src",))
+        m2 = _manager_for(tmp_path, extra_roots=("lib",))
+        created = [m1, m2]
+
+        # Same config -> same cached manager; different config -> distinct one.
+        assert m1 is m1_again
+        assert m2 is not m1
+    finally:
+        for manager in created:
+            manager.stop()
+        _MANAGERS.clear()
 
 
 def test_high_risk_modules_ranks_central_volatile_first(tmp_path: Path):
