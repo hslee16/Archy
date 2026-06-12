@@ -17,8 +17,10 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-# bench/ is not a package; add it to the path to reuse the harness primitives.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "bench"))
+# bench/ is not a package; append it (not insert(0)) so its generic module names
+# (run.py, dsm.py, ...) cannot shadow stdlib or installed imports for the rest of
+# the pytest process.
+sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 
 import delta_direction as dd
 
@@ -50,9 +52,18 @@ def test_overall_dilution_is_measured_not_asserted():
     large = dd.check_cycle_direction(dd.synthetic_dag(1500), label="test-large")
     assert isinstance(large["d_overall"], float)
     assert large["d_acyclicity"] < 0  # the guaranteed signal holds regardless
-    # The dilution: a single edge carries less of its acyclicity magnitude into
-    # `overall` on the larger graph.
-    assert large["attenuation"] < small["attenuation"]
+    # The dilution: a smaller fraction of the acyclicity regression survives into
+    # `overall` on the larger graph (lower survival = more diluted).
+    assert large["survival"] < small["survival"]
+
+
+def test_resolved_direction_on_native_cycle():
+    # Independent of the inject path: a graph built WITH a 2-cycle, broken to
+    # clean, must report exactly one resolved cycle and a positive acyclicity
+    # delta. check_resolved_direction asserts internally; a returned row means
+    # every assertion held.
+    result = dd.check_resolved_direction()
+    assert result["pair"] == "m100 <-> m101"
 
 
 def test_layer_violation_direction():

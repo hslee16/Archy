@@ -15,8 +15,11 @@ What it asserts (the monotonic, guaranteed-correct signals):
 * Inject one back-edge that creates exactly one 2-cycle -> the `acyclicity`
   axis STRICTLY drops and `archy_diff` reports `cycles.added == 1` with the
   correct module pair.
-* Remove that same back-edge -> `acyclicity` STRICTLY rises and `archy_diff`
-  reports `cycles.resolved == 1`.
+* On a SEPARATE graph built natively with a 2-cycle, removing it -> `acyclicity`
+  STRICTLY rises and `archy_diff` reports `cycles.resolved == 1`. A distinct
+  scenario, not the inject pair re-diffed backwards: `compute_diff` is
+  antisymmetric, so re-diffing the same two snapshots swapped would pass by
+  construction and prove nothing.
 * Add a forbidden layer edge against a synthetic `archy.yaml` -> `archy_diff`
   reports `violations.added == 1`; remove it -> `violations.resolved == 1`.
 
@@ -113,11 +116,17 @@ def synthetic_layered(per_layer: int = 25, layers: int = 4) -> nx.DiGraph:
 def inject_two_cycle(g: nx.DiGraph) -> tuple[nx.DiGraph, tuple[str, str]]:
     """Return `(g1, (u, v))` where `g1` adds one edge forming exactly the 2-cycle {u, v}.
 
-    Reverses an existing acyclic edge `u -> v` (adding `v -> u`) and verifies the
-    resulting strongly-connected component containing `u` is exactly `{u, v}`, so
-    the injection adds a single, unambiguous cycle whose module pair we can
-    assert on. This mirrors how an agent introduces a back-edge between two real
-    modules. Raises if no clean site exists (none of the repos here hit that).
+    Adds the reverse-direction edge `v -> u` to an existing acyclic edge `u -> v`
+    while KEEPING `u -> v`, so the result is a fresh back-edge layered on existing
+    structure -- exactly how an agent introduces a back-edge between two real
+    modules (this is an edge addition, not an edge reversal). Verifies the
+    strongly-connected component containing `u` is exactly `{u, v}`, so the
+    injection adds a single, unambiguous cycle whose module pair we can assert on.
+    Raises if no clean site exists (none of the repos here hit that). On the
+    regular synthetic graphs this deterministically picks the lowest-index leaf
+    pair `m1 <-> m0`; the acyclicity delta (`tangle_ratio = 2/n`) is
+    site-independent, while the measured `overall` delta does depend on the
+    chosen site's degree.
     """
     cyclic = {m for c in find_cycles(g) for m in c.modules}
     for u, v in sorted(g.edges()):
@@ -135,19 +144,23 @@ def inject_two_cycle(g: nx.DiGraph) -> tuple[nx.DiGraph, tuple[str, str]]:
 
 
 def check_cycle_direction(g0: nx.DiGraph, label: str) -> dict:
-    """Inject and then remove a 2-cycle; assert acyclicity + cycle-count direction.
+    """Inject one 2-cycle; assert the acyclicity axis and cycles.added move correctly.
 
     Returns a row of measured magnitudes (acyclicity delta, overall delta, and
     the fraction of the acyclicity signal that survives into `overall`) for the
-    report.
+    report. The resolved/break direction is covered separately by
+    `check_resolved_direction`: re-diffing this inject pair backwards would pass
+    by construction because `compute_diff` is antisymmetric, so it would add no
+    independent coverage.
     """
     g1, (u, v) = inject_two_cycle(g0)
     pair = {u, v}
     base = take_snapshot(g0)
     worse = take_snapshot(g1)
 
-    # Inject: structure got worse.
     inj = compute_diff(base, worse)
+    # The core contract: a one-edge structural regression must register on the
+    # acyclicity axis even as a single cycle in a large, diluting graph.
     assert inj.score_delta.acyclicity < 0, (
         f"{label}: injecting a cycle did NOT lower acyclicity "
         f"(delta={inj.score_delta.acyclicity:+.6f})"
@@ -158,18 +171,6 @@ def check_cycle_direction(g0: nx.DiGraph, label: str) -> dict:
     )
     assert inj.cycles.resolved == (), f"{label}: spurious resolved cycles on inject"
 
-    # Remove: the reverse edit must read as a clean improvement.
-    rem = compute_diff(worse, base)
-    assert rem.score_delta.acyclicity > 0, (
-        f"{label}: removing the cycle did NOT raise acyclicity "
-        f"(delta={rem.score_delta.acyclicity:+.6f})"
-    )
-    assert len(rem.cycles.resolved) == 1 and set(rem.cycles.resolved[0].modules) == pair, (
-        f"{label}: expected exactly one resolved cycle {sorted(pair)}, "
-        f"got {[sorted(c.modules) for c in rem.cycles.resolved]}"
-    )
-    assert rem.cycles.added == (), f"{label}: spurious added cycles on remove"
-
     d_acy = inj.score_delta.acyclicity
     d_overall = inj.score_delta.overall
     return {
@@ -179,10 +180,46 @@ def check_cycle_direction(g0: nx.DiGraph, label: str) -> dict:
         "pair": f"{u} <-> {v}",
         "d_acyclicity": d_acy,
         "d_overall": d_overall,
-        # How much of the acyclicity signal survives into `overall`. Near 1 on
-        # tiny graphs; collapses toward 0 as the graph grows (the dilution).
-        "attenuation": abs(d_overall) / abs(d_acy) if d_acy else 0.0,
+        # Fraction of the acyclicity regression that survives into `overall`
+        # (|overall delta| / |acyclicity delta|). A LOW value means the composite
+        # heavily dilutes the signal; a high value means little dilution.
+        "survival": abs(d_overall) / abs(d_acy) if d_acy else 0.0,
     }
+
+
+def check_resolved_direction() -> dict:
+    """Independently verify the resolved/break path on a natively-cyclic graph.
+
+    Distinct from the inject path on purpose. `compute_diff(A, B)` and
+    `compute_diff(B, A)` are exact mirrors, so re-diffing an injected pair
+    backwards proves nothing. Here the baseline graph is built WITH a 2-cycle on
+    an interior pair (`m100 <-> m101`, not the leaf the inject path mutates) and
+    the current graph WITHOUT it, so `cycles.resolved` and the positive
+    score-delta sign are exercised on their own inputs.
+    """
+    clean = synthetic_dag(200)
+    a, b = "m100", "m101"
+    # m101 -> m100 already exists (the m{i} -> m{i-1} chain); adding m100 -> m101
+    # closes exactly the 2-cycle {m100, m101}.
+    assert clean.has_edge(b, a) and not clean.has_edge(a, b)
+    cyclic = clean.copy()
+    cyclic.add_edge(a, b, kinds=("import",), lines=(1,))
+
+    base = take_snapshot(cyclic)  # baseline HAS the cycle
+    fixed = take_snapshot(clean)  # current does NOT
+    rep = compute_diff(base, fixed)
+
+    assert rep.score_delta.acyclicity > 0, (
+        f"resolved: breaking a cycle did NOT raise acyclicity "
+        f"(delta={rep.score_delta.acyclicity:+.6f})"
+    )
+    assert len(rep.cycles.resolved) == 1 and set(rep.cycles.resolved[0].modules) == {a, b}, (
+        f"resolved: expected exactly one resolved cycle {[a, b]}, "
+        f"got {[sorted(c.modules) for c in rep.cycles.resolved]}"
+    )
+    assert rep.cycles.added == (), "resolved: spurious added cycles on break"
+
+    return {"pair": f"{a} <-> {b}", "modules": clean.number_of_nodes()}
 
 
 def check_violation_direction() -> dict:
@@ -227,7 +264,7 @@ def check_violation_direction() -> dict:
 # --- driver & report ---------------------------------------------------------
 
 
-def run() -> tuple[list[dict], dict]:
+def run() -> tuple[list[dict], dict, dict]:
     rows: list[dict] = []
 
     # Synthetic scale always runs (corpus-independent floor for CI parity).
@@ -245,68 +282,95 @@ def run() -> tuple[list[dict], dict]:
             except RuntimeError as exc:
                 print(f"# {repo.name}: skipped ({exc})", file=sys.stderr)
 
+    resolved = check_resolved_direction()
     violation = check_violation_direction()
-    return rows, violation
+    return rows, resolved, violation
 
 
-def format_report(rows: list[dict], violation: dict) -> str:
+def format_report(rows: list[dict], resolved: dict, violation: dict) -> str:
     out = ["# Score-delta direction validation (issue #178)", ""]
     out.append(
-        "Each row injects exactly one 2-cycle, asserts `acyclicity` strictly "
-        "drops and `cycles.added == 1` (and the reverse on removal), then "
-        "reports the `overall` delta so per-edge dilution at scale stays visible."
+        "Each row injects exactly one 2-cycle and asserts `acyclicity` strictly "
+        "drops with `cycles.added == 1`, then reports the `overall` delta so "
+        "per-edge dilution at scale stays visible. The break direction is "
+        "asserted separately (see below) on a graph built natively with a cycle, "
+        "since `compute_diff` is antisymmetric and re-diffing an inject pair "
+        "backwards would pass by construction."
     )
     out.append("")
     out.append(
-        "| graph | modules | edges | acyclicity delta | overall delta | |Δoverall|/|Δacyclicity| |"
+        "| graph | modules | edges | acyclicity delta | overall delta | overall/acy survival |"
     )
     out.append("|---|--:|--:|--:|--:|--:|")
     for r in sorted(rows, key=lambda r: -r["modules"]):
         out.append(
             f"| {r['label']} | {r['modules']} | {r['edges']} | "
             f"{r['d_acyclicity']:+.6f} | {r['d_overall']:+.6f} | "
-            f"{r['attenuation']:.3f} |"
+            f"{r['survival']:.3f} |"
         )
     out.append("")
-    # Headline trend over the real corpus only; synthetic graphs (uniform degree)
-    # attenuate differently and are reported as the scale extension, not mixed
-    # into the corpus trend.
-    real = sorted(
-        (r for r in rows if not r["label"].startswith("synthetic")),
-        key=lambda r: r["modules"],
+    # "overall/acy survival" = |overall delta| / |acyclicity delta|: the fraction
+    # of the one-edge acyclicity regression that reaches the composite. LOW means
+    # heavily diluted. Report the range and the broad (NOT monotonic) size trend
+    # straight from the data, and name a real size-inversion so it is not oversold.
+    hi_s = max(rows, key=lambda r: r["survival"])
+    lo_s = min(rows, key=lambda r: r["survival"])
+    biggest = sorted(rows, key=lambda r: -r["modules"])[:3]
+    biggest_vals = ", ".join(f"{g['survival']:.1%}" for g in biggest)
+    out.append(
+        f"The `overall/acy survival` column is the fraction of the one-edge "
+        f"acyclicity regression that reaches `overall`. It is small across all "
+        f"{len(rows)} graphs: from {hi_s['survival']:.0%} ({hi_s['label']}, "
+        f"{hi_s['modules']} modules) down to {lo_s['survival']:.1%} ({lo_s['label']}, "
+        f"{lo_s['modules']} modules). The three largest graphs "
+        f"({', '.join(g['label'] for g in biggest)}) carry the least ({biggest_vals}), "
+        f"so a single back-edge moves `overall` proportionally less as the graph grows."
     )
-    syn = sorted(
-        (r for r in rows if r["label"].startswith("synthetic")),
-        key=lambda r: r["modules"],
+    by_size = sorted(rows, key=lambda r: r["modules"])
+    inversion = next(
+        (
+            (sm, lg)
+            for i, sm in enumerate(by_size)
+            for lg in by_size[i + 1 :]
+            if sm["survival"] < lg["survival"]
+        ),
+        None,
     )
-    if real:
-        lo, hi = real[0], real[-1]
-        ratio = lo["attenuation"] / hi["attenuation"] if hi["attenuation"] else float("inf")
+    if inversion:
+        sm, lg = inversion
         out.append(
-            f"Across the real corpus, the same one-edge regression carries "
-            f"{lo['attenuation']:.0%} of its acyclicity magnitude into `overall` on "
-            f"the smallest repo ({lo['label']}, {lo['modules']} modules) but only "
-            f"{hi['attenuation']:.1%} on the largest ({hi['label']}, {hi['modules']} "
-            f"modules) -- a ~{ratio:.0f}x attenuation."
-        )
-    if syn:
-        out.append(
-            f"Synthetic graphs extend the trend to {syn[-1]['modules']} modules "
-            f"(attenuation {syn[-1]['attenuation']:.1%})."
+            f"The relationship is not monotonic: survival also depends on how the edge "
+            f"perturbs equality/modularity, not size alone. For example {sm['label']} "
+            f"({sm['modules']} modules, {sm['survival']:.1%}) is more diluted than the "
+            f"larger {lg['label']} ({lg['modules']} modules, {lg['survival']:.1%})."
         )
     out.append(
         "This is the pinned decision for #178: `overall` is a five-axis geometric "
-        "mean, so a single back-edge's contribution to it shrinks toward zero as the "
-        "graph grows and can be swamped (or sign-flipped) by simultaneous moves in "
+        "mean, so a single back-edge's contribution to it is a small, "
+        "structure-dependent fraction of the acyclicity magnitude and can be "
+        "swamped (or sign-flipped) by simultaneous moves in "
         "modularity/equality/depth. `overall`'s per-edge sign is therefore NOT a "
-        "reliable regression signal at scale; `acyclicity` (asserted strictly "
-        "negative above) and `cycles.added` are. This is exactly why archy_diff "
-        "surfaces them independently of `overall`. The dilution is intended, not a bug."
+        "reliable regression signal; `acyclicity` (asserted strictly negative "
+        "above) and `cycles.added` are, which is why archy_diff surfaces them "
+        "independently of `overall`. The dilution is intended, not a bug."
+    )
+    out.append("")
+    out.append("## Break direction (separate native-cycle graph)")
+    out.append(
+        f"- {resolved['modules']}-node graph built with a 2-cycle on "
+        f"`{resolved['pair']}`, then broken: 1 resolved, 0 added, acyclicity rises."
     )
     out.append("")
     out.append("## Layer-violation direction (synthetic, forbid l0->l1)")
     out.append(f"- added edge flagged: 1 violation (`{violation['rule']}`, `{violation['edge']}`)")
     out.append("- removed edge: 1 resolved, 0 added")
+    out.append("")
+    out.append(
+        "> The asserted signals (acyclicity sign, cycles.added/resolved counts) are "
+        "exact and environment-independent. The `overall` / ratio columns depend on "
+        "networkx's community detection and may shift across networkx versions; they "
+        "are measured, not asserted."
+    )
     out.append("")
     return "\n".join(out) + "\n"
 
@@ -320,8 +384,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    rows, violation = run()
-    report = format_report(rows, violation)
+    rows, resolved, violation = run()
+    report = format_report(rows, resolved, violation)
     if args.stdout:
         sys.stdout.write(report)
     else:
