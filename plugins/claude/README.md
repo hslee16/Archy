@@ -2,7 +2,7 @@
 
 The lowest-friction install path for archy on Claude Code. Bundles:
 
-- The archy MCP server registration (runs `uvx archy>=0.31,<1.0 mcp` over stdio so users without a global archy install still get the tool surface; the lower bound guarantees the full current 0.x tool set, including `archy_what_to_refactor_next`, is exposed, and the `<1.0` cap keeps a future breaking 1.0 from being auto-pulled)
+- The archy MCP server registration. It launches through a small Node shim (`bin/archy-mcp.mjs`) that finds a working way to run `archy mcp` over stdio: an installed `archy` (any method), else `uvx archy>=0.31,<1.0 mcp`, else `python -m archy mcp`. The lower bound guarantees the full current 0.x tool set, including `archy_what_to_refactor_next`, is exposed, and the `<1.0` cap keeps a future breaking 1.0 from being auto-pulled. `uv` is no longer a hard requirement (see ["Why a Node shim"](#why-a-node-shim) below).
 - The canonical [`archy` skill](skills/archy/SKILL.md) (a byte-identical copy of [`skills/archy/SKILL.md`](../../skills/archy/SKILL.md) at the repo root; `tests/test_plugin.py` asserts the two stay in sync)
 
 What this plugin does **not** ship (current Claude Code plugin constraints, May 2026):
@@ -16,7 +16,7 @@ Two gotchas worth knowing up front:
 
 **(1) If you already wired archy in manually, remove it first.** If `~/.claude/settings.json` already has an `mcpServers.archy` stanza from a previous manual install, every archy tool will appear twice once the plugin loads (once as `mcp__archy__*` from the manual stanza, once as `mcp__plugin_archy_archy__*` from the plugin). Both work, but the agent sees 38 tool descriptions instead of 19 and has to disambiguate. Remove the manual stanza before installing the plugin, or remove it after if you preferred the shorter prefix.
 
-**(2) If you've installed archy as a `uv tool`, make sure it's recent.** `uvx` prefers an installed tool over fetching from PyPI, so a stale `uv tool install archy` (say, from a year ago) will mask the release the plugin pins to. The `archy>=0.31,<1.0` specifier in the manifest will refuse to use an older installed tool, but to avoid the confusion either remove the install (`uv tool uninstall archy`) and let `uvx` cache fresh, or refresh it deliberately (`uv tool upgrade archy`).
+**(2) If you've installed archy as a `uv tool`, make sure it's recent.** When the shim falls through to `uvx`, `uvx` prefers an installed tool over fetching from PyPI, so a stale `uv tool install archy` (say, from a year ago) will mask the release the plugin pins to. The `archy>=0.31,<1.0` specifier the shim passes will refuse to use an older installed tool, but to avoid the confusion either remove the install (`uv tool uninstall archy`) and let `uvx` cache fresh, or refresh it deliberately (`uv tool upgrade archy`). (If you have a current `archy` on `PATH`, the shim uses it directly and never reaches `uvx`.)
 
 ## Install (local development)
 
@@ -46,14 +46,18 @@ Claude Code.
 plugins/claude/
 ├── .claude-plugin/
 │   └── plugin.json          # manifest: MCP server registration + metadata
+├── bin/
+│   └── archy-mcp.mjs        # Node shim that resolves a way to run `archy mcp`
 ├── skills/
 │   └── archy/
 │       └── SKILL.md         # bundled skill; mirror of skills/archy/SKILL.md
 └── README.md                # this file
 ```
 
-## Why uvx and not archy directly?
+## Why a Node shim?
 
-The MCP server command is `uvx archy>=0.31,<1.0 mcp` rather than plain `archy mcp` so a user who has `uv` installed but has not separately installed archy still gets a working plugin. The lower bound pins to a release exposing all 19 advertised tools (so a stale `uv tool install archy` from before that release can't quietly mask newer ones, e.g. `archy_what_to_refactor_next`) and carrying the v0.31 metric-correctness fixes, and the `<1.0` cap stops a future breaking 1.0 from being auto-pulled into the stanza. Users who installed archy globally (`pip install archy` or `uv tool install archy`) can switch the manifest's `command` to `archy` and drop the leading `args` entry; the plugin works either way once Claude Code resolves the MCP stanza.
+The manifest runs `node ${CLAUDE_PLUGIN_ROOT}/bin/archy-mcp.mjs` rather than `uvx archy ... mcp` directly. The shim removes the previous **hard `uv` requirement**: before, a user without `uv` on `PATH` got a silent "server failed to start" and none of the `archy_*` tools loaded. Now the shim tries, in order, an installed `archy` (from any of `pipx`/`uv tool`/`pip`), then `uvx archy>=0.31,<1.0 mcp` (which fetches archy on demand if `uv` is present), then `python -m archy mcp`; if none are available it prints an actionable message telling you exactly what to install. The version bound is unchanged in meaning: the lower bound exposes the full current tool set (e.g. `archy_what_to_refactor_next`) and the `<1.0` cap stops a future breaking 1.0 from being auto-pulled.
 
-**Prerequisite: `uv` must be on `PATH`.** Claude Code does not bundle `uv`, and `uvx` is what fetches and runs archy on demand. If `uv` is missing the MCP server fails to start. Install it once with `curl -LsSf https://astral.sh/uv/install.sh | sh` (or `brew install uv`); uv also bootstraps the Python it needs, so it is the only prerequisite. Users who would rather not depend on `uv` can install archy any way they like (`pipx install archy`, `uv tool install archy`, `pip install archy`) and switch the manifest's `command` to `archy` with `args` of `["mcp"]`, as noted above.
+`node` is the launcher rather than a shell script because Claude Code spawns MCP servers without a shell and there is no per-OS override in the plugin manifest, so a POSIX `.sh` would not run on Windows. `node` is the one interpreter Claude Code guarantees on `PATH` across macOS, Linux, and Windows, so a single `.mjs` entry point works everywhere (it handles the Windows `.cmd`/`.bat` spawn quirk internally).
+
+**No prerequisite for the common case.** If you have `uv` *or* any `archy` install, the tools just work. If you have neither, you will see a one-line hint to run `curl -LsSf https://astral.sh/uv/install.sh | sh` (uv bootstraps its own Python) or `pipx install archy`, then restart Claude Code. The shim's version specifier (`archy>=0.31,<1.0`) lives in `bin/archy-mcp.mjs`; `tests/test_plugin.py` pins it so the README and launcher cannot drift.
