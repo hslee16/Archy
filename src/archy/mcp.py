@@ -1521,6 +1521,12 @@ def _manager_for(path: Path, **kwargs) -> IndexManager:
     with _MANAGERS_LOCK:
         manager = _MANAGERS.get(key)
         if manager is None:
+            # The config for this root changed (different key, same path): retire
+            # any manager built with the superseded config so we don't leak its
+            # watcher thread + cache connection on the same directory. A root has
+            # exactly one live config at a time, so at most one manager per root.
+            for stale_key in [k for k in _MANAGERS if k[0] == key[0]]:
+                _MANAGERS.pop(stale_key).stop()
             manager = IndexManager(root, **kwargs)
             manager.start_watching()  # best-effort; on-demand sync works regardless
             _MANAGERS[key] = manager

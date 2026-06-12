@@ -540,21 +540,36 @@ def test_manager_cache_key_distinguishes_config(tmp_path: Path):
     assert diff_roots != diff_ignored
 
 
-def test_manager_for_reuses_or_separates_by_config(tmp_path: Path):
+def test_manager_for_reuses_or_evicts_by_config(tmp_path: Path):
     from archy.mcp import _MANAGERS, _manager_for
 
     created = []
-    try:
-        m1 = _manager_for(tmp_path, extra_roots=("src",))
-        m1_again = _manager_for(tmp_path, extra_roots=("src",))
-        m2 = _manager_for(tmp_path, extra_roots=("lib",))
-        created = [m1, m2]
 
-        # Same config -> same cached manager; different config -> distinct one.
+    def make(**kwargs):
+        # Track every manager the moment it is created so a mid-test failure
+        # still tears down its watcher + connection in the finally block.
+        manager = _manager_for(tmp_path, **kwargs)
+        created.append(manager)
+        return manager
+
+    try:
+        m1 = make(extra_roots=("src",))
+        m1_again = make(extra_roots=("src",))
+        # Same config -> same cached manager (no new watcher/connection).
         assert m1 is m1_again
+
+        m2 = make(extra_roots=("lib",))
+        # Different config -> distinct manager, and the superseded one is evicted
+        # so a root never accumulates managers (one live config at a time).
+        # Scope the count to this root: other tests leak managers into the
+        # module-global for other roots.
         assert m2 is not m1
+        root_key = str(tmp_path.resolve())
+        same_root = [k for k in _MANAGERS if k[0] == root_key]
+        assert len(same_root) == 1
+        assert _MANAGERS[same_root[0]] is m2
     finally:
-        for manager in created:
+        for manager in set(created):
             manager.stop()
         _MANAGERS.clear()
 
