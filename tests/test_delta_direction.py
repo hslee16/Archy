@@ -22,7 +22,7 @@ import pytest
 # the pytest process.
 sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 
-import delta_direction as dd
+import delta_direction as dd  # ty: ignore[unresolved-import]  (added to sys.path above)
 
 
 def test_inject_two_cycle_creates_exactly_one_2cycle():
