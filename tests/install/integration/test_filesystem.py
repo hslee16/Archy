@@ -90,6 +90,28 @@ def test_uninstall_round_trip_removes_all_archy_traces(on_real_os, adapter_id):
         assert "archy" not in path.read_text(encoding="utf-8").lower()
 
 
+def test_uninstall_removes_manual_config_even_after_plugin_installed(on_real_os):
+    # Regression for the #169 blocker: install Claude with no plugin (writes a
+    # manual MCP stanza + instructions), then the user installs the archy
+    # plugin, then uninstalls. Gating removal on the *current* plugin state used
+    # to leave the manual stanza + CLAUDE.md block orphaned.
+    adapters = resolve_targets("claude")
+    run_install(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+
+    manifest = on_real_os.home / ".claude" / "plugins" / "archy" / ".claude-plugin" / "plugin.json"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(json.dumps({"name": "archy"}), encoding="utf-8")
+
+    run_uninstall(adapters, Scope.GLOBAL, write_system=RealWriteSystem())
+
+    # Every file except the plugin manifest itself (which `archy uninstall` does
+    # not own) must be free of archy references.
+    for path in _all_files(on_real_os.home):
+        if path == manifest:
+            continue
+        assert "archy" not in path.read_text(encoding="utf-8").lower(), path
+
+
 @pytest.mark.parametrize("adapter_id", ALL_IDS)
 def test_uninstall_is_idempotent(on_real_os, adapter_id):
     adapters = resolve_targets(adapter_id)

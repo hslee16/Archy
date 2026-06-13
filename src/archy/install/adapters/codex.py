@@ -59,6 +59,7 @@ class CodexAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
+        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
     ) -> list[FileAction]:
         return [
             FileAction(

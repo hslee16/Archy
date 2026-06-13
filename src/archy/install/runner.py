@@ -102,8 +102,14 @@ def plan_for(
     *,
     project_root: Path | None,
     seed_permissions: bool,
+    for_uninstall: bool = False,
 ) -> list[FileAction]:
-    return adapter.plan(scope, project_root=project_root, seed_permissions=seed_permissions)
+    return adapter.plan(
+        scope,
+        project_root=project_root,
+        seed_permissions=seed_permissions,
+        for_uninstall=for_uninstall,
+    )
 
 
 def _run_for_adapters(
@@ -114,13 +120,18 @@ def _run_for_adapters(
     seed_permissions: bool,
     write_system: WriteSystem | None,
     apply_fn: Callable[[list[FileAction], WriteSystem], list[Path]],
+    for_uninstall: bool = False,
 ) -> InstallResult:
     """Plan each adapter and run ``apply_fn`` over it. Shared by install/uninstall."""
     ws = write_system if write_system is not None else RealWriteSystem()
     results: list[AdapterResult] = []
     for adapter in adapters:
         plan = plan_for(
-            adapter, scope, project_root=project_root, seed_permissions=seed_permissions
+            adapter,
+            scope,
+            project_root=project_root,
+            seed_permissions=seed_permissions,
+            for_uninstall=for_uninstall,
         )
         touched = apply_fn(plan, ws)
         results.append(AdapterResult(adapter_id=adapter.id, written=tuple(touched)))
@@ -167,6 +178,7 @@ def run_uninstall(
         seed_permissions=seed_permissions,
         write_system=write_system,
         apply_fn=apply_uninstall,
+        for_uninstall=True,
     )
 
 

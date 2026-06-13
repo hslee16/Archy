@@ -101,10 +101,17 @@ class ClaudeAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
+        for_uninstall: bool = False,
     ) -> list[FileAction]:
         actions: list[FileAction] = []
-        plugin = self.plugin_installed()
-        if not plugin:
+        # On install we skip the MCP + instruction writes when the archy plugin
+        # already registers them (avoids the #104 double-registration). On
+        # uninstall we must include them unconditionally: a prior install done
+        # while the plugin was absent may have written a manual stanza, and
+        # gating removal on the *current* plugin state is exactly what left
+        # those files orphaned and broke install/uninstall symmetry (#169). The
+        # strip/remove operations are idempotent no-ops when nothing is there.
+        if for_uninstall or not self.plugin_installed():
             actions.append(
                 FileAction(
                     path=self.config_paths(scope, project_root)[0],

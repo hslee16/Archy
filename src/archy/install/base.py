@@ -240,12 +240,16 @@ class AgentAdapter(ABC):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
+        for_uninstall: bool = False,
     ) -> list[FileAction]:
-        """The ordered list of file writes for installing archy at ``scope``.
+        """The ordered list of file actions for archy at ``scope``.
 
         ``project_root`` anchors local-scope writes (defaults to cwd).
         ``seed_permissions`` is honored only by adapters whose client supports a
         permission allowlist (Claude today); others ignore it.
+        ``for_uninstall`` lets an adapter widen the plan for the reverse pass so
+        uninstall stays the exact inverse of install regardless of state that
+        changed in between (Claude uses it; others ignore it).
         """
 
 

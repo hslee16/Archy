@@ -51,6 +51,7 @@ class OpencodeAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
+        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
     ) -> list[FileAction]:
         root = local_root(project_root) if scope is Scope.LOCAL else self._global_dir()
         return [

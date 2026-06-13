@@ -123,7 +123,7 @@ class _Probe(AgentAdapter):
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         return [self._root / "probe" / "config.json"]
 
-    def plan(self, scope, *, project_root=None, seed_permissions=True):
+    def plan(self, scope, *, project_root=None, seed_permissions=True, for_uninstall=False):
         return []
 
 
