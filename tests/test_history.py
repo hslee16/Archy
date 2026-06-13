@@ -115,6 +115,118 @@ def test_pre_v0_20_row_without_complexity_reads_as_none(tmp_path: Path):
     assert rows[0].complexity is None
 
 
+def test_pre_v0_7_row_without_tangle_ratio_reads_as_zero(tmp_path: Path):
+    # Backwards-compat: a JSONL row written by archy < 0.7.x has no
+    # `tangle_ratio` key in inputs. We accept it and default to 0.0 rather
+    # than refusing the whole row. (Parallels the pre-v0.20 complexity test.)
+    history = tmp_path / "history.jsonl"
+    legacy_payload = {
+        "timestamp": "2025-06-01T12:00:00Z",
+        "commit": "feedface",
+        "branch": "main",
+        "score": {
+            "overall": 0.5,
+            "modularity": 0.6,
+            "acyclicity": 0.5,
+            "depth": 0.7,
+            "equality": 0.4,
+            "complexity": 0.55,
+        },
+        "inputs": {
+            "module_count": 10,
+            "edge_count": 20,
+            "cycle_count": 1,
+            "max_depth": 2,
+            "community_count": 3,
+        },
+    }
+    history.write_text(json.dumps(legacy_payload) + "\n")
+    rows = read(history)
+    assert len(rows) == 1
+    assert rows[0].tangle_ratio == 0.0
+
+
+def test_float_encoded_integer_fields_are_accepted(tmp_path: Path):
+    # JSON has no distinct integer type, so exporters / manual edits often
+    # write count fields as `10.0`. Those rows must read, not be silently
+    # dropped. A fractional value, however, is corruption and is rejected.
+    history = tmp_path / "history.jsonl"
+    base = {
+        "timestamp": "2026-06-13T00:00:00Z",
+        "commit": None,
+        "branch": None,
+        "score": {
+            "overall": 0.5,
+            "modularity": 0.6,
+            "acyclicity": 0.5,
+            "depth": 0.7,
+            "equality": 0.4,
+            "complexity": 0.55,
+        },
+        "inputs": {
+            "module_count": 10.0,
+            "edge_count": 20.0,
+            "cycle_count": 0.0,
+            "tangle_ratio": 0.2,
+            "max_depth": 2.0,
+            "community_count": 3.0,
+        },
+    }
+    history.write_text(json.dumps(base) + "\n")
+    rows = read(history)
+    assert len(rows) == 1
+    assert rows[0].module_count == 10
+    assert isinstance(rows[0].module_count, int)
+
+    # A fractional count is not a whole number: corruption, row dropped.
+    base["inputs"]["module_count"] = 10.5
+    history.write_text(json.dumps(base) + "\n")
+    assert read(history) == []
+
+
+def test_present_but_corrupt_complexity_drops_row(tmp_path: Path):
+    # Distinct from a *missing* complexity (older row -> None, kept): a
+    # present-but-non-numeric value is corruption and drops the row, the same
+    # as any other corrupt field, instead of being disguised as None.
+    history = tmp_path / "history.jsonl"
+    payload = {
+        "timestamp": "2026-06-13T00:00:00Z",
+        "commit": None,
+        "branch": None,
+        "score": {
+            "overall": 0.5,
+            "modularity": 0.6,
+            "acyclicity": 0.5,
+            "depth": 0.7,
+            "equality": 0.4,
+            "complexity": "not-a-number",
+        },
+        "inputs": {
+            "module_count": 10,
+            "edge_count": 20,
+            "cycle_count": 1,
+            "tangle_ratio": 0.2,
+            "max_depth": 2,
+            "community_count": 3,
+        },
+    }
+    history.write_text(json.dumps(payload) + "\n")
+    assert read(history) == []
+
+
+def test_append_record_is_newline_terminated(tmp_path: Path):
+    # Each append must write a complete, newline-terminated line so a later
+    # append never merges onto a previous record (the crash-mid-write data
+    # loss path). N appends -> N parseable lines, file ends with a newline.
+    history = tmp_path / "history.jsonl"
+    append(history, row_from_score(_score(0.4), commit="a", branch="main"))
+    append(history, row_from_score(_score(0.6), commit="b", branch="main"))
+    text = history.read_text()
+    assert text.endswith("\n")
+    assert len(text.splitlines()) == 2
+    assert [r.overall for r in read(history)] == [0.4, 0.6]
+
+
 def test_git_metadata_on_non_git_dir(tmp_path: Path):
     commit, branch = git_metadata(tmp_path)
     assert commit is None
