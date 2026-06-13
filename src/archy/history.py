@@ -44,8 +44,11 @@ class HistoryRow(BaseModel):
 def append(history_path: Path, row: HistoryRow) -> None:
     history_path.parent.mkdir(parents=True, exist_ok=True)
     with history_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(_row_to_dict(row), sort_keys=True))
-        fh.write("\n")
+        # Single write of the JSON *and* its newline: two separate write()
+        # calls leave a window where a crash between them lands a record with
+        # no trailing newline, so the next append merges onto that line and
+        # both rows become an unparseable (silently dropped) line.
+        fh.write(json.dumps(_row_to_dict(row), sort_keys=True) + "\n")
 
 
 def read(history_path: Path) -> list[HistoryRow]:
@@ -96,7 +99,14 @@ def row_from_score(
 
 
 def git_metadata(path: Path) -> tuple[str | None, str | None]:
-    """Best-effort git context. Returns (commit_sha, branch_name) or (None, None)."""
+    """Best-effort git context: returns (commit_sha, branch_name).
+
+    Each element is resolved independently and may be ``None`` on its own:
+    a non-git path yields ``(None, None)``, a detached HEAD yields a real
+    commit with ``branch=None``, and a partial git failure can leave either
+    side ``None``. Callers (serialization, trend display) already treat the
+    two as independently optional, so no atomicity is implied.
+    """
     if not path.exists():
         return None, None
     commit = _git(path, "rev-parse", "HEAD")
@@ -193,8 +203,18 @@ def _as_float(value: object) -> float:
 
 
 def _as_int(value: object) -> int:
+    # Accept a float that encodes a whole number (e.g. 10.0): JSON has no
+    # integer type distinct from number, so exporters, manual edits, and
+    # other tools routinely write count fields as `10.0`. Rejecting those
+    # silently dropped otherwise-valid rows. `bool` is an int subclass and
+    # passes through unchanged, which is fine. A fractional float (10.5) is
+    # still corruption and is rejected.
+    if isinstance(value, bool):
+        return int(value)
     if isinstance(value, int):
         return value
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
     raise TypeError(f"expected int, got {type(value).__name__}")
 
 
@@ -216,8 +236,13 @@ def _optional_str(value: object) -> str | None:
 
 
 def _optional_float(value: object) -> float | None:
+    # Distinguish "field absent" (an older row that predates this field ->
+    # None, keep the row) from "field present but not a number" (corruption ->
+    # raise, so the row is dropped like any other corrupt required field).
+    # Returning None for corruption would disguise it as a legitimately-old
+    # row, which is the inconsistency this resolves.
     if value is None:
         return None
     if isinstance(value, (int, float)):
         return float(value)
-    return None
+    raise TypeError(f"expected number or absent, got {type(value).__name__}")
