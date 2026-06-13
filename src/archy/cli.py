@@ -525,6 +525,11 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
     commit count from a one-pass `git log --name-only`. Files that score
     zero on either axis are dropped.
     """
+    # Validate before any graph/git work so a bad --top fails fast and
+    # consistently (a non-positive value otherwise silently truncated the
+    # list: --top 0 showed nothing, --top -1 dropped the lowest-score row).
+    if top_n < 1:
+        raise click.ClickException(f"--top must be >= 1; got {top_n}")
     g = _load_graph(path, internal_only=True)
     churn = git_churn(path, since=since)
     if churn is None:

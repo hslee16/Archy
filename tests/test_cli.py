@@ -573,6 +573,39 @@ def test_impact_max_chains_rejects_zero(tmp_path: Path):
     )
 
 
+@pytest.mark.parametrize("bad", ["0", "-1"])
+def test_hotspots_top_rejects_invalid_values(tmp_path: Path, bad: str):
+    # --top was unvalidated: 0 showed nothing and -1 sliced off the
+    # lowest-score row while mislabeling the count. The guard runs before the
+    # git check, so a non-git tmp dir still exercises it.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    result = CliRunner().invoke(main, ["hotspots", str(tmp_path), "--top", bad])
+    assert result.exit_code != 0
+    assert f"--top must be >= 1; got {bad}" in result.output
+
+
+@pytest.mark.parametrize("bad", ["0", "-1"])
+def test_what_to_refactor_next_top_rejects_invalid_values(tmp_path: Path, bad: str):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    result = CliRunner().invoke(main, ["what-to-refactor-next", str(tmp_path), "--top", bad])
+    assert result.exit_code != 0
+    assert f"--top must be >= 1; got {bad}" in result.output
+
+
+@pytest.mark.parametrize("bad", ["1.5", "-0.1"])
+def test_what_to_refactor_next_min_risk_rejects_out_of_range(tmp_path: Path, bad: str):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    result = CliRunner().invoke(main, ["what-to-refactor-next", str(tmp_path), "--min-risk", bad])
+    assert result.exit_code != 0
+    assert "--min-risk must be in [0, 1]" in result.output
+
+
 def test_affected_classifies_tests_and_modules_json(tmp_path: Path):
     _make_libs_to_routers_chain(tmp_path)
     tests = tmp_path / "tests"
