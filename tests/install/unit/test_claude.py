@@ -74,6 +74,22 @@ def test_plan_skips_mcp_when_plugin_installed(simulate_os):
     assert _kinds(plan) == ["permissions"]
 
 
+def test_plan_for_uninstall_includes_mcp_even_when_plugin_installed(simulate_os):
+    # Regression for #169: if the plugin is installed *after* a manual install,
+    # the uninstall plan must still strip the MCP stanza + instructions a prior
+    # install wrote, or they are orphaned. The reverse pass widens the plan
+    # regardless of current plugin state.
+    fake = simulate_os("linux")
+    _write_plugin_manifest(fake.home, "archy")
+    assert ADAPTER.plugin_installed() is True
+    install_plan = ADAPTER.plan(Scope.GLOBAL, seed_permissions=True)
+    uninstall_plan = ADAPTER.plan(Scope.GLOBAL, seed_permissions=True, for_uninstall=True)
+    # Install still skips MCP + instructions (avoids #104 double-registration),
+    # but uninstall removes them so the round-trip leaves no footprint.
+    assert _kinds(install_plan) == ["permissions"]
+    assert _kinds(uninstall_plan) == ["mcp", "instructions", "permissions"]
+
+
 def test_plugin_detection_ignores_foreign_manifests(simulate_os):
     fake = simulate_os("linux")
     _write_plugin_manifest(fake.home, "other")

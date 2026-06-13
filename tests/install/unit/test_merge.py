@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import sys
 
+import pytest
 import yaml
 
 if sys.version_info >= (3, 11):
@@ -28,6 +29,7 @@ from archy.install.merge import (
     strip_opencode_mcp,
     strip_toml_mcp,
 )
+from archy.install.writer import InstallError
 
 
 def test_json_mcp_fresh():
@@ -46,6 +48,22 @@ def test_json_mcp_preserves_unrelated_keys_and_servers():
 def test_json_mcp_idempotent():
     first = render_json_mcp(None)
     assert render_json_mcp(first) == first
+
+
+def test_json_mcp_rejects_non_dict_servers_key():
+    # #169: a scalar where a table is expected is malformed config; raise with
+    # an actionable message instead of silently overwriting the user's value.
+    existing = json.dumps({"mcpServers": "oops-a-string"})
+    with pytest.raises(InstallError, match=r"mcpServers.*must be an object"):
+        render_json_mcp(existing)
+
+
+def test_claude_permissions_rejects_non_list_allow():
+    # #169: normalizing a scalar `allow` to [] would drop the user's value and
+    # leave uninstall unable to restore it; fail fast instead.
+    existing = json.dumps({"permissions": {"allow": "not-a-list"}})
+    with pytest.raises(InstallError, match=r"permissions\.allow must be a list"):
+        render_claude_permissions(existing)
 
 
 def test_opencode_mcp_shape():

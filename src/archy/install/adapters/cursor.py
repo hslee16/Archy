@@ -58,6 +58,7 @@ class CursorAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
+        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
     ) -> list[FileAction]:
         root = self._root(scope, project_root)
         return [

@@ -31,6 +31,7 @@ from archy.install.base import (
     SERVER_KEY,
     permission_patterns,
 )
+from archy.install.writer import InstallError
 
 JsonObj = dict[str, object]
 
@@ -63,15 +64,24 @@ def _load_toml_obj(existing: str | None) -> JsonObj:
 
 
 def _ensure_dict(obj: JsonObj, key: str) -> JsonObj:
-    """Return ``obj[key]`` as a dict, creating it when absent or the wrong type.
+    """Return ``obj[key]`` as a dict, creating it only when the key is absent.
 
     Mutates ``obj`` in place, so the caller's reference stays valid. Used to
-    walk-or-create the nested config tables every JSON merge below shares.
+    walk-or-create the nested config tables every JSON merge below shares. A
+    key present with a non-dict value (e.g. ``mcpServers`` set to a string) is a
+    malformed config: we raise rather than silently overwrite it, so the user
+    keeps their data and gets an actionable error instead of silent loss (#169).
+    JSON ``null`` is treated as absent and (re)created.
     """
     sub = obj.get(key)
-    if not isinstance(sub, dict):
+    if sub is None:
         sub = {}
         obj[key] = sub
+    elif not isinstance(sub, dict):
+        raise InstallError(
+            f"invalid config: {key!r} must be an object/table, "
+            f"found {type(sub).__name__}; fix or remove it before installing."
+        )
     return cast(JsonObj, sub)
 
 
@@ -139,9 +149,18 @@ def render_claude_permissions(existing: str | None) -> str:
     obj = _load_json_obj(existing)
     perms = _ensure_dict(obj, "permissions")
     allow = perms.get("allow")
-    if not isinstance(allow, list):
+    if allow is None:
         allow = []
         perms["allow"] = allow
+    elif not isinstance(allow, list):
+        # A non-list `allow` is malformed (Claude documents it as an array).
+        # Normalizing it to [] would silently drop the user's value and, worse,
+        # leave uninstall unable to restore it (the strip path only edits a
+        # list), breaking the round-trip. Fail fast instead (#169).
+        raise InstallError(
+            f"invalid config: permissions.allow must be a list, "
+            f"found {type(allow).__name__}; fix or remove it before installing."
+        )
     allow_list = cast(list[object], allow)
     have = set(allow_list)
     for pattern in permission_patterns():
