@@ -64,7 +64,12 @@ class DSM(BaseModel):
 
 
 class DSMDiff(BaseModel):
-    """Structured diff between two DSMs over the same set of nodes (intersected).
+    """Structured diff between two DSMs over the union of their nodes.
+
+    Edges are matched by (source_name, target_name), so node additions and
+    removals are tracked explicitly in `nodes_added` / `nodes_removed`. Cell
+    indices are ordering-relative: `added` / `new_back_edges` index `after`,
+    while `removed` index `before`; never index one's cells into the other.
 
     `new_back_edges` is the load-bearing field for agent scenario 2 in
     `docs/research/DSM_EMPIRICS.md`: cells that appeared above the diagonal in
@@ -178,6 +183,8 @@ def _group_by_topological(graph: nx.DiGraph) -> list[DSMGroup]:
     topo = list(nx.topological_sort(cond))
     groups: list[DSMGroup] = []
     singleton_buffer: list[str] = []
+    scc_count = 0  # SCC label index; len(groups) would skip numbers and shift
+    # whenever an interleaved DAG group was appended just before an SCC.
     for scc_idx in topo:
         members = sorted(sccs[scc_idx])
         if len(members) == 1:
@@ -186,7 +193,8 @@ def _group_by_topological(graph: nx.DiGraph) -> list[DSMGroup]:
         if singleton_buffer:
             groups.append(DSMGroup(label="DAG", members=tuple(singleton_buffer)))
             singleton_buffer = []
-        groups.append(DSMGroup(label=f"SCC-{len(groups)}", members=tuple(members)))
+        groups.append(DSMGroup(label=f"SCC-{scc_count}", members=tuple(members)))
+        scc_count += 1
     if singleton_buffer:
         groups.append(DSMGroup(label="DAG", members=tuple(singleton_buffer)))
     return groups
@@ -440,35 +448,43 @@ def _name_indexed(dsm: DSM) -> dict[tuple[str, str], DSMCell]:
     return {(dsm.ordering[c.row], dsm.ordering[c.col]): c for c in dsm.cells}
 
 
-def render_diff_text(diff: DSMDiff, after: DSM) -> str:
-    """Render a DSMDiff as a short agent-friendly text summary."""
+def render_diff_text(diff: DSMDiff, after: DSM, before: DSM) -> str:
+    """Render a DSMDiff as a short agent-friendly text summary.
+
+    Both DSMs are required because cell indices are ordering-relative: `added`
+    / `new_back_edges` cells index `after.ordering`, while `removed` cells index
+    `before.ordering`. Resolving each against its own DSM is what lets removed
+    edges print real names (e.g. `a -> b`) symmetrically with added edges,
+    rather than bare, easily-misread positional indices.
+    """
     lines: list[str] = []
     lines.append(
         f"DSM diff: +{len(diff.added)} cells, -{len(diff.removed)} cells, "
         f"~{len(diff.weight_changed)} weight changes, "
         f"+{len(diff.nodes_added)} modules, -{len(diff.nodes_removed)} modules."
     )
+
+    def _edge(cell: DSMCell, dsm: DSM) -> str:
+        return f"{dsm.ordering[cell.row]} -> {dsm.ordering[cell.col]}"
+
     if diff.new_back_edges:
         lines.append("")
         lines.append(f"New back-edges ({len(diff.new_back_edges)}):")
         for cell in diff.new_back_edges:
-            src = after.ordering[cell.row]
-            dst = after.ordering[cell.col]
-            lines.append(f"  {src} -> {dst}")
+            lines.append(f"  {_edge(cell, after)}")
     if diff.added and not diff.new_back_edges:
         lines.append("")
         lines.append(f"Added edges ({len(diff.added)}):")
         for cell in diff.added[:10]:
-            src = after.ordering[cell.row]
-            dst = after.ordering[cell.col]
-            lines.append(f"  {src} -> {dst}")
+            lines.append(f"  {_edge(cell, after)}")
         if len(diff.added) > 10:
             lines.append(f"  ... and {len(diff.added) - 10} more")
     if diff.removed:
         lines.append("")
         lines.append(f"Removed edges ({len(diff.removed)}):")
         for cell in diff.removed[:10]:
-            lines.append(f"  cell ({cell.row}, {cell.col})")
+            # removed cells index `before.ordering`, never `after`.
+            lines.append(f"  {_edge(cell, before)}")
         if len(diff.removed) > 10:
             lines.append(f"  ... and {len(diff.removed) - 10} more")
     return "\n".join(lines) + "\n"

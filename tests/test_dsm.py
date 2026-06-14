@@ -316,9 +316,52 @@ def test_render_diff_text_mentions_new_back_edges():
     before = build_dsm(_g(("a", "b"), ("b", "c")), group_by="topological")
     after = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "a")), group_by="topological")
     diff = diff_dsm(before, after)
-    text = render_diff_text(diff, after)
+    text = render_diff_text(diff, after, before)
     assert "back-edge" in text.lower()
     assert "c -> a" in text or "c -&gt; a" in text
+
+
+def test_render_diff_text_names_removed_edges_from_before_ordering():
+    # Removed cells index `before`, not `after`. Rendering them with names (via
+    # before) must be correct and symmetric with added edges, and must not be
+    # misread as `after` positions even when node removal shifts the ordering.
+    before = build_dsm(_g(("a", "b"), ("b", "c")))
+    after = build_dsm(_g(("a", "c")))  # b removed; edges a->b and b->c gone
+    diff = diff_dsm(before, after)
+    text = render_diff_text(diff, after, before)
+    assert "Removed edges" in text
+    assert "a -> b" in text
+    assert "b -> c" in text
+    # The bare positional form the old renderer emitted must be gone.
+    assert "cell (" not in text
+
+
+def test_render_diff_text_removed_edges_never_index_after():
+    # Regression for the latent blocker: a removed cell's (row, col) is a
+    # before-ordering index that can exceed len(after.ordering); rendering must
+    # resolve it against before and never raise.
+    before = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "d"), ("d", "e")))
+    after = build_dsm(_g(("a", "b")))  # most nodes/edges removed
+    diff = diff_dsm(before, after)
+    text = render_diff_text(diff, after, before)  # must not raise IndexError
+    assert "d -> e" in text
+
+
+def test_group_by_topological_scc_labels_are_sequential():
+    # SCC labels must number sequentially (SCC-0, SCC-1, ...) even when DAG
+    # groups are interleaved; using len(groups) skipped numbers.
+    # Two independent SCCs separated by a DAG singleton chain.
+    g = _g(
+        ("a", "b"),
+        ("b", "a"),  # SCC #0: {a, b}
+        ("b", "m"),  # m: DAG singleton between the two SCCs
+        ("m", "x"),
+        ("x", "y"),
+        ("y", "x"),  # SCC #1: {x, y}
+    )
+    dsm = build_dsm(g, group_by="topological")
+    scc_labels = [grp.label for grp in dsm.groups if grp.label.startswith("SCC-")]
+    assert scc_labels == [f"SCC-{i}" for i in range(len(scc_labels))]
 
 
 # --- Model validation ---------------------------------------------------------
