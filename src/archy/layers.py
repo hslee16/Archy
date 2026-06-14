@@ -7,6 +7,7 @@ graph and returns every edge that crosses a forbidden boundary.
 
 from __future__ import annotations
 
+import keyword
 import re
 from pathlib import Path
 
@@ -244,19 +245,27 @@ def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
             f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
             "empty path segment (no leading, trailing, or doubled dots)."
         )
-    if not segments[0].isidentifier():
+    # A package-name segment must be an identifier that is not a Python keyword:
+    # no importable package is named `import`/`class`, so accepting one here
+    # would just defer the failure to a cryptic import-linter error instead of
+    # the clean message this validation exists to give.
+    if not _is_package_segment(segments[0]):
         raise LayerConfigError(
             f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
             f"must start with a Python package name, not {segments[0]!r} "
             '(e.g. "myapp.domain.**", not "**").'
         )
     for seg in segments[1:]:
-        if seg not in ("*", "**") and not seg.isidentifier():
+        if seg not in ("*", "**") and not _is_package_segment(seg):
             raise LayerConfigError(
                 f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
                 f"segment {seg!r} must be a package name, '*' (one segment), "
                 "or '**' (zero or more segments)."
             )
+
+
+def _is_package_segment(segment: str) -> bool:
+    return segment.isidentifier() and not keyword.iskeyword(segment)
 
 
 def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[ForbidRule]:

@@ -174,6 +174,8 @@ def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
         ".foo",  # leading dot -> empty root segment
         "foo.",  # trailing dot
         "a..b",  # doubled dot
+        "import",  # Python keyword -> never an importable package name
+        "class.foo",  # keyword root would defer to a cryptic import-linter error
     ],
 )
 def test_load_config_rejects_malformed_layer_pattern(tmp_path: Path, bad: str):
