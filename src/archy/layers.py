@@ -7,6 +7,7 @@ graph and returns every edge that crosses a forbidden boundary.
 
 from __future__ import annotations
 
+import keyword
 import re
 from pathlib import Path
 
@@ -134,8 +135,10 @@ def discover_config(start: Path) -> Path | None:
 def match_layer(qualname: str, layers: tuple[LayerSpec, ...]) -> str | None:
     """Return the layer name covering `qualname`, or None if unlayered.
 
-    Layers are required to be disjoint (enforced at load_config) so the
-    walk below collects all matches and is expected to find at most one.
+    Layers are expected to be disjoint. That is checked here at runtime (the
+    walk collects all matches and raises if a module matches more than one),
+    not at load_config, which validates pattern *syntax* but not cross-layer
+    overlap. Disjointness can only be decided against a concrete module set.
     """
     matches = [layer.name for layer in layers if _qualname_matches_any(qualname, layer.patterns)]
     if len(matches) > 1:
@@ -220,8 +223,49 @@ def _parse_layers(raw: object, path: Path) -> list[LayerSpec]:
             )
         # mypy/ty: explicit narrowing - the all(...) check above guarantees str.
         modules: tuple[str, ...] = tuple(m for m in modules_raw if isinstance(m, str))
+        for pattern in modules:
+            _validate_layer_pattern(pattern, name, path)
         out.append(LayerSpec(name=name, patterns=modules))
     return out
+
+
+def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
+    """Reject malformed dotted-name globs at config load with a clear error.
+
+    A pattern is a dotted-name glob: a leading valid-identifier root package,
+    then segments that are each a valid identifier, ``*`` (one segment), or
+    ``**`` (zero or more segments). Validating here means a typo like ``**`` or
+    ``*foo`` fails fast and legibly, instead of later surfacing as a cryptic
+    import-linter ``ModuleNotFoundError`` (the contracts fallback derives the
+    root package from the first segment) or a silently-wrong match regex.
+    """
+    segments = pattern.split(".")
+    if any(seg == "" for seg in segments):
+        raise LayerConfigError(
+            f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
+            "empty path segment (no leading, trailing, or doubled dots)."
+        )
+    # A package-name segment must be an identifier that is not a Python keyword:
+    # no importable package is named `import`/`class`, so accepting one here
+    # would just defer the failure to a cryptic import-linter error instead of
+    # the clean message this validation exists to give.
+    if not _is_package_segment(segments[0]):
+        raise LayerConfigError(
+            f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
+            f"must start with a Python package name, not {segments[0]!r} "
+            '(e.g. "myapp.domain.**", not "**").'
+        )
+    for seg in segments[1:]:
+        if seg not in ("*", "**") and not _is_package_segment(seg):
+            raise LayerConfigError(
+                f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
+                f"segment {seg!r} must be a package name, '*' (one segment), "
+                "or '**' (zero or more segments)."
+            )
+
+
+def _is_package_segment(segment: str) -> bool:
+    return segment.isidentifier() and not keyword.iskeyword(segment)
 
 
 def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[ForbidRule]:

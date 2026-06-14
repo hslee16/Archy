@@ -164,6 +164,38 @@ def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
         load_config(cfg)
 
 
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "**",  # leading ** -> contracts root extraction would yield "**"
+        "*",  # leading * -> root "*"
+        "*foo",  # wildcard not a whole segment
+        "foo**bar",  # ** not a whole segment -> previously a wrong regex
+        ".foo",  # leading dot -> empty root segment
+        "foo.",  # trailing dot
+        "a..b",  # doubled dot
+        "import",  # Python keyword -> never an importable package name
+        "class.foo",  # keyword root would defer to a cryptic import-linter error
+    ],
+)
+def test_load_config_rejects_malformed_layer_pattern(tmp_path: Path, bad: str):
+    # Malformed patterns must fail at load with a clear archy error rather than
+    # surfacing later as a cryptic import-linter ModuleNotFoundError or a
+    # silently-wrong match regex. Quote the pattern to keep YAML happy.
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text(f'layers:\n  core: {{modules: ["{bad}"]}}\nforbid: []\n')
+    with pytest.raises(LayerConfigError, match="invalid module pattern"):
+        load_config(cfg)
+
+
+@pytest.mark.parametrize("good", ["myapp", "myapp.core.**", "myapp.*", "app.routers.user"])
+def test_load_config_accepts_canonical_layer_patterns(tmp_path: Path, good: str):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text(f'layers:\n  core: {{modules: ["{good}"]}}\nforbid: []\n')
+    config = load_config(cfg)
+    assert config.layers[0].patterns == (good,)
+
+
 # --- discover_config ----------------------------------------------------------
 
 
