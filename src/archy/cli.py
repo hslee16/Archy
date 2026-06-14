@@ -905,7 +905,7 @@ def dsm(
         if fmt == "json":
             click.echo(json.dumps(diff.model_dump(), indent=2, sort_keys=True))
         else:
-            click.echo(render_diff_text(diff, current))
+            click.echo(render_diff_text(diff, current, before))
         return
 
     if fmt == "json":
