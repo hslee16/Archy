@@ -144,27 +144,36 @@ def _test_classifier(project_root: Path, test_filter: str | None):
         pattern = _compile_glob(test_filter)
 
         def _user(path: Path) -> bool:
-            try:
-                rel = path.resolve().relative_to(root).as_posix()
-            except ValueError:
+            rel = _rel_to_root(path, root)
+            if rel is None:
                 return False
-            return bool(pattern.fullmatch(rel))
+            return bool(pattern.fullmatch(rel.as_posix()))
 
         return _user
 
     auto_patterns = [_compile_glob(g) for g in _AUTO_TEST_GLOBS]
 
     def _auto(path: Path) -> bool:
-        try:
-            rel_path = path.resolve().relative_to(root)
-        except ValueError:
+        rel = _rel_to_root(path, root)
+        if rel is None:
             return False
-        rel = rel_path.as_posix()
-        if any(p.fullmatch(rel) for p in auto_patterns):
+        if any(p.fullmatch(rel.as_posix()) for p in auto_patterns):
             return True
-        return _AUTO_TEST_DIR in rel_path.parts
+        return _AUTO_TEST_DIR in rel.parts
 
     return _auto
+
+
+def _rel_to_root(path: Path, root: Path) -> Path | None:
+    """Resolve `path` relative to `root`, or None if it falls outside.
+
+    Both classifier closures need the project-relative path; centralizing the
+    resolve + `relative_to` guard keeps the out-of-tree handling identical.
+    """
+    try:
+        return path.resolve().relative_to(root)
+    except ValueError:
+        return None
 
 
 def _compile_glob(pattern: str) -> re.Pattern[str]:
@@ -187,13 +196,24 @@ def _compile_glob(pattern: str) -> re.Pattern[str]:
         c = pattern[i]
         if c == "*":
             if i + 1 < len(pattern) and pattern[i + 1] == "*":
-                # `**/` matches zero or more segments; bare trailing `**`
-                # matches any remainder.
-                if i + 2 < len(pattern) and pattern[i + 2] == "/":
+                # `**` only crosses path separators when it is a *complete*
+                # path segment, i.e. bounded by `/` (or string start/end) on
+                # both sides -- matching git/pathlib `full_match` semantics.
+                # `**/<rest>` matches zero or more leading segments; a bare
+                # trailing `**` matches any remainder. A `**` glued to other
+                # characters (e.g. `**.py`, `a/**b`) is NOT recursive; it
+                # degrades to a single in-segment `*` so it can't leak across
+                # `/` and silently over-select nested paths.
+                left_ok = i == 0 or pattern[i - 1] == "/"
+                if left_ok and i + 2 < len(pattern) and pattern[i + 2] == "/":
                     out.append("(?:.*/)?")
                     i += 3
                     continue
-                out.append(".*")
+                if left_ok and i + 2 == len(pattern):
+                    out.append(".*")
+                    i += 2
+                    continue
+                out.append("[^/]*")
                 i += 2
                 continue
             out.append("[^/]*")
