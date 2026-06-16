@@ -144,27 +144,36 @@ def _test_classifier(project_root: Path, test_filter: str | None):
         pattern = _compile_glob(test_filter)
 
         def _user(path: Path) -> bool:
-            try:
-                rel = path.resolve().relative_to(root).as_posix()
-            except ValueError:
+            rel = _rel_to_root(path, root)
+            if rel is None:
                 return False
-            return bool(pattern.fullmatch(rel))
+            return bool(pattern.fullmatch(rel.as_posix()))
 
         return _user
 
     auto_patterns = [_compile_glob(g) for g in _AUTO_TEST_GLOBS]
 
     def _auto(path: Path) -> bool:
-        try:
-            rel_path = path.resolve().relative_to(root)
-        except ValueError:
+        rel = _rel_to_root(path, root)
+        if rel is None:
             return False
-        rel = rel_path.as_posix()
-        if any(p.fullmatch(rel) for p in auto_patterns):
+        if any(p.fullmatch(rel.as_posix()) for p in auto_patterns):
             return True
-        return _AUTO_TEST_DIR in rel_path.parts
+        return _AUTO_TEST_DIR in rel.parts
 
     return _auto
+
+
+def _rel_to_root(path: Path, root: Path) -> Path | None:
+    """Resolve `path` relative to `root`, or None if it falls outside.
+
+    Both classifier closures need the project-relative path; centralizing the
+    resolve + `relative_to` guard keeps the out-of-tree handling identical.
+    """
+    try:
+        return path.resolve().relative_to(root)
+    except ValueError:
+        return None
 
 
 def _compile_glob(pattern: str) -> re.Pattern[str]:
