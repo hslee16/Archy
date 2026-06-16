@@ -219,9 +219,12 @@ def _compile_glob(pattern: str) -> re.Pattern[str]:
             out.append("[^/]*")
         elif c == "?":
             out.append("[^/]")
-        elif c in ".^$+{}()|\\":
-            out.append(re.escape(c))
         else:
-            out.append(c)
+            # Every non-glob character is a literal. Escape via `re.escape`
+            # (a no-op for ordinary chars) so ALL regex metachars are covered
+            # -- a hand-maintained allowlist silently omitted `[`/`]`, which
+            # made a user `--filter` containing them raise an uncaught
+            # `re.error` instead of matching them literally.
+            out.append(re.escape(c))
         i += 1
     return re.compile("".join(out))
