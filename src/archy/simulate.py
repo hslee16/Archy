@@ -170,11 +170,11 @@ def _resolve_delta(
     missing edge is a no-op. Only genuinely applicable specs land in
     `added_edges` / `removed_edges`.
 
-    Resolved pairs are de-duplicated within each list, and a pair that appears
-    in both `add` and `remove` cancels (recorded in `rejected`, applied to
-    neither). This keeps the echoed `AppliedDelta` consistent with the
-    sequential apply and, critically, stops a repeated `remove` from calling
-    `remove_edge` twice (which would raise).
+    Resolved pairs and unresolved endpoint names are both de-duplicated
+    (order-preserving), and a pair that appears in both `add` and `remove`
+    cancels (recorded in `rejected`, applied to neither). This keeps the echoed
+    `AppliedDelta` consistent with the sequential apply and, critically, stops a
+    repeated `remove` from calling `remove_edge` twice (which would raise).
 
     Self-loops are NOT rejected: archy's resolver does produce module-imports-
     itself edges (e.g. `from . import box as box` in rich's box.py), so a
@@ -204,7 +204,10 @@ def _resolve_delta(
     add_pairs, add_unres = _resolve_pairs(add)
     remove_pairs, rem_unres = _resolve_pairs(remove)
     rejected: list[str] = []
-    unresolved = add_unres + rem_unres
+    # De-duplicate unresolved names (order-preserving) the same way pairs are:
+    # a name that fails to resolve across several specs is one failed endpoint,
+    # not several, so the echoed report should list it once.
+    unresolved = list(dict.fromkeys(add_unres + rem_unres))
 
     # A pair in both add and remove cancels: applying both would be a no-op, and
     # the report should not claim it was added or removed.
