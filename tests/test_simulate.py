@@ -60,6 +60,21 @@ def test_unresolved_endpoint_reported_and_skipped(tmp_path: Path):
     assert result.applied.added_edges == ()
 
 
+def test_unresolved_endpoints_are_deduplicated(tmp_path: Path):
+    # Regression for #165: a name that fails to resolve across several specs is
+    # one failed endpoint, not several. The echoed `unresolved` tuple must list
+    # it once (matching the de-dup already applied to resolved pairs).
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(
+        g,
+        add=[("bad", "app.a"), ("bad", "app.b")],
+        remove=[("bad", "app.a")],
+        project_root=project,
+    )
+    assert result.applied.unresolved == ("bad",)
+
+
 def test_self_loop_removal_is_simulable(tmp_path: Path):
     # archy's resolver does produce self-edges (e.g. `from . import a as a`),
     # so removing one must be simulable, not rejected. Regression for a bug the
