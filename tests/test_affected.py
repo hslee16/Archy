@@ -223,3 +223,17 @@ def test_compile_glob_left_glued_star_star_does_not_cross_separators():
     assert p.fullmatch("a/b")
     assert p.fullmatch("axyz/b")
     assert not p.fullmatch("a/x/b")
+
+
+def test_compile_glob_is_total_over_regex_metachars():
+    # Regression for #170 (F3): a user `--filter` containing regex metachars
+    # that are NOT glob operators must compile and match literally rather than
+    # raise `re.error`. The old hand-maintained escape allowlist omitted
+    # `[`/`]`, so `--filter '['` crashed with an uncaught PatternError.
+    for ch in "[](){}.^$+|\\":
+        p = _compile_glob(ch)  # must not raise
+        assert p.fullmatch(ch), f"{ch!r} should match itself literally"
+    # a char class is treated as literal text, not a regex class
+    p = _compile_glob("[abc].py")
+    assert p.fullmatch("[abc].py")
+    assert not p.fullmatch("a.py")

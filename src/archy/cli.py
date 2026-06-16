@@ -411,8 +411,10 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> No
     is_flag=True,
     default=False,
     help=(
-        "Read changed file paths from stdin, one per line. "
-        "Pairs with `git diff --name-only | archy affected --stdin`."
+        "Read changed file paths from stdin, one per line. These are MERGED "
+        "with any FILES passed as positional arguments (both sources combine; "
+        "they are not alternatives). Pairs with "
+        "`git diff --name-only | archy affected --stdin`."
     ),
 )
 @click.option(
@@ -469,6 +471,8 @@ def affected(
     if depth < 1:
         raise click.ClickException(f"--depth must be >= 1; got {depth}")
 
+    # Positional FILES and --stdin are intentionally MERGED, not exclusive:
+    # a caller can name a few files and pipe the rest (the help text says so).
     file_list = list(files)
     if from_stdin:
         file_list.extend(Path(line.strip()) for line in sys.stdin if line.strip())
@@ -780,8 +784,11 @@ def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
     try:
         result = run_contracts(path, config_filename=config_filename)
     except (ContractsNotAvailable, ContractsConfigError) as exc:
+        # Exit 1 (not 2) so config/availability errors share the failure code
+        # used by `check`/`score` gate failures; CI treats any non-zero
+        # uniformly, and POSIX reserves 2 for argument/usage misuse.
         click.echo(str(exc), err=True)
-        sys.exit(2)
+        sys.exit(1)
 
     if fmt == "json":
         click.echo(json.dumps(_contracts_to_dict(result), indent=2, sort_keys=True))

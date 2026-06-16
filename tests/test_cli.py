@@ -678,6 +678,48 @@ def test_affected_depth_rejects_invalid_values(tmp_path: Path):
     assert "--depth must be >= 1; got 0" in result.output
 
 
+def test_affected_filter_with_regex_metachars_does_not_crash(tmp_path: Path):
+    # Regression for #170 (F3): a `--filter` containing regex metachars that
+    # are not glob operators must be treated as literal text, not raise an
+    # uncaught re.error (the old escape allowlist omitted `[`/`]`).
+    _make_app_with_test_module(tmp_path)
+    args = ["affected", str(tmp_path), "app/core.py", "--filter", "[", "--json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    assert result.exception is None
+    payload = json.loads(result.output)
+    # `[` matches nothing here, so the test module is classified as a module.
+    assert payload["impacted_tests"] == []
+
+
+def test_affected_merges_stdin_and_positional_files(tmp_path: Path):
+    # Regression for #170 (F9): --stdin and positional FILES are merged, not
+    # mutually exclusive. Both sources should appear in `changed`.
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("")
+    (pkg / "other.py").write_text("")
+
+    args = ["affected", str(tmp_path), "app/core.py", "--stdin", "--json"]
+    result = CliRunner().invoke(main, args, input="app/other.py\n")
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["changed"] == ["app.core", "app.other"]
+
+
+def test_contracts_missing_config_exits_one(tmp_path: Path):
+    # Regression for #170 (F8): missing contracts config exits 1 (like
+    # check/score gate failures), not 2, and prints a clean message rather
+    # than a traceback.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    result = CliRunner().invoke(main, ["contracts", str(tmp_path)])
+    assert result.exit_code == 1
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
 def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):
     # Without `roots:`, app.routers.** patterns match nothing because the
     # discovered module is bare `routers.user`. With `roots: [app]`, the layer
