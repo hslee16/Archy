@@ -187,13 +187,24 @@ def _compile_glob(pattern: str) -> re.Pattern[str]:
         c = pattern[i]
         if c == "*":
             if i + 1 < len(pattern) and pattern[i + 1] == "*":
-                # `**/` matches zero or more segments; bare trailing `**`
-                # matches any remainder.
-                if i + 2 < len(pattern) and pattern[i + 2] == "/":
+                # `**` only crosses path separators when it is a *complete*
+                # path segment, i.e. bounded by `/` (or string start/end) on
+                # both sides -- matching git/pathlib `full_match` semantics.
+                # `**/<rest>` matches zero or more leading segments; a bare
+                # trailing `**` matches any remainder. A `**` glued to other
+                # characters (e.g. `**.py`, `a/**b`) is NOT recursive; it
+                # degrades to a single in-segment `*` so it can't leak across
+                # `/` and silently over-select nested paths.
+                left_ok = i == 0 or pattern[i - 1] == "/"
+                if left_ok and i + 2 < len(pattern) and pattern[i + 2] == "/":
                     out.append("(?:.*/)?")
                     i += 3
                     continue
-                out.append(".*")
+                if left_ok and i + 2 == len(pattern):
+                    out.append(".*")
+                    i += 2
+                    continue
+                out.append("[^/]*")
                 i += 2
                 continue
             out.append("[^/]*")

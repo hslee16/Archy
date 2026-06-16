@@ -195,3 +195,31 @@ def test_compile_glob_escapes_regex_metachars():
     p = _compile_glob("file.with.dots.py")
     assert p.fullmatch("file.with.dots.py")
     assert not p.fullmatch("fileXwithXdotsXpy")
+
+
+def test_compile_glob_glued_star_star_does_not_cross_separators():
+    # A `**` glued to other characters is NOT a complete path segment, so it
+    # must not cross `/` (it degrades to an in-segment `*`). Regression for
+    # #203: the old `.*` branch silently over-selected nested files. Ground
+    # truth is pathlib's `PurePosixPath(...).full_match(pattern)`.
+    p = _compile_glob("a/**b")
+    assert p.fullmatch("a/xb")
+    assert p.fullmatch("a/b")
+    assert not p.fullmatch("a/x/y/b")  # would falsely match under old `.*`
+
+    p = _compile_glob("**.py")
+    assert p.fullmatch("foo.py")
+    assert not p.fullmatch("a/b/foo.py")  # would falsely match under old `.*`
+
+    p = _compile_glob("tests/**_spec.py")
+    assert p.fullmatch("tests/foo_spec.py")
+    assert not p.fullmatch("tests/deep/nested/foo_spec.py")
+
+
+def test_compile_glob_left_glued_star_star_does_not_cross_separators():
+    # `**` with a clean right boundary (`/`) but a glued left side is still
+    # not a complete segment, so it must not cross `/` either.
+    p = _compile_glob("a**/b")
+    assert p.fullmatch("a/b")
+    assert p.fullmatch("axyz/b")
+    assert not p.fullmatch("a/x/b")
