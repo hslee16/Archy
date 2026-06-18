@@ -8,13 +8,13 @@
 # To add a project: append below with a one-line `why` rationale so the
 # diversity claim stays auditable.
 
-# Last SHA refresh: 2026-05-11.
+# Last SHA refresh: 2026-06-18.
 
 projects:
   # --- 9-library popular set (preserved from prior benchmarks) -------------
   - name: starlette
     repo: encode/starlette
-    sha: "7793b92"
+    sha: "de970d7"
     src_dir: starlette
     why: small async web framework
 
@@ -26,7 +26,7 @@ projects:
 
   - name: click
     repo: pallets/click
-    sha: "fc6c7c4"
+    sha: "8a1b1a3"
     src_dir: src/click
     why: CLI framework
 
@@ -38,94 +38,94 @@ projects:
 
   - name: flask
     repo: pallets/flask
-    sha: "7374c85"
+    sha: "36e4a82"
     src_dir: src/flask
     why: classic sync web framework
 
   - name: requests
     repo: psf/requests
-    sha: "b684dcb"
+    sha: "d64b9ad"
     src_dir: src/requests
     why: classic sync HTTP client
 
   - name: pytest
     repo: pytest-dev/pytest
-    sha: "856da14"
+    sha: "070e35b"
     src_dir: src/_pytest
     why: pluggy-based test framework
 
   - name: pydantic
     repo: pydantic/pydantic
-    sha: "5c63f86"
+    sha: "8dbb2a1"
     src_dir: pydantic
     why: validation / serialization
 
   - name: fastapi
     repo: fastapi/fastapi
-    sha: "e89a37e"
+    sha: "c61384e"
     src_dir: fastapi
     why: layered web framework on starlette
 
   # --- size and domain coverage --------------------------------------------
   - name: django
     repo: django/django
-    sha: "4d455ae"
+    sha: "189c2d2"
     src_dir: django
     why: very large web framework, app-plugin pattern, older codebase
 
   - name: sqlalchemy
     repo: sqlalchemy/sqlalchemy
-    sha: "1e1c008"
+    sha: "ddf3b65"
     src_dir: lib/sqlalchemy
     why: very large ORM, deep inheritance, dialect plugins
 
   - name: scrapy
     repo: scrapy/scrapy
-    sha: "5223dbe"
+    sha: "fada8be"
     src_dir: scrapy
     why: signals/middleware/pipeline plugin patterns
 
   - name: scikit-learn
     repo: scikit-learn/scikit-learn
-    sha: "13f20d7"
+    sha: "8fac97f"
     src_dir: sklearn
     why: scientific, distinctive estimator/transformer pattern
 
   - name: numpy
     repo: numpy/numpy
-    sha: "0a1ed72"
+    sha: "7dfe67e"
     src_dir: numpy
     why: namespace package, mostly C with Python orchestration
 
   - name: pytorch
     repo: pytorch/pytorch
-    sha: "9a8a62c"
+    sha: "4ece0fc"
     src_dir: torch
     why: very large ML framework, deep C++/Python boundary, heavy codegen
 
   # --- async / modern-typed ------------------------------------------------
   - name: aiohttp
     repo: aio-libs/aiohttp
-    sha: "e8f4371"
+    sha: "7b0b013"
     src_dir: aiohttp
     why: async web (server + client)
 
   - name: anyio
     repo: agronholm/anyio
-    sha: "bcb2db6"
+    sha: "1dbc3b6"
     src_dir: src/anyio
     why: small, modern-typed async-abstraction layer
 
   - name: msgspec
     repo: jcrist/msgspec
-    sha: "3b2543b"
+    sha: "54a7c2f"
     src_dir: src/msgspec
     why: pydantic alternative, smaller surface
 
   # --- plugin host / orchestration -----------------------------------------
   - name: datasette
     repo: simonw/datasette
-    sha: "aa84fe0"
+    sha: "dfd5b95"
     src_dir: datasette
     why: pluggy host where plugins dominate the surface
 
@@ -135,41 +135,47 @@ projects:
     src_dir: mkdocs
     why: smaller pluggy host, docs ecosystem
 
+  - name: home-assistant
+    repo: home-assistant/core
+    sha: "ff87c54"
+    src_dir: homeassistant
+    why: very large pure-Python integration host, hundreds of self-similar plugin components over a small core
+
   # --- tooling / devops ----------------------------------------------------
   - name: mypy
     repo: python/mypy
-    sha: "e53693b"
+    sha: "74ecdd8"
     src_dir: mypy
     why: type checker internals, lots of layered abstractions
 
   - name: ansible
     repo: ansible/ansible
-    sha: "b7c0900"
+    sha: "b475463"
     src_dir: lib/ansible
     why: legacy devops tool, dynamic-loading plugin patterns
 
   - name: dagster
     repo: dagster-io/dagster
-    sha: "8e7f318"
+    sha: "c8a8460"
     src_dir: python_modules/dagster/dagster
     why: modern workflow orchestrator, asset-based DAG, integration plugin pattern
 
   # --- distinctive surface shapes -----------------------------------------
   - name: boto3
     repo: boto/boto3
-    sha: "81a86c9"
+    sha: "447ab8f"
     src_dir: boto3
     why: thin hand-written layer over a code-generated SDK
 
   - name: botocore
     repo: boto/botocore
-    sha: "2b64927"
+    sha: "dbfa9d0"
     src_dir: botocore
     why: auto-generated client surface for thousands of AWS services
 
   - name: pygments
     repo: pygments/pygments
-    sha: "6fe2c31"
+    sha: "74fdf56"
     src_dir: pygments
     why: "wide-and-shallow: hundreds of parallel lexer modules over a small core"
 

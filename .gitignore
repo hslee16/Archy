@@ -243,3 +243,6 @@ bench/cache/
 
 # Prevalence-study git clones; regenerable via bench/inloop_prevalence.py
 bench/replay_cache/
+
+# Benchmark project clones cached across runs; regenerable via bench/run.py
+bench/repo_cache/
