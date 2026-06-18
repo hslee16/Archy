@@ -17,6 +17,7 @@ import argparse
 import datetime as dt
 import json
 import math
+import os
 import shutil
 import subprocess
 import sys
@@ -28,11 +29,54 @@ import yaml  # type: ignore[import-untyped]
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = REPO_ROOT / "bench" / "projects.yaml"
 RESULTS = REPO_ROOT / "bench" / "results.md"
-WORKDIR = Path("/tmp/archy_bench")
+# Clones are cached in-repo (gitignored) and reused across runs: a healthy
+# checkout is just fetched + re-pinned, not re-cloned. Override with
+# ARCHY_BENCH_CACHE for a throwaway location.
+WORKDIR = Path(os.environ.get("ARCHY_BENCH_CACHE", REPO_ROOT / "bench" / "repo_cache"))
 
 
 def load_manifest() -> list[dict]:
     return yaml.safe_load(MANIFEST.read_text())["projects"]
+
+
+def _is_git_repo(path: Path) -> bool:
+    """True only for a usable clone. An interrupted clone leaves a directory
+    that exists but has no valid .git, which would fail every checkout; treat
+    that as a cache miss so it gets wiped and re-cloned."""
+    if not path.exists():
+        return False
+    return (
+        subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "--git-dir"],
+            capture_output=True,
+        ).returncode
+        == 0
+    )
+
+
+def _clone(repo: str, target: Path) -> None:
+    WORKDIR.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["git", "clone", "--quiet", f"https://github.com/{repo}.git", str(target)],
+        check=True,
+    )
+
+
+def _checkout_clean(target: Path, sha: str) -> None:
+    # Ensure the pinned commit is present; GitHub rejects fetches of short
+    # SHAs as a refspec, so fetch all refs and let checkout resolve it.
+    present = subprocess.run(
+        ["git", "-C", str(target), "cat-file", "-e", sha],
+        capture_output=True,
+    )
+    if present.returncode != 0:
+        subprocess.run(["git", "-C", str(target), "fetch", "--quiet", "origin"], check=False)
+    subprocess.run(["git", "-C", str(target), "checkout", "--quiet", sha], check=True)
+    # Force a clean tree at the pinned SHA. Untracked .py files left over
+    # from a previous checkout at a different ref would otherwise be parsed
+    # as phantom modules, inflating module and edge counts.
+    subprocess.run(["git", "-C", str(target), "reset", "--hard", "--quiet", sha], check=True)
+    subprocess.run(["git", "-C", str(target), "clean", "-fdx", "--quiet"], check=True)
 
 
 def clone_or_update(proj: dict) -> Path:
@@ -45,33 +89,21 @@ def clone_or_update(proj: dict) -> Path:
         # the normal clone+checkout path so the result is reproducible.
         return REPO_ROOT
     target = WORKDIR / name
+    # Drop a corrupt/partial cache entry so it gets re-cloned instead of
+    # failing checkout on every future run (the bug that motivated the move
+    # off /tmp: an interrupted run left non-git dirs that poisoned the cache).
+    if target.exists() and not _is_git_repo(target):
+        shutil.rmtree(target, ignore_errors=True)
     if not target.exists():
-        WORKDIR.mkdir(parents=True, exist_ok=True)
-        subprocess.run(
-            ["git", "clone", "--quiet", f"https://github.com/{proj['repo']}.git", str(target)],
-            check=True,
-        )
-    # Fetch first in case the pinned commit isn't present locally. GitHub
-    # rejects fetches of short SHAs as a refspec, so fetch all refs and
-    # rely on the post-fetch checkout to resolve the short SHA.
-    res = subprocess.run(
-        ["git", "-C", str(target), "cat-file", "-e", sha],
-        capture_output=True,
-    )
-    if res.returncode != 0:
-        subprocess.run(
-            ["git", "-C", str(target), "fetch", "--quiet", "origin"],
-            check=False,
-        )
-    subprocess.run(
-        ["git", "-C", str(target), "checkout", "--quiet", sha],
-        check=True,
-    )
-    # Force a clean tree at the pinned SHA. Untracked .py files left over
-    # from a previous checkout at a different ref would otherwise be parsed
-    # as phantom modules, inflating module and edge counts.
-    subprocess.run(["git", "-C", str(target), "reset", "--hard", "--quiet", sha], check=True)
-    subprocess.run(["git", "-C", str(target), "clean", "-fdx", "--quiet"], check=True)
+        _clone(proj["repo"], target)
+    try:
+        _checkout_clean(target, sha)
+    except subprocess.CalledProcessError:
+        # Cached repo too damaged to check out (e.g. truncated packfile):
+        # wipe and re-clone once, then retry.
+        shutil.rmtree(target, ignore_errors=True)
+        _clone(proj["repo"], target)
+        _checkout_clean(target, sha)
     return target
 
 
