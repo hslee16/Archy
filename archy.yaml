@@ -35,11 +35,16 @@ forbid:
   - {from: graph,  to: cli}
   - {from: policy, to: cli}
 
-# Directories archy must not descend into. `replay_cache/` holds the vendored
-# git clones created by `bench/inloop_prevalence.py` (full external repos checked
-# out at arbitrary commits); scoring them would pollute archy's self-score and
-# races with the harness's concurrent `git checkout`s (FileNotFoundError on files
-# that vanish mid-scan). Matched by basename, so any nested `replay_cache/` is
-# skipped. Harmless in CI, where the directory does not exist.
+# Directories archy must not descend into -- all hold vendored external git
+# clones created by the bench harness, gitignored and absent in CI:
+#   replay_cache/ -- `bench/inloop_prevalence.py` checkouts at arbitrary commits
+#   repo_cache/   -- `bench/run.py` clone cache (moved in-repo in #212)
+#   cache/        -- misc bench scratch
+# Scoring them pollutes archy's self-score and spins for minutes on the ~40k
+# vendored `.py` files, and races the harness's concurrent `git checkout`s
+# (FileNotFoundError on files that vanish mid-scan). Matched by basename, so any
+# nested copy is skipped. Harmless in CI, where the directories do not exist.
 exclude:
   - replay_cache
+  - repo_cache
+  - cache
