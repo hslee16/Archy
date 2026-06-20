@@ -218,8 +218,12 @@ This is the highest-leverage *new score axis* on the list.
 **Companion: core size.** MacCormack also introduces a
 "core/periphery" classification: a system has a *core* (the largest
 SCC, or near-SCC) plus a periphery. Empirical finding across 75-80%
-of real systems: there is a single dominant core, and smaller cores
-correlate with healthier maintainability. Cheap to compute alongside
+of real systems (MacCormack, Baldwin, and Rusnak, HBS 10-059; 1,027 of
+1,286 releases across 19 applications): there is a single dominant
+core, and core size tracks the development model (open, distributed
+organizations produce smaller cores). The link from smaller cores to
+healthier maintainability is our own inference from modularity theory,
+not a result in that paper. Cheap to compute alongside
 NCCD; report as a diagnostic, not a score axis.
 
 ---
@@ -603,9 +607,10 @@ and strictness are quantifiable:
 - **`# type: ignore` density:** how often the contract is explicitly
   violated.
 
-A 2025 community survey found 73% of Python projects use type hints,
-but only 41% run a checker in CI ([source][type-hints-survey]). The
-gap between "types written" and "types verified" is itself a signal.
+In practice there is a persistent gap between type hints being
+*written* and being *verified* in CI: many projects adopt annotations
+but never run a checker as a merge gate. That gap between "types
+written" and "types verified" is itself a signal.
 
 **Why this is architectural and not just lint-level:** in Python, the
 type-hint graph (which classes reference which, via parameters and
@@ -790,8 +795,10 @@ Two implications for archy, both sharper than the earlier citations:
   reinvented archy's core check as its measurement instrument, which
   validates the *category*, not just individual metrics: archy already
   ships the harder version of the thing the study had to build, and
-  the quantified -9.1 pp is the cleanest external evidence yet that the
-  architectural feedback loop has measurable value at generation time.
+  the quantified -9.1 pp shows that an architectural constraint handed
+  to the agent as static prose, with no course-correction, measurably
+  degrades output, which is the gap archy's feedback loop is designed
+  to close (the paper does not itself test archy or any feedback loop).
 - The study's explicit gap, "no dynamic course-correction", is exactly
   archy's MCP loop. But it surfaces two capabilities archy does *not*
   yet have, both motivated directly. **Convention-based layer
@@ -1447,7 +1454,7 @@ Specific validations referenced above:
 [swiftalyzer-ccd]: https://swiftalyzer.com/understanding-your-project-with-metrics-ccd/
 [lattix-metrics]: https://docs.lattix.com/lattix/userGuide/Metrics.html
 [maccormack-hbs]: https://www.hbs.edu/ris/Publication%20Files/05-016.pdf
-[maccormack-core-periphery]: https://www.hbs.edu/ris/download.aspx?name=10-059.pdf
+[maccormack-core-periphery]: https://www.hbs.edu/ris/Publication%20Files/10-059_0cb8fd37-fe3a-49ce-9ed4-5710d0e98342.pdf
 [dsm-overview]: https://dsmsuite.github.io/dsm_overview.html
 [reflexion-paper]: https://dl.acm.org/doi/10.1145/222132.222136
 [codescene-xray]: https://docs.enterprise.codescene.io/versions/3.5.4/guides/technical/xray.html
@@ -1472,6 +1479,5 @@ Specific validations referenced above:
 [pyright-doc]: https://microsoft.github.io/pyright/
 [mypy-doc]: https://mypy.readthedocs.io/
 [ruff-doc]: https://docs.astral.sh/ruff/
-[type-hints-survey]: https://anujyadav.substack.com/p/type-hinting-and-type-checking-with
 [pep-544]: https://peps.python.org/pep-0544/
 [pep-562]: https://peps.python.org/pep-0562/

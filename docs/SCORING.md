@@ -34,8 +34,13 @@ archy defers sentrux's redundancy axis; see
 1. **Every axis must be independent.** Two graphs can have identical
    modularity but very different depth; identical depth but very
    different fan-out concentration. A single number that conflates them
-   is uninformative. The five sub-metrics are chosen so that improving
-   one does not mechanically improve the others.
+   is uninformative. The five sub-metrics are chosen to minimize
+   mechanical coupling: no pair crosses the OECD `|r| = 0.7`
+   double-counting threshold (see [Empirical axis
+   independence](#empirical-axis-independence)). Two pairs
+   (modularity↔depth, acyclicity↔depth) sit in the moderate band
+   (`|r| ≈ 0.6`), so this is "no double counting," not full
+   orthogonality.
 2. **The aggregate must be hard to game.** A weak score on any axis
    should pull the overall down sharply. Improving the overall should
    require improving every axis. This is what motivates geometric mean
@@ -273,7 +278,10 @@ files) returns `1.0` vacuously, matching the convention the other axes
 use for empty inputs. The same `1.0` floor applies to projects with
 fewer than 20 functions: `cc_mean` is statistically unstable on tiny
 inputs and one branchy dispatcher can pull the mean well above 4 even
-when surrounding code is healthy.
+when surrounding code is healthy. The 20-function cutoff is a
+conservative stability heuristic, not a swept boundary; the bench
+corpus is mature multi-thousand-function repos, so no scored bench
+project lands near it.
 
 **Why a linear floor-to-nine mapping.** The bench distribution sits in
 `[1.77, 5.33]`. Linearly mapping `[1, 9]` to `[1, 0]` spreads that
@@ -288,7 +296,12 @@ whose `cc_mean` lands in `[6, 9)` (validator-heavy or parser-heavy
 codebases). Under the old slope, a single axis at 0 zeroed the entire
 score regardless of how strong the other four axes were; the wider
 divisor keeps the bottom band discriminative while preserving the
-ordering of the bench distribution.
+ordering of the bench distribution. The motivating real-world case was
+a private validator/parser-heavy backend (`cc_mean` ~6.5) that is not
+part of the public `bench/projects.yaml`, so that specific calibration
+point is not reproducible from the published manifest alone; the
+divisor's ordering-preserving lift, however, is visible across the
+public bench.
 
 **Why mean and not max.** Project-wide `cc_max` is dominated by
 single dispatcher / parser functions and does not correlate with the
@@ -430,8 +443,11 @@ for treating sub-indicators as redundant. **Two of ten sit at
 "moderate" coupling (`|r| ∈ [0.5, 0.7]`)**, both involving the
 original four axes (modularity↔depth and acyclicity↔depth). The four
 pairs involving `complexity` are all weakly coupled (`|r| ≤ 0.14`),
-the empirical evidence behind its v0.20 promotion from diagnostic to
-a fifth axis.
+the orthogonality that motivated its v0.20 promotion from diagnostic
+to a fifth axis. Orthogonality is necessary but not sufficient; the
+sufficiency case is qualitative (the "compact but branchy" gap that
+item 4 below describes), not a four-axis-versus-five-axis
+discrimination ablation, which has not been run.
 
 Concretely:
 
@@ -510,7 +526,11 @@ CLI tools (click, msgspec) to very large frameworks (pytorch at
 2,252 modules, django, numpy, sqlalchemy, dagster), with diversity
 across web / async / scientific / ML
 / ORM / plugin-host / devops / workflow-orchestration / build-tooling
-/ syntax-highlighting / generated-SDK domains. Pinned SHAs in
+/ syntax-highlighting / generated-SDK domains. The mix is weighted
+toward web and async (~7 web, ~6 async, with overlap); ORM,
+workflow-orchestration, build-tooling, and syntax-highlighting are
+each represented by a single project (sqlalchemy, dagster, setuptools,
+pygments). Pinned SHAs in
 [`bench/projects.yaml`](../bench/projects.yaml); raw output in
 [`bench/results.md`](../bench/results.md). Captured 2026-05-18
 against archy v0.24.0 (added pytorch to widen the size envelope to
