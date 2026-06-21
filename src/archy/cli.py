@@ -1001,6 +1001,26 @@ def index_clear(path: Path) -> None:
         click.echo("no cache to remove.")
 
 
+def _confirm_targets(adapters, location: str, action: str) -> bool:
+    """Preview the affected adapters and prompt before install/uninstall writes.
+
+    Returns False if the user declines (caller should abort). `action` is the
+    verb phrase spliced into "archy will {action} ({location}):" -- "configure"
+    for install, "be removed from" for uninstall.
+    """
+    from archy.install import detect_all
+
+    detected = {d.adapter.id for d in detect_all() if d.detected}
+    click.echo(f"archy will {action} ({location}):")
+    for adapter in adapters:
+        mark = "detected" if adapter.id in detected else "not detected"
+        click.echo(f"  - {adapter.name} ({adapter.id}, {mark})")
+    if not click.confirm("Proceed?", default=True):
+        click.echo("Aborted.")
+        return False
+    return True
+
+
 @main.command()
 @click.option(
     "--target",
@@ -1052,7 +1072,6 @@ def install(
     from archy.install import (
         InstallError,
         Scope,
-        detect_all,
         print_config,
         resolve_targets,
         run_install,
@@ -1076,15 +1095,8 @@ def install(
 
         adapters = resolve_targets(target)
 
-        if not yes:
-            detected = {d.adapter.id for d in detect_all() if d.detected}
-            click.echo(f"archy will configure ({location}):")
-            for adapter in adapters:
-                mark = "detected" if adapter.id in detected else "not detected"
-                click.echo(f"  - {adapter.name} ({adapter.id}, {mark})")
-            if not click.confirm("Proceed?", default=True):
-                click.echo("Aborted.")
-                return
+        if not yes and not _confirm_targets(adapters, location, "configure"):
+            return
 
         result = run_install(
             adapters,
@@ -1151,7 +1163,6 @@ def uninstall(
     from archy.install import (
         InstallError,
         Scope,
-        detect_all,
         resolve_targets,
         run_uninstall,
     )
@@ -1180,15 +1191,8 @@ def uninstall(
                 click.echo("Nothing to remove; archy is not installed for these targets.")
             return
 
-        if not yes:
-            detected = {d.adapter.id for d in detect_all() if d.detected}
-            click.echo(f"archy will be removed from ({location}):")
-            for adapter in adapters:
-                mark = "detected" if adapter.id in detected else "not detected"
-                click.echo(f"  - {adapter.name} ({adapter.id}, {mark})")
-            if not click.confirm("Proceed?", default=True):
-                click.echo("Aborted.")
-                return
+        if not yes and not _confirm_targets(adapters, location, "be removed from"):
+            return
 
         result = run_uninstall(
             adapters,
