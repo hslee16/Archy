@@ -254,3 +254,32 @@ def test_violations_sorted_by_rule_then_endpoints(core_cli_config: LayerConfig):
         ("myapp.core.a", "myapp.cli.y"),
         ("myapp.core.b", "myapp.cli.x"),
     ]
+
+
+# --- max_modules parsing (#216) -----------------------------------------------
+
+
+def test_load_config_max_modules_valid(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {}\nforbid: []\nmax_modules: 2500\n")
+    assert load_config(cfg).max_modules == 2500
+
+
+def test_load_config_max_modules_absent_is_none(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {}\nforbid: []\n")
+    assert load_config(cfg).max_modules is None
+
+
+def test_load_config_max_modules_zero_allowed(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {}\nforbid: []\nmax_modules: 0\n")
+    assert load_config(cfg).max_modules == 0
+
+
+@pytest.mark.parametrize("bad", ["-1", "3.5", "'lots'", "true"])
+def test_load_config_max_modules_rejects_invalid(tmp_path: Path, bad: str):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text(f"layers: {{}}\nforbid: []\nmax_modules: {bad}\n")
+    with pytest.raises(LayerConfigError, match="max_modules"):
+        load_config(cfg)

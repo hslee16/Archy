@@ -63,6 +63,10 @@ class LayerConfig(BaseModel):
     exclude: tuple[str, ...] = ()
     roots: tuple[str, ...] = ()
     sdp: SdpConfig = SdpConfig()
+    # Scan-size ceiling (see graph.DEFAULT_MAX_MODULES). None = unset (callers
+    # apply the default); 0 = explicitly disabled; positive = that ceiling. Kept
+    # as a raw override here so the policy layer carries no dependency on graph.
+    max_modules: int | None = None
 
 
 class Violation(BaseModel):
@@ -109,13 +113,30 @@ def load_config(path: Path) -> LayerConfig:
     exclude = _parse_str_list(raw.get("exclude", []), "exclude", path)
     roots = _parse_str_list(raw.get("roots", []), "roots", path)
     sdp = _parse_sdp(raw.get("sdp"), path)
+    max_modules = _parse_max_modules(raw.get("max_modules"), path)
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
         exclude=tuple(exclude),
         roots=tuple(roots),
         sdp=sdp,
+        max_modules=max_modules,
     )
+
+
+def _parse_max_modules(value: object, path: Path) -> int | None:
+    """Validate `max_modules:` from archy.yaml. Absent -> None (use the default).
+
+    Rejects non-integers and negatives (a `bool` is an `int` subclass in Python,
+    so it is rejected explicitly). `0` is allowed and means "disable the guard".
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise LayerConfigError(
+            f"`max_modules` must be a non-negative integer in {path}, got {value!r}"
+        )
+    return value
 
 
 def discover_config(start: Path) -> Path | None:

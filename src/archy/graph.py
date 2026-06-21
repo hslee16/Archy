@@ -37,6 +37,37 @@ DEFAULT_IGNORED_DIRS = frozenset(
     }
 )
 
+# Soft ceiling on how many modules a single scan may discover before archy
+# refuses to proceed. The named `DEFAULT_IGNORED_DIRS` above catch the standard
+# vendored dirs, but a custom cache/generated dir (e.g. a bench `repo_cache`)
+# can still pull tens of thousands of files into one scan and wedge the
+# superlinear graph metrics for many minutes (see #213/#216). This backstop is
+# name-agnostic: it trips on size alone. The default sits well above the largest
+# real project archy benches (pytorch ~2,250 modules); callers pass `0`/`None`
+# to disable, or override via `max_modules:` in archy.yaml.
+DEFAULT_MAX_MODULES = 10_000
+
+
+class ScanTooLargeError(Exception):
+    """Raised when a scan discovers more modules than the configured ceiling.
+
+    Carries the measured `count`, the `root` scanned, and the `limit` so callers
+    (the CLI, the MCP tools) can render an actionable message without re-deriving
+    them.
+    """
+
+    def __init__(self, count: int, root: Path, limit: int) -> None:
+        self.count = count
+        self.root = root
+        self.limit = limit
+        super().__init__(
+            f"Found {count:,} modules under {root} (limit {limit:,}). This is far "
+            f"larger than a typical project and usually means a vendored, cache, or "
+            f"generated directory is being scanned. Add it to `exclude:` in "
+            f"archy.yaml, point archy at a narrower path, or raise/disable the limit "
+            f"with `max_modules:` in archy.yaml (0 disables)."
+        )
+
 
 class Module(BaseModel):
     """An internal Python module discovered in the project."""
@@ -48,11 +79,24 @@ class Module(BaseModel):
     is_package: bool
 
 
+def effective_max_modules(configured: int | None) -> int | None:
+    """Resolve a configured scan ceiling to the value the guard should use.
+
+    `None` (unset in archy.yaml, or no config) -> `DEFAULT_MAX_MODULES`; `0` ->
+    `None` (explicitly disabled); a positive value -> itself. Shared by the CLI
+    and MCP boundaries so they apply identical semantics.
+    """
+    if configured is None:
+        return DEFAULT_MAX_MODULES
+    return configured or None
+
+
 def build_graph(
     root: Path,
     *,
     ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
     extra_roots: Iterable[str] = (),
+    max_modules: int | None = None,
 ) -> nx.DiGraph:
     """Discover modules under `root` and build their import graph.
 
@@ -67,6 +111,13 @@ def build_graph(
     """
     ignored = frozenset(ignored_dirs)
     modules = _discover_modules(root, ignored, tuple(extra_roots))
+    # Trip the size backstop here, at the cheap discovery boundary, BEFORE the
+    # expensive per-file parse loop below: parsing tens of thousands of files is
+    # what actually wedges, and the module count is already known. Any
+    # non-positive `max_modules` (0/None, or a negative from a misused library
+    # call) disables the guard, preserving direct/library callers.
+    if max_modules and max_modules > 0 and len(modules) > max_modules:
+        raise ScanTooLargeError(len(modules), root, max_modules)
     parse_results: dict[str, ParseResult] = {}
     for m in modules:
         try:

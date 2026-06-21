@@ -4,7 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from archy.graph import build_graph, graph_to_dict, resolve_modules
+from archy.graph import (
+    DEFAULT_MAX_MODULES,
+    ScanTooLargeError,
+    build_graph,
+    effective_max_modules,
+    graph_to_dict,
+    resolve_modules,
+)
 
 
 @pytest.fixture
@@ -564,3 +571,49 @@ def test_build_graph_skips_file_that_vanishes_mid_build(project: Path, monkeypat
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
     assert "myapp.utils" not in internal  # the vanished module is dropped
     assert "myapp.core" in internal  # the rest of the build survives
+
+
+# --- scan-size guard (#216) ---------------------------------------------------
+
+
+def _write_flat_package(root: Path, name: str, n_modules: int) -> None:
+    """Create `root/<name>/` with `n_modules` import-free leaf modules."""
+    pkg = root / name
+    pkg.mkdir(parents=True, exist_ok=True)
+    (pkg / "__init__.py").write_text("")
+    for i in range(n_modules):
+        (pkg / f"mod{i}.py").write_text("x = 1\n")
+
+
+def test_build_graph_unguarded_by_default(tmp_path: Path):
+    # Direct/library callers (max_modules unset) are never guarded.
+    _write_flat_package(tmp_path, "pkg", 5)
+    g = build_graph(tmp_path)  # must not raise
+    assert g.number_of_nodes() >= 5
+
+
+def test_build_graph_trips_scan_size_guard(tmp_path: Path):
+    _write_flat_package(tmp_path, "pkg", 5)  # 5 leaves + 1 package = 6 modules
+    with pytest.raises(ScanTooLargeError) as exc:
+        build_graph(tmp_path, max_modules=3)
+    assert exc.value.limit == 3
+    assert exc.value.count > 3
+    assert "max_modules" in str(exc.value)
+
+
+def test_build_graph_under_limit_ok(tmp_path: Path):
+    _write_flat_package(tmp_path, "pkg", 2)
+    g = build_graph(tmp_path, max_modules=1000)
+    assert g.number_of_nodes() >= 2
+
+
+def test_build_graph_zero_disables_guard(tmp_path: Path):
+    _write_flat_package(tmp_path, "pkg", 5)
+    g = build_graph(tmp_path, max_modules=0)  # 0 = disabled, must not raise
+    assert g.number_of_nodes() >= 5
+
+
+def test_effective_max_modules_resolution():
+    assert effective_max_modules(None) == DEFAULT_MAX_MODULES  # unset -> default
+    assert effective_max_modules(0) is None  # explicitly disabled
+    assert effective_max_modules(2500) == 2500  # custom ceiling

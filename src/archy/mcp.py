@@ -46,7 +46,15 @@ from archy.dsm import (
     diff_dsm,
     read_dsm,
 )
-from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, graph_to_dict, resolve_modules
+from archy.graph import (
+    DEFAULT_IGNORED_DIRS,
+    ScanTooLargeError,
+    build_graph,
+    discover_modules,
+    effective_max_modules,
+    graph_to_dict,
+    resolve_modules,
+)
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
@@ -908,7 +916,7 @@ def _register_tools(server: FastMCP) -> None:
 def _run_status(path: Path) -> StatusPayload:
     root = path.resolve()
     try:
-        manager = _manager_for(path, **_graph_kwargs(path))
+        manager = _manager_for(path, max_modules=_resolve_max_modules(path), **_graph_kwargs(path))
         if manager.last_synced_at is None:
             manager.sync_now()  # seed freshness so a first status call is meaningful
         return StatusPayload(
@@ -987,6 +995,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload:
         path,
         ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
         extra_roots=config.roots,
+        max_modules=effective_max_modules(config.max_modules),
     )
     violations = find_violations(graph, config)
     sdp_violations: list[SdpViolation] = []
@@ -1507,7 +1516,7 @@ def _manager_cache_key(root: Path, kwargs: dict) -> _ManagerKey:
     return (str(root), ignored, extra)
 
 
-def _manager_for(path: Path, **kwargs) -> IndexManager:
+def _manager_for(path: Path, *, max_modules: int | None = None, **kwargs) -> IndexManager:
     """Get-or-create the per-(root, config) IndexManager, starting its watcher once.
 
     Managers live for the server's lifetime: one persistent cache connection
@@ -1515,12 +1524,29 @@ def _manager_for(path: Path, **kwargs) -> IndexManager:
     background-synced index. ``kwargs`` (ignored_dirs / extra_roots) are part of
     the cache key, so changing the discovered config produces a fresh manager
     rather than reusing one built with stale kwargs.
+
+    ``max_modules`` is the scan-size backstop (see graph.DEFAULT_MAX_MODULES). It
+    is enforced here, on first creation, via a cheap discovery walk BEFORE the
+    recursive watcher is scheduled -- scheduling a watcher over a 40k-file
+    vendored tree is itself costly, so a `ScanTooLargeError` must short-circuit
+    before `start_watching`. It is intentionally NOT part of the cache key (it is
+    a guard, not part of the manager's identity).
     """
     root = path.resolve()
     key = _manager_cache_key(root, kwargs)
     with _MANAGERS_LOCK:
         manager = _MANAGERS.get(key)
         if manager is None:
+            if max_modules and max_modules > 0:
+                count = len(
+                    discover_modules(
+                        root,
+                        ignored_dirs=kwargs.get("ignored_dirs", DEFAULT_IGNORED_DIRS),
+                        extra_roots=kwargs.get("extra_roots", ()),
+                    )
+                )
+                if count > max_modules:
+                    raise ScanTooLargeError(count, root, max_modules)
             # The config for this root changed (different key, same path): retire
             # any manager built with the superseded config so we don't leak its
             # watcher thread + cache connection on the same directory. A root has
@@ -1533,22 +1559,31 @@ def _manager_for(path: Path, **kwargs) -> IndexManager:
         return manager
 
 
-def _build_graph(path: Path, **kwargs):
+def _build_graph(path: Path, *, max_modules: int | None = None, **kwargs):
     """Cache-backed build for the long-lived MCP server (its hot path).
 
     Routes through a per-root IndexManager (persistent connection + background
     watcher). Falls back to a cold `build_graph` if the cache cannot be used
     (read-only filesystem, permission error): the index is an optimization,
     never a dependency, so a tool call must still succeed without it.
+
+    A `ScanTooLargeError` from the guard is NOT a cache failure, so it propagates
+    rather than being retried by the cold path (which would re-raise anyway).
     """
     try:
-        return _manager_for(path, **kwargs).build_graph()
+        return _manager_for(path, max_modules=max_modules, **kwargs).build_graph()
     except (sqlite3.Error, OSError):
-        return build_graph(path, **kwargs)
+        return build_graph(path, max_modules=max_modules, **kwargs)
+
+
+def _resolve_max_modules(path: Path) -> int | None:
+    config_path = discover_config(path)
+    configured = load_config(config_path).max_modules if config_path is not None else None
+    return effective_max_modules(configured)
 
 
 def _load_graph(path: Path, *, internal_only: bool):
-    graph = _build_graph(path, **_graph_kwargs(path))
+    graph = _build_graph(path, max_modules=_resolve_max_modules(path), **_graph_kwargs(path))
     if internal_only:
         external = {n for n, d in graph.nodes(data=True) if d.get("external")}
         graph.remove_nodes_from(external)

@@ -931,3 +931,47 @@ def test_simulate_cli_bad_spec_exits_nonzero(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["simulate", str(project), "--add", "foo"])
     assert result.exit_code != 0
+
+
+# --- scan-size guard (#216) ---------------------------------------------------
+
+
+def _make_many_module_project(tmp_path: Path, n: int) -> Path:
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for i in range(n):
+        (pkg / f"mod{i}.py").write_text("x = 1\n")
+    return tmp_path
+
+
+def test_score_errors_on_oversized_scan(tmp_path: Path):
+    project = _make_many_module_project(tmp_path, 5)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    result = CliRunner().invoke(main, ["score", str(project)])
+    assert result.exit_code != 0
+    assert "max_modules" in result.output
+    assert "exclude" in result.output
+
+
+def test_score_max_modules_zero_disables_guard(tmp_path: Path):
+    project = _make_many_module_project(tmp_path, 5)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 0\n")
+    result = CliRunner().invoke(main, ["score", str(project)])
+    assert result.exit_code == 0
+
+
+def test_score_default_limit_does_not_trip_small_project(tmp_path: Path):
+    # No archy.yaml -> the default ceiling (10k) applies and a tiny project passes.
+    project = _make_many_module_project(tmp_path, 5)
+    result = CliRunner().invoke(main, ["score", str(project)])
+    assert result.exit_code == 0
+
+
+def test_index_sync_errors_on_oversized_scan(tmp_path: Path):
+    # `index sync` reparses every changed file, so it gets the same backstop.
+    project = _make_many_module_project(tmp_path, 5)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    result = CliRunner().invoke(main, ["index", "sync", str(project)])
+    assert result.exit_code != 0
+    assert "max_modules" in result.output
