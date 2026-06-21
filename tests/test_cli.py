@@ -966,3 +966,12 @@ def test_score_default_limit_does_not_trip_small_project(tmp_path: Path):
     project = _make_many_module_project(tmp_path, 5)
     result = CliRunner().invoke(main, ["score", str(project)])
     assert result.exit_code == 0
+
+
+def test_index_sync_errors_on_oversized_scan(tmp_path: Path):
+    # `index sync` reparses every changed file, so it gets the same backstop.
+    project = _make_many_module_project(tmp_path, 5)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    result = CliRunner().invoke(main, ["index", "sync", str(project)])
+    assert result.exit_code != 0
+    assert "max_modules" in result.output

@@ -1537,7 +1537,7 @@ def _manager_for(path: Path, *, max_modules: int | None = None, **kwargs) -> Ind
     with _MANAGERS_LOCK:
         manager = _MANAGERS.get(key)
         if manager is None:
-            if max_modules:
+            if max_modules and max_modules > 0:
                 count = len(
                     discover_modules(
                         root,

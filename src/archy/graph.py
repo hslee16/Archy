@@ -113,9 +113,10 @@ def build_graph(
     modules = _discover_modules(root, ignored, tuple(extra_roots))
     # Trip the size backstop here, at the cheap discovery boundary, BEFORE the
     # expensive per-file parse loop below: parsing tens of thousands of files is
-    # what actually wedges, and the module count is already known. A falsy
-    # `max_modules` (0/None) disables the guard, preserving direct/library callers.
-    if max_modules and len(modules) > max_modules:
+    # what actually wedges, and the module count is already known. Any
+    # non-positive `max_modules` (0/None, or a negative from a misused library
+    # call) disables the guard, preserving direct/library callers.
+    if max_modules and max_modules > 0 and len(modules) > max_modules:
         raise ScanTooLargeError(len(modules), root, max_modules)
     parse_results: dict[str, ParseResult] = {}
     for m in modules:

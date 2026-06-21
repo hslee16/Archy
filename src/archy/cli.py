@@ -968,6 +968,12 @@ def index_sync(path: Path) -> None:
     conn = open_index(default_db_path(path))
     try:
         modules = discover_modules(path, **_graph_kwargs(path))
+        # Apply the same scan-size backstop as the graph commands: `index sync`
+        # reparses every changed file, so a stray 40k-file vendored dir would
+        # wedge here too even though it never builds the graph (#216).
+        limit = _resolve_max_modules(path)
+        if limit and len(modules) > limit:
+            raise click.ClickException(str(ScanTooLargeError(len(modules), path.resolve(), limit)))
         _results, stats = sync_index(conn, modules)
     finally:
         conn.close()
