@@ -359,6 +359,13 @@ exclude:
 
 `exclude:` applies to every analysis (`graph`, `cycles`, `score`, `check`) and the equivalent MCP tools.
 
+**Scan-size guard (`max_modules:`).** archy refuses to scan a tree with more modules than a ceiling, so a stray vendored, cache, or generated directory that the named `exclude:` skips do not cover cannot silently wedge a scan for minutes. The default (10,000) sits well above the largest real projects; a scan that trips it stops with a message pointing at `exclude:` / a narrower path. Override or disable it:
+
+```yaml
+max_modules: 25000   # raise the ceiling for a genuinely large monorepo
+# max_modules: 0     # disable the guard entirely
+```
+
 **Namespace packages (`roots:`).** archy discovers packages by walking `__init__.py` files. PEP 420 namespace packages (no `__init__.py`) are invisible by default. Declare them as roots so descendants get qualified names:
 
 ```yaml

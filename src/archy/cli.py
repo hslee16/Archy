@@ -29,13 +29,21 @@ from archy.diff import (
     write_snapshot,
 )
 from archy.diff_summary import summarize_diff
-from archy.graph import DEFAULT_IGNORED_DIRS, build_graph, discover_modules, graph_to_dict
+from archy.graph import (
+    DEFAULT_IGNORED_DIRS,
+    ScanTooLargeError,
+    build_graph,
+    discover_modules,
+    effective_max_modules,
+    graph_to_dict,
+)
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import Hotspot, compute_hotspots, git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.layers import (
+    LayerConfig,
     LayerConfigError,
     SdpViolation,
     Violation,
@@ -175,11 +183,15 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     except LayerConfigError as exc:
         raise click.ClickException(str(exc)) from exc
 
-    g = build_graph(
-        path,
-        ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
-        extra_roots=config.roots,
-    )
+    try:
+        g = build_graph(
+            path,
+            ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
+            extra_roots=config.roots,
+            max_modules=_effective_max_modules(config),
+        )
+    except ScanTooLargeError as exc:
+        raise click.ClickException(str(exc)) from exc
     try:
         violations = find_violations(g, config)
     except LayerConfigError as exc:
@@ -1188,11 +1200,24 @@ def uninstall(
 
 
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
-    g = build_graph(path, **_graph_kwargs(path))
+    try:
+        g = build_graph(path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path))
+    except ScanTooLargeError as exc:
+        raise click.ClickException(str(exc)) from exc
     if internal_only:
         external = {n for n, d in g.nodes(data=True) if d.get("external")}
         g.remove_nodes_from(external)
     return g
+
+
+def _effective_max_modules(config: LayerConfig | None) -> int | None:
+    return effective_max_modules(config.max_modules if config is not None else None)
+
+
+def _resolve_max_modules(path: Path) -> int | None:
+    config_path = discover_config(path)
+    config = load_config(config_path) if config_path is not None else None
+    return _effective_max_modules(config)
 
 
 def _graph_kwargs(path: Path) -> dict:

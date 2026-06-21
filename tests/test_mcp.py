@@ -987,3 +987,21 @@ def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
     assert "pkg.old" not in filtered_modules
     hot_filtered = next(h for h in filtered.hotspots if h.module == "pkg.hot")
     assert hot_filtered.churn == 1
+
+
+# --- scan-size guard (#216) ---------------------------------------------------
+
+
+def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):
+    from archy.graph import ScanTooLargeError
+    from archy.mcp import _load_graph
+
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for i in range(5):
+        (pkg / f"mod{i}.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    # The guard fires inside `_manager_for` before the watcher is scheduled.
+    with pytest.raises(ScanTooLargeError):
+        _load_graph(tmp_path, internal_only=True)
