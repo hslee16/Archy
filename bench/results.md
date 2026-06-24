@@ -1,7 +1,7 @@
 # Benchmark results
 
 Output of `uv run --with networkx --with pyyaml python bench/run.py`.
-SHAs pinned in `bench/projects.yaml`. Captured 2026-06-18.
+SHAs pinned in `bench/projects.yaml`. Captured 2026-06-24.
 
 ## Score table
 
@@ -54,37 +54,39 @@ SHAs pinned in `bench/projects.yaml`. Captured 2026-06-18.
 
 ## Call-graph diagnostics
 
-| project | sha | modules | edges | call_edges | total_calls | calls/edge |
-| --- | --- | ---: | ---: | ---: | ---: | ---: |
-| pygments | `74fdf56` | 342 | 834 | 331 | 5926 | 17.90 |
-| boto3 | `447ab8f` | 39 | 71 | 57 | 142 | 2.49 |
-| numpy | `7dfe67e` | 425 | 1361 | 1001 | 52443 | 52.39 |
-| mkdocs | `2862536` | 61 | 177 | 119 | 1425 | 11.97 |
-| home-assistant | `ff87c54` | 9647 | 54340 | 16188 | 37086 | 2.29 |
-| starlette | `de970d7` | 34 | 119 | 61 | 118 | 1.93 |
-| anyio | `1dbc3b6` | 43 | 163 | 83 | 347 | 4.18 |
-| scrapy | `fada8be` | 174 | 877 | 357 | 752 | 2.11 |
-| setuptools | `84ed591` | 317 | 592 | 400 | 1520 | 3.80 |
-| botocore | `dbfa9d0` | 76 | 257 | 207 | 714 | 3.45 |
-| pytest | `070e35b` | 77 | 401 | 207 | 597 | 2.88 |
-| archy | `v0.22.0` | 19 | 43 | 39 | 99 | 2.54 |
-| fastapi | `c61384e` | 48 | 114 | 52 | 292 | 5.62 |
-| datasette | `dfd5b95` | 72 | 238 | 156 | 1003 | 6.43 |
-| sqlalchemy | `ddf3b65` | 255 | 2553 | 1088 | 8031 | 7.38 |
-| requests | `d64b9ad` | 19 | 73 | 42 | 177 | 4.21 |
-| rich | `46cebbb` | 100 | 421 | 322 | 886 | 2.75 |
-| pydantic | `8dbb2a1` | 104 | 496 | 264 | 959 | 3.63 |
-| django | `189c2d2` | 907 | 3321 | 1946 | 6049 | 3.11 |
-| mypy | `74ecdd8` | 195 | 1106 | 716 | 6908 | 9.65 |
-| scikit-learn | `8fac97f` | 653 | 3912 | 3123 | 26313 | 8.43 |
-| flask | `36e4a82` | 24 | 94 | 36 | 88 | 2.44 |
-| dagster | `c8a8460` | 805 | 6290 | 2882 | 10590 | 3.67 |
-| httpx | `b5addb6` | 23 | 87 | 36 | 155 | 4.31 |
-| click | `8a1b1a3` | 17 | 61 | 39 | 175 | 4.49 |
-| aiohttp | `7b0b013` | 52 | 314 | 110 | 414 | 3.76 |
-| ansible | `b475463` | 581 | 2145 | 1395 | 4448 | 3.19 |
-| pytorch | `4ece0fc` | 2325 | 13693 | 8756 | 74277 | 8.48 |
-| msgspec | `54a7c2f` | 10 | 20 | 9 | 24 | 2.67 |
+`coverage` = call_edges / import_edges: the fraction of import edges that carry at least one resolved call. Static call resolution is partial (dynamic dispatch, decorators, and re-exports are not followed), so the call-graph diagnostics below are computed on this fraction, not the whole import graph.
+
+| project | sha | modules | edges | call_edges | coverage | total_calls | calls/edge |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| pygments | `74fdf56` | 342 | 834 | 331 | 39.7% | 5926 | 17.90 |
+| boto3 | `447ab8f` | 39 | 71 | 57 | 80.3% | 142 | 2.49 |
+| numpy | `7dfe67e` | 425 | 1361 | 1001 | 73.5% | 52443 | 52.39 |
+| mkdocs | `2862536` | 61 | 177 | 119 | 67.2% | 1425 | 11.97 |
+| home-assistant | `ff87c54` | 9647 | 54340 | 16188 | 29.8% | 37086 | 2.29 |
+| starlette | `de970d7` | 34 | 119 | 61 | 51.3% | 118 | 1.93 |
+| anyio | `1dbc3b6` | 43 | 163 | 83 | 50.9% | 347 | 4.18 |
+| scrapy | `fada8be` | 174 | 877 | 357 | 40.7% | 752 | 2.11 |
+| setuptools | `84ed591` | 317 | 592 | 400 | 67.6% | 1520 | 3.80 |
+| botocore | `dbfa9d0` | 76 | 257 | 207 | 80.5% | 714 | 3.45 |
+| pytest | `070e35b` | 77 | 401 | 207 | 51.6% | 597 | 2.88 |
+| archy | `v0.22.0` | 19 | 43 | 39 | 90.7% | 99 | 2.54 |
+| fastapi | `c61384e` | 48 | 114 | 52 | 45.6% | 292 | 5.62 |
+| datasette | `dfd5b95` | 72 | 238 | 156 | 65.5% | 1003 | 6.43 |
+| sqlalchemy | `ddf3b65` | 255 | 2553 | 1088 | 42.6% | 8031 | 7.38 |
+| requests | `d64b9ad` | 19 | 73 | 42 | 57.5% | 177 | 4.21 |
+| rich | `46cebbb` | 100 | 421 | 322 | 76.5% | 886 | 2.75 |
+| pydantic | `8dbb2a1` | 104 | 496 | 264 | 53.2% | 959 | 3.63 |
+| django | `189c2d2` | 907 | 3321 | 1946 | 58.6% | 6049 | 3.11 |
+| mypy | `74ecdd8` | 195 | 1106 | 716 | 64.7% | 6908 | 9.65 |
+| scikit-learn | `8fac97f` | 653 | 3912 | 3123 | 79.8% | 26313 | 8.43 |
+| flask | `36e4a82` | 24 | 94 | 36 | 38.3% | 88 | 2.44 |
+| dagster | `c8a8460` | 805 | 6290 | 2882 | 45.8% | 10590 | 3.67 |
+| httpx | `b5addb6` | 23 | 87 | 36 | 41.4% | 155 | 4.31 |
+| click | `8a1b1a3` | 17 | 61 | 39 | 63.9% | 175 | 4.49 |
+| aiohttp | `7b0b013` | 52 | 314 | 110 | 35.0% | 414 | 3.76 |
+| ansible | `b475463` | 581 | 2145 | 1395 | 65.0% | 4448 | 3.19 |
+| pytorch | `4ece0fc` | 2325 | 13693 | 8756 | 63.9% | 74277 | 8.48 |
+| msgspec | `54a7c2f` | 10 | 20 | 9 | 45.0% | 24 | 2.67 |
 
 ## Call-density orthogonality to existing axes
 
@@ -194,3 +196,12 @@ Lower absolute values indicate stronger orthogonality.
 | depth | -0.534 |
 | equality | -0.371 |
 | complexity | +0.264 |
+
+## Axis-independence gate
+
+**PASS**: all 10 axis pairs are below the OECD redundancy threshold `|r| = 0.7`.
+
+Moderate coupling (`0.5 <= |r| <= 0.7`), acceptable but watched:
+- `modularity ↔ depth`: `-0.611`
+- `acyclicity ↔ depth`: `-0.590`
+

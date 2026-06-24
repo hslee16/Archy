@@ -269,7 +269,7 @@ This was the trigger for promoting `__init__.py` re-export resolution into the n
 > markedly because their cycles cover only a small fraction of large
 > codebases.
 
-`archy score <path>` reports a composite quality score (current archy: five axes including complexity; this historical run uses the original four-axis formula). Same 9 libraries, same checkouts as the cycle benchmark. See [`docs/SCORING.md`](SCORING.md) for the current formula and a refreshed 28-project benchmark.
+`archy score <path>` reports a composite quality score (current archy: five axes including complexity; this historical run uses the original four-axis formula). Same 9 libraries, same checkouts as the cycle benchmark. See [`docs/SCORING.md`](SCORING.md) for the current formula and a refreshed 29-project benchmark.
 
 | Library | Score | Modularity | Acyclicity | Depth | Equality |
 |---|---:|---:|---:|---:|---:|

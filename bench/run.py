@@ -232,6 +232,19 @@ def main() -> int:
         out_lines.append(line)
 
     manifest = load_manifest()
+
+    # archy's OWN archy.yaml (repo root) excludes `repo_cache` (#213), so that a
+    # self-score does not descend into the vendored clones. But `archy score`
+    # discovers config by walking UP from the target, and the clones carry no
+    # archy.yaml of their own, so scoring `repo_cache/<proj>/src/...` would climb
+    # into archy's repo root, inherit that exclude, and score every corpus project
+    # as 0 modules. Drop a neutral (empty-exclude) archy.yaml at the cache root so
+    # discovery stops there. Skipped when the cache lives outside the repo
+    # (ARCHY_BENCH_CACHE), where archy's config is never on the path anyway.
+    if WORKDIR == REPO_ROOT / "bench" / "repo_cache":
+        WORKDIR.mkdir(parents=True, exist_ok=True)
+        (WORKDIR / "archy.yaml").write_text("exclude: []\n")
+
     rows: list[dict] = []
     print(f"# benchmark over {len(manifest)} projects", file=sys.stderr)
     for proj in manifest:
