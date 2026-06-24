@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "ba18708ab4a7",
+  "strategy": "manual-commit",
+  "branch": "alee/mcp-concise-responses-226",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/test_mcp.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ba/18708ab4a7/0/metadata.json",
+      "transcript": "/ba/18708ab4a7/0/full.jsonl",
+      "content_hash": "/ba/18708ab4a7/0/content_hash.txt",
+      "prompt": "/ba/18708ab4a7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 34212,
+    "cache_creation_tokens": 1007459,
+    "cache_read_tokens": 35163905,
+    "output_tokens": 125101,
+    "api_call_count": 204
+  }
+}
