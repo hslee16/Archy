@@ -129,6 +129,57 @@ def test_all_tools_declare_human_friendly_title():
         assert tool.title != tool.name, f"{tool.name} title duplicates the name"
 
 
+def test_all_tools_declare_output_schema():
+    # 2025-06-18 structured output: FastMCP derives an `outputSchema` (JSON
+    # Schema) from each tool's return annotation. Assert every tool declares
+    # one and it is an object schema, since `structuredContent` must be a JSON
+    # object (sequence/union returns are wrapped under a `result` key to honor
+    # this -- see the module docstring).
+    server = create_server()
+    tools = asyncio.run(server.list_tools())
+    for tool in tools:
+        schema = tool.outputSchema
+        assert schema is not None, f"{tool.name} has no outputSchema"
+        assert schema.get("type") == "object", f"{tool.name} outputSchema is not an object"
+
+
+@pytest.mark.parametrize(
+    # One case per wrapping rule the structured-output contract has to honor.
+    # expect_text is the BC guidance that a `TextContent` block accompanies
+    # `structuredContent`; it is False only for an empty bare-sequence return,
+    # which FastMCP serializes to zero content blocks (the documented benign
+    # edge in the module docstring).
+    ("name", "extra_args", "expect_text"),
+    [
+        ("archy_score", {}, True),  # BaseModel return
+        ("archy_graph", {}, True),  # union, success branch (GraphPayload)
+        ("archy_diff", {}, True),  # union, in-band error branch (no baseline -> DiffErrorPayload)
+        ("archy_cycles", {}, False),  # bare list, empty on an acyclic project -> {"result": []}
+    ],
+)
+def test_tool_result_conforms_to_output_schema(
+    acyclic_project: Path, name: str, extra_args: dict, expect_text: bool
+):
+    # A client that validates `structuredContent` against a declared
+    # `outputSchema` MUST NOT reject archy's results -- including the in-band
+    # `*ErrorPayload` branch of a union return, which is an `anyOf` member of
+    # the schema, not a separate error channel.
+    from jsonschema import Draft202012Validator
+
+    server = create_server()
+    schema = {t.name: t.outputSchema for t in asyncio.run(server.list_tools())}[name]
+    content, structured = asyncio.run(
+        server.call_tool(name, {"path": str(acyclic_project), **extra_args})
+    )
+    assert isinstance(structured, dict)
+    errors = sorted(
+        Draft202012Validator(schema).iter_errors(structured), key=lambda e: list(e.path)
+    )
+    assert not errors, f"{name} structuredContent violates outputSchema: {errors[:1]}"
+    has_text = any(getattr(block, "text", None) for block in content)
+    assert has_text is expect_text
+
+
 def test_create_server_registers_loop_prompt():
     server = create_server()
     prompts = asyncio.run(server.list_prompts())
