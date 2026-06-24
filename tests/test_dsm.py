@@ -8,8 +8,10 @@ from pydantic import ValidationError
 
 from archy.dsm import (
     DSM,
+    SUMMARY_BACK_EDGE_SAMPLE,
     DSMCell,
     DSMGroup,
+    DSMSummary,
     build_dsm,
     diff_dsm,
     dsm_from_dict,
@@ -17,6 +19,7 @@ from archy.dsm import (
     render_ascii,
     render_diff_text,
     render_json,
+    summarize_dsm,
     write_dsm,
 )
 
@@ -33,6 +36,56 @@ def _externalize(g: nx.DiGraph, *names: str) -> nx.DiGraph:
     for n in names:
         g.add_node(n, external=True)
     return g
+
+
+# --- summarize_dsm ------------------------------------------------------------
+
+
+def test_summarize_dsm_derives_counts_and_back_edges():
+    # a<->b is a 2-cycle (one direction is a back-edge in any ordering); c->b is
+    # an extra forward edge. summarize_dsm must reproduce the DSM's own counts.
+    dsm = build_dsm(_g(("a", "b"), ("b", "a"), ("c", "b")), group_by="topological")
+    summary = summarize_dsm(dsm)
+
+    assert isinstance(summary, DSMSummary)
+    assert summary.group_by == "topological"
+    assert summary.module_count == len(dsm.ordering) == 3
+    assert summary.cell_count == len(dsm.cells) == 3
+    assert summary.group_count == len(dsm.groups)
+    assert tuple(g.size for g in summary.groups) == tuple(len(g.members) for g in dsm.groups)
+    assert sum(g.size for g in summary.groups) == summary.module_count
+
+    # Back-edges: cells whose source sits later than the target in the ordering
+    # (row > col) -- the same test diff_dsm uses. Recompute to cross-check.
+    expected_back = [(dsm.ordering[c.row], dsm.ordering[c.col]) for c in dsm.cells if c.row > c.col]
+    assert summary.back_edge_count == len(expected_back)
+    assert set(summary.back_edges) <= set(expected_back)
+    assert len(summary.back_edges) == min(len(expected_back), SUMMARY_BACK_EDGE_SAMPLE)
+
+
+def test_summarize_dsm_counts_cross_group_coupling():
+    # Two disjoint communities joined by a single edge: exactly one cell crosses
+    # a group boundary.
+    dsm = build_dsm(_g(("a", "b"), ("c", "d"), ("b", "c")), group_by="community")
+    summary = summarize_dsm(dsm)
+    group_of: dict[int, int] = {}
+    offset = 0
+    for gi, grp in enumerate(dsm.groups):
+        for pos in range(offset, offset + len(grp.members)):
+            group_of[pos] = gi
+        offset += len(grp.members)
+    expected_cross = sum(1 for c in dsm.cells if group_of[c.row] != group_of[c.col])
+    assert summary.cross_group_edge_count == expected_cross
+
+
+def test_summarize_dsm_back_edge_sample_is_capped():
+    # A fully-connected 8-node graph has many back-edges; the count is exact but
+    # the listed sample is bounded.
+    nodes = "abcdefgh"
+    edges = [(u, v) for u in nodes for v in nodes if u != v]
+    summary = summarize_dsm(build_dsm(_g(*edges), group_by="topological"))
+    assert summary.back_edge_count > SUMMARY_BACK_EDGE_SAMPLE
+    assert len(summary.back_edges) == SUMMARY_BACK_EDGE_SAMPLE
 
 
 # --- Builder: basic shapes ----------------------------------------------------

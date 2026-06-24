@@ -16,13 +16,18 @@ from pathlib import Path
 
 import pytest
 
+from archy.dsm import DSM, DSMSummary
 from archy.mcp import (
+    DSMTooLargePayload,
     ForbiddenEdge,
     GraphPayload,
+    GraphSummaryPayload,
     GraphTooLargePayload,
     _run_check,
     _run_cycles,
     _run_diff,
+    _run_dsm,
+    _run_graph,
     _run_graph_dump,
     _run_graph_focus,
     _run_graph_summary,
@@ -152,7 +157,10 @@ def test_all_tools_declare_output_schema():
     ("name", "extra_args", "expect_text"),
     [
         ("archy_score", {}, True),  # BaseModel return
-        ("archy_graph", {}, True),  # union, success branch (GraphPayload)
+        ("archy_graph", {}, True),  # union, default summary branch (GraphSummaryPayload)
+        ("archy_graph", {"response_format": "full"}, True),  # union, full branch (GraphPayload)
+        ("archy_dsm", {}, True),  # union, default summary branch (DSMSummary)
+        ("archy_dsm", {"response_format": "full"}, True),  # union, full branch (DSM)
         ("archy_diff", {}, True),  # union, in-band error branch (no baseline -> DiffErrorPayload)
         ("archy_cycles", {}, False),  # bare list, empty on an acyclic project -> {"result": []}
     ],
@@ -178,6 +186,132 @@ def test_tool_result_conforms_to_output_schema(
     assert not errors, f"{name} structuredContent violates outputSchema: {errors[:1]}"
     has_text = any(getattr(block, "text", None) for block in content)
     assert has_text is expect_text
+
+
+# --- #226 concise-by-default response shaping ---------------------------------
+
+
+def _dsm(
+    path: Path,
+    response_format: str = "summary",
+    *,
+    group_by: str = "community",
+    weight: str = "imports",
+    focus: str | None = None,
+    focus_depth: int = 1,
+    package: str | None = None,
+    baseline_path: str | None = None,
+):
+    return _run_dsm(
+        path,
+        response_format=response_format,
+        group_by=group_by,
+        weight=weight,
+        focus=focus,
+        focus_depth=focus_depth,
+        package=package,
+        baseline_path=baseline_path,
+    )
+
+
+def _fan_out_project(tmp_path: Path, fan: int) -> Path:
+    # pkg.a imports `fan` leaf modules -> `fan` cells, no cycle.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    leaves = "".join(f"from pkg.m{i} import x\n" for i in range(fan))
+    (pkg / "a.py").write_text(leaves)
+    for i in range(fan):
+        (pkg / f"m{i}.py").write_text("")
+    return tmp_path
+
+
+@pytest.mark.parametrize("runner", [_run_graph, _run_dsm])
+def test_response_format_rejects_unknown_value(acyclic_project: Path, runner):
+    # Both heavy tools validate the enum up front, before any graph work.
+    kwargs = (
+        dict(internal_only=True, max_nodes=500, top_n=20)
+        if runner is _run_graph
+        else dict(
+            group_by="community",
+            weight="imports",
+            focus=None,
+            focus_depth=1,
+            package=None,
+            baseline_path=None,
+        )
+    )
+    with pytest.raises(ValueError, match="response_format must be"):
+        runner(acyclic_project, response_format="xml", **kwargs)
+
+
+def test_dsm_default_is_compact_summary(acyclic_project: Path):
+    # Default (no response_format) is the concise summary: counts + block
+    # structure, and crucially NOT the full cell list.
+    result = _dsm(acyclic_project)
+    assert isinstance(result, DSMSummary)
+    assert not hasattr(result, "cells")
+    assert result.module_count >= 2
+    assert result.group_count == len(result.groups)
+
+
+def test_dsm_full_returns_matrix_with_cells(acyclic_project: Path):
+    result = _dsm(acyclic_project, response_format="full")
+    assert isinstance(result, DSM)
+    assert result.cells  # pkg.a -> pkg.b is one non-empty cell
+
+
+def test_dsm_summary_localizes_back_edges(tmp_path: Path):
+    # A 2-cycle produces a back-edge (source later than target in the ordering);
+    # the summary surfaces both the count and the (source, target) name pair.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import thing\n")
+    (pkg / "b.py").write_text("from pkg.a import other\n")
+    summary = _dsm(tmp_path, group_by="topological")
+    assert summary.back_edge_count >= 1
+    assert summary.back_edges
+    src, tgt = summary.back_edges[0]
+    assert {src, tgt} == {"pkg.a", "pkg.b"}
+
+
+def test_dsm_full_oversized_returns_too_large(tmp_path: Path, monkeypatch):
+    # The full matrix is capped; over the ceiling it refuses with an explicit
+    # indicator pointing at the summary / focus / package escape hatches.
+    monkeypatch.setattr("archy.mcp.DEFAULT_MAX_DSM_CELLS", 2)
+    project = _fan_out_project(tmp_path, fan=5)  # 5 cells > cap of 2
+    result = _dsm(project, response_format="full")
+    assert isinstance(result, DSMTooLargePayload)
+    assert result.cell_count == 5
+    assert result.max_cells == 2
+
+
+def test_dsm_diff_ignores_response_format(acyclic_project: Path, tmp_path: Path):
+    # A baseline diff is a deliberate, already-compact comparison; summary mode
+    # must not suppress it.
+    from archy.dsm import DSMDiff, build_dsm, write_dsm
+    from archy.mcp import _load_graph
+
+    baseline = tmp_path / "baseline.json"
+    write_dsm(build_dsm(_load_graph(acyclic_project, internal_only=False)), baseline)
+    result = _dsm(acyclic_project, response_format="summary", baseline_path=str(baseline))
+    assert isinstance(result, DSMDiff)
+
+
+def test_graph_default_is_summary(acyclic_project: Path):
+    result = _run_graph(
+        acyclic_project, response_format="summary", internal_only=True, max_nodes=500, top_n=20
+    )
+    assert isinstance(result, GraphSummaryPayload)
+
+
+def test_graph_full_returns_dump(acyclic_project: Path):
+    result = _run_graph(
+        acyclic_project, response_format="full", internal_only=True, max_nodes=500, top_n=20
+    )
+    assert isinstance(result, GraphPayload)
+    assert result.nodes
 
 
 def test_create_server_registers_loop_prompt():

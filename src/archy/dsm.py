@@ -87,6 +87,90 @@ class DSMDiff(BaseModel):
     new_back_edges: tuple[DSMCell, ...]
 
 
+class DSMGroupSummary(BaseModel):
+    """A group's label and size, without its member name list.
+
+    The full `DSMGroup.members` tuples are the bulk of a large DSM's payload
+    (every module name, repeated in `ordering`); the summary keeps only the
+    block structure (how many blocks, how big) that orients an agent.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    label: str
+    size: int
+
+
+class DSMSummary(BaseModel):
+    """Compact, count-oriented view of a DSM for concise-by-default output.
+
+    Derived from an already-built `DSM` by `summarize_dsm`; carries the
+    block structure and the cycle-localizing back-edges without the full
+    `cells`/`ordering`/`members`, so its size is bounded by the number of
+    groups (plus a capped back-edge sample) rather than the module count.
+    An agent that needs the full matrix re-requests with
+    `response_format="full"`.
+
+    `back_edges` are the load-bearing signal: cells whose source sits later
+    in `ordering` than the target (`row > col`), i.e. an edge that points
+    against the chosen order -- the same back-edge test `diff_dsm` uses for
+    `new_back_edges`. `cross_group_edge_count` is the inter-block coupling
+    (edges whose endpoints fall in different groups).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    group_by: GroupBy
+    weight: Weight
+    module_count: int
+    cell_count: int
+    group_count: int
+    groups: tuple[DSMGroupSummary, ...]
+    back_edge_count: int
+    back_edges: tuple[tuple[str, str], ...]
+    cross_group_edge_count: int
+
+
+# Cap on the back-edge sample surfaced in a DSMSummary. Back-edge *count* is
+# always exact; this only bounds the (source, target) name pairs listed, since
+# a deeply tangled graph could otherwise reintroduce an unbounded payload.
+SUMMARY_BACK_EDGE_SAMPLE = 10
+
+
+def summarize_dsm(dsm: DSM) -> DSMSummary:
+    """Project a built `DSM` into its compact `DSMSummary` (no full cells).
+
+    Pure function of the DSM: `build_dsm` and the CLI are untouched. Group
+    membership is read positionally from `ordering` (groups are contiguous
+    slices), so a cell crosses groups when its row and col fall in different
+    blocks.
+    """
+    group_of: dict[int, int] = {}
+    offset = 0
+    for gi, g in enumerate(dsm.groups):
+        for pos in range(offset, offset + len(g.members)):
+            group_of[pos] = gi
+        offset += len(g.members)
+
+    back_edges = [c for c in dsm.cells if c.row > c.col]
+    cross_group = sum(1 for c in dsm.cells if group_of.get(c.row) != group_of.get(c.col))
+
+    return DSMSummary(
+        group_by=dsm.group_by,
+        weight=dsm.weight,
+        module_count=len(dsm.ordering),
+        cell_count=len(dsm.cells),
+        group_count=len(dsm.groups),
+        groups=tuple(DSMGroupSummary(label=g.label, size=len(g.members)) for g in dsm.groups),
+        back_edge_count=len(back_edges),
+        back_edges=tuple(
+            (dsm.ordering[c.row], dsm.ordering[c.col])
+            for c in back_edges[:SUMMARY_BACK_EDGE_SAMPLE]
+        ),
+        cross_group_edge_count=cross_group,
+    )
+
+
 def build_dsm(
     graph: nx.DiGraph,
     *,

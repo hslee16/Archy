@@ -48,10 +48,12 @@ if you want to confirm it explicitly.
    - CLI: not exposed; use `archy graph` and grep
    - MCP: `archy_graph_focus(path, modules=[<file or qualname>])`
 
-   And when you don't yet know which module to look at, the top-N
-   overview tool answers "where is the gravity in this codebase":
+   And when you don't yet know which module to look at, the graph tool
+   answers "where is the gravity in this codebase" with a top-N overview
+   (summary by default; pass `response_format="full"` only when you
+   actually need the whole node/edge dump):
 
-   - MCP: `archy_graph_summary(path)`
+   - MCP: `archy_graph(path)`  (or the equivalent `archy_graph_summary(path)`)
 
    Before a non-trivial edit (refactor, public-surface change, anything
    touching more than a handful of files), check whether your target
@@ -99,7 +101,9 @@ if you want to confirm it explicitly.
      repo) or `archy dsm . --focus <module>` (read the module's row and
      column to see who you depend on and who depends on you)
    - MCP: `archy_dsm(path, group_by="community"|"layer"|"topological",
-     focus=<qualname>, package=<prefix>)`
+     focus=<qualname>, package=<prefix>)` returns a compact summary
+     (block structure, counts, back-edges) by default; pass
+     `response_format="full"` to read the positional matrix cell-by-cell.
 
    The DSM is structured context an agent reads positionally rather
    than a number to act on: block-diagonal blocks under community
