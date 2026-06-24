@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "cf72c1b09233",
+  "strategy": "manual-commit",
+  "branch": "alee/gitignore-entire",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/cf/72c1b09233/0/metadata.json",
+      "transcript": "/cf/72c1b09233/0/full.jsonl",
+      "content_hash": "/cf/72c1b09233/0/content_hash.txt",
+      "prompt": "/cf/72c1b09233/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1170,
+    "cache_creation_tokens": 142786,
+    "cache_read_tokens": 1012014,
+    "output_tokens": 4778,
+    "api_call_count": 14
+  }
+}
