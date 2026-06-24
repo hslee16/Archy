@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d43d9d5a47b4",
+  "strategy": "manual-commit",
+  "branch": "alee/177-179-bench-rigor",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "docs/SCORING.md",
+    "docs/research/CALL_WEIGHTED_Q_EMPIRICS.md",
+    "docs/research/INLOOP_PREVALENCE_EMPIRICS.md",
+    "docs/research/SCORE_SHAPE_REDESIGN_EMPIRICS.md",
+    "docs/research/SIMULATE_ORACLE_EMPIRICS.md",
+    "docs/research/TYPE_HINT_COVERAGE_EMPIRICS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d4/3d9d5a47b4/0/metadata.json",
+      "transcript": "/d4/3d9d5a47b4/0/full.jsonl",
+      "content_hash": "/d4/3d9d5a47b4/0/content_hash.txt",
+      "prompt": "/d4/3d9d5a47b4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 24026,
+    "cache_creation_tokens": 819406,
+    "cache_read_tokens": 40430424,
+    "output_tokens": 187585,
+    "api_call_count": 188
+  }
+}
