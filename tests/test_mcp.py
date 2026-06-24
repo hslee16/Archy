@@ -101,6 +101,34 @@ def test_create_server_registers_expected_tools():
     }
 
 
+def test_all_tools_declare_read_only_annotations():
+    # Every archy tool is read-only structural analysis. Declaring the hints
+    # explicitly lets trusted clients auto-approve calls instead of prompting
+    # on every read (MCP tool-annotations, 2025-03-26 spec); the cautious
+    # default for an un-annotated tool is destructive/non-idempotent/open-world.
+    server = create_server()
+    tools = asyncio.run(server.list_tools())
+    assert tools, "expected registered tools"
+    for tool in tools:
+        ann = tool.annotations
+        assert ann is not None, f"{tool.name} has no annotations"
+        assert ann.readOnlyHint is True, f"{tool.name} not readOnlyHint"
+        assert ann.destructiveHint is False, f"{tool.name} not destructiveHint=False"
+        assert ann.idempotentHint is True, f"{tool.name} not idempotentHint"
+        assert ann.openWorldHint is False, f"{tool.name} not openWorldHint=False"
+
+
+def test_all_tools_declare_human_friendly_title():
+    # The 2025-06-18 revision added a display `title` so `name` stays a
+    # programmatic id. Assert every tool sets a non-empty title distinct from
+    # its name.
+    server = create_server()
+    tools = asyncio.run(server.list_tools())
+    for tool in tools:
+        assert tool.title, f"{tool.name} has no display title"
+        assert tool.title != tool.name, f"{tool.name} title duplicates the name"
+
+
 def test_create_server_registers_loop_prompt():
     server = create_server()
     prompts = asyncio.run(server.list_prompts())
