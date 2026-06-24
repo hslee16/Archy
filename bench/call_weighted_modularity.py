@@ -195,8 +195,10 @@ def main() -> int:
     # A new axis must be orthogonal to the existing ones; this is the discriminating test.
     print("\n## Pearson r of Q_weighted_normalized against the other axes\n")
     print(
-        "(Compare against the unweighted-Q correlations in"
-        " `docs/research/RESEARCH_METRICS.md` sec 16.)\n"
+        "(Compare against the UNWEIGHTED-Q baseline: the `modularity <-> {axis}`"
+        " rows of the pairwise correlation table in `bench/results.md`, since"
+        " unweighted Q is the modularity axis. NOT RESEARCH_METRICS.md sec 16,"
+        " which measures calls_per_edge orthogonality, a different signal.)\n"
     )
     qw = [r["q_weighted_norm"] for r in rows]
     for label, vals in [

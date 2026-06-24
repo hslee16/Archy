@@ -85,9 +85,17 @@ def _real_back_edges(before, after) -> set[tuple[str, str]]:
 
 
 def _cycle_keys(cd):
+    # Compare both the module SET and the EDGE set of each cycle. Comparing only
+    # modules would miss a simulate/real disagreement about which edges close the
+    # loop. Edges are keyed by (source, target) and not `lines`: a synthetic
+    # simulate edge carries `lines=()`, so a line comparison would always diverge
+    # on a hypothetical edge even when the topology is identical.
+    def key(c):
+        return (frozenset(c.modules), frozenset((e.source, e.target) for e in c.edges))
+
     return (
-        frozenset(frozenset(c.modules) for c in cd.added),
-        frozenset(frozenset(c.modules) for c in cd.resolved),
+        frozenset(key(c) for c in cd.added),
+        frozenset(key(c) for c in cd.resolved),
     )
 
 
@@ -99,9 +107,16 @@ def _violation_keys(vd):
 
 
 def _sdp_keys(sd):
+    # Compare the instability magnitudes, not just the endpoints: simulate
+    # predicting the right (source, target) pair but the wrong instability gap
+    # would otherwise pass. Rounded to guard float-repr noise; on a clean sample
+    # the topologies are identical, so the values match exactly.
+    def key(v):
+        return (v.source, v.target, round(v.source_instability, 6), round(v.target_instability, 6))
+
     return (
-        frozenset((v.source, v.target) for v in sd.added),
-        frozenset((v.source, v.target) for v in sd.resolved),
+        frozenset(key(v) for v in sd.added),
+        frozenset(key(v) for v in sd.resolved),
     )
 
 

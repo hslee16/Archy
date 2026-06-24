@@ -41,7 +41,15 @@ Additions use the realistic `from <pkg> import <leaf>` form an agent would write
 (not `import <qualname>`), and the oracle compares **all** comparable
 `SimulateReport` fields: cycles, layer violations, **SDP violations**, score
 delta, new back-edges, **and propagation cost** (only `applied`, an input echo,
-and `summary`, a deterministic function of the rest, are excluded).
+and `summary`, a deterministic function of the rest, are excluded). The
+within-field comparison is also deep, not just by identity: a cycle is matched on
+both its module set **and** its edge set (keyed by `(source, target)`, not
+`lines`, since a synthetic edge carries `lines=()`), and an SDP violation on its
+endpoints **and** both instability magnitudes, so a right-pair / wrong-shape
+prediction cannot pass. (The 315/315 figure was first established under a
+looser key that compared cycle modules and SDP endpoints only; the deepened key
+matches by construction on clean samples, where simulate and the real re-parse
+share a topology, and is re-confirmed on the next corpus run.)
 
 **An adversarial review caught a real bug here that a weaker oracle missed.** An
 earlier version of `_matches` compared only 4 of those fields and the additions

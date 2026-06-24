@@ -537,6 +537,66 @@ regression that smears across moderately-coupled axes. When using
 the breakdown to localize a drop, a single-axis movement is the
 sharpest pointer.
 
+### Corpus composition and validation honesty
+
+The independence numbers above are only as trustworthy as the corpus
+they are computed on. The honest caveats (raised by the 2026-06
+adversarial review, [#177]):
+
+- **It is a convenience sample, not a pre-registered one.** The corpus
+  grew from a seed of popular projects plus deliberate additions for
+  size/domain/shape coverage, with the rationale written *after*
+  selection ([`bench/projects.yaml`](../bench/projects.yaml)). It skews
+  toward mature, well-maintained libraries and contains no deliberately
+  pathological "negative control" (a project engineered to score badly).
+  Read the correlations as descriptive of this population, not as a
+  random sample of all Python code.
+- **archy is in its own corpus (dogfooding), but the conclusion does not
+  depend on it.** Recomputing the ten pairwise correlations with archy's
+  row removed moves the median `|r|` from `0.316` to `0.337` and the max
+  from `0.611` to `0.664` (`acyclicity ↔ depth`); still below `0.7`. The
+  self-referential data point does not prop up the independence claim.
+- **The pass is near the boundary and sensitive to the two special
+  points.** Dropping the huge outlier pytorch (9,647 modules) alone keeps
+  the max at `0.662`; but dropping *both* archy and pytorch pushes
+  `acyclicity ↔ depth` to **`0.737`, just over the `0.7` threshold**. So
+  the OECD pass on the depth pairs is real but not comfortable: it holds
+  for the corpus as sampled and is robust to either special point alone,
+  not to removing both. The moderate depth coupling documented above is
+  the live boundary, which is why a future formula change near it is now
+  gated (below) rather than trusted.
+- **The corpus is all stable, pinned SHAs; none mid-refactoring.** This
+  bench measures *static shape* across mature codebases. It does not
+  measure the agent-edit-loop direction signal archy is pitched for; that
+  is validated separately by
+  [`bench/delta_direction.py`](../bench/delta_direction.py) (known-sign
+  structural mutations) and [`bench/simulate_oracle.py`](../bench/simulate_oracle.py)
+  (pre-edit prediction fidelity).
+- **Call-graph diagnostics are computed on partial call resolution.**
+  Static call extraction covers a median ~58% of import edges (dynamic
+  dispatch, decorators, and re-exports are not followed), so
+  `calls_per_edge` and the call-weighted Q diagnostic are computed on that
+  fraction. `bench/results.md` now reports a per-project `coverage` column
+  so the reader can weight those rows accordingly.
+- **The complexity axis's upper range is under-represented in the public
+  corpus.** Public projects top out at `cc_mean = 5.33` (msgspec); the
+  `/8` divisor (v0.23) was calibrated for the `cc_mean ∈ [6, 9)` band seen
+  on a private validator-heavy backend that is *not* in the public bench
+  (see the Complexity section). The divisor choice is therefore
+  under-tested against the public corpus on exactly the codebases it was
+  meant to fix.
+
+**Falsification gate.** Because the independence claim is load-bearing and
+the depth pairs sit near the boundary, `bench/run.py` now *enforces* it
+rather than merely reporting it: the run prints an "Axis-independence
+gate" section and **exits non-zero if any axis pair exceeds `|r| = 0.7`**,
+and warns (exit zero) on the moderate `[0.5, 0.7]` band so the two depth
+pairs stay visible. A future scoring change that pushes a pair into
+redundancy fails the bench loudly instead of shipping a quietly-degraded
+correlation table. (The gate was validated when an offline run with an
+empty corpus cache produced degenerate `|r| = 1.0` correlations: it
+failed, as designed.)
+
 ## Interpreting a score
 
 There is no universal "good architecture score." The systematic-

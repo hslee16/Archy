@@ -80,15 +80,16 @@ The largest rank movements cluster into two distinguishable patterns. (Full tabl
 
 ### Orthogonality picture vs the other axes
 
-| signal | r against `Q_weighted` (normalized) | r against `Q_unweighted` (from sec 16) |
-| --- | ---: | ---: |
-| modularity_unweighted | +0.136 | n/a |
-| acyclicity | +0.217 | +0.423 |
-| depth | -0.397 | -0.576 |
-| equality | +0.044 | -0.344 |
-| complexity | -0.015 | very low for cc_mean too |
+The right baseline is the **unweighted modularity axis's own** correlations with the other four axes (the `modularity ↔ {axis}` rows of the main pairwise bench in [`bench/results.md`](../../bench/results.md)), since unweighted Q *is* the modularity axis. (An earlier version of this table sourced that column from `RESEARCH_METRICS.md` "sec 16" and labeled it accordingly; sec 16 measures `calls_per_edge` orthogonality, **not** unweighted-Q orthogonality, so that was the wrong baseline. The column below is corrected to the modularity-axis values from the current pairwise bench.)
 
-Weighted Q is **substantially more orthogonal** to the other axes than unweighted Q. All four cross-axis correlations drop in absolute value. (This is one of the points that favored ship-as-axis; it's not enough to outweigh the directionality argument below.)
+| signal | r against `Q_weighted` (normalized) | r against `Q_unweighted` (modularity axis) |
+| --- | ---: | ---: |
+| acyclicity | +0.217 | +0.383 |
+| depth | -0.397 | -0.617 |
+| equality | +0.044 | -0.389 |
+| complexity | -0.015 | +0.110 |
+
+(`r` between the two Q variants themselves is `+0.136`: the weighted and unweighted partitions are nearly independent.) Weighted Q is **more orthogonal** to the other axes than unweighted Q on every pair: `|r|` drops from 0.383 to 0.217 (acyclicity), 0.617 to 0.397 (depth), and 0.389 to 0.044 (equality); complexity stays low either way. The conclusion survives the corrected baseline. (This is one of the points that favored ship-as-axis; it is not enough to outweigh the directionality argument below.)
 
 ## Why the empirics don't justify replacing unweighted Q
 

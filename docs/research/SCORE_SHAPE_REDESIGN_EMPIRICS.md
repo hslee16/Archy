@@ -164,8 +164,8 @@ status quo:
 ### Cross-product (acyclicity × depth)
 
 The full Cartesian product over all (7 acyclicity × 3 depth) variants
-was evaluated. Only six combinations clear `0/10` moderate pairs, and
-all six include either `depth_with_scc_penalty` or
+was evaluated. Eight combinations clear `0/10` moderate pairs, and
+all eight include either `depth_with_scc_penalty` or
 `depth_size_relative` (which fail actionability/intuition gates above):
 
 | acyclicity | depth | acy ↔ dep | mod ↔ dep | spearman ρ vs v0.23 |
@@ -173,13 +173,28 @@ all six include either `depth_with_scc_penalty` or
 | `feedback_edges` | `depth_with_scc_penalty` | +0.444 | -0.295 | **0.534** |
 | `feedback_edges` | `depth_size_relative` | -0.283 | +0.400 | 0.621 |
 | `feedback_x_tangle` | `depth_with_scc_penalty` | +0.312 | -0.295 | 0.648 |
+| `feedback_x_tangle` | `depth_size_relative` | -0.153 | +0.400 | n/a |
 | `modular_tangle` | `depth_with_scc_penalty` | +0.237 | -0.295 | 0.638 |
 | `modular_tangle` | `depth_size_relative` | -0.102 | +0.400 | n/a |
 | `log_cycle_count` | `depth_size_relative` | -0.173 | +0.400 | n/a |
+| `sentrux_legacy` | `depth_size_relative` | -0.185 | +0.400 | n/a |
+
+(An earlier version of this table listed six rows and said "six
+combinations"; the bench results show eight clear `0/10`. The two
+omitted rows, both pairing with `depth_size_relative`, are restored
+above.) Spearman ρ vs v0.23 was computed only for the curated
+`interesting_combos` subset in [`bench/score_redesign.py`](../../bench/score_redesign.py),
+so four of the eight carry `n/a` rank-stability. That gap does not
+change the decision: every `n/a` row pairs with `depth_size_relative`
+or `depth_with_scc_penalty`, which already fail the actionability and
+intuition gates above on their own, so none is a shippable candidate
+regardless of its ρ. The measured ρ values that do exist (0.534-0.648)
+establish the rank-instability point for the combinations closest to
+shippable.
 
 The Spearman rank-stability column is the load-bearing one. Every
-`0/10` combination re-ranks the bench projects substantially compared
-to v0.23. ρ = 0.534 means the project ordering is closer to a coin
+measured `0/10` combination re-ranks the bench projects substantially
+compared to v0.23. ρ = 0.534 means the project ordering is closer to a coin
 flip than to the current shape. For comparison, the v0.20 promotion of
 `cc_mean` to a fifth axis preserved the ordering within `+/- 2` ranks
 for most projects, and the v0.23 divisor widening preserved ordering

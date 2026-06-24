@@ -340,19 +340,30 @@ def main() -> int:
     cols2 = {a: [r[a] for r in rows] for a in axes}
     emit("| pair | r |")
     emit("| --- | ---: |")
+    axis_corrs: list[tuple[str, float]] = []
     for a, b in combinations(axes, 2):
         r = pearson(cols2[a], cols2[b])
+        axis_corrs.append((f"{a} ↔ {b}", r))
         emit(f"| {a} ↔ {b} | {r:+.3f} |")
 
     emit()
     emit("## Call-graph diagnostics")
     emit()
-    emit("| project | sha | modules | edges | call_edges | total_calls | calls/edge |")
-    emit("| --- | --- | ---: | ---: | ---: | ---: | ---: |")
+    emit(
+        "`coverage` = call_edges / import_edges: the fraction of import edges that "
+        "carry at least one resolved call. Static call resolution is partial (dynamic "
+        "dispatch, decorators, and re-exports are not followed), so the call-graph "
+        "diagnostics below are computed on this fraction, not the whole import graph."
+    )
+    emit()
+    emit("| project | sha | modules | edges | call_edges | coverage | total_calls | calls/edge |")
+    emit("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |")
     for r in rows:
+        coverage = r["call_edge_count"] / r["edges"] if r["edges"] else 0.0
         emit(
             f"| {r['name']} | `{r['sha']}` | {r['modules']} | {r['edges']} | "
-            f"{r['call_edge_count']} | {r['total_calls']} | {r['calls_per_edge']:.2f} |"
+            f"{r['call_edge_count']} | {coverage:.1%} | {r['total_calls']} | "
+            f"{r['calls_per_edge']:.2f} |"
         )
 
     emit()
@@ -445,6 +456,37 @@ def main() -> int:
                 f"{r.get('vulture_60', '?')} | {r.get('vulture_90', '?')} |"
             )
 
+    # Falsification gate (issue #177). The bench's load-bearing claim is that the
+    # five axes are non-redundant: every inter-axis |r| stays below the OECD
+    # redundancy threshold (0.7). Make that claim FAIL loudly instead of silently
+    # passing if a future formula change pushes a pair into redundancy, and WARN on
+    # the moderate band so the two known depth pairs stay visible rather than buried.
+    REDUNDANT = 0.7
+    MODERATE = 0.5
+    redundant = [(p, r) for p, r in axis_corrs if abs(r) > REDUNDANT]
+    moderate = [(p, r) for p, r in axis_corrs if MODERATE <= abs(r) <= REDUNDANT]
+    emit()
+    emit("## Axis-independence gate")
+    emit()
+    if redundant:
+        emit(
+            f"**FAIL**: {len(redundant)} axis pair(s) exceed the OECD redundancy "
+            f"threshold `|r| > 0.7`:"
+        )
+        for p, r in redundant:
+            emit(f"- `{p}`: `{r:+.3f}`")
+    else:
+        emit(
+            f"**PASS**: all {len(axis_corrs)} axis pairs are below the OECD "
+            f"redundancy threshold `|r| = 0.7`."
+        )
+    if moderate:
+        emit("")
+        emit("Moderate coupling (`0.5 <= |r| <= 0.7`), acceptable but watched:")
+        for p, r in moderate:
+            emit(f"- `{p}`: `{r:+.3f}`")
+    emit()
+
     report = "\n".join(out_lines) + "\n"
     if args.stdout:
         sys.stdout.write(report)
@@ -452,6 +494,19 @@ def main() -> int:
         RESULTS.write_text(report)
         print(f"# wrote {RESULTS.relative_to(REPO_ROOT)}", file=sys.stderr)
 
+    if redundant:
+        print(
+            f"# AXIS-INDEPENDENCE GATE FAILED: {len(redundant)} pair(s) over |r|=0.7: "
+            + ", ".join(f"{p} ({r:+.3f})" for p, r in redundant),
+            file=sys.stderr,
+        )
+        return 1
+    if moderate:
+        print(
+            f"# axis-independence gate passed; {len(moderate)} pair(s) in the moderate band "
+            + ", ".join(f"{p} ({r:+.3f})" for p, r in moderate),
+            file=sys.stderr,
+        )
     return 0
 
 
