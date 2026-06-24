@@ -36,6 +36,18 @@ contested test that killed call-weighted Q as an axis last week.
 
 ### The four candidates
 
+These four are the standard scalars the DSM literature derives from a
+dependency-structure matrix (`feedback` and `bandwidth` are classic DSM
+metrics; `block_comm` / `block_layer` are the two natural block-structure
+readings against archy's existing community and depth partitions). They
+were chosen as representative, not as a proven-exhaustive or
+proven-strongest set -- other DSM scalars exist (e.g. propagation cost
+variants, clustered-cost measures), and this study does not claim to have
+swept them. The claim is narrower: these four cover the obvious
+DSM-derived candidates, and all four fail, which is evidence against the
+*family* being a fruitful source of a new axis, not proof no DSM scalar
+could ever qualify.
+
 - **`feedback`**: share of internal edges that land above the diagonal
   in the SCC-condensed topological ordering. Direct measure of how much
   of the graph violates clean DAG layering.
@@ -77,21 +89,35 @@ killed call-weighted Q as a score axis (see `CALL_WEIGHTED_Q_EMPIRICS.md`):
 1. **Direction is contested across the population.** Pure DAG-shaped
    projects in the bench (`pygments`, `archy`, `fastapi`, `botocore`,
    `boto3`) score `feedback < 0.02`. Cycle-heavy projects (`msgspec`
-   at 0.333, `click` at 0.231, `flask` at 0.221) score high. But
-   `acyclicity` and `cycle_count` already report this, and they
-   already weight tangle severity rather than raw back-edge count.
-   `feedback` is a different normalization of the same underlying
-   property, with no clear story for *why* the new normalization is
-   better at predicting maintenance cost or defect rate.
+   at 0.333, `click` at 0.231, `flask` at 0.221) score high. To be
+   precise about the rejection: `feedback` is **not** statistically
+   redundant with `acyclicity` -- it cleared the OECD independence gate
+   (`r = -0.688`, under the `0.7` threshold), so this is not a
+   double-counting objection. The objection is narrower: `feedback`
+   measures the *same underlying property* `acyclicity`/`cycle_count`
+   already target (back-edges / DAG violation), under a different
+   normalization (raw back-edge fraction vs tangle-severity weighting),
+   and there is no story for *why* this normalization would better
+   predict maintenance cost or defect rate. "Statistically distinct but
+   conceptually the same target with no superior cost-prediction story"
+   is the precise ground, not "equivalent signal." A normalization that
+   added directional or predictive value could survive even at this
+   correlation; this one does not clear that bar.
 
 2. **Bandwidth direction inverts intuition.** `starlette` (0.400) and
    `fastapi` (0.474) post the *highest* bandwidth values in the bench;
    `pygments` (0.476) ties them. These three are not analogously
    shaped: starlette and fastapi are well-regarded layered web
    frameworks, pygments is a wide-and-shallow plugin host. The metric
-   conflates "long-range coupling" with "small number of edges spread
-   across many layers," which is a different property and not one that
-   maps cleanly to a refactoring action.
+   appears to conflate "long-range coupling" with "small number of edges
+   spread across many layers," a different property that does not map
+   cleanly to a refactoring action. This conflation is argued from the
+   three projects' known shapes, not empirically decomposed: the study
+   did not separate bandwidth into a per-project edge-distance
+   distribution to confirm the two components drive the same scalar in
+   different projects. It is a reasoned objection from the tied values of
+   dissimilar projects, not a measured separation -- enough to decline
+   shipping the scalar, not a proof of the mechanism.
 
 3. **Refactoring action is unclear or duplicative.** "Reduce feedback
    fraction" decomposes into "break import cycles" (already actionable

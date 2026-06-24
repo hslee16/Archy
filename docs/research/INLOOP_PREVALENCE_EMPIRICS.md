@@ -94,7 +94,12 @@ median 3, max 8**; only 1 of 5 was an easy 2-module cycle. The five events:
 This is the bridge from the human base rate to the agent concern. Cycle introduction concentrates in
 large changes (median 7 vs 1 files), and the AI-PR literature documents agent PRs as **154% larger**
 than human PRs ([synthesis §7](AGENT_CAUSAL_REASONING_SYNTHESIS.md)). Agents push toward exactly the
-change regime where the per-change cycle rate is elevated. And when a cycle does appear it is a
+change regime where the per-change cycle rate is elevated. **This is directional, not a quantitative
+match:** 154% larger applied to the corpus median (1 `.py` file) lands around 2-3 files, still well
+below the 7-file median of the cycle-introducing commits here. The mechanism is "agents shift the
+distribution toward the risky tail," not "agents routinely reach the 7-file regime"; the size
+relationship is consistent across two sample sizes but, on n=5 events, the precise multiplier is not
+tightly estimated (see limitations). And when a cycle does appear it is a
 multi-module tangle (new-SCC median 3, up to 8; 4 of 5 were larger than a trivial 2-cycle) of the
 kind that is invisible in a large diff and compounds silently, which is archy's founding origin story
 ("six weeks later the cycle count had doubled and nobody noticed"). Two of the five events
@@ -110,6 +115,34 @@ noise. This is independent empirical support for archy's existing advisory-vs-bl
 (the v0.15.0 lesson, reaffirmed in [`AUTONOMY_CONTINUUM_SYNTHESIS.md`](AUTONOMY_CONTINUUM_SYNTHESIS.md)):
 the composite score belongs in `archy trend` and advisory diff summaries, and `cycles.added` (rare,
 FP-free, severe) is the right thing to ever block on.
+
+**On the 0.005 floor (it is pragmatic, not derived).** 0.005 is not a principled constant; it is a
+floor chosen to separate the noise cluster from the tail. The conclusion does not depend on its exact
+value: the median drop (-0.0001) sits ~50x below it and the distribution is sharply bimodal (a dense
+mass of sub-0.001 jitter, then a thin tail), so drawing the line anywhere from 0.001 to 0.01 leaves
+the same ~30%-fire-on-noise picture. The "98%" is therefore descriptive of that mass, not a tuned
+result. When this floor is reused in the Q1b protocol below, it must be **re-derived on agent diffs**,
+not inherited: agent-authored changes may have a different jitter distribution, and a human-corpus
+floor could mis-gate them.
+
+**The score and the cycle signal disagree, and the score's *direction* is unreliable per commit.**
+The most consequential structural regression in the corpus -- the requests commit that introduced an
+8-module SCC (16 files) -- had a **positive** composite-score delta of **+0.012**. The score moved
+*up* while a genuine multi-module tangle appeared. This is the sharpest possible evidence for gating
+on `cycles.added` rather than score: on the single worst event here, a score gate (any direction)
+would have stayed silent or pointed the wrong way. It is also a concrete instance of the
+score-shape/dilution concern tracked in
+[#178](https://github.com/hslee16/archy/issues/178)/[#192](https://github.com/hslee16/archy/issues/192).
+
+**On the 5-and-5 coincidence (no double standard).** Exactly 5 commits dropped by >=0.005, the same
+count as the 5 cycle regressions -- but the two sets are nearly disjoint (they share only the mkdocs
+commit). The large score drops and the cycle introductions identify largely *different* commits, so
+the two signals are not redundant. Both fire at the same ~0.5% base rate, which raises the fair
+question: if a 0.5% cycle rate is "real," why is a 0.5% score-drop>=0.005 rate "noise"? The
+distinction is principled, not a double standard: `cycles.added` is an FP-free structural fact (a
+module that was acyclic is now in an SCC), whereas a 0.005 score move can be complexity/modularity
+jitter from simply adding code and -- per the requests case above -- can even carry the wrong sign.
+Rarity alone does not make a signal trustworthy; freedom from false positives and direction does.
 
 ### Context: the size regime
 
@@ -143,10 +176,15 @@ produce.
   recursion. The cycle-regression test is conservative (it requires both a count rise and a newly
   cyclic module), so cycle-for-cycle swaps are not counted. The "score drop" signal includes
   complexity/modularity jitter from simply adding code.
-- **Silent skips bias `src/`-layout repos toward recent history.** A commit pair is dropped when the
-  package path does not build at one end (e.g. requests, which migrated to `src/requests` in 2023,
-  yielded N=72 of 100 because pre-migration commits have no `src/requests`). Those repos' samples
-  therefore skew post-migration rather than spanning their full history.
+- **Silent skips bias `src/`-layout repos toward recent history, but the effect is confined to one
+  repo here.** A commit pair is dropped when the package path does not build at one end. Quantified:
+  only **requests** lost samples (N=72 of 100, because it migrated to `src/requests` in 2023 and
+  pre-migration commits have no `src/requests`); the other 10 repos all reached the full N=100. So the
+  recency skew affects 1 of 11 repos and 28 of the 1,072 sampled pairs, not the corpus broadly.
+- **One of the five "multi-module tangles" is a trivial 2-cycle.** The new-SCC sizes are min 2, median
+  3, max 8; the mkdocs event (new-SCC 2) is an ordinary mutual import, not a multi-module tangle. The
+  "multi-module" characterization holds for 4 of the 5 events, not all 5; the median-3 figure already
+  reflects this.
 
 ## Q1b: the executable protocol to finish the resolution
 
@@ -160,8 +198,11 @@ The remaining causal question needs an A/B, now well-specified by this study:
   `archy_simulate` / diff in the loop, per [`AGENT_LOOP.md`](../AGENT_LOOP.md)) present in arm A and
   absent in arm B. Paired design: run both arms on each task.
 - **Primary outcome:** rate of structurally-bad produced diffs = introduced cycle OR declared-layer /
-  contract violation OR score regression beyond the 0.005 noise floor established in Finding 3,
-  scored deterministically by archy (objective, blind by construction).
+  contract violation OR score regression beyond a noise floor. The 0.005 floor from Finding 3 is a
+  *human-corpus* value and must be **re-derived on the Q1b agent diffs** before use (agent jitter may
+  differ); cycle and violation signals are FP-free and transfer directly. Scored deterministically by
+  archy (objective, blind by construction). Note from Finding 3 that the composite score can move the
+  wrong direction on a real regression, so it is a supporting outcome, not the primary gate.
 - **Secondary:** task success (target tests pass), diff size, and the mechanism check, did the agent
   *revise* after an archy signal (the anti-theater test from the synthesis: archy changes what the
   agent does, not just what it reports).

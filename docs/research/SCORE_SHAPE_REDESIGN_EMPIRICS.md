@@ -48,13 +48,30 @@ match to the stated design concern because its penalty term fires
 alternatives if the calibration of PGM's `lambda` parameter is judged
 to add too much knob-tuning surface.
 
-A fully honest finding ran sideways to the original framing: under
-*every* tested aggregator, `depth` is the axis least correlated with
-`overall` (`|r(overall, depth)| <= 0.187` for geomean, harmonic, MPI,
-PGM, penalty-geomean, and arith). Improving the depth axis barely
-moves the score under any aggregator. The two moderate pairs therefore
-create a smaller *operational* gaming surface than the design language
-suggests; the OECD breach is real but cosmetic in practice.
+A finding ran sideways to the original framing, but it must be read
+carefully to avoid a trap the 2026-06 adversarial review ([#176]) caught
+in `SCORING.md`: under *every* tested aggregator, `depth` is the axis
+least *correlated* with `overall` (`|r(overall, depth)| <= 0.187` for
+geomean, harmonic, MPI, PGM, penalty-geomean, and arith). **This is low
+cross-project correlation, not low leverage, and the two are different
+things.** The low correlation is an artifact of low cross-project
+*variance* in depth scores, not evidence that depth is inert: a direct
+local-sensitivity sweep at the corpus baseline measured
+`d(overall)/d(axis)` as equality 0.376, **depth 0.225**, modularity
+0.216, complexity 0.139, acyclicity 0.133 -- depth is the *second* most
+locally influential axis under the geomean. So improving (or tanking) a
+single project's depth *does* move its score; what the `|r| <= 0.187`
+shows is only that, across projects, depth doesn't co-vary much with
+overall.
+
+The corrected operational reading: the two moderate pairs create a
+gaming surface that is **smaller than the LEARNINGS.md "improve every
+dimension" language implies but not cosmetic** -- a project that lets
+depth regress pays for it (leverage 0.225), and the non-compensatory
+geomean bites on every axis. The OECD breach is real; the earlier claim
+that it is "cosmetic in practice" overstated and is withdrawn (it relied
+on conflating depth's cross-project correlation with its local leverage,
+the exact error corrected in `SCORING.md`).
 
 ## What this rules out
 
@@ -119,15 +136,22 @@ status quo:
   change-propagation standpoint, a 50-module SCC *is* at least 50 hops
   deep. Mathematically the cleanest fix: it directly attacks the SCC
   condensation step that mechanically couples depth to acyclicity.
-  Drops both moderate pairs below `0.5`. **Fails actionability**: when
-  the axis regresses, the agent cannot tell whether the cause was a
-  new long chain or a new SCC without re-deriving `max_depth` and
-  `largest_scc` separately. Today the diagnostic message "max_depth
-  went from 8 to 12" is unambiguous; under the SCC-penalty form it
-  becomes "depth-with-SCC went from 8 to 14, of which ? came from
-  chain growth and ? from SCC growth." That ambiguity is what the OECD
-  handbook's "actionable indicator" gate is designed to prevent
-  (Section 2 on indicator selection).
+  Drops both moderate pairs below `0.5`. **Fails archy's diagnostic-
+  legibility bar** (a stricter, archy-specific gate, not the bare OECD
+  actionability criterion -- to be precise about which test it fails):
+  strict OECD actionability asks only whether a good-practice refactoring
+  improves the indicator, and this form *passes* that (both "shorten the
+  longest chain" and "break the SCC" are good practice). What it fails is
+  decomposability: when the axis regresses, the agent cannot tell whether
+  the cause was a new long chain or a new SCC without re-deriving
+  `max_depth` and `largest_scc` separately. Today "max_depth went from 8
+  to 12" is unambiguous; under the SCC-penalty form it becomes
+  "depth-with-SCC went from 8 to 14, of which ? came from chain growth
+  and ? from SCC growth." The OECD handbook's actionable-indicator
+  discussion (Section 2) motivates keeping an indicator interpretable;
+  archy raises that to a hard requirement that a single axis map to a
+  single, localizable structural cause. It is that archy-specific
+  requirement, not OECD actionability per se, that this candidate fails.
 - `depth_size_relative = 1 - 2 * (max_depth / module_count)` reframes
   depth as a *fraction* of the graph, which is conceptually closer to
   acyclicity (also a fraction). Removes the acy ↔ depth coupling but
@@ -269,6 +293,21 @@ uniform sensitivity).
   directionality, actionability, ordering stability. Per aggregator
   change: rank stability `>= 0.9`, sensitivity profile no flatter than
   the existing geomean by more than 50%, single-line implementation.
+
+  **Why the two gates differ (the asymmetry is deliberate, not selective).**
+  A reader could object that the diagnostic-legibility bar above sank
+  `depth_with_scc_penalty` while PGM -- which also adds a non-decomposable
+  penalty term to `overall` -- was accepted without an analogous check.
+  The distinction is *where* the legibility is lost. An axis redefinition
+  corrupts the meaning of that axis's own diagnostic ("max_depth" no
+  longer means max depth), so the per-axis number an agent reads to
+  localize a regression becomes ambiguous. An aggregator change leaves
+  all five axis values and their diagnostics individually intact and
+  inspectable; PGM only changes how those five legible numbers combine
+  into the single headline `overall`. An agent still localizes via the
+  per-axis breakdown, never via the headline. Hence actionability/
+  legibility is gated per-axis but not per-aggregator -- by design, not
+  by oversight. (PGM was ultimately not shipped regardless; see below.)
 
 ## What ships and what doesn't
 

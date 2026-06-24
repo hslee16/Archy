@@ -85,10 +85,39 @@ packages), not a bug. It means an agent's single-edge mental model under-models 
 real submodule import by the ancestor edges. **Actionable guidance (now in the
 tool description):** to model a submodule import exactly, include the ancestor
 edges in the delta; a lone submodule edge is a lower bound on the real impact.
-~4% of single-line import edits in the corpus touch more than one graph edge.
-(The bench skips qualnames that are not valid dotted identifiers, e.g. a
+~4% of single-line import edits in the corpus (12/327) touch more than one graph
+edge. (The bench skips qualnames that are not valid dotted identifiers, e.g. a
 `unicode8-0-0.py` data module, so a syntactically invalid injected import cannot
 masquerade as an ancestor-edge divergence.)
+
+**When the gap strikes (it is not uniform).** The divergence is concentrated, not
+random, so the headline 96% understates how reliable simulate is for the common
+case and overstates it for one specific case:
+
+- **By edit direction:** 11 of the 12 dirty samples are *removals*. Removing a
+  submodule import line (`from a.b import c`) usually also drops the `a -> a.b`
+  ancestor edge, because the `__init__` was reached only through that line.
+  Additions diverge far less often (1/12) -- adding `from a.b import c` to a
+  module that already imports something else under `a.b` adds only the leaf edge.
+  An agent simulating a *removal* of a deep submodule import is the case most
+  likely to under-model real impact.
+- **By repo:** the 96% is a corpus-wide pooled rate, not a per-repo guarantee.
+  Per-repo clean rates run ~93% (scrapy, pydantic, datasette, mkdocs, flask --
+  repos with deep submodule packages) up to 100% (fastapi, starlette, httpx,
+  click -- flatter package trees). The fidelity an agent actually sees depends on
+  how deeply nested the target repo's packages are.
+
+This is the honest reading of the fidelity number: it is a real, agent-facing
+limitation (an intended edge that does not match the written one), not just a
+measurement artifact, and it falls predominantly on submodule-import removals in
+deeply-nested packages.
+
+**Corpus caveat.** 327 samples drawn from 11 mid-sized Python repos (<=174
+modules) is a convenience corpus, not a stratified sample, and the run reports no
+confidence interval. The 96% should be read as "roughly 19 in 20 on repos of this
+shape," not a precise population estimate; a corpus that over- or under-represents
+deeply-nested packages would move it. Wider and stratified sampling is future
+work.
 
 ## Scale + performance (closes the corpus gap)
 
@@ -128,11 +157,13 @@ correctness follows from that function plus the verified edge application.
 
 ## Bottom line
 
-- The oracle holds exactly (308/308, 0 bugs) whenever the agent's delta is the
+- The oracle holds exactly (315/315, 0 bugs) whenever the agent's delta is the
   edge that actually gets written.
 - It diverges precisely when a single import maps to multiple graph edges
-  (ancestor packages, ~6%); this is documented, quantified, and surfaced in the
-  tool description rather than hidden.
+  (ancestor packages, ~4%: 12/327); this is documented, quantified, and surfaced
+  in the tool description rather than hidden. The divergence is directional --
+  11 of the 12 dirty samples are *removals* of a submodule import, where dropping
+  the line also drops the ancestor `__init__` edge.
 - simulate is cheap relative to a diff (~1.2x) at every scale tested; its
   absolute cost on very large graphs is a snapshot-cost property, not a simulate
   one.

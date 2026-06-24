@@ -51,7 +51,7 @@ The gap is real but it is **coupling-strength and type-coverage shaped**, not ca
 
 From the 27-project bench ([`bench/results.md`](../../bench/results.md), captured 2026-05-14):
 
-**Orthogonality.** Max `|r| = 0.229` against modularity, acyclicity, depth, equality, propagation_cost. Below the OECD redundancy threshold (`|r| > 0.7`) by a wide margin. Substantially more orthogonal than any existing inter-axis pair (median `|r| ~ 0.45`).
+**Orthogonality.** Max `|r| = 0.229` against modularity, acyclicity, depth, equality, propagation_cost. Below the OECD redundancy threshold (`|r| > 0.7`) by a wide margin. More orthogonal than the typical existing inter-axis pair: on the current bench the 10 inter-axis pairs have **median `|r| = 0.32`, max `0.61`** (modularity ↔ depth); `calls_per_edge`'s 0.229 sits below even the median pair. (An earlier draft cited "median ~0.45"; that figure was not reproducible against the committed correlation matrix in [`bench/results.md`](../../bench/results.md) and has been corrected.)
 
 **Distribution.** Heavy-tailed:
 
@@ -78,9 +78,9 @@ The composite-indicator literature (OECD Handbook, JRC reports) is explicit on t
 
 ### Condition 2: directionality is shape-driven, not quality-driven
 
-The top of the distribution (numpy, pygments, mkdocs, mypy, scikit-learn) is dominated by scientific-Python and AST-heavy tools. The bottom (starlette, scrapy, flask, boto3, msgspec) is web frameworks, auto-generated SDKs, and compact serializers. Both top and bottom are full of widely-respected, well-architected codebases.
+The top of the distribution (numpy, pygments, mkdocs, mypy, scikit-learn) is dominated by scientific-Python and AST-heavy tools. The bottom (starlette, scrapy, flask, boto3) is web frameworks and auto-generated SDKs that score well on archy's own axes (boto3 0.653, starlette 0.610, scrapy 0.606). The point is that the bottom of the `calls_per_edge` distribution is **not** populated by structurally bad code. (msgspec also sits low on `calls_per_edge` at 2.67, but it is a poor exemplar for "low density is fine": it is a tiny 10-module serializer that scores 0.394 overall, the lowest on the bench, with acyclicity 0.100 -- ~90% of it inside cycles by design. Its low density says nothing about quality either way, so it is excluded from the "well-architected bottom" claim rather than cited in support of it.)
 
-The signal is correlated with **codebase shape**, not **codebase health**:
+The signal is correlated with **codebase shape**, not **codebase health**. The strongest direct evidence is that `calls_per_edge` barely correlates with archy's own composite at all: across the 28-project bench, **Pearson `r = -0.03`, Spearman `+0.18`** between `calls_per_edge` and `overall`. A would-be quality axis that is statistically uncorrelated with the quality composite is, almost by definition, not measuring the same thing. Mechanistically:
 
 - High `calls_per_edge` is caused by intra-module function dispatch (numpy's ndarray methods route through a handful of internal modules; mypy's analysis pipeline runs many narrow passes against the same nodes).
 - Low `calls_per_edge` is caused by registry, plugin, and dynamic-dispatch patterns (starlette's middleware chain; scrapy's component registry; boto3's auto-generated SDK; msgspec's typed-dispatch shortcut).
@@ -93,7 +93,7 @@ Neither shape is intrinsically bad. [`RESEARCH_METRICS.md` section 16](RESEARCH_
 
 That section reads this as "the call signal is independent." It is. But independence with shape does not translate to a directional quality signal. Asking "is your `calls_per_edge` too high or too low?" depends on the answer to "what kind of codebase are you?" There is no defensible cross-population direction.
 
-Compare `cc_mean`. The top of its distribution (msgspec 5.33, ansible 4.42, datasette 4.37) arguably could refactor toward less branching per function, even though those codebases work. The bottom (mkdocs 1.77, anyio 2.03, boto3 2.11) is unambiguously good: short functions, few branches. "Lower is better" holds across shapes.
+Compare `cc_mean`. Its directionality is also hedged at the top of the distribution (msgspec 5.33, ansible 4.42, datasette 4.37 *work* despite higher branching), so the asymmetry with `calls_per_edge` is not that one is hedge-free. The difference is **external grounding**: "lower branch density is better" rests on a documented relationship between McCabe complexity and defect density (McCabe 1976 and the successor literature), so the direction holds across shapes even where a specific high-CC project is fine. `calls_per_edge` has no comparable literature giving "lower (or higher) is better" a cross-population meaning; its direction flips with codebase shape. The claim here is therefore directional-evidence-backed for `cc_mean` and directional-evidence-absent for `calls_per_edge`, not "confident vs hedged."
 
 ### Condition 3: no canonical positive refactoring exists
 
@@ -156,7 +156,9 @@ The strongest gap-filler candidate is **type-hint coverage**:
 - Actionable: "add type hints to your public functions" is a standard, well-supported refactoring.
 - Likely discriminant validity: heavily-typed projects (msgspec, pydantic, anyio) tend to rank high on community quality perceptions; un-typed legacy projects rank low.
 
-This is the natural 6th axis if archy ever adds one, and the case for it is structurally stronger than the case for `calls_per_edge` on every dimension.
+> **Consistency note (added in review).** The "likely discriminant validity" claim above is a *hypothesis stated on the same unstudied basis* this document uses to reject `calls_per_edge` in Condition 4 -- impressionistic appeal to which projects are "widely respected," not a ranking study. Holding both to the same bar: this was a hypothesis, not a finding. It was subsequently tested empirically in [`TYPE_HINT_COVERAGE_EMPIRICS.md`](TYPE_HINT_COVERAGE_EMPIRICS.md) (2026-05) and **refuted** -- discriminant validity was contested (django / numpy / boto3 sit at near-zero coverage) and independence was the weakest archy has measured (`|r| = 0.551`). The conclusion below ("structurally stronger than `calls_per_edge`") held only until that data arrived; see the struck-through recommendation 3.
+
+This was the natural 6th axis candidate when written, and the *a priori* case for it looked structurally stronger than the case for `calls_per_edge` on every dimension. Empirics later overturned that (above).
 
 ## Diminishing returns: the case for not adding more axes at all
 
