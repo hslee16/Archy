@@ -14,6 +14,32 @@ it from the CLI via `archy mcp`.
 Tool returns are pydantic models; FastMCP serializes them to JSON for
 the MCP client. The model shapes are the public wire contract for any
 agent calling these tools.
+
+## Structured output (2025-06-18 spec)
+
+FastMCP derives an `outputSchema` (JSON Schema) from each tool's return
+annotation and attaches it to the `tools/list` entry, so every archy tool
+declares its result shape up front. Each `tools/call` then returns BOTH a
+machine-readable `structuredContent` (the JSON object, validated against
+that schema) AND a `TextContent` block carrying the same JSON serialized,
+which clients may prefer for token-efficient agent UX. archy gets this for
+free from the SDK; no per-tool opt-in is needed.
+
+Two wrapping rules worth knowing:
+
+- A tool whose return is a bare sequence (`list[Cycle]` for `archy_cycles`,
+  `list[TrendRow]` for `archy_trend`) is wrapped under a top-level `result`
+  key, because `structuredContent` MUST be a JSON object, not an array.
+- A tool whose return is a union (`DiffReport | DiffErrorPayload`,
+  `GraphPayload | GraphTooLargePayload`, `DSM | DSMDiff | DSMErrorPayload`)
+  is likewise wrapped under `result`, with the union expressed as the
+  schema's `anyOf`; every branch (including the `*ErrorPayload` ones) is a
+  conforming member, so an in-band error result still validates.
+
+One benign edge: an *empty* sequence return yields `structuredContent`
+`{"result": []}` with no accompanying `TextContent` block (FastMCP emits one
+content block per element). The structured form is unambiguous, so this is
+not a correctness gap. tests/test_mcp.py locks the whole contract.
 """
 
 from __future__ import annotations

@@ -65,6 +65,12 @@ dev = [
     "ruff>=0.6",
     "ty>=0.0.1a1",
     "import-linter>=2.11,<2.12",
+    # Used by tests/test_mcp.py to validate each tool's returned
+    # `structuredContent` against its declared `outputSchema` (the 2025-06-18
+    # MCP structured-output contract). Ships transitively with `mcp` already;
+    # declared here so the test's direct use is honest, not relying on a
+    # transitive dep.
+    "jsonschema>=4.0",
     # `tomli` is a *runtime* dep only on 3.10 (see [project] markers), but the
     # type checker assumes the 3.10 floor on every interpreter, so it must be
     # importable in the dev env regardless of the local Python version.

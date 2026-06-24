@@ -55,6 +55,7 @@ contracts = [
 [package.dev-dependencies]
 dev = [
     { name = "import-linter" },
+    { name = "jsonschema" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
@@ -88,6 +89,7 @@ provides-extras = ["contracts"]
 [package.metadata.requires-dev]
 dev = [
     { name = "import-linter", specifier = ">=2.11,<2.12" },
+    { name = "jsonschema", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.6" },
