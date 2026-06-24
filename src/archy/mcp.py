@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import cast
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict
 
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
@@ -486,9 +487,27 @@ def _register_prompts(server: FastMCP) -> None:
         return _AGENT_LOOP_PROMPT
 
 
+_READ_ONLY_ANNOTATIONS = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+"""All 19 archy tools are read-only structural analysis: they compute over a
+project and mutate nothing observable on the wire, are closed-domain (no
+network/external world), and are idempotent for a fixed source tree. Declaring
+this explicitly lets trusted clients auto-approve archy's calls instead of
+prompting on every read (MCP tool-annotations, 2025-03-26 spec). The two tools
+that write a dotfile under .archy/ (snapshot, record_baseline) are still
+read-only *for the model's purposes*: the file is a cache/baseline the next
+call reads, not an external side effect, and re-running them is idempotent."""
+
+
 def _register_tools(server: FastMCP) -> None:
     @server.tool(
         name="archy_score",
+        title="Score project structure",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Compute the composite quality score (modularity, acyclicity, depth, "
             "equality, complexity - geometric mean of five axes) for a Python "
@@ -514,6 +533,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_cycles",
+        title="Find import cycles",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Find import cycles (Tarjan SCCs of size >= min_size, plus self-loops) "
             "in a Python project. Returns cycles sorted largest-first."
@@ -528,6 +549,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_check",
+        title="Check layer boundaries",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "**Call after any Python edit that adds, removes, or changes an "
             "import statement.** Returns forbidden direct edges between layers "
@@ -546,6 +569,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_contracts",
+        title="Check import contracts",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "**Call after any Python edit that adds, removes, or changes an "
             "import statement, especially across package boundaries.** A "
@@ -568,6 +593,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_trend",
+        title="Read score history",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Read the recent score history (.archy/history.jsonl) for a Python "
             "project. Returns up to last_n rows ordered oldest-first so an agent "
@@ -579,6 +606,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_impact",
+        title="Compute change blast radius",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Given a list of changed file paths, return the internal modules "
             "that transitively import any of them (the blast radius). Use "
@@ -606,6 +635,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_affected",
+        title="Select affected tests and modules",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "CI-shaped impact lookup: given changed files (typically from "
             "`git diff --name-only`), return the impacted modules split into "
@@ -635,6 +666,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_snapshot",
+        title="Snapshot baseline",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Capture score, cycles, and layer violations to .archy/baseline.json "
             "as a baseline that archy_diff will compare against. Call at the "
@@ -652,6 +685,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_diff",
+        title="Diff against baseline",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Compare the current project state to the last snapshot. Returns "
             "a risk-weighted `summary` (headline + top regressions / "
@@ -666,6 +701,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_simulate",
+        title="Simulate import-edge change",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Counterfactual pre-edit check: given a proposed import-edge delta "
             "(`add` / `remove` lists of {from, to} module-or-path pairs), return "
@@ -699,6 +736,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_record_baseline",
+        title="Record score baseline",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Compute the score for a Python project AND append it to "
             ".archy/history.jsonl. Convenience wrapper for archy_score(record=True). "
@@ -717,6 +756,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_graph_focus",
+        title="Focus dependency subgraph",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Return a subgraph centered on one or more modules. Pass qualnames "
             "(e.g. 'archy.parser') or file paths. `depth` caps hop distance; "
@@ -744,6 +785,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_graph_summary",
+        title="Summarize dependency graph",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Whole-project structural overview sized for LLM context. Returns "
             "top-N modules by fan-in, fan-out, and PageRank (importance "
@@ -758,6 +801,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_graph",
+        title="Dump dependency graph",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Full dependency-graph dump matching `archy graph --format json`. "
             "Refuses to serialize graphs larger than `max_nodes` (default 500, "
@@ -780,6 +825,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_high_risk_modules",
+        title="Rank high-risk modules",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Return the top-N internal modules ranked by edit-risk: the "
             "geometric mean of MacCormack propagation cost, normalized "
@@ -797,6 +844,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_hotspots",
+        title="Rank complexity-x-churn hotspots",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Rank internal modules by cyclomatic complexity x git "
             "churn (Tornhill / CodeScene's 'Code Red'). Each entry is "
@@ -824,6 +873,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_what_to_refactor_next",
+        title="Rank refactor priorities",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "One ranked refactor-priority list that fuses both refactor "
             "signals so you make a single call instead of `archy_hotspots` "
@@ -855,6 +906,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_dsm",
+        title="Design Structure Matrix",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Design Structure Matrix view of the import graph. Returns a "
             "structured matrix the agent reads positionally: cell (row=source, "
@@ -895,6 +948,8 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_status",
+        title="Report index freshness",
+        annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Report the persistent index's freshness for a project. Returns "
             "`last_synced_at` (ISO timestamp of the most recent cache sync), "
