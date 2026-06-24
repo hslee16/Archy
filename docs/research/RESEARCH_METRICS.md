@@ -1223,7 +1223,8 @@ All six correlations sit well below the OECD `|r| > 0.7` redundancy
 threshold (max absolute is 0.197). `cc_mean` is the **most orthogonal
 new signal archy has ever measured**: more orthogonal than v0.16's
 call density (max `|r| = 0.229`) and substantially more so than any
-existing axis pair (median `|r| ~ 0.45`). This is what justified
+existing axis pair (median `|r| ~ 0.32`, max `0.61`, on the current
+bench). This is what justified
 the v0.20.0 promotion to a 5th score axis (initially `1 - clamp((cc_mean - 1)
 / 5, 0, 1)`, widened to `/8` in v0.23.0). The alternative path - redesigning the equality axis to
 use `gini(per_function_cc)` instead of `gini(out_degree)` - is still

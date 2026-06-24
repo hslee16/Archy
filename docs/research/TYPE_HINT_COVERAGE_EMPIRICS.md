@@ -35,7 +35,7 @@ This document is retained as a "we measured this, considered it, decided no" ref
 | equality | +0.037 |
 | complexity | -0.030 |
 
-Three of five at moderate coupling (`|r|` 0.5-0.7). All below the 0.7 OECD redundancy threshold, but well above the inter-axis median for any existing pair.
+Three of five at moderate coupling (`|r|` 0.5-0.7). All below the 0.7 OECD redundancy threshold, but well above the inter-axis median (`|r| ~ 0.32` on the current bench); type-hint coverage's strongest tie (depth, `+0.551`) is comparable to the most-correlated existing pair (modularity ↔ depth, `0.611`). This is the weakest independence archy has measured for a candidate signal.
 
 ## OECD four-criterion check
 

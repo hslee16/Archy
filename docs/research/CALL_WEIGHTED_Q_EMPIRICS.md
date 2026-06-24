@@ -23,7 +23,7 @@ The overall `archy score` formula is unchanged. No "record a new baseline" event
 
 ## What this diagnostic is for
 
-Five concrete use cases, all of which require the *gap* between the two values rather than either value alone:
+Five concrete use cases, all of which require the *gap* between the two values rather than either value alone. To be precise about what they need: every one relies on the gap's **sign or its trend over time**, not on a calibrated magnitude. (1) and (3) key off the sign (`Q_weighted < Q_unweighted`); (2) and (4) off the direction of change; (5) off relative ordering. That is appropriate for a side-by-side diagnostic and is also the reason this signal does not need the magnitude calibration a score axis would (it is never thresholded numerically):
 
 1. **Mismatch detector.** When `Q_weighted < Q_unweighted`, the package layout doesn't reflect call patterns. The decomposition is aspirational, not realized. Maintainers and agents should know this before treating package boundaries as load-bearing.
 2. **Architectural drift detection over time.** A widening gap means the package layout is drifting from actual usage. Leading indicator that's invisible to the existing five axes.
@@ -42,6 +42,8 @@ Built each of the 27 bench projects (`bench/projects.yaml`) and computed two Q v
 - `Q_unweighted`: current `compute_modularity` shape; every edge counts equally.
 - `Q_weighted`: same Clauset-Newman-Moore greedy algorithm, edges weighted by `call_count` with a weight=1 fallback for import-only edges. The fallback preserves every structural edge in the modularity computation rather than zeroing out import-only edges that genuinely carry coupling signal.
 
+**Weighting-policy caveat.** The `weight=1` fallback is one policy choice among several (alternatives: `weight=0` to drop import-only edges, or a log/sqrt compression of `call_count` to damp high-traffic outliers like numpy at 52k calls). This study did not sweep those alternatives, so the size of the gap -- and some of the rank shifts driven by high-traffic projects -- are sensitive to the fallback and the linear weighting in ways not yet bounded. The *decision* (ship as diagnostic, not axis) is robust to this because it turns on direction-contestedness, not on the precise gap; a magnitude-calibrated use would need the policy sweep first. Future work.
+
 ### Headline finding
 
 Pearson `r = +0.136` between `Q_unweighted` and `Q_weighted` across the 27 projects. The two formulations are nearly independent signals. Distribution detail:
@@ -53,6 +55,8 @@ Pearson `r = +0.136` between `Q_unweighted` and `Q_weighted` across the 27 proje
 ### Project-level rank shifts
 
 The largest rank movements cluster into two distinguishable patterns. (Full table in `bench/call_weighted_modularity_results.md`.)
+
+**Caveat: the direction of movement is not predicted by `calls/edge`, and the per-row readings are interpretive, not derived.** Both groups span nearly the full density range -- "moved up" runs 2.74 (archy) to 11.97 (mkdocs); "moved down" runs 2.67 (msgspec) to 52.68 (numpy). A project's `calls/edge` magnitude therefore does not tell you which way its rank moves under weighted Q; what moves the rank is whether call traffic falls *inside* or *across* the import-defined communities, which is the gap itself, not the density. The "reading" column below is a post-hoc narrative for each project, not a controlled attribution: rank shifts also confound community granularity (msgspec's tiny clusters), project size, and the weight-1 fallback policy. Read the readings as plausible mechanism, not measured cause.
 
 **Moved up under weighted Q** (call traffic aligns with the import-graph communities):
 
@@ -92,7 +96,7 @@ The v0.20 promotion of `cc_mean` to a score axis was a layup: cross-population d
 
 Call-weighted Q fails the analogous tests:
 
-1. **Direction is contested across the population.** numpy's drop from rank 10 to rank 22 reflects its small-core / broad-call shape, which is *intentional* and widely considered well-architected. sqlalchemy's drop reflects a deliberate ORM-core / dialect-adapter split where adapters call into the core a lot. Penalizing these designs as a headline-score reduction is not defensible.
+1. **Direction is contested across the population.** numpy's drop from rank 10 to rank 22 reflects its small-core / broad-call shape; sqlalchemy's drop reflects an ORM-core / dialect-adapter split where adapters call into the core a lot. These are *deliberate, widely-adopted* designs (the claim here is that they are intentional and mainstream, not a ranked verdict that they are "well-architected" -- archy has no expert-ranking data to assert that, per the Condition-4 caveat in `AXIS_REVIEW.md`). Penalizing a deliberate, mainstream design pattern as a headline-score reduction is not defensible without that directional evidence.
 2. **Refactoring action is unclear.** "Reduce cross-community call traffic" implies either reorganizing packages to follow call patterns (rare in mature projects) or reducing the number of cross-community calls (inlining, duplication, both bad practice).
 3. **Replacement changes the meaning of the axis.** Trends in `.archy/history.jsonl` would break in a way that's not just "shifted by a constant" but "now measuring something different." The OECD versioning machinery handles axis additions cleanly; it handles axis redefinitions less cleanly.
 
