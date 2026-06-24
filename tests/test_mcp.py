@@ -191,17 +191,27 @@ def test_tool_result_conforms_to_output_schema(
 # --- #226 concise-by-default response shaping ---------------------------------
 
 
-def _dsm(path: Path, response_format: str = "summary", **kw):
-    base = dict(
-        group_by="community",
-        weight="imports",
-        focus=None,
-        focus_depth=1,
-        package=None,
-        baseline_path=None,
+def _dsm(
+    path: Path,
+    response_format: str = "summary",
+    *,
+    group_by: str = "community",
+    weight: str = "imports",
+    focus: str | None = None,
+    focus_depth: int = 1,
+    package: str | None = None,
+    baseline_path: str | None = None,
+):
+    return _run_dsm(
+        path,
+        response_format=response_format,
+        group_by=group_by,
+        weight=weight,
+        focus=focus,
+        focus_depth=focus_depth,
+        package=package,
+        baseline_path=baseline_path,
     )
-    base.update(kw)
-    return _run_dsm(path, response_format=response_format, **base)
 
 
 def _fan_out_project(tmp_path: Path, fan: int) -> Path:
