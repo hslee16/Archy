@@ -173,6 +173,28 @@ not capture (it gave 0.5 either way).
   backwards compatibility and as a quick "how many independent
   groups need fixing" stat.
 
+**On `overall` and single regressions at scale (a documented property, not an
+open question).** Because acyclicity is a *fraction*, one freshly-introduced
+2-cycle moves it by `tangle_ratio = 2 / total_nodes`, which is intentionally
+tiny on a large graph; passed through the five-axis geometric mean, its effect on
+`overall` shrinks to a fraction of a percent (≈0.000005 on a 5000-module graph).
+This is by design. `overall` is a slow-moving *health-state* trend, not a
+per-edge regression detector. The per-edge "did my edit introduce a cycle?"
+signal is delivered exactly and without false positives by `archy_diff`:
+`cycles.added` (the precise module pair) and the acyclicity-axis delta sign,
+which the [direction harness](../bench/delta_direction.py) hard-asserts strictly
+negative on every corpus and synthetic graph. Issue
+[#192](https://github.com/hslee16/archy/issues/192) evaluated blending a
+count-sensitive term into the acyclicity axis so a single cycle would register on
+`overall`; the corpus empirics
+([`ACYCLICITY_DILUTION_EMPIRICS.md`](research/ACYCLICITY_DILUTION_EMPIRICS.md))
+rejected every candidate. A count term docks a large near-acyclic codebase the
+same per-cycle penalty as a tiny tangled one (fastapi at 99.0% acyclic would lose
+0.10 of the axis for 2 isolated cycles), inverting the proportional-pathology
+rationale and confounding the axis with raw module count, while duplicating a
+signal `archy_diff` already provides FP-free. The dilution stays; the regression
+signal lives in the diff.
+
 ### Depth
 
 > **What it measures:** the length of the longest dependency chain.
