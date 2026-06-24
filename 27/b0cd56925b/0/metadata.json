@@ -1,0 +1,90 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "27b0cd56925b",
+  "session_id": "e8897a68-12e8-4c11-8394-bbf10769f0b5",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-24T16:30:19.641867Z",
+  "branch": "alee/192-acyclicity-dilution-decision",
+  "checkpoints_count": 2,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "78b8cd60619d",
+  "checkpoint_transcript_start": 386,
+  "transcript_lines_at_start": 386,
+  "token_usage": {
+    "input_tokens": 5623,
+    "cache_creation_tokens": 275073,
+    "cache_read_tokens": 7589137,
+    "output_tokens": 48382,
+    "api_call_count": 40
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-deepwork:review-2026-06-24T15:43:27.591399Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "6730ddcb6f35",
+      "timestamp": "2026-06-24T15:43:27.591399Z",
+      "native": {
+        "command": "/deepwork:review"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/deepwork:review",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_011cmsWtQ4mxkWFyFrJSUKkt",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "78b8cd60619d",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 377,
+        "end": 378,
+        "entry_ids": [
+          "207abc70-41c4-4f58-bf21-a208752784a3"
+        ],
+        "tool_use_id": "toolu_011cmsWtQ4mxkWFyFrJSUKkt"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_011cmsWtQ4mxkWFyFrJSUKkt"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
