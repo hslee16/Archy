@@ -227,6 +227,9 @@ __marimo__/
 .deepwork/
 .deepreview
 
+# Entire (local-only checkpoint/transcript history)
+.entire/
+
 # archy score history (per-checkout, not committed; one row per `archy score --record`)
 .archy/
 
