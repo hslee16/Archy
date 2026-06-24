@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "31dbd3701c3d",
+  "strategy": "manual-commit",
+  "branch": "alee/research-doc-honesty-172-174",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/LEARNINGS.md",
+    "docs/research/AXIS_REVIEW.md",
+    "docs/research/CALL_WEIGHTED_Q_EMPIRICS.md",
+    "docs/research/DSM_EMPIRICS.md",
+    "docs/research/INLOOP_PREVALENCE_EMPIRICS.md",
+    "docs/research/RESEARCH_METRICS.md",
+    "docs/research/SCORE_SHAPE_REDESIGN_EMPIRICS.md",
+    "docs/research/SIMULATE_ORACLE_EMPIRICS.md",
+    "docs/research/TYPE_HINT_COVERAGE_EMPIRICS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/31/dbd3701c3d/0/metadata.json",
+      "transcript": "/31/dbd3701c3d/0/full.jsonl",
+      "content_hash": "/31/dbd3701c3d/0/content_hash.txt",
+      "prompt": "/31/dbd3701c3d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12469,
+    "cache_creation_tokens": 157425,
+    "cache_read_tokens": 5221745,
+    "output_tokens": 56571,
+    "api_call_count": 60
+  }
+}
