@@ -269,6 +269,14 @@ The server also exposes a `loop` **prompt** with the agent feedback-loop playboo
 
 Every tool declares an `outputSchema` (JSON Schema, derived from its return model) in `tools/list`, and every `tools/call` returns both a `structuredContent` object (validated against that schema) and a text block with the same JSON, per the [2025-06-18 MCP structured-output spec](https://modelcontextprotocol.io/specification/2025-06-18). All tools are also annotated `readOnlyHint: true` (closed-domain, idempotent, non-destructive), so trusted clients can auto-approve archy's calls instead of prompting on every read. Sequence returns (`archy_cycles`, `archy_trend`) and union returns (`archy_diff`, `archy_graph`, `archy_dsm`) are wrapped under a top-level `result` key since `structuredContent` must be a JSON object; for unions every branch (including the in-band `*ErrorPayload` shapes) is a conforming `anyOf` member.
 
+#### Error model (recovery contract)
+
+archy maps failures onto MCP's two error mechanisms with one convention, so an agent has a single recovery contract:
+
+- **Usage error → `isError: true`** (a raised exception): an invalid argument *value* (e.g. `response_format="xml"`, `last_n=0`), a *malformed* `archy.yaml`, or a project over the scan ceiling. The caller must fix the call or the environment.
+- **Recoverable / advisory → in-band result (`isError: false`)**: an expected precondition that isn't met but is recoverable, or a valid-but-degraded result. These are normal results the agent branches on. Either a **union variant** when there's no usable result (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no config → `CheckErrorPayload`, no DSM snapshot → `DSMErrorPayload`), or an **advisory field** on an otherwise-valid payload (`ContractsPayload.available=false`, `HotspotsPayload.note`, `WhatToRefactorPayload.git_available`). The marker for a "no usable result" variant: a payload with an `error` field and no success data.
+- **Protocol error (JSON-RPC)**: unknown tool or a missing/mistyped required argument, handled by the framework.
+
 #### Wiring it into your agents
 
 One command detects your installed clients (Claude Code, Cursor, Codex CLI, opencode, Continue) and wires each one up:

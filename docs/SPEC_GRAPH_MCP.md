@@ -94,7 +94,10 @@ class GraphPayload(BaseModel):
 # Separate model rather than a `truncated: bool` flag so the typed union
 # (`GraphPayload | GraphTooLargePayload`) forces callers to handle the
 # refusal case explicitly instead of silently treating a truncated graph
-# as complete.
+# as complete. This is the tier-3 "recoverable, no usable result" shape of
+# archy's error model (a payload with an `error` field, returned in-band as
+# isError:false); see the "Error model" section in the README and the
+# src/archy/mcp.py module docstring.
 class GraphTooLargePayload(BaseModel):
     error: str
     node_count: int

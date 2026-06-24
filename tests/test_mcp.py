@@ -17,7 +17,10 @@ from pathlib import Path
 import pytest
 
 from archy.dsm import DSM, DSMSummary
+from archy.layers import LayerConfigError
 from archy.mcp import (
+    CheckErrorPayload,
+    CheckPayload,
     DSMTooLargePayload,
     ForbiddenEdge,
     GraphPayload,
@@ -162,6 +165,7 @@ def test_all_tools_declare_output_schema():
         ("archy_dsm", {}, True),  # union, default summary branch (DSMSummary)
         ("archy_dsm", {"response_format": "full"}, True),  # union, full branch (DSM)
         ("archy_diff", {}, True),  # union, in-band error branch (no baseline -> DiffErrorPayload)
+        ("archy_check", {}, True),  # union, tier-3 no-config branch (CheckErrorPayload)
         ("archy_cycles", {}, False),  # bare list, empty on an acyclic project -> {"result": []}
     ],
 )
@@ -186,6 +190,28 @@ def test_tool_result_conforms_to_output_schema(
     assert not errors, f"{name} structuredContent violates outputSchema: {errors[:1]}"
     has_text = any(getattr(block, "text", None) for block in content)
     assert has_text is expect_text
+
+
+def test_error_model_tier2_raises_tier3_returns_in_band(acyclic_project: Path):
+    # The #229 recovery contract at the wire: a tier-2 usage error (invalid
+    # argument value) surfaces as isError (call_tool raises ToolError), while a
+    # tier-3 recoverable condition (no archy.yaml, no baseline) comes back as a
+    # normal in-band result the agent branches on.
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    server = create_server()
+    path = str(acyclic_project)
+
+    # Tier 2: bad argument value -> isError.
+    with pytest.raises(ToolError):
+        asyncio.run(server.call_tool("archy_graph", {"path": path, "response_format": "xml"}))
+
+    # Tier 3: recoverable preconditions -> in-band result (no raise).
+    for name in ("archy_check", "archy_diff"):
+        _content, structured = asyncio.run(server.call_tool(name, {"path": path}))
+        assert isinstance(structured, dict)
+        inner = structured.get("result", structured)
+        assert "error" in inner, f"{name} tier-3 result should carry an in-band error field"
 
 
 # --- #226 concise-by-default response shaping ---------------------------------
@@ -379,10 +405,33 @@ def test_run_check_payload_shape(tmp_path: Path):
         "  - {from: core, to: cli}\n"
     )
     result = _run_check(tmp_path, config_path=None)
+    assert isinstance(result, CheckPayload)
     assert result.passed is False
     [violation] = result.violations
     assert violation.rule.from_layer == "core"
     assert violation.rule.to_layer == "cli"
+
+
+def test_run_check_missing_config_returns_in_band(tmp_path: Path):
+    # Tier-3 recoverable precondition: no archy.yaml -> in-band CheckErrorPayload
+    # (isError:false), NOT a raise, so the agent can branch and create a config.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    result = _run_check(tmp_path, config_path=None)
+    assert isinstance(result, CheckErrorPayload)
+    assert "archy.yaml" in result.error
+
+
+def test_run_check_malformed_config_raises(tmp_path: Path):
+    # Tier-2 usage error: a broken archy.yaml cannot be checked against, so it
+    # raises (-> isError:true at the wire), distinct from the no-config case.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (tmp_path / "archy.yaml").write_text("layers: [not a mapping\n")
+    with pytest.raises(LayerConfigError):
+        _run_check(tmp_path, config_path=None)
 
 
 def _make_sdp_violating_project(tmp_path: Path) -> Path:
@@ -409,6 +458,7 @@ def test_run_check_reports_sdp_violations_when_enabled(tmp_path: Path):
         "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  tolerance: 0.0\n"
     )
     result = _run_check(project, config_path=None)
+    assert isinstance(result, CheckPayload)
     assert result.passed is False
     assert result.violations == ()
     [violation] = [v for v in result.sdp_violations if v.source == "myapp.a"]
@@ -419,6 +469,7 @@ def test_run_check_skips_sdp_when_disabled(tmp_path: Path):
     project = _make_sdp_violating_project(tmp_path)
     (project / "archy.yaml").write_text("layers: {}\nforbid: []\n")
     result = _run_check(project, config_path=None)
+    assert isinstance(result, CheckPayload)
     assert result.passed is True
     assert result.sdp_violations == ()
 
@@ -429,6 +480,7 @@ def test_run_check_warn_mode_reports_violations_but_passes(tmp_path: Path):
         "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  mode: warn\n"
     )
     result = _run_check(project, config_path=None)
+    assert isinstance(result, CheckPayload)
     # Violations still reported, but passed=True so CI/agents can adopt SDP
     # without it being a hard gate yet.
     assert result.passed is True

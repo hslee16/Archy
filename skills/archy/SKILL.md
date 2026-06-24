@@ -198,6 +198,8 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 
 The MCP server also exposes a `loop` **prompt** containing the canonical playbook in archy's own words. Fetch it via `prompts/get name="loop"` for the always-current version.
 
+**Error model (recovery contract).** A failure is one of two kinds. A **usage error** (bad argument value like `response_format="xml"` or `last_n=0`, a malformed `archy.yaml`, or a project over the scan ceiling) comes back as `isError: true` (a raised error); fix the call or the environment. A **recoverable condition** comes back as a normal `isError: false` result you branch on: either a payload with an `error` field and no success data (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no `archy.yaml` → `CheckErrorPayload`), or an advisory field on a still-valid result (`available=false`, `note`, `git_available`). So `archy_check` on a project with no config returns an in-band `CheckErrorPayload`, not an error: create a config or move on.
+
 ## Decision rules
 
 **Which check tool to run after an import edit:**
