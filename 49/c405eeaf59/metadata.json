@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "49c405eeaf59",
+  "strategy": "manual-commit",
+  "branch": "alee/177-179-bench-rigor",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "bench/run.py",
+    "docs/SCORING.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/49/c405eeaf59/0/metadata.json",
+      "transcript": "/49/c405eeaf59/0/full.jsonl",
+      "content_hash": "/49/c405eeaf59/0/content_hash.txt",
+      "prompt": "/49/c405eeaf59/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 25954,
+    "cache_creation_tokens": 1278138,
+    "cache_read_tokens": 60555952,
+    "output_tokens": 245428,
+    "api_call_count": 236
+  }
+}
