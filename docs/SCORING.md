@@ -14,8 +14,8 @@ sentrux's [`quality-signal-design.md`][sentrux-design]. The fifth axis
 (complexity) was promoted from a v0.17 diagnostic to a score axis in
 v0.20 after the then-27-project benchmark showed it is the most
 orthogonal signal archy has ever measured against the existing four
-(max `|r| = 0.197` at the time; `|r| = 0.159` on the current
-28-project bench after pytorch was added); the validation evidence
+(max `|r| = 0.197` at the time; `|r| = 0.182` on the current
+29-project bench); the validation evidence
 lives in
 [`docs/research/RESEARCH_METRICS.md` section 17](research/RESEARCH_METRICS.md).
 archy defers sentrux's redundancy axis; see
@@ -288,8 +288,8 @@ mapped linearly to `[0, 1]` with the floor at the theoretical minimum
 complexity = 1 - clamp((cc_mean - 1) / 8, 0, 1)
 ```
 
-Anchor points from the 28-project benchmark
-([`RESEARCH_METRICS.md` section 17](research/RESEARCH_METRICS.md)):
+Anchor points from the cc_mean capture in
+[`RESEARCH_METRICS.md` section 17](research/RESEARCH_METRICS.md):
 
 - mkdocs at `cc_mean = 1.77` -> `complexity = 0.904`
 - archy at `cc_mean = 3.73` -> `complexity = 0.659`
@@ -442,29 +442,36 @@ The OECD Handbook on Constructing Composite Indicators recommends
 testing this empirically: pairwise correlation between sub-indicators
 above ~`|r| = 0.7` is treated as a "symptom of double counting."[^oecd-handbook]
 
-Pairwise Pearson correlations on the 28-project benchmark spanning
+Pairwise Pearson correlations on the 29-project benchmark spanning
 small CLI tools to very large frameworks (msgspec at 10 modules,
-django at 902, dagster at 801, pytorch at 2,252), captured 2026-05-18
+django at 907, dagster at 805, pytorch at 2,325), captured 2026-06-24
 against pinned SHAs (see [`bench/projects.yaml`](../bench/projects.yaml)):
+
+> The manifest has grown over time (27 -> 28 -> 29 projects as
+> home-assistant and others were pinned in). Dated empirical captures
+> elsewhere in the docs cite their manifest size at capture time:
+> `RESEARCH_METRICS.md` sections 16/17 at 27 projects, and the 2026-05
+> score-shape study at 28 (27 manifest plus one private guinea-pig
+> repo). The live manifest, and `bench/results.md`, are at 29.
 
 | Pair                     |    `r` |
 | ------------------------ | -----: |
-| modularity ↔ acyclicity  | +0.383 |
-| modularity ↔ depth       | -0.617 |
-| modularity ↔ equality    | -0.389 |
-| modularity ↔ complexity  | +0.110 |
-| acyclicity ↔ depth       | -0.581 |
-| acyclicity ↔ equality    | -0.458 |
-| acyclicity ↔ complexity  | +0.068 |
-| depth ↔ equality         | +0.359 |
-| depth ↔ complexity       | -0.052 |
-| equality ↔ complexity    | +0.159 |
+| modularity ↔ acyclicity  | +0.382 |
+| modularity ↔ depth       | -0.611 |
+| modularity ↔ equality    | -0.353 |
+| modularity ↔ complexity  | +0.126 |
+| acyclicity ↔ depth       | -0.590 |
+| acyclicity ↔ equality    | -0.366 |
+| acyclicity ↔ complexity  | +0.116 |
+| depth ↔ equality         | +0.278 |
+| depth ↔ complexity       | -0.084 |
+| equality ↔ complexity    | +0.182 |
 
 All ten pairs are below `|r| = 0.7`, the OECD-conventional threshold
 for treating sub-indicators as redundant. **Two of ten sit at
 "moderate" coupling (`|r| ∈ [0.5, 0.7]`)**, both involving the
 original four axes (modularity↔depth and acyclicity↔depth). The four
-pairs involving `complexity` are all weakly coupled (`|r| ≤ 0.14`),
+pairs involving `complexity` are all weakly coupled (`|r| ≤ 0.19`),
 the orthogonality that motivated its v0.20 promotion from diagnostic
 to a fifth axis. Orthogonality is necessary but not sufficient; the
 sufficiency case is qualitative (the "compact but branchy" gap that
@@ -473,26 +480,24 @@ discrimination ablation, which has not been run.
 
 Concretely:
 
-- **modularity ↔ depth at `-0.617`**: deeper graphs tend to have
+- **modularity ↔ depth at `-0.611`**: deeper graphs tend to have
   higher modularity. Plausible: in a deep DAG, communities form
   along the chain naturally, so longer chains give Newman's Q more
-  structure to find. Tightened slightly with pytorch's addition
-  (modularity 0.680 / depth 0.286), now the dominant moderate pair.
-- **acyclicity ↔ depth at `-0.581`**: codebases with low acyclicity
+  structure to find. The dominant moderate pair (highest `|r|` of the
+  ten).
+- **acyclicity ↔ depth at `-0.590`**: codebases with low acyclicity
   also tend to have low depth scores (longer chains). A graph that's
   mostly inside a few SCCs has fewer free DAG hops to extend, but the
   SCC condensation it does have tends to be deep when the tangled
-  mass dominates. Eased from `-0.651` after pytorch (acyclicity 0.423
-  with depth 0.286 lands off-trend for this pair).
-- **acyclicity ↔ equality at `-0.458`**: stable since the prior
-  bench. Tangled hub modules pull both axes down, but the effect is
-  not strong enough to cross into the moderate band.
-- **modularity ↔ acyclicity at `+0.383`**: the wide-and-shallow plugin
-  shapes (pygments, setuptools) score high on both. Loosened from
-  `+0.454` after pytorch (high modularity, mid acyclicity).
-- **depth ↔ equality at `+0.359`**: weak and stable across sample
+  mass dominates. Sits just under the moderate-pair leader.
+- **acyclicity ↔ equality at `-0.366`**: tangled hub modules pull both
+  axes down, but the effect is not strong enough to cross into the
+  moderate band.
+- **modularity ↔ acyclicity at `+0.382`**: the wide-and-shallow plugin
+  shapes (pygments, setuptools) score high on both.
+- **depth ↔ equality at `+0.278`**: weak and stable across sample
   expansions.
-- **All four complexity pairs at `|r| ≤ 0.16`**: empirically the most
+- **All four complexity pairs at `|r| ≤ 0.19`**: empirically the most
   orthogonal axis archy has. Branchiness within functions does not
   correlate with the import-graph shape one way or the other; this is
   what makes the geometric mean's non-compensatory property bite
@@ -528,7 +533,7 @@ this passage said depth was "toothless" / "barely moves the score"; that
 conflated cross-project correlation with local sensitivity and was wrong.
 The four non-depth axes also carry non-trivial leverage, and the
 geometric mean's non-compensatory property bites on every axis.)
-Complexity remains the most orthogonal axis (max `|r| ≤ 0.14` against any
+Complexity remains the most orthogonal axis (max `|r| ≤ 0.19` against any
 other axis), so moving it does not mechanically move anything else.
 
 The flip side is that this couples the *diagnostic* signal usefully:
@@ -537,15 +542,75 @@ regression that smears across moderately-coupled axes. When using
 the breakdown to localize a drop, a single-axis movement is the
 sharpest pointer.
 
+### Corpus composition and validation honesty
+
+The independence numbers above are only as trustworthy as the corpus
+they are computed on. The honest caveats (raised by the 2026-06
+adversarial review, [#177]):
+
+- **It is a convenience sample, not a pre-registered one.** The corpus
+  grew from a seed of popular projects plus deliberate additions for
+  size/domain/shape coverage, with the rationale written *after*
+  selection ([`bench/projects.yaml`](../bench/projects.yaml)). It skews
+  toward mature, well-maintained libraries and contains no deliberately
+  pathological "negative control" (a project engineered to score badly).
+  Read the correlations as descriptive of this population, not as a
+  random sample of all Python code.
+- **archy is in its own corpus (dogfooding), but the conclusion does not
+  depend on it.** Recomputing the ten pairwise correlations with archy's
+  row removed moves the median `|r|` from `0.316` to `0.337` and the max
+  from `0.611` to `0.664` (`acyclicity ↔ depth`); still below `0.7`. The
+  self-referential data point does not prop up the independence claim.
+- **The pass is near the boundary and sensitive to the two special
+  points.** Dropping the huge outlier pytorch (9,647 modules) alone keeps
+  the max at `0.662`; but dropping *both* archy and pytorch pushes
+  `acyclicity ↔ depth` to **`0.737`, just over the `0.7` threshold**. So
+  the OECD pass on the depth pairs is real but not comfortable: it holds
+  for the corpus as sampled and is robust to either special point alone,
+  not to removing both. The moderate depth coupling documented above is
+  the live boundary, which is why a future formula change near it is now
+  gated (below) rather than trusted.
+- **The corpus is all stable, pinned SHAs; none mid-refactoring.** This
+  bench measures *static shape* across mature codebases. It does not
+  measure the agent-edit-loop direction signal archy is pitched for; that
+  is validated separately by
+  [`bench/delta_direction.py`](../bench/delta_direction.py) (known-sign
+  structural mutations) and [`bench/simulate_oracle.py`](../bench/simulate_oracle.py)
+  (pre-edit prediction fidelity).
+- **Call-graph diagnostics are computed on partial call resolution.**
+  Static call extraction covers a median ~58% of import edges (dynamic
+  dispatch, decorators, and re-exports are not followed), so
+  `calls_per_edge` and the call-weighted Q diagnostic are computed on that
+  fraction. `bench/results.md` now reports a per-project `coverage` column
+  so the reader can weight those rows accordingly.
+- **The complexity axis's upper range is under-represented in the public
+  corpus.** Public projects top out at `cc_mean = 5.33` (msgspec); the
+  `/8` divisor (v0.23) was calibrated for the `cc_mean ∈ [6, 9)` band seen
+  on a private validator-heavy backend that is *not* in the public bench
+  (see the Complexity section). The divisor choice is therefore
+  under-tested against the public corpus on exactly the codebases it was
+  meant to fix.
+
+**Falsification gate.** Because the independence claim is load-bearing and
+the depth pairs sit near the boundary, `bench/run.py` now *enforces* it
+rather than merely reporting it: the run prints an "Axis-independence
+gate" section and **exits non-zero if any axis pair exceeds `|r| = 0.7`**,
+and warns (exit zero) on the moderate `[0.5, 0.7]` band so the two depth
+pairs stay visible. A future scoring change that pushes a pair into
+redundancy fails the bench loudly instead of shipping a quietly-degraded
+correlation table. (The gate was validated when an offline run with an
+empty corpus cache produced degenerate `|r| = 1.0` correlations: it
+failed, as designed.)
+
 ## Interpreting a score
 
 There is no universal "good architecture score." The systematic-
 mapping literature on software-metric thresholds is explicit that
 thresholds must be derived empirically from a benchmark population
 rather than asserted from intuition.[^thresholds-empirical] The bands
-below are derived from archy's 28-project benchmark spanning small
+below are derived from archy's 29-project benchmark spanning small
 CLI tools (click, msgspec) to very large frameworks (pytorch at
-2,252 modules, django, numpy, sqlalchemy, dagster), with diversity
+2,325 modules, django, numpy, sqlalchemy, dagster), with diversity
 across web / async / scientific / ML
 / ORM / plugin-host / devops / workflow-orchestration / build-tooling
 / syntax-highlighting / generated-SDK domains. The mix is weighted
@@ -707,9 +772,10 @@ versioning discipline; see [Score-shape versioning](#score-shape-versioning).
 as a *diagnostic only*: per-edge `kinds`, `call_lines`, `call_count`
 attributes plus `inputs.total_calls` / `inputs.calls_per_edge` on
 `archy score`'s output. Not folded into the geometric mean. The
-28-project benchmark shows `calls_per_edge` is orthogonal to every
-existing axis (max `|r| = 0.229` against modularity, acyclicity,
-depth, equality, propagation_cost). The original plan was to promote
+benchmark shows `calls_per_edge` is orthogonal to every
+existing axis (max `|r| = 0.229` in the capture that introduced it,
+against modularity, acyclicity, depth, equality, propagation_cost).
+The original plan was to promote
 it to a score axis at a deliberate version boundary; that plan was
 reviewed after the v0.20 cc_mean promotion and **rejected** on
 directionality, actionability, and discriminant-validity grounds (see

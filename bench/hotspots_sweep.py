@@ -17,6 +17,27 @@ window-choice proxies:
 Output: a markdown report at `bench/hotspots_results.md` with a
 per-project table and aggregate medians.
 
+Limitations (these bound what the numbers prove; issue #179):
+
+* **Validates the window default, not hotspot correctness.** With no
+  labelled ground truth, a stable top-K across windows shows the
+  `--since` choice is low-stakes, not that the ranked files are the
+  "right" hotspots. This is a window-robustness proxy, not an accuracy
+  measure.
+* **`TOP_K = 20` is a fixed, unswept cutoff.** The overlap numbers are
+  reported at one K; they are not swept over K (e.g. 5/10/20/40), so the
+  reader cannot see whether stability is a knee or an artifact of this
+  particular K. A K-sensitivity sweep is unrun future work.
+* **Single point in time, no temporal validation.** Each project is
+  scored once at its pinned SHA across `--since` windows; the script does
+  not check whether the hotspot set itself drifts as the repo evolves
+  over calendar time. It measures window-choice stability, not hotspot
+  persistence.
+* **Low-activity projects inflate or zero the Jaccard.** A repo with few
+  recently-churned files can post a degenerate overlap (all-or-nothing),
+  so the aggregate medians mix high- and low-activity repos without
+  stratifying by churn volume.
+
 Usage:
     uv run --with pyyaml python bench/hotspots_sweep.py
     uv run --with pyyaml python bench/hotspots_sweep.py --stdout

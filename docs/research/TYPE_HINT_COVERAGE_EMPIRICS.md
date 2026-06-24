@@ -37,6 +37,11 @@ This document is retained as a "we measured this, considered it, decided no" ref
 
 Three of five at moderate coupling (`|r|` 0.5-0.7). All below the 0.7 OECD redundancy threshold, but well above the inter-axis median (`|r| ~ 0.32` on the current bench); type-hint coverage's strongest tie (depth, `+0.551`) is comparable to the most-correlated existing pair (modularity ↔ depth, `0.611`). This is the weakest independence archy has measured for a candidate signal.
 
+**Statistical caveats (these weaken the precision, not the decision).** Two limits apply to the Pearson values above:
+
+- **The coverage distribution is bimodal, not continuous.** The corpus splits into a heavily-typed cluster (the modern libraries near 0.95+ above) and a sparsely-typed cluster (legacy / scientific projects near or below 0.5), with little mass between. Pearson `r` assumes a roughly linear association over a continuous range; on a two-cluster variable it largely measures the separation between the clusters, so the exact coefficients should be read as "moderate, cluster-driven" rather than precise effect sizes. A rank-based or cluster-stratified analysis would be the rigorous follow-up.
+- **Five simultaneous correlations, no multiple-comparison correction, n=27.** These are exploratory tests, not confirmatory; at this sample size with five comparisons a borderline `|r|` should not be over-read in either direction. The decision does not lean on a precise threshold: type-hint coverage is rejected because its *strongest* tie (0.551) is the weakest independence of any candidate AND it fails directionality/actionability/value-prop (below), a conclusion robust to the exact coefficients.
+
 ## OECD four-criterion check
 
 Per [`AXIS_REVIEW.md`](AXIS_REVIEW.md): a sub-indicator must clear four criteria to belong in a quality composite.

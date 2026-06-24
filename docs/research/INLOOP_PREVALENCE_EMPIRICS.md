@@ -166,9 +166,13 @@ produce.
 - This is the **human-authored control base rate.** It does not measure agent-authored regression
   rates; that is Q1b. The study's purpose is to establish the control and the size-risk mechanism, not
   to prove the agent claim.
-- **Small absolute event count** (5 cycle regressions). The size relationship (median 7 vs 1) is
+- **Small absolute event count** (5 cycle regressions), so the rate itself is wide. The point
+  estimate 0.47% (5/1072, reported as "0.5%") carries a 95% Wilson confidence interval of
+  **[0.20%, 1.09%]** -- the true human base rate could be anywhere in roughly a 5x band. The
+  qualitative finding (cycle regressions are *rare*, low single-digit per-thousand) is robust across
+  that interval; any specific decimal is not. Likewise the size relationship (median 7 vs 1) is
   consistent across two sample sizes and directionally strong, but the precise multiplier is not
-  tightly estimated. More events (a larger or refactor-enriched corpus) would sharpen it.
+  tightly estimated. More events (a larger or refactor-enriched corpus) would sharpen both.
 - **Corpus is small-to-medium mature repos** with strong review cultures; large, tightly-coupled
   repos (django, sqlalchemy, pytorch) were excluded for build cost. Those already carry more cycles in
   stock ([`CASE_STUDIES.md`](../CASE_STUDIES.md)); their per-commit introduction rate may differ.

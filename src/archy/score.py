@@ -16,7 +16,7 @@ weak score on any axis pulls the overall down hard:
 * complexity: 1 - clamp((cc_mean - 1) / 8, 0, 1), where cc_mean is the
               mean per-function McCabe cyclomatic complexity across all
               internal modules. cc_mean=1 yields 1.0; cc_mean>=9 yields
-              0.0; the 27-project bench (RESEARCH_METRICS.md sec 17)
+              0.0; the bench capture in RESEARCH_METRICS.md sec 17
               sits in [1.77, 5.33] which maps to [0.90, 0.46]. Promoted
               from diagnostic to score axis in v0.20; the v0.20 divisor
               of /5 was widened to /8 in v0.23 after the original
@@ -281,8 +281,8 @@ def compute_complexity(cc_mean: float, function_count: int) -> float:
     Python project sits in the [2, 5] band which maps roughly linearly
     to [0.875, 0.5].
 
-    Anchor points from the 27-project benchmark (RESEARCH_METRICS.md
-    sec 17): mkdocs (1.77) -> 0.904; archy (3.73) -> 0.659; msgspec
+    Anchor points from the benchmark capture in RESEARCH_METRICS.md
+    sec 17: mkdocs (1.77) -> 0.904; archy (3.73) -> 0.659; msgspec
     (5.33) -> 0.459.
 
     Vacuous cases (return 1.0):
