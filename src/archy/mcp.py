@@ -67,11 +67,13 @@ from archy.diff_summary import summarize_diff
 from archy.dsm import (
     DSM,
     DSMDiff,
+    DSMSummary,
     GroupBy,
     Weight,
     build_dsm,
     diff_dsm,
     read_dsm,
+    summarize_dsm,
 )
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
@@ -132,8 +134,10 @@ confirm freshness explicitly. The loop is:
 
    For a bounded, bidirectional neighborhood with edge line numbers,
    use `archy_graph_focus(path, modules=[<file or qualname>])` instead.
-   `archy_graph_summary(path)` gives a top-N overview when you don't yet
-   know which module to look at. Before a non-trivial edit, call
+   `archy_graph(path)` gives a top-N overview (summary by default) when
+   you don't yet know which module to look at; pass
+   `response_format='full'` only when you actually need the whole node/
+   edge dump. Before a non-trivial edit, call
    `archy_high_risk_modules(path)` to see whether your target sits in
    the project's central-and-fragile zone (high blast radius combined
    with high instability); if it does, scope down or pause for review.
@@ -168,11 +172,13 @@ matrix the agent reads positionally, not a scalar. Use it when you
 need *where*, not *how much*: orienting in a new repo
 (`group_by='community'`), localizing a cycle to specific back-edges
 (`group_by='topological'`), or inspecting cross-layer traffic
-(`group_by='layer', weight='calls'`). Narrow large projects with
-`focus=<qualname>` or `package=<prefix>`. Passing `baseline_path` to
-a previously saved DSM JSON returns a structured diff whose
-`new_back_edges` field flags cycles the most recent edit just
-introduced.
+(`group_by='layer', weight='calls'`). It is summary-by-default (block
+structure, counts, and the back-edges, without the full cell list);
+pass `response_format='full'` for the complete matrix. Narrow large
+projects with `focus=<qualname>` or `package=<prefix>`. Passing
+`baseline_path` to a previously saved DSM JSON returns a structured
+diff whose `new_back_edges` field flags cycles the most recent edit
+just introduced.
 """
 
 
@@ -482,6 +488,21 @@ class DSMErrorPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     error: str
+
+
+# Cell-count ceiling for a full-mode DSM dump. Mirrors archy_graph's
+# max_nodes guard: above this, the full matrix is refused with a pointer to
+# the concise summary / focus / package escape hatches rather than dumping
+# thousands of cells into the agent's context.
+DEFAULT_MAX_DSM_CELLS = 2000
+
+
+class DSMTooLargePayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    error: str
+    cell_count: int
+    max_cells: int
 
 
 class StatusPayload(BaseModel):
@@ -819,7 +840,8 @@ def _register_tools(server: FastMCP) -> None:
             "weighted by importance of dependents), plus the top external "
             "dependencies. Cheaper than dumping the full graph; use for "
             "'where is the gravity in this codebase' questions. Call "
-            "archy_cycles separately for cycle detail."
+            "archy_cycles separately for cycle detail. Identical to "
+            "archy_graph(response_format='summary')."
         ),
     )
     def archy_graph_summary(path: str, top_n: int = 20) -> GraphSummaryPayload:
@@ -827,26 +849,34 @@ def _register_tools(server: FastMCP) -> None:
 
     @server.tool(
         name="archy_graph",
-        title="Dump dependency graph",
+        title="Inspect dependency graph",
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
-            "Full dependency-graph dump matching `archy graph --format json`. "
-            "Refuses to serialize graphs larger than `max_nodes` (default 500, "
-            "must be >= 1) to avoid blowing the agent's context; bump the limit "
-            "explicitly if you really want everything. For most reasoning, prefer "
-            "archy_graph_focus (local neighborhood) or archy_graph_summary "
-            "(top-N overview)."
+            "Inspect the dependency graph. `response_format='summary'` (the "
+            "DEFAULT) returns a compact top-N overview (modules by fan-in, "
+            "fan-out, PageRank, and edit-risk, plus top external deps; `top_n` "
+            "controls N) -- concise-by-default so a routine call doesn't dump "
+            "the whole graph into context. `response_format='full'` returns the "
+            "complete node/edge dump matching `archy graph --format json`, but "
+            "refuses graphs larger than `max_nodes` (default 500, must be >= 1) "
+            "with a GraphTooLargePayload; bump `max_nodes` explicitly if you "
+            "really want everything, or narrow with archy_graph_focus (local "
+            "neighborhood). The summary path is identical to archy_graph_summary."
         ),
     )
     def archy_graph(
         path: str,
+        response_format: str = "summary",
         internal_only: bool = True,
         max_nodes: int = 500,
-    ) -> GraphPayload | GraphTooLargePayload:
-        return _run_graph_dump(
+        top_n: int = 20,
+    ) -> GraphSummaryPayload | GraphPayload | GraphTooLargePayload:
+        return _run_graph(
             Path(path),
+            response_format=response_format,
             internal_only=internal_only,
             max_nodes=max_nodes,
+            top_n=top_n,
         )
 
     @server.tool(
@@ -935,42 +965,45 @@ def _register_tools(server: FastMCP) -> None:
         title="Design Structure Matrix",
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
-            "Design Structure Matrix view of the import graph. Returns a "
-            "structured matrix the agent reads positionally: cell (row=source, "
-            "col=target) is non-empty when source imports target. Use "
-            "`group_by='community'` for block-diagonal cohesion, "
+            "Design Structure Matrix view of the import graph. "
+            "`response_format='summary'` (the DEFAULT) returns a compact "
+            "overview -- block structure (group labels + sizes), counts, the "
+            "back-edges (source later than target in the ordering = the cycle "
+            "signal), and inter-block coupling -- without the full cell list, "
+            "so a routine call stays small. `response_format='full'` returns "
+            "the full matrix the agent reads positionally: cell (row=source, "
+            "col=target) is non-empty when source imports target; it refuses "
+            f"matrices with more than {DEFAULT_MAX_DSM_CELLS} cells with a "
+            "DSMTooLargePayload (narrow with `focus`/`package`, or read the "
+            "summary). Use `group_by='community'` for block-diagonal cohesion, "
             "`group_by='layer'` for layer-violation forensics, or "
-            "`group_by='topological'` to localize back-edges (above-diagonal "
-            "entries within an SCC). Narrow large projects with `focus` "
-            "(qualname + focus_depth-hop neighborhood) or `package` (qualname "
-            "prefix). When `baseline_path` is provided, returns a DSMDiff "
-            "instead; `new_back_edges` flags cycles the edit just introduced."
+            "`group_by='topological'` to localize back-edges. Narrow large "
+            "projects with `focus` (qualname + focus_depth-hop neighborhood) or "
+            "`package` (qualname prefix). When `baseline_path` is provided, "
+            "returns a DSMDiff regardless of response_format (`new_back_edges` "
+            "flags cycles the edit just introduced)."
         ),
     )
     def archy_dsm(
         path: str,
+        response_format: str = "summary",
         group_by: str = "community",
         weight: str = "imports",
         focus: str | None = None,
         focus_depth: int = 1,
         package: str | None = None,
         baseline_path: str | None = None,
-    ) -> DSM | DSMDiff | DSMErrorPayload:
-        graph = _load_graph(Path(path), internal_only=False)
-        current = build_dsm(
-            graph,
-            group_by=cast(GroupBy, group_by),
-            weight=cast(Weight, weight),
+    ) -> DSMSummary | DSM | DSMDiff | DSMTooLargePayload | DSMErrorPayload:
+        return _run_dsm(
+            Path(path),
+            response_format=response_format,
+            group_by=group_by,
+            weight=weight,
             focus=focus,
             focus_depth=focus_depth,
             package=package,
+            baseline_path=baseline_path,
         )
-        if baseline_path is None:
-            return current
-        before = read_dsm(Path(baseline_path))
-        if before is None:
-            return DSMErrorPayload(error=f"no DSM snapshot at {baseline_path}")
-        return diff_dsm(before, current)
 
     @server.tool(
         name="archy_status",
@@ -1405,6 +1438,78 @@ def _run_graph_dump(
             max_nodes=max_nodes,
         )
     return _graph_payload_from(graph)
+
+
+def _validate_response_format(response_format: str) -> None:
+    if response_format not in ("summary", "full"):
+        raise ValueError(f"response_format must be 'summary' or 'full'; got {response_format!r}")
+
+
+def _run_graph(
+    path: Path,
+    *,
+    response_format: str,
+    internal_only: bool,
+    max_nodes: int,
+    top_n: int,
+) -> GraphSummaryPayload | GraphPayload | GraphTooLargePayload:
+    """Route archy_graph between the concise summary and the full dump.
+
+    Summary is the default (top-N overview, identical to archy_graph_summary);
+    full is the opt-in node/edge dump, still guarded by max_nodes.
+    """
+    _validate_response_format(response_format)
+    if response_format == "summary":
+        return _run_graph_summary(path, top_n=top_n)
+    return _run_graph_dump(path, internal_only=internal_only, max_nodes=max_nodes)
+
+
+def _run_dsm(
+    path: Path,
+    *,
+    response_format: str,
+    group_by: str,
+    weight: str,
+    focus: str | None,
+    focus_depth: int,
+    package: str | None,
+    baseline_path: str | None,
+) -> DSMSummary | DSM | DSMDiff | DSMTooLargePayload | DSMErrorPayload:
+    """Route archy_dsm between the concise summary, the full matrix, and a diff.
+
+    A diff (baseline_path set) is a deliberate, already-compact comparison
+    (new_back_edges is the signal), not a dump, so response_format does not
+    apply to it. The full matrix is capped at DEFAULT_MAX_DSM_CELLS cells.
+    """
+    _validate_response_format(response_format)
+    graph = _load_graph(path, internal_only=False)
+    current = build_dsm(
+        graph,
+        group_by=cast(GroupBy, group_by),
+        weight=cast(Weight, weight),
+        focus=focus,
+        focus_depth=focus_depth,
+        package=package,
+    )
+    if baseline_path is not None:
+        before = read_dsm(Path(baseline_path))
+        if before is None:
+            return DSMErrorPayload(error=f"no DSM snapshot at {baseline_path}")
+        return diff_dsm(before, current)
+    if response_format == "summary":
+        return summarize_dsm(current)
+    if len(current.cells) > DEFAULT_MAX_DSM_CELLS:
+        return DSMTooLargePayload(
+            error=(
+                f"DSM has {len(current.cells)} cells (> max_cells="
+                f"{DEFAULT_MAX_DSM_CELLS}). Read response_format='summary' for a "
+                "compact overview, or narrow with focus=<qualname> or "
+                "package=<prefix>."
+            ),
+            cell_count=len(current.cells),
+            max_cells=DEFAULT_MAX_DSM_CELLS,
+        )
+    return current
 
 
 def _empty_subgraph(graph):

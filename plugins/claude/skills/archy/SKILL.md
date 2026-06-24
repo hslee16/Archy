@@ -110,7 +110,7 @@ archy_dsm(path=".", group_by="community")
 # or: archy_dsm(path=".", package="src.app")
 ```
 
-Returns a structured DSM: ordered row/col list plus a sparse cell list, grouped into block-diagonal blocks. `group_by="community"` orients in an unfamiliar codebase via Newman-community blocks; `"layer"` makes cross-layer dependencies visible as off-block entries; `"topological"` puts cycles above the diagonal so back-edges localize to specific module pairs. `weight="calls"` exposes `call_count` instead of binary edge presence. Pass `focus=<qualname>` to keep just the focus + its N-hop neighborhood, or `package=<prefix>` to scope to a single subpackage. The DSM is *visualization-only*, never a score input; agents read it positionally, not as a number ([`docs/research/DSM_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/research/DSM_EMPIRICS.md) for why).
+Returns a compact summary by default (block structure, counts, back-edges, cross-block coupling); pass `response_format="full"` for the full positional matrix (ordered row/col list plus a sparse cell list, grouped into block-diagonal blocks; refused over `DEFAULT_MAX_DSM_CELLS` cells). `group_by="community"` orients in an unfamiliar codebase via Newman-community blocks; `"layer"` makes cross-layer dependencies visible as off-block entries; `"topological"` puts cycles above the diagonal so back-edges localize to specific module pairs. `weight="calls"` exposes `call_count` instead of binary edge presence. Pass `focus=<qualname>` to keep just the focus + its N-hop neighborhood, or `package=<prefix>` to scope to a single subpackage. The DSM is *visualization-only*, never a score input; agents read it positionally, not as a number ([`docs/research/DSM_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/research/DSM_EMPIRICS.md) for why).
 
 For refactor priority across the whole codebase:
 
@@ -165,7 +165,7 @@ Decision rule:
 
 Loop back to step 4 after each correction.
 
-When `score_delta.acyclicity` drops or `cycles.added` is non-empty, follow with a DSM diff to localize the offending edge. Save the DSM JSON before editing (`archy_dsm(path=".", group_by="topological")` and redirect to a file), then diff against it after:
+When `score_delta.acyclicity` drops or `cycles.added` is non-empty, follow with a DSM diff to localize the offending edge. Save the full DSM JSON before editing (`archy_dsm(path=".", group_by="topological", response_format="full")` and redirect to a file -- a diff baseline needs the full matrix, not the summary), then diff against it after:
 
 ```
 archy_dsm(path=".", group_by="topological", baseline_path=".archy/dsm-before.json")
@@ -184,7 +184,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_affected` | `(path, files: list[str], depth=5, test_filter=None)` | CI-shaped impact: given changed files, return modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped so monorepos stay tractable. Use for "which tests should I run for this diff?". |
 | `archy_graph_focus` | `(path, modules: list[str], depth=1, direction="both", internal_only=True)` | Bounded local neighborhood with edges + line numbers. |
 | `archy_graph_summary` | `(path, top_n=20)` | Top-N overview by fan-in / fan-out / PageRank. |
-| `archy_graph` | `(path, internal_only=True, max_nodes=500)` | Full dump. Refuses graphs over `max_nodes`; prefer focus/summary for reasoning. |
+| `archy_graph` | `(path, response_format="summary", internal_only=True, max_nodes=500, top_n=20)` | `response_format="summary"` (default) = top-N overview (same as `archy_graph_summary`). `response_format="full"` = full dump, refused over `max_nodes`. |
 | `archy_high_risk_modules` | `(path, top_n=10, internal_only=True)` | "Is this edit dangerous?" Top-N modules by `edit_risk` (geomean of propagation cost, normalized fan-in, instability). Call before a non-trivial edit. |
 | `archy_hotspots` | `(path, top_n=20, since=None)` | "Where is the refactoring leverage?" Rank files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). Pass `since` (e.g. `"1 year ago"`) for recency-weighted views. |
 | `archy_what_to_refactor_next` | `(path, top_n=10, since=None, min_risk=0.15)` | "What should I refactor first?" One ranked list fusing hotspots (CC x churn) and edit-risk (central+fragile) into a summed `priority`; both-lens modules generally rank above comparable single-lens ones. Each entry names the firing `lenses` + a `rationale`. Empty list + `note` when neither lens has anything to prioritize. |
@@ -194,7 +194,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl`; `strict=True` fails on regression beyond tolerance. |
 | `archy_record_baseline` | `(path, internal_only=True)` | Convenience: `archy_score(record=True)` for the start-of-session entry. |
 | `archy_trend` | `(path, last_n=10)` | Recent score history (oldest-first). |
-| `archy_dsm` | `(path, group_by="community", weight="imports", focus=None, focus_depth=1, package=None, baseline_path=None)` | Design Structure Matrix view of the import graph. `group_by` is `community` / `layer` / `topological`. Narrow large projects with `focus` + `focus_depth` or `package`. When `baseline_path` is provided, returns a `DSMDiff` whose `new_back_edges` flags cycles the edit just introduced. Visualization-only; not part of any score. |
+| `archy_dsm` | `(path, response_format="summary", group_by="community", weight="imports", focus=None, focus_depth=1, package=None, baseline_path=None)` | Design Structure Matrix view of the import graph. `response_format="summary"` (default) = compact block structure + counts + back-edges; `response_format="full"` = full matrix (refused over `DEFAULT_MAX_DSM_CELLS` cells). `group_by` is `community` / `layer` / `topological`. Narrow large projects with `focus` + `focus_depth` or `package`. When `baseline_path` is provided, returns a `DSMDiff` (regardless of `response_format`) whose `new_back_edges` flags cycles the edit just introduced. Visualization-only; not part of any score. |
 
 The MCP server also exposes a `loop` **prompt** containing the canonical playbook in archy's own words. Fetch it via `prompts/get name="loop"` for the always-current version.
 
@@ -215,7 +215,7 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 - "What does this module depend on?" → `archy_graph_focus(direction="out")`
 - "Who uses this and what edges?" → `archy_graph_focus(direction="both")` (carries import line numbers)
 - "Where should I start reading this codebase?" → `archy_graph_summary`
-- "I really need the whole graph" → `archy_graph` (bump `max_nodes` only after `archy_graph_summary` shows the project fits)
+- "I really need the whole graph" → `archy_graph(response_format="full")` (bump `max_nodes` only after the default summary shows the project fits)
 - "Is this module dangerous to edit?" → `archy_high_risk_modules` (structural; no git required)
 - "Where should I focus refactoring effort?" → `archy_hotspots` (CC x git churn; needs a git repo)
 
@@ -269,8 +269,9 @@ archy_diff(path=".")   # confirms score did not regress
 archy_cycles(path=".")
 # Identify the SCC.
 archy_dsm(path=".", group_by="topological")
-# The SCC sits as a contiguous block on the diagonal; entries above the
-# diagonal inside that block are the back-edges that close the cycle.
+# The default summary lists `back_edges` directly: the (source, target)
+# pairs that point against the topological order = the edges closing the
+# cycle. (Use response_format="full" to read the matrix positionally.)
 archy_graph_focus(path=".", modules=[<one back-edge source from the DSM>], depth=2, direction="both")
 # Read import line numbers from the edges; choose the edge to break.
 ```
@@ -281,9 +282,10 @@ archy_graph_focus(path=".", modules=[<one back-edge source from the DSM>], depth
 archy_graph_summary(path=".", top_n=20)
 # Top fan-in / fan-out / PageRank modules. Names the hubs.
 archy_dsm(path=".", group_by="community")
-# Block-diagonal view of the top-level decomposition. Each block is one
-# Newman community; row density inside a block names the central module
-# of that block; off-block entries name the cross-cluster bridges.
+# The default summary names the Newman-community blocks and their sizes
+# plus cross-block coupling = the top-level decomposition. Drop to
+# response_format="full" to read row density inside a block (the central
+# module of that block); off-block entries name the cross-cluster bridges.
 ```
 
 ### Finding what to refactor next

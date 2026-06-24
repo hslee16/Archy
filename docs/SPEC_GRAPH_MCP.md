@@ -59,12 +59,12 @@ The whole-project lens, sized for context.
 
 PageRank is a NetworkX one-liner (already flagged in `docs/FUTURE.md` line 13 as a graph-time diagnostic). Fan-in/fan-out + instability is the cheapest possible "where is the gravity in this codebase" answer. This is what `dsm` is in sentrux, minus the full matrix (which doesn't paginate well into LLM context).
 
-### 3. `archy_graph(path, internal_only=True, max_nodes=500)`
+### 3. `archy_graph(path, response_format="summary", internal_only=True, max_nodes=500, top_n=20)`
 
-The escape hatch. Full graph dump, matching `archy graph --format json` exactly, with a guardrail.
+Concise-by-default, with a full-dump escape hatch (the #226 response-shaping work).
 
-- If `node_count > max_nodes`, return an error payload pointing the agent at `archy_graph_focus` / `archy_graph_summary` instead of silently truncating. Truncated graphs lie (missing edges look like absence of dependency).
-- `max_nodes` is overridable so a determined caller can opt in.
+- `response_format="summary"` (**the default**) returns the section-2 `GraphSummaryPayload` (top-N overview). A routine "what's the shape of this graph" call should not dump every node/edge into context; the summary is the high-signal default. This path is identical to `archy_graph_summary`, which #227 folds into this tool.
+- `response_format="full"` returns the full graph dump, matching `archy graph --format json` exactly, with the original guardrail: if `node_count > max_nodes`, return a `GraphTooLargePayload` pointing the agent at `archy_graph_focus` / `response_format="summary"` instead of silently truncating (truncated graphs lie -- missing edges look like absence of dependency). `max_nodes` is overridable so a determined caller can opt in.
 
 ## Response models
 
