@@ -180,6 +180,26 @@ Both are stateless from archy's perspective: the score history and
 the snapshot file are the only state, and both live under `.archy/`
 in the project being analyzed.
 
+## Error model (recovery contract)
+
+Failures come in two kinds, so you have one rule for detecting and
+recovering from them:
+
+- **Usage error → `isError: true`** (a raised error): an invalid argument
+  *value* (`response_format="xml"`, `last_n=0`), a malformed `archy.yaml`,
+  or a project over the scan ceiling. Fix the call or the environment.
+- **Recoverable condition → in-band result (`isError: false`)**: an expected
+  precondition you can recover from, or a valid-but-degraded result, returned
+  as a normal result you branch on. Either a payload with an `error` field and
+  no success data (no baseline → `DiffErrorPayload`, output too large →
+  `*TooLargePayload`, no config → `CheckErrorPayload`), or an advisory field on
+  a still-valid payload (`available=false`, `note`, `git_available`). For
+  example `archy_check` on a project with no `archy.yaml` returns an in-band
+  `CheckErrorPayload`, not an error: create a config or move on.
+
+Unknown-tool and missing/mistyped-argument failures are JSON-RPC protocol
+errors handled by the framework, distinct from both of the above.
+
 ## Worked example (terminal)
 
 ```text

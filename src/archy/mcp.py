@@ -40,6 +40,38 @@ One benign edge: an *empty* sequence return yields `structuredContent`
 `{"result": []}` with no accompanying `TextContent` block (FastMCP emits one
 content block per element). The structured form is unambiguous, so this is
 not a correctness gap. tests/test_mcp.py locks the whole contract.
+
+## Error model
+
+archy maps failures onto MCP's two error mechanisms (2025-06-18 server spec)
+with one convention, so an agent has a single recovery contract:
+
+1. **Protocol error (JSON-RPC, FastMCP-handled):** unknown tool, or a missing
+   / mistyped required argument. The framework rejects the call; archy does
+   nothing.
+2. **Usage error -> `isError:true` (raise):** an invalid argument *value* (e.g.
+   `response_format='xml'`, `last_n=0`, `min_risk>1`), a *malformed* `archy.yaml`
+   (`LayerConfigError` from `load_config`), or a project over the scan ceiling
+   (`ScanTooLargeError`). The caller must fix the call or the environment; a
+   raised exception becomes an `isError:true` tool result the model sees.
+3. **Recoverable / advisory -> in-band result (`isError:false`):** an expected
+   precondition that isn't met but the agent can recover from, or a valid but
+   degraded result. These are *normal* results the agent branches on, not
+   errors. Two shapes, by "is there a usable result?":
+   - **Union variant** when there is no success result to return: no baseline
+     (`DiffErrorPayload`), output too large (`GraphTooLargePayload` /
+     `DSMTooLargePayload`), no `archy.yaml` found (`CheckErrorPayload`), no DSM
+     snapshot (`DSMErrorPayload`). Each carries an `error` (or
+     `error`+`*_count`) field and is a conforming `anyOf` member of the tool's
+     `outputSchema`.
+   - **Advisory field** on an otherwise-valid payload: contracts extra not
+     installed (`ContractsPayload.available=False`), project not under git
+     (`HotspotsPayload.note` / `WhatToRefactorPayload.git_available`), or an
+     honest-null empty result with a `note`.
+
+The de-facto marker an agent can key on: a tier-3 "no usable result" variant is
+a payload with an `error` field and no success data. tests/test_mcp.py asserts
+tier-2 conditions surface as `isError` and tier-3 conditions return in-band.
 """
 
 from __future__ import annotations
@@ -91,7 +123,6 @@ from archy.hotspots import compute_hotspots, git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
-    LayerConfigError,
     SdpViolation,
     Violation,
     discover_config,
@@ -234,6 +265,22 @@ class CheckPayload(BaseModel):
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
     passed: bool
+
+
+class CheckErrorPayload(BaseModel):
+    """Tier-3 in-band advisory for archy_check: no `archy.yaml` was found.
+
+    A recoverable precondition (the agent can create a config or pass
+    config_path), not a usage error -- so it returns in-band (`isError:false`)
+    like DiffErrorPayload / DSMErrorPayload rather than raising. A *malformed*
+    config is different: that raises (tier-2 `isError:true`) because the config
+    is broken and the agent cannot recover by retrying. See the module
+    docstring's "Error model" section.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    error: str
 
 
 class ContractsPayload(BaseModel):
@@ -605,13 +652,16 @@ def _register_tools(server: FastMCP) -> None:
             "Principle violations (when `sdp.enabled: true` in archy.yaml) under "
             "`sdp_violations`. Empty lists on both mean no direct boundary "
             "crossings; pair with archy_contracts for transitive (multi-hop) "
-            "checks."
+            "checks. If no archy.yaml is found, returns an in-band "
+            "CheckErrorPayload (an `error` field, not a raised error) so you can "
+            "create one or pass `config_path`; a malformed archy.yaml instead "
+            "raises (it cannot be checked against)."
         ),
     )
     def archy_check(
         path: str,
         config_path: str | None = None,
-    ) -> CheckPayload:
+    ) -> CheckPayload | CheckErrorPayload:
         return _run_check(Path(path), config_path=Path(config_path) if config_path else None)
 
     @server.tool(
@@ -1096,12 +1146,15 @@ def _run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[Cycle
     return list(find_cycles(graph, min_size=min_size))
 
 
-def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload:
+def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckErrorPayload:
     if config_path is None:
         discovered = discover_config(path)
         if discovered is None:
-            raise LayerConfigError(
-                f"no archy.yaml found near {path}; pass config_path or create one."
+            # Tier-3 recoverable precondition: no config to check against. In-band
+            # (isError:false) so the agent can branch and create/point at a config,
+            # not a raise. A *malformed* config below still raises (tier 2).
+            return CheckErrorPayload(
+                error=f"no archy.yaml found near {path}; pass config_path or create one."
             )
         config_path = discovered
     config = load_config(config_path)
