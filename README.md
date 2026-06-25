@@ -22,7 +22,7 @@ archy mcp             # expose 19 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.34.0. Usable today via:
+**Status:** v0.35.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -301,7 +301,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.34.0
+- uses: hslee16/archy@v0.35.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -327,7 +327,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.34.0
+    rev: v0.35.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -456,6 +456,7 @@ Shipped:
 - **v0.28, causal-framing reframes**: archy's output now reads as causal claims and judgment prompts, not just structure. `archy_impact` returns `chains` (the shortest import path back to a changed module, with line numbers, explaining *why* each dependent is impacted); `archy_snapshot` returns an `invariant_brief` (declared layers, forbidden edges, the acyclic invariant, baseline score, and load-bearing modules) so an agent is told the constraints before its first edit; and each `archy_diff` summary item carries a `prompt` reframing the delta as a reviewer question ("new cycle a -> b; intended, or invert an edge?"). No new tool, axis, or graph; packaging over already-computed data ([#152](https://github.com/hslee16/archy/pull/152), [#153](https://github.com/hslee16/archy/pull/153), [#154](https://github.com/hslee16/archy/pull/154)).
 - **v0.29, `archy_simulate` (18th tool)**: counterfactual pre-edit check. Given a proposed import-edge delta (`add`/`remove` of `{from, to}` pairs), it returns the would-be cycles, new back-edges, layer/SDP violations, per-axis score delta, and blast-radius change *before any file is written*, so an agent can test a refactoring hypothesis and reshape a plan that introduces a cycle before touching code. Mostly composition over the diff/DSM/propagation machinery; empirically validated (oracle 315/315 on real repos, 96% fidelity, [`SIMULATE_ORACLE_EMPIRICS.md`](docs/research/SIMULATE_ORACLE_EMPIRICS.md), [#156](https://github.com/hslee16/archy/pull/156)).
 - **v0.30, `archy_what_to_refactor_next` (19th tool)**: one ranked refactor-priority list fusing the behavioral lens (`archy_hotspots`, CC x churn) and the structural lens (`archy_high_risk_modules`, edit-risk). The two normalized lens scores are summed into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one, while a dominant single-lens signal (a giant hotspot at the import-graph leaves) can still rank first. Each entry names which lenses fired and carries a one-line `rationale`; one call replaces two-plus-synthesis. Pure aggregation over the two existing primitives. Honest null: an empty list plus a `note` when nothing is both complex+churned and nothing is central+fragile above the `min_risk` floor, rather than manufacturing a phantom #1 ([#130](https://github.com/hslee16/archy/issues/130)).
+- **v0.35, MCP surface modernization**: brought the `archy mcp` tools up to current MCP best practice (2025-2026 spec) without changing the tool set (still 19, no plugin-pin bump). All tools now declare `readOnlyHint` / `title` annotations so trusted clients can auto-approve archy's read-only calls instead of prompting on every read ([#225](https://github.com/hslee16/archy/issues/225)); every tool declares a structured-output `outputSchema` and returns conforming `structuredContent` alongside the text block ([#228](https://github.com/hslee16/archy/issues/228)); the token-heavy `archy_dsm` and `archy_graph` are concise-by-default with a `response_format="summary"|"full"` enum and a truncation cap (DSM summary ~89% smaller than the full matrix) ([#226](https://github.com/hslee16/archy/issues/226)); and a single three-tier error model gives agents one recovery contract (`isError:true` for usage errors, in-band result variants for recoverable conditions like no-baseline / too-large / no-config) ([#229](https://github.com/hslee16/archy/issues/229)). No new tool, axis, or graph; MCP-DX over the existing surface. Tracker [#230](https://github.com/hslee16/archy/issues/230).
 
 **Diagnostics**
 
