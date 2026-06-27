@@ -1,0 +1,133 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f046327a4946",
+  "session_id": "0bf33a1a-dca1-49bf-826b-3a509aa5635c",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-27T22:49:08.350338Z",
+  "branch": "alee/mcp-consolidation-227",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/AGENT_LOOP.md",
+    "docs/CASE_STUDIES.md",
+    "docs/FUTURE.md",
+    "docs/INSTALL.md",
+    "docs/LEARNINGS.md",
+    "docs/MCP_DIRECTORIES.md",
+    "docs/ROADMAP.md",
+    "docs/SIXTY_SECOND_TOUR.md",
+    "docs/SPEC_GRAPH_MCP.md",
+    "docs/SPEC_SIMULATE.md",
+    "plugins/claude/README.md",
+    "plugins/claude/bin/archy-mcp.mjs",
+    "plugins/claude/skills/archy/SKILL.md",
+    "pyproject.toml",
+    "skills/archy/SKILL.md",
+    "src/archy/__init__.py",
+    "src/archy/install/base.py",
+    "src/archy/mcp.py",
+    "tests/install/snapshot/__snapshots__/test_snapshots.ambr",
+    "tests/test_mcp.py",
+    "tests/test_plugin.py",
+    "uv.lock"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "3e5ea193b8ec",
+  "token_usage": {
+    "input_tokens": 29430,
+    "cache_creation_tokens": 470751,
+    "cache_read_tokens": 60954417,
+    "output_tokens": 132244,
+    "api_call_count": 226
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_019d41iSG21SWZRCB3Zda3YS",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:deepplan"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "3e5ea193b8ec",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 70,
+        "end": 71,
+        "entry_ids": [
+          "6e027bb8-c939-4c04-96bd-eb3330148c23"
+        ],
+        "tool_use_id": "toolu_019d41iSG21SWZRCB3Zda3YS"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_019d41iSG21SWZRCB3Zda3YS"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:deepplan",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01XJUJmjoaUqZKicvDEfT8dR",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "3e5ea193b8ec",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1197,
+        "end": 1198,
+        "entry_ids": [
+          "b064e91c-df49-4b28-9581-876dee196f78"
+        ],
+        "tool_use_id": "toolu_01XJUJmjoaUqZKicvDEfT8dR"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01XJUJmjoaUqZKicvDEfT8dR"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-06-27T22:49:08.310884Z",
+    "agent_lines": 645,
+    "agent_removed": 691,
+    "human_added": 1,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 646,
+    "total_lines_changed": 1337,
+    "agent_percentage": 99.925205684368,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

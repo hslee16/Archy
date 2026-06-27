@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f046327a4946",
+  "strategy": "manual-commit",
+  "branch": "alee/mcp-consolidation-227",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/AGENT_LOOP.md",
+    "docs/CASE_STUDIES.md",
+    "docs/FUTURE.md",
+    "docs/INSTALL.md",
+    "docs/LEARNINGS.md",
+    "docs/MCP_DIRECTORIES.md",
+    "docs/ROADMAP.md",
+    "docs/SIXTY_SECOND_TOUR.md",
+    "docs/SPEC_GRAPH_MCP.md",
+    "docs/SPEC_SIMULATE.md",
+    "plugins/claude/README.md",
+    "plugins/claude/bin/archy-mcp.mjs",
+    "plugins/claude/skills/archy/SKILL.md",
+    "pyproject.toml",
+    "skills/archy/SKILL.md",
+    "src/archy/__init__.py",
+    "src/archy/install/base.py",
+    "src/archy/mcp.py",
+    "tests/install/snapshot/__snapshots__/test_snapshots.ambr",
+    "tests/test_mcp.py",
+    "tests/test_plugin.py",
+    "uv.lock"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f0/46327a4946/0/metadata.json",
+      "transcript": "/f0/46327a4946/0/full.jsonl",
+      "content_hash": "/f0/46327a4946/0/content_hash.txt",
+      "prompt": "/f0/46327a4946/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 29430,
+    "cache_creation_tokens": 470751,
+    "cache_read_tokens": 60954417,
+    "output_tokens": 132244,
+    "api_call_count": 226
+  }
+}
