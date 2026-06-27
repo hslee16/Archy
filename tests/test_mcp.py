@@ -240,6 +240,20 @@ def _dsm(
     )
 
 
+def _hub_project(tmp_path: Path, spokes: int = 3) -> Path:
+    # pkg.hub imports pkg.dep (non-zero instability) and is imported by `spokes`
+    # peers (high fan-in), so it dominates the edit-risk composite. Shared by the
+    # structural-lens and structural-only tests.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
+    for i in range(spokes):
+        (pkg / f"s{i}.py").write_text("from pkg.hub import x\n")
+    return tmp_path
+
+
 def _fan_out_project(tmp_path: Path, fan: int) -> Path:
     # pkg.a imports `fan` leaf modules -> `fan` cells, no cycle.
     pkg = tmp_path / "pkg"
@@ -844,14 +858,7 @@ def test_refactor_structural_lens_ranks_central_volatile_first(tmp_path: Path):
     # is imported by three peers (high fan-in) AND itself imports a downstream dep
     # (non-zero instability), so it dominates the edit-risk composite. min_risk=0
     # restores the old high-risk behavior (no floor).
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "dep.py").write_text("")
-    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
-    (pkg / "a.py").write_text("from pkg.hub import x\n")
-    (pkg / "b.py").write_text("from pkg.hub import y\n")
-    (pkg / "c.py").write_text("from pkg.hub import z\n")
+    _hub_project(tmp_path, spokes=3)
 
     payload = _run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=5, since=None, min_risk=0.0
@@ -868,12 +875,7 @@ def test_refactor_structural_lens_ranks_central_volatile_first(tmp_path: Path):
 def test_refactor_structural_lens_skips_git(tmp_path: Path):
     # The structural lens never consults git, so it works (and reports
     # git_available=False) even with no repository present.
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "dep.py").write_text("")
-    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
-    (pkg / "a.py").write_text("from pkg.hub import x\n")
+    _hub_project(tmp_path, spokes=1)
 
     payload = _run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=5, since="2025-01-01", min_risk=0.0
@@ -884,13 +886,7 @@ def test_refactor_structural_lens_skips_git(tmp_path: Path):
 
 
 def test_refactor_structural_lens_top_n_caps_results(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "dep.py").write_text("")
-    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
-    for name in ("a", "b", "c", "d"):
-        (pkg / f"{name}.py").write_text("from pkg.hub import x\n")
+    _hub_project(tmp_path, spokes=4)
 
     payload = _run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=2, since=None, min_risk=0.0
@@ -1273,14 +1269,7 @@ def test_what_to_refactor_next_fuses_both_lenses(tmp_path: Path):
 def test_what_to_refactor_next_structural_only_without_git(tmp_path: Path):
     # No git -> behavioral lens skipped, ranking is structural-only, and a note
     # explains the degraded mode. The list is still populated structurally.
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "dep.py").write_text("")
-    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
-    (pkg / "a.py").write_text("from pkg.hub import x\n")
-    (pkg / "b.py").write_text("from pkg.hub import y\n")
-    (pkg / "c.py").write_text("from pkg.hub import z\n")
+    _hub_project(tmp_path, spokes=3)
 
     payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
     assert payload.git_available is False
