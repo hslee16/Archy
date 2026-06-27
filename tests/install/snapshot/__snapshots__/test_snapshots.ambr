@@ -23,13 +23,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -45,15 +45,9 @@
             "mcp__archy__archy_contracts",
             "mcp__archy__archy_trend",
             "mcp__archy__archy_impact",
-            "mcp__archy__archy_affected",
             "mcp__archy__archy_snapshot",
             "mcp__archy__archy_diff",
-            "mcp__archy__archy_record_baseline",
-            "mcp__archy__archy_graph_focus",
-            "mcp__archy__archy_graph_summary",
             "mcp__archy__archy_graph",
-            "mcp__archy__archy_high_risk_modules",
-            "mcp__archy__archy_hotspots",
             "mcp__archy__archy_what_to_refactor_next",
             "mcp__archy__archy_dsm",
             "mcp__archy__archy_status",
@@ -89,13 +83,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -111,15 +105,9 @@
             "mcp__archy__archy_contracts",
             "mcp__archy__archy_trend",
             "mcp__archy__archy_impact",
-            "mcp__archy__archy_affected",
             "mcp__archy__archy_snapshot",
             "mcp__archy__archy_diff",
-            "mcp__archy__archy_record_baseline",
-            "mcp__archy__archy_graph_focus",
-            "mcp__archy__archy_graph_summary",
             "mcp__archy__archy_graph",
-            "mcp__archy__archy_high_risk_modules",
-            "mcp__archy__archy_hotspots",
             "mcp__archy__archy_what_to_refactor_next",
             "mcp__archy__archy_dsm",
             "mcp__archy__archy_status",
@@ -155,13 +143,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -177,15 +165,9 @@
             "mcp__archy__archy_contracts",
             "mcp__archy__archy_trend",
             "mcp__archy__archy_impact",
-            "mcp__archy__archy_affected",
             "mcp__archy__archy_snapshot",
             "mcp__archy__archy_diff",
-            "mcp__archy__archy_record_baseline",
-            "mcp__archy__archy_graph_focus",
-            "mcp__archy__archy_graph_summary",
             "mcp__archy__archy_graph",
-            "mcp__archy__archy_high_risk_modules",
-            "mcp__archy__archy_hotspots",
             "mcp__archy__archy_what_to_refactor_next",
             "mcp__archy__archy_dsm",
             "mcp__archy__archy_status",
@@ -209,15 +191,9 @@
             "mcp__archy__archy_contracts",
             "mcp__archy__archy_trend",
             "mcp__archy__archy_impact",
-            "mcp__archy__archy_affected",
             "mcp__archy__archy_snapshot",
             "mcp__archy__archy_diff",
-            "mcp__archy__archy_record_baseline",
-            "mcp__archy__archy_graph_focus",
-            "mcp__archy__archy_graph_summary",
             "mcp__archy__archy_graph",
-            "mcp__archy__archy_high_risk_modules",
-            "mcp__archy__archy_hotspots",
             "mcp__archy__archy_what_to_refactor_next",
             "mcp__archy__archy_dsm",
             "mcp__archy__archy_status",
@@ -249,13 +225,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -275,15 +251,9 @@
             "mcp__archy__archy_contracts",
             "mcp__archy__archy_trend",
             "mcp__archy__archy_impact",
-            "mcp__archy__archy_affected",
             "mcp__archy__archy_snapshot",
             "mcp__archy__archy_diff",
-            "mcp__archy__archy_record_baseline",
-            "mcp__archy__archy_graph_focus",
-            "mcp__archy__archy_graph_summary",
             "mcp__archy__archy_graph",
-            "mcp__archy__archy_high_risk_modules",
-            "mcp__archy__archy_hotspots",
             "mcp__archy__archy_what_to_refactor_next",
             "mcp__archy__archy_dsm",
             "mcp__archy__archy_status",
@@ -315,13 +285,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -341,15 +311,9 @@
             "mcp__archy__archy_contracts",
             "mcp__archy__archy_trend",
             "mcp__archy__archy_impact",
-            "mcp__archy__archy_affected",
             "mcp__archy__archy_snapshot",
             "mcp__archy__archy_diff",
-            "mcp__archy__archy_record_baseline",
-            "mcp__archy__archy_graph_focus",
-            "mcp__archy__archy_graph_summary",
             "mcp__archy__archy_graph",
-            "mcp__archy__archy_high_risk_modules",
-            "mcp__archy__archy_hotspots",
             "mcp__archy__archy_what_to_refactor_next",
             "mcp__archy__archy_dsm",
             "mcp__archy__archy_status",
@@ -381,13 +345,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -405,13 +369,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -438,13 +402,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -471,13 +435,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -513,13 +477,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -546,13 +510,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -579,13 +543,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -616,13 +580,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -653,13 +617,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -690,13 +654,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -727,13 +691,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -764,13 +728,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -801,13 +765,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -839,13 +803,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -877,13 +841,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -915,13 +879,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -953,13 +917,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -991,13 +955,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1029,13 +993,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1053,13 +1017,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1093,13 +1057,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1133,13 +1097,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1173,13 +1137,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1213,13 +1177,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->
@@ -1253,13 +1217,13 @@
       architectural health, finds cycles and layer violations, and maps the blast
       radius of a change. Use it on the edit loop, not just on demand.
       
-      - Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-        files) to see what a module change reaches.
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
       - Take a baseline with `archy_snapshot` at the start of a task; after edits,
         call `archy_diff` and read `summary.headline` first.
       - When asked "is this codebase healthy / where is the risk", reach for
-        `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-        rather than guessing from file names.
+        `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+        'behavioral'), and `archy_cycles` rather than guessing from file names.
       
       Outputs are structured JSON meant for you to act on, not dashboards for humans.
       <!-- archy:end -->

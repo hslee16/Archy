@@ -30,7 +30,7 @@ archy
 Architectural sensor for Python codebases (CLI + MCP server)
 
 ### Short description (max 200 chars)
-Python architecture analysis: import graph, cycles, layer rules, five-axis score, refactor-priority hotspots, DSM, and an MCP server (19 tools) so coding agents see structural impact before they commit.
+Python architecture analysis: import graph, cycles, layer rules, five-axis score, refactor-priority hotspots, DSM, and an MCP server (13 tools) so coding agents see structural impact before they commit.
 
 ### Long description
 archy watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. Designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents (Claude Code, Cursor, Codex, opencode, Continue, any MCP client) can read their own architectural impact before committing. A persistent parse cache kept warm by a background file watcher keeps tool calls fast (low seconds even on 10k+ module repos), and `archy install` auto-wires the server into any supported agent. Tree-sitter powered, so robust to in-flight edits and partial files.
@@ -58,7 +58,7 @@ archy is MCP-native: works with any MCP client, not just Claude. Don't position 
 `code-analysis`, `python`, `developer-tools`, `code-quality`, `architecture`, `mcp`, `import-graph`, `static-analysis`
 
 ### Screenshot
-Output of `archy_graph_summary` against a real repo, or a Claude-Code session showing `archy_high_risk_modules` being called.
+Output of `archy_graph` (default summary) against a real repo, or a Claude-Code session showing `archy_what_to_refactor_next(lens="structural")` being called.
 
 ### Demo video (60s, optional but Smithery weights it)
 A screencap of a Claude-Code session using archy tools to avoid a regression: snapshot at start, edit a load-bearing module, diff at end to see the score drop and the added cycle.

@@ -1,12 +1,18 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The
-tools mirror the CLI surface (`archy_score`, `archy_cycles`,
+Built on the official Python `mcp` SDK using its FastMCP API. The 13
+tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
-`archy_affected`, `archy_snapshot`, `archy_diff`, `archy_record_baseline`)
-plus three graph-navigation tools (`archy_graph_focus`,
-`archy_graph_summary`, `archy_graph`) so an agent can treat archy as a
-structural sensor in its own feedback loop, the way the README pitches.
+`archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
+`archy_what_to_refactor_next`, `archy_dsm`, `archy_status`) so an agent
+can treat archy as a structural sensor in its own feedback loop, the way
+the README pitches. Several tools carry a mode/lens/param switch that
+absorbs what used to be a separate tool: `archy_impact(mode='affected')`
+(was `archy_affected`), `archy_graph(focus=...)` (was `archy_graph_focus`)
+and `archy_graph(response_format='summary')` (was `archy_graph_summary`),
+`archy_what_to_refactor_next(lens=...)` (was `archy_hotspots` /
+`archy_high_risk_modules`), and `archy_score(record=True)` (was
+`archy_record_baseline`). See docs/LEARNINGS.md for the v0.36 consolidation.
 
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.
@@ -66,7 +72,7 @@ with one convention, so an agent has a single recovery contract:
      `outputSchema`.
    - **Advisory field** on an otherwise-valid payload: contracts extra not
      installed (`ContractsPayload.available=False`), project not under git
-     (`HotspotsPayload.note` / `WhatToRefactorPayload.git_available`), or an
+     (`WhatToRefactorPayload.git_available` / its lens-aware `note`), or an
      honest-null empty result with a `note`.
 
 The de-facto marker an agent can key on: a tier-3 "no usable result" variant is
@@ -119,7 +125,7 @@ from archy.graph import (
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
-from archy.hotspots import compute_hotspots, git_churn
+from archy.hotspots import git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
@@ -164,14 +170,15 @@ confirm freshness explicitly. The loop is:
    `archy_impact(path, files=[<file you plan to edit>])`
 
    For a bounded, bidirectional neighborhood with edge line numbers,
-   use `archy_graph_focus(path, modules=[<file or qualname>])` instead.
+   use `archy_graph(path, focus=[<file or qualname>])` instead.
    `archy_graph(path)` gives a top-N overview (summary by default) when
    you don't yet know which module to look at; pass
    `response_format='full'` only when you actually need the whole node/
    edge dump. Before a non-trivial edit, call
-   `archy_high_risk_modules(path)` to see whether your target sits in
-   the project's central-and-fragile zone (high blast radius combined
-   with high instability); if it does, scope down or pause for review.
+   `archy_what_to_refactor_next(path, lens='structural')` to see whether
+   your target sits in the project's central-and-fragile zone (high blast
+   radius combined with high instability); if it does, scope down or pause
+   for review.
 
    If the edit changes imports (adds or removes a dependency), call
    `archy_simulate(path, add=[{from, to}], remove=[...])` first: it
@@ -451,48 +458,6 @@ class GraphSummaryPayload(BaseModel):
     external_deps: tuple[GraphSummaryEntry, ...]
 
 
-class HighRiskEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    module: str
-    edit_risk: float
-    propagation_cost: float
-    instability: float
-    fan_in: int
-
-
-class HighRiskPayload(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    module_count: int
-    modules: tuple[HighRiskEntry, ...]
-
-
-class HotspotEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    module: str
-    path: str
-    cc_sum: int
-    churn: int
-    score: int
-
-
-class HotspotsPayload(BaseModel):
-    """Per-file CC x churn ranking. `note` is set when the metric
-    cannot run (project is not under git), and `hotspots` is empty -
-    the agent should pivot to `archy_high_risk_modules` for a
-    git-free structural alternative."""
-
-    model_config = ConfigDict(frozen=True)
-
-    since: str | None
-    total: int
-    shown: int
-    hotspots: tuple[HotspotEntry, ...]
-    note: str | None = None
-
-
 class RefactorPriorityEntry(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -587,12 +552,12 @@ _READ_ONLY_ANNOTATIONS = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
-"""All 19 archy tools are read-only structural analysis: they compute over a
+"""All 13 archy tools are read-only structural analysis: they compute over a
 project and mutate nothing observable on the wire, are closed-domain (no
 network/external world), and are idempotent for a fixed source tree. Declaring
 this explicitly lets trusted clients auto-approve archy's calls instead of
-prompting on every read (MCP tool-annotations, 2025-03-26 spec). The two tools
-that write a dotfile under .archy/ (snapshot, record_baseline) are still
+prompting on every read (MCP tool-annotations, 2025-03-26 spec). The tools that
+write a dotfile under .archy/ (snapshot, and score when record=True) are still
 read-only *for the model's purposes*: the file is a cache/baseline the next
 call reads, not an external side effect, and re-running them is idempotent."""
 
@@ -607,7 +572,8 @@ def _register_tools(server: FastMCP) -> None:
             "equality, complexity - geometric mean of five axes) for a Python "
             "project. Optionally append "
             "the result to .archy/history.jsonl and/or compare against the most "
-            "recent recorded run as a regression gate."
+            "recent recorded run as a regression gate. Pass record=True to record "
+            "a baseline at session start (replaces the removed archy_record_baseline)."
         ),
     )
     def archy_score(
@@ -706,60 +672,47 @@ def _register_tools(server: FastMCP) -> None:
         title="Compute change blast radius",
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
-            "Given a list of changed file paths, return the internal modules "
-            "that transitively import any of them (the blast radius). Use "
-            "before refactoring or removing a module to see what would break. "
-            "Files that don't resolve to any module in the graph are returned "
-            "in `unresolved`. `propagation_cost` is the MacCormack-style "
-            "blast-radius scalar: fraction of the project's internal module "
-            "count that this edit set can reach (changed plus impacted, over "
-            "total internal modules). Higher values mean the edit is more "
-            "structurally consequential. `chains` explains *why* each impacted "
-            "module is reachable: the shortest import path back to a changed "
-            "module, one hop at a time with the line numbers where each import "
-            "lives. Cite the specific edge(s) you must preserve when you edit "
-            "the changed module instead of guessing which dependents matter. "
+            "Given a list of changed file paths, return what they affect. "
+            "`mode='blast'` (the DEFAULT) returns the internal modules that "
+            "transitively import any of them (the blast radius): use before "
+            "refactoring or removing a module to see what would break. "
+            "`propagation_cost` is the MacCormack-style scalar (fraction of "
+            "internal modules the edit set can reach); `chains` explains *why* "
+            "each impacted module is reachable (the shortest import path back to "
+            "a changed module, hop by hop with the line numbers where each "
+            "import lives) so you can cite the specific edge(s) to preserve. "
             "Chains are ranked closest-first and capped at `max_chains` "
-            "(negative for all); `chains_omitted` reports how many were left out."
+            "(negative for all); `chains_omitted` reports how many were left "
+            "out. `mode='affected'` (replaces the removed archy_affected) is the "
+            "CI-shaped lookup instead: it returns the impact pre-classified into "
+            "`impacted_tests` and `impacted_modules`, with traversal depth-capped "
+            "(`depth`, default 5) so a single-line edit doesn't fan out to "
+            "thousands of nodes. Test detection uses pytest conventions "
+            "(test_*.py, *_test.py, files under tests/) unless `test_filter` "
+            "overrides with a recursive glob. Files that resolve to no module "
+            "are returned in `unresolved`; internal modules only."
         ),
     )
     def archy_impact(
         path: str,
         files: list[str],
+        mode: str = "blast",
         max_chains: int = DEFAULT_MAX_CHAINS,
-    ) -> Impact:
-        return _run_impact(Path(path), files=[Path(f) for f in files], max_chains=max_chains)
-
-    @server.tool(
-        name="archy_affected",
-        title="Select affected tests and modules",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "CI-shaped impact lookup: given changed files (typically from "
-            "`git diff --name-only`), return the impacted modules split into "
-            "`impacted_tests` (test files whose behavior could change) and "
-            "`impacted_modules` (other downstream code). Differs from "
-            "archy_impact in two ways: traversal is depth-capped (default 5) "
-            "so a single-line edit on a monorepo doesn't fan out to thousands "
-            "of nodes, and the result is pre-classified for test selection. "
-            "Test detection uses pytest conventions (test_*.py, *_test.py, "
-            "files under tests/ directories) unless `test_filter` overrides "
-            "with a recursive glob. Internal modules only; vendored/third-"
-            "party code is not traced through."
-        ),
-    )
-    def archy_affected(
-        path: str,
-        files: list[str],
         depth: int = DEFAULT_DEPTH,
         test_filter: str | None = None,
-    ) -> Affected:
-        return _run_affected(
-            Path(path),
-            files=[Path(f) for f in files],
-            depth=depth,
-            test_filter=test_filter,
-        )
+    ) -> Impact | Affected:
+        _validate_impact_mode(mode)
+        resolved = [Path(f) for f in files]
+        if mode == "affected":
+            return _run_affected(
+                Path(path),
+                files=resolved,
+                depth=depth,
+                test_filter=test_filter,
+            )
+        return _run_impact(Path(path), files=resolved, max_chains=max_chains)
+
+    # removed v0.36 (#227): archy_affected folded into archy_impact(mode='affected').
 
     @server.tool(
         name="archy_snapshot",
@@ -804,23 +757,16 @@ def _register_tools(server: FastMCP) -> None:
             "Counterfactual pre-edit check: given a proposed import-edge delta "
             "(`add` / `remove` lists of {from, to} module-or-path pairs), return "
             "the structural consequence BEFORE any file is written -- new/resolved "
-            "cycles, new topological back-edges, new layer/SDP violations, "
-            "per-axis score delta, and the blast-radius (propagation_cost) change. "
-            "Use it to test a refactoring hypothesis: if the simulation shows a "
-            "new cycle or layer violation, reshape the plan before editing instead "
-            "of discovering it in the diff afterward. `summary` carries the same "
-            "risk-ranked judgment prompts as archy_diff, phrased conditionally "
-            "('would form a cycle'). Endpoints that match no internal module are "
-            "returned in `applied.unresolved`; the input `from`/`to` are resolved "
-            "to modules and echoed as `source`/`target` `EdgeRef`s in `applied`. "
-            "Caveat: this models the graph delta you describe, not arbitrary code "
-            "edits -- it cannot change content-derived metrics (the complexity "
-            "axis). One import can map to several graph edges: importing a "
-            "submodule `a.b.c` also creates edges to its ancestor packages "
-            "(`a.b`, `a`), whose __init__ runs. To model a real submodule import "
-            "exactly, include those ancestor edges in `add`; a lone submodule "
-            "edge is a lower bound on the true impact (empirically ~96% of "
-            "single-line imports map 1:1; see "
+            "cycles, new back-edges, new layer/SDP violations, per-axis score "
+            "delta, and the propagation_cost change -- with a risk-ranked "
+            "`summary` phrased conditionally ('would form a cycle'). Use it to "
+            "test a refactoring hypothesis and reshape the plan before editing. "
+            "Endpoints matching no internal module are returned in "
+            "`applied.unresolved`. Caveat: it models the graph delta you "
+            "describe, not arbitrary code edits (it cannot move the complexity "
+            "axis), and one submodule import (`a.b.c`) also implies edges to its "
+            "ancestor packages -- include them in `add` to model it exactly (a "
+            "lone submodule edge is a lower bound; see "
             "docs/research/SIMULATE_ORACLE_EMPIRICS.md)."
         ),
     )
@@ -831,92 +777,42 @@ def _register_tools(server: FastMCP) -> None:
     ) -> SimulateReport:
         return _run_simulate(Path(path), add=add or [], remove=remove or [])
 
-    @server.tool(
-        name="archy_record_baseline",
-        title="Record score baseline",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Compute the score for a Python project AND append it to "
-            ".archy/history.jsonl. Convenience wrapper for archy_score(record=True). "
-            "Use at the start of an agent session so a later archy_score(strict=True) "
-            "can detect degradation."
-        ),
-    )
-    def archy_record_baseline(path: str, internal_only: bool = True) -> ScorePayload:
-        return _run_score(
-            Path(path),
-            internal_only=internal_only,
-            record=True,
-            strict=False,
-            strict_tolerance=0.02,
-        )
+    # removed v0.36 (#227): archy_record_baseline folded into archy_score(record=True).
 
-    @server.tool(
-        name="archy_graph_focus",
-        title="Focus dependency subgraph",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Return a subgraph centered on one or more modules. Pass qualnames "
-            "(e.g. 'archy.parser') or file paths. `depth` caps hop distance; "
-            "`direction` is 'in' (who depends on me), 'out' (my dependencies), "
-            "or 'both'. Each node carries instability (Martin's I); each edge "
-            "carries the source line numbers of the import statements. Prefer "
-            "this over archy_impact when you want forward dependencies, "
-            "edge-level detail, or a bounded blast radius."
-        ),
-    )
-    def archy_graph_focus(
-        path: str,
-        modules: list[str],
-        depth: int = 1,
-        direction: str = "both",
-        internal_only: bool = True,
-    ) -> GraphPayload:
-        return _run_graph_focus(
-            Path(path),
-            modules=modules,
-            depth=depth,
-            direction=direction,
-            internal_only=internal_only,
-        )
+    # removed v0.36 (#227): archy_graph_summary folded into
+    # archy_graph(response_format='summary').
 
-    @server.tool(
-        name="archy_graph_summary",
-        title="Summarize dependency graph",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Whole-project structural overview sized for LLM context. Returns "
-            "top-N modules by fan-in, fan-out, and PageRank (importance "
-            "weighted by importance of dependents), plus the top external "
-            "dependencies. Cheaper than dumping the full graph; use for "
-            "'where is the gravity in this codebase' questions. Call "
-            "archy_cycles separately for cycle detail. Identical to "
-            "archy_graph(response_format='summary')."
-        ),
-    )
-    def archy_graph_summary(path: str, top_n: int = 20) -> GraphSummaryPayload:
-        return _run_graph_summary(Path(path), top_n=top_n)
+    # removed v0.36 (#227): archy_graph_focus folded into archy_graph(focus=[...]).
 
     @server.tool(
         name="archy_graph",
         title="Inspect dependency graph",
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
-            "Inspect the dependency graph. `response_format='summary'` (the "
-            "DEFAULT) returns a compact top-N overview (modules by fan-in, "
-            "fan-out, PageRank, and edit-risk, plus top external deps; `top_n` "
-            "controls N) -- concise-by-default so a routine call doesn't dump "
-            "the whole graph into context. `response_format='full'` returns the "
-            "complete node/edge dump matching `archy graph --format json`, but "
-            "refuses graphs larger than `max_nodes` (default 500, must be >= 1) "
-            "with a GraphTooLargePayload; bump `max_nodes` explicitly if you "
-            "really want everything, or narrow with archy_graph_focus (local "
-            "neighborhood). The summary path is identical to archy_graph_summary."
+            "Inspect the dependency graph. With no `focus`, "
+            "`response_format='summary'` (the DEFAULT, replaces the removed "
+            "archy_graph_summary) returns a compact top-N overview (modules by "
+            "fan-in, fan-out, PageRank, and edit-risk, plus top external deps; "
+            "`top_n` controls N) so a routine call doesn't dump the whole graph "
+            "into context; `response_format='full'` returns "
+            "the complete node/edge dump matching `archy graph --format json`, "
+            "but refuses graphs larger than `max_nodes` (default 500, must be "
+            ">= 1) with a GraphTooLargePayload (bump it explicitly, or narrow "
+            "with `focus`). Pass `focus=[<qualname or path>]` (replaces the "
+            "removed archy_graph_focus) for a bounded subgraph centered on those "
+            "modules: `depth` caps hop distance and `direction` is 'in' (who "
+            "depends on me), 'out' (my dependencies), or 'both'; each edge "
+            "carries the source line numbers of the import statements. With "
+            "`focus` set, `response_format`/`max_nodes`/`top_n` do not apply (the "
+            "neighborhood is already bounded)."
         ),
     )
     def archy_graph(
         path: str,
         response_format: str = "summary",
+        focus: list[str] | None = None,
+        depth: int = 2,
+        direction: str = "both",
         internal_only: bool = True,
         max_nodes: int = 500,
         top_n: int = 20,
@@ -924,91 +820,51 @@ def _register_tools(server: FastMCP) -> None:
         return _run_graph(
             Path(path),
             response_format=response_format,
+            focus=focus,
+            depth=depth,
+            direction=direction,
             internal_only=internal_only,
             max_nodes=max_nodes,
             top_n=top_n,
         )
 
-    @server.tool(
-        name="archy_high_risk_modules",
-        title="Rank high-risk modules",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Return the top-N internal modules ranked by edit-risk: the "
-            "geometric mean of MacCormack propagation cost, normalized "
-            "fan-in, and Martin's instability. High score means editing is "
-            "both expensive (wide blast radius, many direct importers) and "
-            "likely to need iteration (the module itself depends on many "
-            "things). Call before a non-trivial edit to decide whether to "
-            "scope down, snapshot more aggressively, or pause for human "
-            "review. Each entry breaks the composite back out into its "
-            "components so you can see *why* a module ranks high."
-        ),
-    )
-    def archy_high_risk_modules(path: str, top_n: int = 10) -> HighRiskPayload:
-        return _run_high_risk_modules(Path(path), top_n=top_n)
+    # removed v0.36 (#227): archy_high_risk_modules folded into
+    # archy_what_to_refactor_next(lens='structural').
 
-    @server.tool(
-        name="archy_hotspots",
-        title="Rank complexity-x-churn hotspots",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Rank internal modules by cyclomatic complexity x git "
-            "churn (Tornhill / CodeScene's 'Code Red'). Each entry is "
-            "`{module, path, cc_sum, churn, score}` where "
-            "`score = cc_sum * churn`. Files with zero CC or zero "
-            "churn are filtered so the top-K only contains files that "
-            "score on both axes. The structural cousin "
-            "`archy_high_risk_modules` answers 'is this edit "
-            "dangerous?' without needing git history; `archy_hotspots` "
-            "answers 'where is the refactoring leverage?' and needs "
-            "git. `since` is passed straight to `git log --since` "
-            "(e.g. '12.months', '2025-01-01'); the default is full "
-            "history. If the project isn't under git, the tool "
-            "returns an empty list plus a `note` explaining why so "
-            "the agent can pivot to `archy_high_risk_modules` "
-            "instead."
-        ),
-    )
-    def archy_hotspots(
-        path: str,
-        top: int = 20,
-        since: str | None = None,
-    ) -> HotspotsPayload:
-        return _run_hotspots(Path(path), top=top, since=since)
+    # removed v0.36 (#227): archy_hotspots folded into
+    # archy_what_to_refactor_next(lens='behavioral').
 
     @server.tool(
         name="archy_what_to_refactor_next",
         title="Rank refactor priorities",
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
-            "One ranked refactor-priority list that fuses both refactor "
-            "signals so you make a single call instead of `archy_hotspots` "
-            "plus `archy_high_risk_modules` plus your own synthesis. It "
-            "merges the behavioral lens (cyclomatic complexity x git churn) "
-            "and the structural lens (the edit-risk composite: central and "
-            "fragile) into a summed priority, so a module flagged by *both* "
-            "lenses generally outranks a comparable single-lens module - "
-            "though a dominant single-lens signal (e.g. a very high CC x churn "
-            "hotspot at the import-graph leaves) can still rank first. Each "
-            "entry says which lenses fired "
-            "and carries a one-line `rationale`. `min_risk` (default "
-            f"{DEFAULT_MIN_RISK}) is the structural floor below which a module "
-            "is not surfaced. If the project isn't under git, the behavioral "
-            "lens is skipped and the ranking is structural-only "
-            "(`git_available=false`). An empty `priorities` plus a `note` is a "
-            "real answer: nothing is both complex and churned and nothing is "
-            "central+fragile above the floor, so there is genuinely nothing to "
-            "prioritize."
+            "Ranked refactor-priority list (replaces the removed archy_hotspots "
+            "and archy_high_risk_modules via `lens`). `lens='fused'` (the "
+            "DEFAULT) merges the behavioral lens (cyclomatic complexity x git "
+            "churn) and the structural lens (the edit-risk composite: central "
+            "and fragile) into one summed priority, so a module flagged by both "
+            "generally outranks a single-lens one. `lens='behavioral'` ranks "
+            "CC x churn hotspots only (needs git; answers 'where is the "
+            "refactoring leverage?'); `lens='structural'` ranks the edit-risk "
+            "composite only (git-free; answers 'is this edit dangerous?'). Each "
+            "entry says which lenses fired and carries a one-line `rationale`. "
+            f"`min_risk` (default {DEFAULT_MIN_RISK}) is the structural floor; "
+            "pass 0 to surface every module on the structural lens. An empty "
+            "`priorities` with a `note` is a real answer: there is genuinely "
+            "nothing to prioritize."
         ),
     )
     def archy_what_to_refactor_next(
         path: str,
+        lens: str = "fused",
         top_n: int = 10,
         since: str | None = None,
         min_risk: float = DEFAULT_MIN_RISK,
     ) -> WhatToRefactorPayload:
-        return _run_what_to_refactor_next(Path(path), top_n=top_n, since=since, min_risk=min_risk)
+        return _run_what_to_refactor_next(
+            Path(path), lens=lens, top_n=top_n, since=since, min_risk=min_risk
+        )
 
     @server.tool(
         name="archy_dsm",
@@ -1213,7 +1069,7 @@ def _build_invariant_brief(
     Layers/forbidden edges come from the same archy.yaml `take_snapshot`
     already loaded (so a malformed config has failed before reaching here);
     load-bearing modules are the top `edit_risk` nodes, the same ranking
-    `archy_high_risk_modules` reports.
+    `archy_what_to_refactor_next(lens='structural')` reports.
     """
     layers: tuple[BriefLayer, ...] = ()
     forbidden: tuple[ForbiddenEdge, ...] = ()
@@ -1483,9 +1339,10 @@ def _run_graph_dump(
         return GraphTooLargePayload(
             error=(
                 f"graph has {node_count} nodes (> max_nodes={max_nodes}). "
-                "Use archy_graph_focus for a local slice or archy_graph_summary "
-                "for a top-N overview, or call archy_graph again with a higher "
-                "max_nodes if you really want the full dump."
+                "Use archy_graph(focus=[...]) for a local slice or "
+                "archy_graph(response_format='summary') for a top-N overview, or "
+                "call archy_graph again with a higher max_nodes if you really "
+                "want the full dump."
             ),
             node_count=node_count,
             max_nodes=max_nodes,
@@ -1498,20 +1355,45 @@ def _validate_response_format(response_format: str) -> None:
         raise ValueError(f"response_format must be 'summary' or 'full'; got {response_format!r}")
 
 
+def _validate_impact_mode(mode: str) -> None:
+    if mode not in ("blast", "affected"):
+        raise ValueError(f"mode must be 'blast' or 'affected'; got {mode!r}")
+
+
+def _validate_refactor_lens(lens: str) -> None:
+    if lens not in ("fused", "behavioral", "structural"):
+        raise ValueError(f"lens must be 'fused', 'behavioral', or 'structural'; got {lens!r}")
+
+
 def _run_graph(
     path: Path,
     *,
     response_format: str,
+    focus: list[str] | None = None,
+    depth: int = 2,
+    direction: str = "both",
     internal_only: bool,
     max_nodes: int,
     top_n: int,
 ) -> GraphSummaryPayload | GraphPayload | GraphTooLargePayload:
-    """Route archy_graph between the concise summary and the full dump.
+    """Route archy_graph between a focused subgraph, the summary, and the dump.
 
-    Summary is the default (top-N overview, identical to archy_graph_summary);
-    full is the opt-in node/edge dump, still guarded by max_nodes.
+    `focus` (absorbing the old archy_graph_focus) takes precedence: a focused
+    neighborhood is already bounded, so response_format/max_nodes/top_n do not
+    apply to it. Otherwise summary is the default (top-N overview, identical to
+    the old archy_graph_summary) and full is the opt-in dump, guarded by
+    max_nodes. response_format is validated on every path so an invalid value
+    raises even when focus is set.
     """
     _validate_response_format(response_format)
+    if focus:
+        return _run_graph_focus(
+            path,
+            modules=focus,
+            depth=depth,
+            direction=direction,
+            internal_only=internal_only,
+        )
     if response_format == "summary":
         return _run_graph_summary(path, top_n=top_n)
     return _run_graph_dump(path, internal_only=internal_only, max_nodes=max_nodes)
@@ -1606,80 +1488,91 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
     )
 
 
-def _run_hotspots(path: Path, *, top: int, since: str | None) -> HotspotsPayload:
-    if top <= 0:
-        raise ValueError(f"top must be >= 1; got {top}")
-    graph = _load_graph(path, internal_only=True)
-    churn = git_churn(path, since=since)
-    if churn is None:
-        return HotspotsPayload(
-            since=since,
-            total=0,
-            shown=0,
-            hotspots=(),
-            note=(
+def _refactor_note(
+    *,
+    lens: str,
+    rows: list,
+    git_available: bool,
+    path: Path,
+    min_risk: float,
+) -> str | None:
+    """Lens-aware empty/degraded note for archy_what_to_refactor_next.
+
+    behavioral needs git; structural never does; fused runs both and degrades
+    to structural-only off git. A non-empty single-lens result needs no note.
+    """
+    if rows:
+        if lens == "fused" and not git_available:
+            return (
                 f"{path} is not inside a git repository (or git is unavailable); "
-                "hotspots needs git history to compute per-file churn. For a "
-                "git-free 'is this edit dangerous?' signal, call "
-                "archy_high_risk_modules instead."
-            ),
+                "the CC x churn behavioral lens was skipped and this ranking is "
+                "structural-only (edit-risk). Run inside git for the fused view."
+            )
+        return None
+    if lens == "behavioral":
+        if not git_available:
+            return (
+                f"{path} is not inside a git repository (or git is unavailable); "
+                "the behavioral lens needs git history to compute per-file churn. "
+                "Use lens='structural' for a git-free 'is this edit dangerous?' "
+                "signal instead."
+            )
+        return (
+            "No behavioral hotspots surfaced: no file is both complex and "
+            "frequently changed (CC x churn). The project is likely small, "
+            "young, or structurally clean."
         )
-    rows = compute_hotspots(graph, churn=churn)
-    shown = rows[:top]
-    entries = tuple(
-        HotspotEntry(
-            module=r.module,
-            path=r.path,
-            cc_sum=r.cc_sum,
-            churn=r.churn,
-            score=r.score,
+    if lens == "structural":
+        return (
+            f"No module is central and fragile above min_risk={min_risk}. Lower "
+            "min_risk (pass 0 to surface every module) to widen the lens."
         )
-        for r in shown
-    )
-    return HotspotsPayload(
-        since=since,
-        total=len(rows),
-        shown=len(entries),
-        hotspots=entries,
-    )
-
-
-def _run_high_risk_modules(path: Path, *, top_n: int) -> HighRiskPayload:
-    if top_n <= 0:
-        raise ValueError(f"top_n must be >= 1; got {top_n}")
-
-    graph = _load_graph(path, internal_only=True)
-    instability = compute_instability(graph)
-    _, propagation_cost = compute_propagation_cost(graph)
-    edit_risk = compute_edit_risk(graph)
-
-    ranked = sorted(edit_risk.items(), key=lambda t: (-t[1], t[0]))
-    entries = tuple(
-        HighRiskEntry(
-            module=name,
-            edit_risk=risk,
-            propagation_cost=propagation_cost.get(name, 0.0),
-            instability=instability.get(name, 0.0),
-            fan_in=graph.in_degree(name),
+    # fused
+    if git_available:
+        return (
+            "No refactoring priorities surfaced: no file is both complex and "
+            "frequently changed (CC x churn hotspots: 0), and no module is "
+            f"central and fragile above min_risk={min_risk} (0). The project is "
+            "likely small, young, or structurally clean - there is genuinely "
+            "nothing to prioritize right now. Lower min_risk to widen the "
+            "structural lens."
         )
-        for name, risk in ranked[:top_n]
+    return (
+        f"{path} is not inside a git repository (or git is unavailable), so the "
+        "CC x churn behavioral lens was skipped and only the structural "
+        f"edit-risk lens ran. No module is central and fragile above "
+        f"min_risk={min_risk}, so nothing was surfaced. Lower min_risk to widen "
+        "the structural lens."
     )
-    return HighRiskPayload(module_count=len(edit_risk), modules=entries)
 
 
 def _run_what_to_refactor_next(
-    path: Path, *, top_n: int, since: str | None, min_risk: float
+    path: Path, *, lens: str = "fused", top_n: int, since: str | None, min_risk: float
 ) -> WhatToRefactorPayload:
+    _validate_refactor_lens(lens)
     if top_n <= 0:
         raise ValueError(f"top_n must be >= 1; got {top_n}")
     if not 0.0 <= min_risk <= 1.0:
         raise ValueError(f"min_risk must be in [0, 1]; got {min_risk}")
 
     graph = _load_graph(path, internal_only=True)
-    churn = git_churn(path, since=since)
+    # The behavioral lens needs git; the structural lens never does, so skip the
+    # git call entirely for structural (since is irrelevant there).
+    churn = None if lens == "structural" else git_churn(path, since=since)
     git_available = churn is not None
 
     rows = compute_refactor_priorities(graph, churn=churn, min_risk=min_risk)
+    if lens == "behavioral":
+        # Keep only rows the behavioral lens fired on and restore the pure
+        # CC x churn ranking (the fused `priority` would let a both-lens module
+        # outrank a bigger pure hotspot).
+        rows = sorted(
+            (r for r in rows if "hotspot" in r.lenses),
+            key=lambda r: (-r.hotspot_score, r.module),
+        )
+    # structural: churn=None already restricts rows to the edit_risk lens, sorted
+    # by priority (== normalized edit_risk), matching the old high-risk ranking.
+
     shown = rows[:top_n]
     entries = tuple(
         RefactorPriorityEntry(
@@ -1699,31 +1592,13 @@ def _run_what_to_refactor_next(
         for r in shown
     )
 
-    note: str | None = None
-    if not rows:
-        if git_available:
-            note = (
-                "No refactoring priorities surfaced: no file is both complex "
-                "and frequently changed (CC x churn hotspots: 0), and no module "
-                f"is central and fragile above min_risk={min_risk} (0). The "
-                "project is likely small, young, or structurally clean - there "
-                "is genuinely nothing to prioritize right now. Lower min_risk to "
-                "widen the structural lens."
-            )
-        else:
-            note = (
-                f"{path} is not inside a git repository (or git is "
-                "unavailable), so the CC x churn behavioral lens was skipped "
-                "and only the structural edit-risk lens ran. No module is "
-                f"central and fragile above min_risk={min_risk}, so nothing was "
-                "surfaced. Lower min_risk to widen the structural lens."
-            )
-    elif not git_available:
-        note = (
-            f"{path} is not inside a git repository (or git is unavailable); "
-            "the CC x churn behavioral lens was skipped and this ranking is "
-            "structural-only (edit-risk). Run inside git for the fused view."
-        )
+    note = _refactor_note(
+        lens=lens,
+        rows=rows,
+        git_available=git_available,
+        path=path,
+        min_risk=min_risk,
+    )
 
     return WhatToRefactorPayload(
         since=since,

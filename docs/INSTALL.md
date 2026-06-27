@@ -30,7 +30,7 @@ Code plugin. Per client it writes up to three things:
 2. **An instructions/rules file** with a short, marker-fenced block telling the
    agent *when* to call the tools (the snapshot -> impact -> diff loop).
 3. **A permission allowlist (Claude Code only)** so you are not prompted to
-   approve each of the 16 `mcp__archy__*` tools on first use.
+   approve each of the 13 `mcp__archy__*` tools on first use.
 
 It does **not** phone home, create an account, auto-update, or install the
 `archy` CLI. (If you want the `archy` command on your PATH for direct CLI use,
@@ -176,7 +176,7 @@ Both commands share `--target`, `--location`, `--project-root`, `--yes`, and
   `mcp__plugin_archy_archy__*`): you have both a manual `mcpServers.archy` stanza
   and the plugin. Remove one. `archy install` avoids creating this by detecting
   the plugin and skipping the manual stanza.
-- **`archy_affected` (or other newer tools) missing:** a stale `uv tool install
+- **`archy_what_to_refactor_next` (or other newer tools) missing:** a stale `uv tool install
   archy` can shadow the PyPI release `uvx` would fetch. Run `uv tool upgrade
   archy`, or `uv tool uninstall archy` and let `uvx` fetch fresh.
 - **`Could not write ...: the file may be open in a running client`** (Windows):

@@ -42,15 +42,9 @@ TOOL_NAMES: tuple[str, ...] = (
     "archy_contracts",
     "archy_trend",
     "archy_impact",
-    "archy_affected",
     "archy_snapshot",
     "archy_diff",
-    "archy_record_baseline",
-    "archy_graph_focus",
-    "archy_graph_summary",
     "archy_graph",
-    "archy_high_risk_modules",
-    "archy_hotspots",
     "archy_what_to_refactor_next",
     "archy_dsm",
     "archy_status",
@@ -74,13 +68,13 @@ archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
 architectural health, finds cycles and layer violations, and maps the blast
 radius of a change. Use it on the edit loop, not just on demand.
 
-- Before editing, call `archy_impact` (or `archy_affected` on a set of changed
-  files) to see what a module change reaches.
+- Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+  set of changed files) to see what a module change reaches.
 - Take a baseline with `archy_snapshot` at the start of a task; after edits,
   call `archy_diff` and read `summary.headline` first.
 - When asked "is this codebase healthy / where is the risk", reach for
-  `archy_score`, `archy_high_risk_modules`, `archy_hotspots`, and `archy_cycles`
-  rather than guessing from file names.
+  `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
+  'behavioral'), and `archy_cycles` rather than guessing from file names.
 
 Outputs are structured JSON meant for you to act on, not dashboards for humans.
 """

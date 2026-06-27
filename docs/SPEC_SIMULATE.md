@@ -68,7 +68,7 @@ EdgeSpec = {"from": str, "to": str}   # resolved (Q1)
 
 - The MCP wire shape is a list of `{"from": SRC, "to": DST}` objects (Q1
   resolved). `SRC` / `DST` are module qualnames **or** file paths, resolved the
-  same way `archy_impact` / `archy_graph_focus` resolve modules
+  same way `archy_impact` / `archy_graph(focus=...)` resolve modules
   (`graph.resolve_modules`), so an agent can pass `src/app/auth.py` or `app.auth`.
 - CLI form: `archy simulate . --add app.a:app.b --remove app.c:app.d`
   (repeatable). `:` separates SRC and DST to avoid quoting `->` in a shell;

@@ -15,14 +15,14 @@
 pip install archy
 archy score .         # one-shot architectural health number
 archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 19 tools to Claude Code, Cursor, any MCP client
+archy mcp             # expose 13 tools to Claude Code, Cursor, any MCP client
 ```
 
 ![archy demo](docs/demo.gif)
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.35.0. Usable today via:
+**Status:** v0.36.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -239,27 +239,21 @@ archy mcp
 
 The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, so a cached result is never stale. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
-`archy mcp` exposes nineteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes thirteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
-| `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. |
+| `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. Pass `record=True` to record a start-of-session baseline (replaces the removed `archy_record_baseline`). |
 | `archy_cycles` | Find import cycles. |
 | `archy_check` | Run layer rules from `archy.yaml`. |
 | `archy_contracts` | Run import-linter contracts (transitive Layers, Forbidden, Independence, Protected, AcyclicSiblings). Stricter than `archy_check`; requires `archy[contracts]`. |
 | `archy_trend` | Read recent score history. |
-| `archy_impact` | Given changed file paths, return the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. |
-| `archy_affected` | CI-shaped impact lookup: given changed files (typically from `git diff --name-only`), return the impacted modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes on a monorepo. Test detection uses pytest conventions unless `test_filter` overrides with a recursive glob. Internal modules only. |
+| `archy_impact` | Given changed file paths, return what they affect. `mode="blast"` (**default**) returns the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. `mode="affected"` (replaces the removed `archy_affected`) is the CI-shaped lookup instead: modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes; `test_filter` overrides pytest test detection with a recursive glob. |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. Also returns an `invariant_brief` (declared layers, forbidden edges, acyclic invariant, baseline score, load-bearing modules) to read before the first edit. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations, per-component score deltas, and a risk-weighted `summary` whose items carry a `prompt` reframing each delta as a judgment question ("new cycle a -> b; intended, or invert an edge?"). |
 | `archy_simulate` | Counterfactual pre-edit check: given a proposed import-edge delta (`add`/`remove` of `{from, to}` pairs), return the would-be cycles, back-edges, layer/SDP violations, per-axis score delta, and blast-radius change, with no file written. Test a refactoring hypothesis before committing to it. |
-| `archy_record_baseline` | Convenience wrapper for `archy_score(record=True)`; mirrors sentrux's `session_start`. |
-| `archy_graph_focus` | Bounded subgraph around one or more modules (qualnames or file paths). `depth` caps hops; `direction` is `in`/`out`/`both`. Each edge carries import line numbers. Use before editing for a richer view than `archy_impact`. |
-| `archy_graph_summary` | Top-N modules by fan-in, fan-out, and PageRank, plus top external dependencies. Whole-project overview sized for LLM context. Identical to `archy_graph(response_format="summary")`. |
-| `archy_graph` | Inspect the dependency graph. `response_format="summary"` (**default**) returns the top-N overview (concise-by-default, identical to `archy_graph_summary`; `top_n` controls N). `response_format="full"` returns the complete node/edge dump matching `archy graph --format json`, refusing graphs larger than `max_nodes` (default 500) with an explicit `GraphTooLargePayload`; bump the limit explicitly when you really want everything. |
-| `archy_high_risk_modules` | Top-N internal modules by `edit_risk`: geometric mean of propagation cost, normalized fan-in, and Martin's instability. Each entry breaks the composite back out. Call before a non-trivial edit to decide whether to scope down or pause for review. |
-| `archy_hotspots` | Rank internal modules by `cc_sum x git-commit-count` (Tornhill / CodeScene's "Code Red"). Each entry is `{module, path, cc_sum, churn, score}`; zero-CC and zero-churn rows are filtered. `since` is passed straight to `git log --since`. Answers "where is the refactoring leverage?"; the structural cousin `archy_high_risk_modules` answers "is this edit dangerous?" without needing git. If the project isn't under git, returns an empty list plus a `note` so the agent can pivot. |
-| `archy_what_to_refactor_next` | One ranked refactor-priority list fusing both lenses, so you call once instead of `archy_hotspots` + `archy_high_risk_modules` + your own synthesis. Sums the behavioral lens (CC x churn) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal can still rank first); each entry names which lenses fired and carries a one-line `rationale`. `min_risk` is the structural floor. Without git, the ranking is structural-only. An empty list plus a `note` is a real answer: nothing is both complex+churned and nothing is central+fragile above the floor. |
+| `archy_graph` | Inspect the dependency graph. With no `focus`, `response_format="summary"` (**default**) returns the top-N overview by fan-in / fan-out / PageRank plus top external deps (replaces the removed `archy_graph_summary`; `top_n` controls N); `response_format="full"` returns the complete node/edge dump matching `archy graph --format json`, refusing graphs larger than `max_nodes` (default 500) with an explicit `GraphTooLargePayload`. Pass `focus=[...]` (replaces the removed `archy_graph_focus`) for a bounded subgraph around one or more modules (qualnames or file paths): `depth` caps hops, `direction` is `in`/`out`/`both`, each edge carries import line numbers, and `response_format`/`max_nodes`/`top_n` do not apply. |
+| `archy_what_to_refactor_next` | Ranked refactor-priority list (replaces the removed `archy_hotspots` and `archy_high_risk_modules` via `lens`). `lens="fused"` (**default**) sums the behavioral lens (CC x churn) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal can still rank first). `lens="behavioral"` ranks CC x churn hotspots only (needs git); `lens="structural"` ranks the edit-risk composite only (git-free; pass `min_risk=0` for no floor). Each entry names which lenses fired and carries a one-line `rationale`. An empty list plus a `note` is a real answer. |
 | `archy_dsm` | Design Structure Matrix view of the import graph. `response_format="summary"` (**default**) returns a compact overview (block structure, counts, back-edges, cross-block coupling) without the full cell list. `response_format="full"` returns the positional matrix (cell `(row=source, col=target)` non-empty when source imports target), refusing matrices over `DEFAULT_MAX_DSM_CELLS` cells with a `DSMTooLargePayload`. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff (regardless of `response_format`) whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md). |
 | `archy_status` | Report the persistent index's freshness: `last_synced_at`, `cached_files`, and whether the background watcher is `watching`. The `archy mcp` server keeps a debounced filesystem watcher warming `.archy/index.db` so graph builds stay fast; every tool also syncs on demand, so results are never stale even when `last_synced_at` looks a moment behind. |
 
@@ -274,7 +268,7 @@ Every tool declares an `outputSchema` (JSON Schema, derived from its return mode
 archy maps failures onto MCP's two error mechanisms with one convention, so an agent has a single recovery contract:
 
 - **Usage error → `isError: true`** (a raised exception): an invalid argument *value* (e.g. `response_format="xml"`, `last_n=0`), a *malformed* `archy.yaml`, or a project over the scan ceiling. The caller must fix the call or the environment.
-- **Recoverable / advisory → in-band result (`isError: false`)**: an expected precondition that isn't met but is recoverable, or a valid-but-degraded result. These are normal results the agent branches on. Either a **union variant** when there's no usable result (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no config → `CheckErrorPayload`, no DSM snapshot → `DSMErrorPayload`), or an **advisory field** on an otherwise-valid payload (`ContractsPayload.available=false`, `HotspotsPayload.note`, `WhatToRefactorPayload.git_available`). The marker for a "no usable result" variant: a payload with an `error` field and no success data.
+- **Recoverable / advisory → in-band result (`isError: false`)**: an expected precondition that isn't met but is recoverable, or a valid-but-degraded result. These are normal results the agent branches on. Either a **union variant** when there's no usable result (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no config → `CheckErrorPayload`, no DSM snapshot → `DSMErrorPayload`), or an **advisory field** on an otherwise-valid payload (`ContractsPayload.available=false`, `WhatToRefactorPayload.git_available` / `WhatToRefactorPayload.note`). The marker for a "no usable result" variant: a payload with an `error` field and no success data.
 - **Protocol error (JSON-RPC)**: unknown tool or a missing/mistyped required argument, handled by the framework.
 
 #### Wiring it into your agents
@@ -301,7 +295,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.35.0
+- uses: hslee16/archy@v0.36.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -327,7 +321,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.35.0
+    rev: v0.36.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -456,6 +450,7 @@ Shipped:
 - **v0.28, causal-framing reframes**: archy's output now reads as causal claims and judgment prompts, not just structure. `archy_impact` returns `chains` (the shortest import path back to a changed module, with line numbers, explaining *why* each dependent is impacted); `archy_snapshot` returns an `invariant_brief` (declared layers, forbidden edges, the acyclic invariant, baseline score, and load-bearing modules) so an agent is told the constraints before its first edit; and each `archy_diff` summary item carries a `prompt` reframing the delta as a reviewer question ("new cycle a -> b; intended, or invert an edge?"). No new tool, axis, or graph; packaging over already-computed data ([#152](https://github.com/hslee16/archy/pull/152), [#153](https://github.com/hslee16/archy/pull/153), [#154](https://github.com/hslee16/archy/pull/154)).
 - **v0.29, `archy_simulate` (18th tool)**: counterfactual pre-edit check. Given a proposed import-edge delta (`add`/`remove` of `{from, to}` pairs), it returns the would-be cycles, new back-edges, layer/SDP violations, per-axis score delta, and blast-radius change *before any file is written*, so an agent can test a refactoring hypothesis and reshape a plan that introduces a cycle before touching code. Mostly composition over the diff/DSM/propagation machinery; empirically validated (oracle 315/315 on real repos, 96% fidelity, [`SIMULATE_ORACLE_EMPIRICS.md`](docs/research/SIMULATE_ORACLE_EMPIRICS.md), [#156](https://github.com/hslee16/archy/pull/156)).
 - **v0.30, `archy_what_to_refactor_next` (19th tool)**: one ranked refactor-priority list fusing the behavioral lens (`archy_hotspots`, CC x churn) and the structural lens (`archy_high_risk_modules`, edit-risk). The two normalized lens scores are summed into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one, while a dominant single-lens signal (a giant hotspot at the import-graph leaves) can still rank first. Each entry names which lenses fired and carries a one-line `rationale`; one call replaces two-plus-synthesis. Pure aggregation over the two existing primitives. Honest null: an empty list plus a `note` when nothing is both complex+churned and nothing is central+fragile above the `min_risk` floor, rather than manufacturing a phantom #1 ([#130](https://github.com/hslee16/archy/issues/130)).
+- **v0.36, MCP tool consolidation (#227)**: shrank the `archy mcp` surface from 19 tools to 13 by clean removal (no aliases), folding each removed tool into a survivor via a mode/lens/param switch: `archy_impact(mode="affected")` absorbs the old `archy_affected`; `archy_graph(focus=...)` and `archy_graph(response_format="summary")` absorb `archy_graph_focus` and `archy_graph_summary`; `archy_what_to_refactor_next(lens="behavioral"|"structural")` absorbs `archy_hotspots` and `archy_high_risk_modules`; and `archy_score(record=True)` replaces `archy_record_baseline`. A smaller, less-overlapping surface costs fewer always-in-context tokens and improves tool-selection accuracy. BC-breaking, so the plugin pin moved to `archy>=0.36,<1.0`. The CLI is unchanged. Closes the [#230](https://github.com/hslee16/archy/issues/230) modernization tracker ([#227](https://github.com/hslee16/archy/issues/227)).
 - **v0.35, MCP surface modernization**: brought the `archy mcp` tools up to current MCP best practice (2025-2026 spec) without changing the tool set (still 19, no plugin-pin bump). All tools now declare `readOnlyHint` / `title` annotations so trusted clients can auto-approve archy's read-only calls instead of prompting on every read ([#225](https://github.com/hslee16/archy/issues/225)); every tool declares a structured-output `outputSchema` and returns conforming `structuredContent` alongside the text block ([#228](https://github.com/hslee16/archy/issues/228)); the token-heavy `archy_dsm` and `archy_graph` are concise-by-default with a `response_format="summary"|"full"` enum and a truncation cap (DSM summary ~89% smaller than the full matrix) ([#226](https://github.com/hslee16/archy/issues/226)); and a single three-tier error model gives agents one recovery contract (`isError:true` for usage errors, in-band result variants for recoverable conditions like no-baseline / too-large / no-config) ([#229](https://github.com/hslee16/archy/issues/229)). No new tool, axis, or graph; MCP-DX over the existing surface. Tracker [#230](https://github.com/hslee16/archy/issues/230).
 
 **Diagnostics**
