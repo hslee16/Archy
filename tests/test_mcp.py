@@ -26,6 +26,7 @@ from archy.mcp import (
     GraphPayload,
     GraphSummaryPayload,
     GraphTooLargePayload,
+    _run_affected,
     _run_check,
     _run_cycles,
     _run_diff,
@@ -34,8 +35,6 @@ from archy.mcp import (
     _run_graph_dump,
     _run_graph_focus,
     _run_graph_summary,
-    _run_high_risk_modules,
-    _run_hotspots,
     _run_impact,
     _run_score,
     _run_simulate,
@@ -86,6 +85,10 @@ def test_create_server_registers_expected_tools():
     server = create_server()
     tools = asyncio.run(server.list_tools())
     names = {t.name for t in tools}
+    # v0.36 (#227): 13 tools after the consolidation. The 6 removed tools
+    # (archy_affected, archy_record_baseline, archy_graph_focus,
+    # archy_graph_summary, archy_high_risk_modules, archy_hotspots) are folded
+    # into survivors via mode/lens/param switches; see the module docstring.
     assert names == {
         "archy_score",
         "archy_cycles",
@@ -93,20 +96,15 @@ def test_create_server_registers_expected_tools():
         "archy_contracts",
         "archy_trend",
         "archy_impact",
-        "archy_affected",
         "archy_snapshot",
         "archy_diff",
-        "archy_record_baseline",
-        "archy_graph_focus",
-        "archy_graph_summary",
         "archy_graph",
-        "archy_high_risk_modules",
-        "archy_hotspots",
         "archy_what_to_refactor_next",
         "archy_dsm",
         "archy_status",
         "archy_simulate",
     }
+    assert len(names) == 13
 
 
 def test_all_tools_declare_read_only_annotations():
@@ -167,6 +165,8 @@ def test_all_tools_declare_output_schema():
         ("archy_diff", {}, True),  # union, in-band error branch (no baseline -> DiffErrorPayload)
         ("archy_check", {}, True),  # union, tier-3 no-config branch (CheckErrorPayload)
         ("archy_cycles", {}, False),  # bare list, empty on an acyclic project -> {"result": []}
+        ("archy_impact", {"files": ["pkg/a.py"]}, True),  # union, blast branch (Impact)
+        ("archy_impact", {"files": ["pkg/a.py"], "mode": "affected"}, True),  # affected branch
     ],
 )
 def test_tool_result_conforms_to_output_schema(
@@ -776,7 +776,7 @@ def test_graph_dump_refuses_oversized_graph(acyclic_project: Path):
     assert isinstance(payload, GraphTooLargePayload)
     assert payload.max_nodes == 1
     assert payload.node_count > 1
-    assert "archy_graph_focus" in payload.error
+    assert "archy_graph(focus=" in payload.error
 
 
 @pytest.mark.parametrize("bad", [0, -1, -500])
@@ -839,9 +839,11 @@ def test_manager_for_reuses_or_evicts_by_config(tmp_path: Path):
         _MANAGERS.clear()
 
 
-def test_high_risk_modules_ranks_central_volatile_first(tmp_path: Path):
-    # `pkg.hub` is imported by three peers (high fan-in) AND itself imports a
-    # downstream dep (non-zero instability), so it dominates the composite.
+def test_refactor_structural_lens_ranks_central_volatile_first(tmp_path: Path):
+    # v0.36 (#227): the structural lens replaces archy_high_risk_modules. `pkg.hub`
+    # is imported by three peers (high fan-in) AND itself imports a downstream dep
+    # (non-zero instability), so it dominates the edit-risk composite. min_risk=0
+    # restores the old high-risk behavior (no floor).
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
@@ -851,31 +853,135 @@ def test_high_risk_modules_ranks_central_volatile_first(tmp_path: Path):
     (pkg / "b.py").write_text("from pkg.hub import y\n")
     (pkg / "c.py").write_text("from pkg.hub import z\n")
 
-    payload = _run_high_risk_modules(tmp_path, top_n=5)
-    assert payload.modules[0].module == "pkg.hub"
-    top = payload.modules[0]
+    payload = _run_what_to_refactor_next(
+        tmp_path, lens="structural", top_n=5, since=None, min_risk=0.0
+    )
+    top = payload.priorities[0]
+    assert top.module == "pkg.hub"
+    assert top.lenses == ("edit_risk",)
     assert 0.0 < top.edit_risk <= 1.0
     assert top.fan_in == 3
     assert top.instability > 0.0
     assert top.propagation_cost > 0.0
 
 
-def test_high_risk_modules_validates_top_n(acyclic_project: Path):
-    with pytest.raises(ValueError, match="top_n"):
-        _run_high_risk_modules(acyclic_project, top_n=0)
-
-
-def test_high_risk_modules_top_n_caps_results(tmp_path: Path):
+def test_refactor_structural_lens_skips_git(tmp_path: Path):
+    # The structural lens never consults git, so it works (and reports
+    # git_available=False) even with no repository present.
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    for name in ("a", "b", "c", "d"):
-        (pkg / f"{name}.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
+    (pkg / "a.py").write_text("from pkg.hub import x\n")
 
-    payload = _run_high_risk_modules(tmp_path, top_n=2)
-    assert len(payload.modules) <= 2
-    # module_count reports the size of the candidate pool, not the slice.
-    assert payload.module_count >= len(payload.modules)
+    payload = _run_what_to_refactor_next(
+        tmp_path, lens="structural", top_n=5, since="2025-01-01", min_risk=0.0
+    )
+    assert payload.git_available is False
+    assert payload.priorities
+    assert all(e.lenses == ("edit_risk",) for e in payload.priorities)
+
+
+def test_refactor_structural_lens_top_n_caps_results(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "dep.py").write_text("")
+    (pkg / "hub.py").write_text("from pkg.dep import thing\n")
+    for name in ("a", "b", "c", "d"):
+        (pkg / f"{name}.py").write_text("from pkg.hub import x\n")
+
+    payload = _run_what_to_refactor_next(
+        tmp_path, lens="structural", top_n=2, since=None, min_risk=0.0
+    )
+    assert len(payload.priorities) <= 2
+    # total reports the size of the candidate pool, not the slice.
+    assert payload.total >= len(payload.priorities)
+
+
+def test_graph_tool_focus_routes_to_subgraph(acyclic_project: Path):
+    # v0.36 (#227): archy_graph(focus=...) replaces archy_graph_focus. With focus
+    # set the tool returns a bounded GraphPayload subgraph, ignoring
+    # response_format/max_nodes/top_n.
+    payload = _run_graph(
+        acyclic_project,
+        response_format="summary",
+        focus=["pkg.a"],
+        depth=1,
+        direction="both",
+        internal_only=True,
+        max_nodes=500,
+        top_n=20,
+    )
+    assert isinstance(payload, GraphPayload)
+    ids = {n.id for n in payload.nodes}
+    assert {"pkg.a", "pkg.b"} <= ids
+
+
+def test_graph_tool_focus_still_validates_response_format(acyclic_project: Path):
+    # response_format is validated up front even when focus short-circuits the
+    # summary/dump branches, so a bad enum value still raises.
+    with pytest.raises(ValueError, match="response_format must be"):
+        _run_graph(
+            acyclic_project,
+            response_format="xml",
+            focus=["pkg.a"],
+            depth=1,
+            direction="both",
+            internal_only=True,
+            max_nodes=500,
+            top_n=20,
+        )
+
+
+def test_impact_mode_blast_returns_chains(acyclic_project: Path):
+    # mode='blast' (the default) returns the Impact shape with chains.
+    result = _run_impact(acyclic_project, files=[Path("pkg/b.py")])
+    from archy.impact import Impact
+
+    assert isinstance(result, Impact)
+
+
+def test_impact_mode_affected_returns_test_split(tmp_path: Path):
+    # v0.36 (#227): archy_impact(mode='affected') replaces archy_affected and
+    # returns the CI-shaped tests/modules split.
+    from archy.affected import Affected
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "b.py").write_text("")
+    (pkg / "a.py").write_text("from pkg.b import thing\n")
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_a.py").write_text("from pkg.a import thing\n")
+
+    result = _run_affected(tmp_path, files=[Path("pkg/a.py")], depth=5, test_filter=None)
+    assert isinstance(result, Affected)
+    assert "pkg.tests.test_a" in set(result.impacted_tests) or any(
+        "test_a" in t for t in result.impacted_tests
+    )
+
+
+def test_impact_tool_validates_mode(acyclic_project: Path):
+    from mcp.server.fastmcp.exceptions import ToolError
+
+    server = create_server()
+    with pytest.raises(ToolError):
+        asyncio.run(
+            server.call_tool(
+                "archy_impact",
+                {"path": str(acyclic_project), "files": ["pkg/a.py"], "mode": "sideways"},
+            )
+        )
+
+
+def test_refactor_validates_lens(acyclic_project: Path):
+    with pytest.raises(ValueError, match="lens must be"):
+        _run_what_to_refactor_next(
+            acyclic_project, lens="sideways", top_n=5, since=None, min_risk=0.15
+        )
 
 
 def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
@@ -1079,45 +1185,57 @@ def _init_hotspot_repo(repo: Path) -> None:
     _git(repo, "commit", "-q", "-m", "touch hot")
 
 
-def test_hotspots_payload_shape_and_ranking(tmp_path: Path):
+def test_refactor_behavioral_lens_shape_and_ranking(tmp_path: Path):
+    # v0.36 (#227): the behavioral lens replaces archy_hotspots. It surfaces only
+    # CC x churn hotspots, ranked by hotspot_score (== cc_sum * churn).
     _init_hotspot_repo(tmp_path)
-    payload = _run_hotspots(tmp_path, top=20, since=None)
+    payload = _run_what_to_refactor_next(
+        tmp_path, lens="behavioral", top_n=20, since=None, min_risk=0.0
+    )
     assert payload.note is None
     assert payload.since is None
     assert payload.total >= 1
-    assert payload.shown == len(payload.hotspots)
-    top = payload.hotspots[0]
+    assert payload.shown == len(payload.priorities)
+    top = payload.priorities[0]
     assert top.module == "pkg.hot"
-    assert top.score == top.cc_sum * top.churn
+    # The behavioral lens keeps only rows the hotspot lens fired on (a row may
+    # also carry edit_risk when it clears the structural floor too).
+    assert "hotspot" in top.lenses
+    assert top.hotspot_score == top.cc_sum * top.churn
+    assert top.path is not None
     assert top.path.endswith("pkg/hot.py")
 
 
-def test_hotspots_top_caps_results(tmp_path: Path):
+def test_refactor_behavioral_lens_top_n_caps_results(tmp_path: Path):
     _init_hotspot_repo(tmp_path)
-    payload = _run_hotspots(tmp_path, top=1, since=None)
+    payload = _run_what_to_refactor_next(
+        tmp_path, lens="behavioral", top_n=1, since=None, min_risk=0.0
+    )
     assert payload.shown <= 1
-    # `total` reports the size of the candidate pool, not the slice.
+    # total reports the size of the candidate pool, not the slice.
     assert payload.total >= payload.shown
 
 
-def test_hotspots_validates_top(tmp_path: Path):
-    with pytest.raises(ValueError, match="top"):
-        _run_hotspots(tmp_path, top=0, since=None)
+def test_refactor_validates_top_n(tmp_path: Path):
+    with pytest.raises(ValueError, match="top_n"):
+        _run_what_to_refactor_next(tmp_path, lens="behavioral", top_n=0, since=None, min_risk=0.0)
 
 
-def test_hotspots_returns_diagnostic_when_not_in_git_repo(tmp_path: Path):
-    # Same Python project shape but no `git init` -> the tool must NOT raise.
-    # The agent reads `note` and pivots to archy_high_risk_modules instead.
+def test_refactor_behavioral_lens_diagnostic_when_not_in_git_repo(tmp_path: Path):
+    # Same Python project shape but no `git init` -> the behavioral lens must NOT
+    # raise. The agent reads `note` and pivots to lens='structural' instead.
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("def f():\n    if True: return 1\n")
-    payload = _run_hotspots(tmp_path, top=20, since=None)
-    assert payload.hotspots == ()
+    payload = _run_what_to_refactor_next(
+        tmp_path, lens="behavioral", top_n=20, since=None, min_risk=0.0
+    )
+    assert payload.priorities == ()
     assert payload.total == 0
     assert payload.note is not None
     assert "not inside a git repository" in payload.note
-    assert "archy_high_risk_modules" in payload.note
+    assert "lens='structural'" in payload.note
 
 
 def test_what_to_refactor_next_fuses_both_lenses(tmp_path: Path):
@@ -1199,11 +1317,11 @@ def test_what_to_refactor_next_validates_args(acyclic_project: Path):
         _run_what_to_refactor_next(acyclic_project, top_n=5, since=None, min_risk=1.5)
 
 
-def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
+def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
     # Verifies the `since` arg is actually plumbed into `git_churn`, not
-    # silently dropped. Regression guard: if someone refactored
-    # `_run_hotspots` and forgot to forward `since`, every other test in
-    # this file would still pass.
+    # silently dropped. Regression guard: if someone refactored the behavioral
+    # lens and forgot to forward `since`, every other test in this file would
+    # still pass.
     import os
     import subprocess
 
@@ -1235,22 +1353,24 @@ def test_hotspots_since_propagates_to_git_churn(tmp_path: Path):
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "recent tweak hot")
 
-    full = _run_hotspots(repo, top=20, since=None)
-    full_modules = {h.module for h in full.hotspots}
+    full = _run_what_to_refactor_next(repo, lens="behavioral", top_n=20, since=None, min_risk=0.0)
+    full_modules = {h.module for h in full.priorities}
     assert "pkg.hot" in full_modules
     assert "pkg.old" in full_modules
-    hot_full = next(h for h in full.hotspots if h.module == "pkg.hot")
-    old_full = next(h for h in full.hotspots if h.module == "pkg.old")
+    hot_full = next(h for h in full.priorities if h.module == "pkg.hot")
+    old_full = next(h for h in full.priorities if h.module == "pkg.old")
     assert hot_full.churn == 2
     assert old_full.churn == 1
 
-    filtered = _run_hotspots(repo, top=20, since="2025-01-01")
+    filtered = _run_what_to_refactor_next(
+        repo, lens="behavioral", top_n=20, since="2025-01-01", min_risk=0.0
+    )
     assert filtered.since == "2025-01-01"
-    filtered_modules = {h.module for h in filtered.hotspots}
+    filtered_modules = {h.module for h in filtered.priorities}
     # `old.py` was last touched in 2020 -> dropped (churn=0 -> filtered).
     # `hot.py` still has the 2026-tweak commit -> kept with churn=1.
     assert "pkg.old" not in filtered_modules
-    hot_filtered = next(h for h in filtered.hotspots if h.module == "pkg.hot")
+    hot_filtered = next(h for h in filtered.priorities if h.module == "pkg.hot")
     assert hot_filtered.churn == 1
 
 

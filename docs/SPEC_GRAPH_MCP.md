@@ -1,5 +1,13 @@
 # Spec: `archy_graph` MCP tool
 
+> **Status (v0.36, #227):** shipped, then consolidated. The three tools this
+> spec proposed (`archy_graph_focus`, `archy_graph_summary`, `archy_graph`) are
+> now a single `archy_graph` tool: the focus lens is `archy_graph(focus=[...],
+> depth=, direction=)` and the summary lens is the default
+> `archy_graph(response_format="summary")`. The sections below describe the
+> original three-tool design and rationale, which still explains the lenses; only
+> the surface shape changed (one tool, mode/param switches).
+
 Open roadmap item from README:
 
 > `archy graph` MCP tool: expose the dep graph itself for agent-side reasoning

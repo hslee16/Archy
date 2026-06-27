@@ -328,7 +328,7 @@ A validation pass on three large, widely-used codebases (the same trees used for
 What this shows:
 
 - **archy surfaces real import cycles in all three** (Django 17, pytorch 22, Home Assistant 108). These are tangles in code that thousands of developers review; they are invisible to a per-file diff review because a cycle is a whole-graph property. pytorch's acyclicity of 0.70 quantifies a materially more tangled import graph than Django's 0.92 or Home Assistant's 0.95 (HA carries the most *cycles* in absolute terms, but as a small fraction of its 17k modules, so its acyclicity axis stays high).
-- **It localizes extreme complexity hotspots**: pytorch has a function with cyclomatic complexity **201** (`cc_max`), the kind of "edit at your peril" site `archy_hotspots` and `archy_high_risk_modules` are built to flag before an agent touches it.
+- **It localizes extreme complexity hotspots**: pytorch has a function with cyclomatic complexity **201** (`cc_max`), the kind of "edit at your peril" site `archy_what_to_refactor_next` (behavioral and structural lenses) is built to flag before an agent touches it.
 - **The numbers are stable and comparable** because the cache-backed build is byte-identical to a cold build (see the persistent-index work), so these can be re-run in CI on every commit to trend architecture erosion over time.
 
 This is the mission in one table: a single per-commit number plus a short list of concrete, agent-actionable structural findings, on codebases far too large to hold in any review (or context window) at once.

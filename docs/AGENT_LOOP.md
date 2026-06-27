@@ -43,23 +43,23 @@ if you want to confirm it explicitly.
 
    For a bounded, bidirectional neighborhood that also includes the
    module's *forward* dependencies (and import line numbers on each
-   edge), reach for `archy_graph_focus` instead:
+   edge), pass `focus` to the graph tool instead:
 
    - CLI: not exposed; use `archy graph` and grep
-   - MCP: `archy_graph_focus(path, modules=[<file or qualname>])`
+   - MCP: `archy_graph(path, focus=[<file or qualname>])`
 
    And when you don't yet know which module to look at, the graph tool
    answers "where is the gravity in this codebase" with a top-N overview
    (summary by default; pass `response_format="full"` only when you
    actually need the whole node/edge dump):
 
-   - MCP: `archy_graph(path)`  (or the equivalent `archy_graph_summary(path)`)
+   - MCP: `archy_graph(path)`
 
    Before a non-trivial edit (refactor, public-surface change, anything
    touching more than a handful of files), check whether your target
    sits in the project's central-and-fragile zone:
 
-   - MCP: `archy_high_risk_modules(path)`
+   - MCP: `archy_what_to_refactor_next(path, lens="structural")`
 
    Returns the top-N modules by `edit_risk`: the geometric mean of
    propagation cost, normalized fan-in, and Martin's instability. Each
@@ -67,17 +67,16 @@ if you want to confirm it explicitly.
    see *why* a module ranks high. If your target is on the list, scope
    down or pause for review before proceeding.
 
-   The churn-aware sibling answers "where is the refactoring leverage?"
+   The churn-aware lens answers "where is the refactoring leverage?"
    rather than "is this edit dangerous?":
 
-   - MCP: `archy_hotspots(path)`
+   - MCP: `archy_what_to_refactor_next(path, lens="behavioral")`
 
    Returns the top-N modules by `cc_sum x git-commit-count` (Tornhill /
-   CodeScene's "Code Red"); each entry is `{module, path, cc_sum, churn,
-   score}`. Needs git history; if the project isn't under git, returns
-   an empty list plus a `note` so you can pivot back to
-   `archy_high_risk_modules`. Most useful when planning a refactoring
-   sprint, less useful for a single targeted edit.
+   CodeScene's "Code Red"). Needs git history; if the project isn't under
+   git, returns an empty list plus a `note` so you can pivot back to
+   `lens="structural"`. Most useful when planning a refactoring sprint,
+   less useful for a single targeted edit.
 
    To answer "what should I refactor first?" without calling both tools
    and merging by hand, use the fused list:
@@ -244,8 +243,8 @@ instructions for using them as a loop.
 
 Why this loop exists in this shape, with citations:
 
-- **Navigation Paradox** (Feb 2026, [arxiv:2602.20048](https://arxiv.org/html/2602.20048v1)) shows that larger LLM context windows do not eliminate the need for structural graph navigation. Failure shifts from retrieval capacity to navigational salience. The MCP `archy_graph_focus` + `archy_impact` calls in step 2 of the loop above exist specifically because long context alone is not enough; the agent has to be pointed at the architecturally critical files.
-- **LocAgent ablation** (ACL 2025, [aclanthology:2025.acl-long.426](https://aclanthology.org/2025.acl-long.426/)) finds that removing graph traversal from an LLM agent significantly degrades function-level code localization. The whole-graph view alone is not enough either; bounded local neighborhoods matter, which is why `archy_graph_focus` returns a subgraph rather than the full dump.
-- **Coding-agent failure-mode literature** (Columbia DAPLab, Anthropic, Stack Overflow synthesis, 2026) names "scope drift", "context exhaustion", and "cross-file reasoning failure" as recurring patterns. The snapshot/diff cycle in steps 1, 4, and 5 of the loop above is built to catch the first; the bounded `archy_graph_focus` and `archy_impact` calls in step 2 are built to catch the third.
+- **Navigation Paradox** (Feb 2026, [arxiv:2602.20048](https://arxiv.org/html/2602.20048v1)) shows that larger LLM context windows do not eliminate the need for structural graph navigation. Failure shifts from retrieval capacity to navigational salience. The MCP `archy_graph(focus=...)` + `archy_impact` calls in step 2 of the loop above exist specifically because long context alone is not enough; the agent has to be pointed at the architecturally critical files.
+- **LocAgent ablation** (ACL 2025, [aclanthology:2025.acl-long.426](https://aclanthology.org/2025.acl-long.426/)) finds that removing graph traversal from an LLM agent significantly degrades function-level code localization. The whole-graph view alone is not enough either; bounded local neighborhoods matter, which is why `archy_graph(focus=...)` returns a subgraph rather than the full dump.
+- **Coding-agent failure-mode literature** (Columbia DAPLab, Anthropic, Stack Overflow synthesis, 2026) names "scope drift", "context exhaustion", and "cross-file reasoning failure" as recurring patterns. The snapshot/diff cycle in steps 1, 4, and 5 of the loop above is built to catch the first; the bounded `archy_graph(focus=...)` and `archy_impact` calls in step 2 are built to catch the third.
 
 The detailed failure-mode-to-capability mapping and the implied roadmap priority order live in [`RESEARCH_METRICS.md` §14c](research/RESEARCH_METRICS.md).

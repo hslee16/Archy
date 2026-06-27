@@ -35,7 +35,7 @@ PLUGIN_README = REPO_ROOT / "plugins" / "claude" / "README.md"
 # The version specifier the launcher hands to `uvx`. Pinned in one place so the
 # launcher/README cannot silently disagree (issue #150 moved the spec out of the
 # manifest and into the launcher).
-EXPECTED_SPEC = "archy>=0.31,<1.0"
+EXPECTED_SPEC = "archy>=0.36,<1.0"
 
 
 @pytest.fixture

@@ -27,7 +27,7 @@ import { delimiter, join } from "node:path";
 // Keep in sync with plugins/claude/README.md and tests/test_plugin.py. The lower
 // bound guarantees the full current tool set; the `<1.0` cap stops a breaking
 // 1.0 from being auto-pulled into the stanza.
-const SPEC = "archy>=0.31,<1.0";
+const SPEC = "archy>=0.36,<1.0";
 
 const isWindows = process.platform === "win32";
 // Only extensions we can actually launch: .exe/.com directly, .cmd/.bat via

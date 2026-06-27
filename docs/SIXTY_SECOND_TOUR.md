@@ -77,7 +77,7 @@ The headline number is the geometric mean of the four sub-axes (modularity, acyc
    }
    ```
 
-   Then ask the agent to call `archy_snapshot` at the start of a session, `archy_high_risk_modules` before editing, and `archy_diff` after the edit. The full playbook is in [`AGENT_LOOP.md`](AGENT_LOOP.md).
+   Then ask the agent to call `archy_snapshot` at the start of a session, `archy_what_to_refactor_next(lens="structural")` before editing, and `archy_diff` after the edit. The full playbook is in [`AGENT_LOOP.md`](AGENT_LOOP.md).
 
 ## Where to next
 

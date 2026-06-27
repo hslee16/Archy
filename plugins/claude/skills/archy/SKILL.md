@@ -70,37 +70,37 @@ archy_impact(path=".", files=["src/app/db.py"])
 
 `impacted` lists the transitive dependents; `chains` tells you *why* each is reachable, the shortest import path back to a changed module with the line numbers on each hop. Cite that edge when you make the edit (e.g. "preserve `billing.invoice -> auth.session -> auth.tokens`") instead of guessing which dependents matter. Chains are ranked closest-first and capped (`max_chains`, `chains_omitted` reports the remainder).
 
-For a richer bidirectional neighborhood with import line numbers and module instability scores, use focus instead:
+For a richer bidirectional neighborhood with import line numbers and module instability scores, pass `focus` to the graph tool (this replaces the old `archy_graph_focus`):
 
 ```
-archy_graph_focus(path=".", modules=["src/app/db.py"], depth=1, direction="both")
+archy_graph(path=".", focus=["src/app/db.py"], depth=2, direction="both")
 ```
 
-`direction` accepts `"in"` (who depends on me), `"out"` (my dependencies), or `"both"`. `depth` caps hop distance. Pass either file paths or qualnames.
+`direction` accepts `"in"` (who depends on me), `"out"` (my dependencies), or `"both"`. `depth` caps hop distance. Pass either file paths or qualnames. With `focus` set the neighborhood is already bounded, so `response_format`/`max_nodes`/`top_n` do not apply.
 
-When the target module is unknown ("where is the gravity in this codebase"), start with the overview:
-
-```
-archy_graph_summary(path=".", top_n=20)
-```
-
-Returns top modules by fan-in, fan-out, and PageRank, plus top external dependencies. Cheap. Read this before reading the full graph.
-
-Before a non-trivial edit, check whether the target is a high-risk module:
+When the target module is unknown ("where is the gravity in this codebase"), start with the overview (the default `response_format="summary"`, which replaces the old `archy_graph_summary`):
 
 ```
-archy_high_risk_modules(path=".", top_n=10)
+archy_graph(path=".")
 ```
 
-Ranks internal modules by `edit_risk = geomean(propagation_cost, normalized_fan_in, instability)`. A high score means central *and* fragile; treat such edits with extra care or scope them down. Pairs with `archy_hotspots` (below) which answers "where is the refactoring leverage" using git churn rather than structural risk.
+Returns top modules by fan-in, fan-out, and PageRank, plus top external dependencies. Cheap. Read this before pulling the full dump with `response_format="full"`.
 
-For CI-shaped test selection (a depth-bounded variant of `archy_impact` that pre-classifies impacted modules into tests vs. other downstream code):
+Before a non-trivial edit, check whether the target is a high-risk module (the structural lens of the refactor tool, replacing the old `archy_high_risk_modules`):
 
 ```
-archy_affected(path=".", files=["src/app/db.py"], depth=5)
+archy_what_to_refactor_next(path=".", lens="structural", top_n=10, min_risk=0)
 ```
 
-Use this instead of `archy_impact` when the question is "given this diff, which tests should I run?" rather than "what's the full blast radius?". Returns `impacted_tests` and `impacted_modules` as separate lists. Test detection defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `test_filter=<recursive glob>`. The depth cap prevents a single-line edit on a monorepo from fanning out to thousands of nodes. The CLI form `git diff --name-only HEAD | archy affected . --stdin -q | xargs pytest` is the canonical CI / pre-commit shape.
+Ranks internal modules by `edit_risk = geomean(propagation_cost, normalized_fan_in, instability)`. A high score means central *and* fragile; treat such edits with extra care or scope them down. Pass `min_risk=0` to surface every module (no floor). The behavioral lens (`lens="behavioral"`, below) answers "where is the refactoring leverage" using git churn rather than structural risk.
+
+For CI-shaped test selection (a depth-bounded variant of `archy_impact` that pre-classifies impacted modules into tests vs. other downstream code), pass `mode="affected"` (this replaces the old `archy_affected`):
+
+```
+archy_impact(path=".", files=["src/app/db.py"], mode="affected", depth=5)
+```
+
+Use this instead of the default `mode="blast"` when the question is "given this diff, which tests should I run?" rather than "what's the full blast radius?". Returns `impacted_tests` and `impacted_modules` as separate lists. Test detection defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `test_filter=<recursive glob>`. The depth cap prevents a single-line edit on a monorepo from fanning out to thousands of nodes. The CLI form `git diff --name-only HEAD | archy affected . --stdin -q | xargs pytest` is the canonical CI / pre-commit shape.
 
 For positional context (where blocks are dense, where back-edges sit, where layer leakage shows up), reach for the Design Structure Matrix:
 
@@ -112,21 +112,21 @@ archy_dsm(path=".", group_by="community")
 
 Returns a compact summary by default (block structure, counts, back-edges, cross-block coupling); pass `response_format="full"` for the full positional matrix (ordered row/col list plus a sparse cell list, grouped into block-diagonal blocks; refused over `DEFAULT_MAX_DSM_CELLS` cells). `group_by="community"` orients in an unfamiliar codebase via Newman-community blocks; `"layer"` makes cross-layer dependencies visible as off-block entries; `"topological"` puts cycles above the diagonal so back-edges localize to specific module pairs. `weight="calls"` exposes `call_count` instead of binary edge presence. Pass `focus=<qualname>` to keep just the focus + its N-hop neighborhood, or `package=<prefix>` to scope to a single subpackage. The DSM is *visualization-only*, never a score input; agents read it positionally, not as a number ([`docs/research/DSM_EMPIRICS.md`](https://github.com/hslee16/Archy/blob/main/docs/research/DSM_EMPIRICS.md) for why).
 
-For refactor priority across the whole codebase:
+For refactor priority across the whole codebase, the behavioral lens ranks files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"; replaces the old `archy_hotspots`):
 
 ```
-archy_hotspots(path=".", top_n=20, since=None)
+archy_what_to_refactor_next(path=".", lens="behavioral", top_n=20, since=None)
 ```
 
-Ranks files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). The top of the list is where refactoring effort pays back the most. `since` is passed straight to `git log --since`; use it for "what should I refactor right now" recency-weighted views. Falls back gracefully on non-git projects (empty list plus a note pointing at `archy_high_risk_modules` as the structural alternative).
+The top of the list is where refactoring effort pays back the most. `since` is passed straight to `git log --since`; use it for "what should I refactor right now" recency-weighted views. Off git, the behavioral lens cannot run (its `note` points at `lens="structural"` as the git-free alternative).
 
-To get both refactor-priority lenses fused in one call instead of running `archy_hotspots` and `archy_high_risk_modules` and merging by hand:
+To get both refactor-priority lenses fused in one call instead of running the behavioral and structural lenses separately and merging by hand, use the default `lens="fused"`:
 
 ```
 archy_what_to_refactor_next(path=".", top_n=10, since=None, min_risk=0.15)
 ```
 
-Sums the behavioral lens (CC x churn hotspots) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal, like a giant hotspot at the import-graph leaves, can still rank first). Each entry lists which `lenses` fired and a one-line `rationale`. Without git, the ranking is structural-only (`git_available=false`). An empty `priorities` plus a `note` is a real answer: nothing is both complex+churned and nothing is central+fragile above `min_risk`, so there is nothing for these two lenses to prioritize.
+Sums the behavioral lens (CC x churn hotspots) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal, like a giant hotspot at the import-graph leaves, can still rank first). Each entry lists which `lenses` fired and a one-line `rationale`. Without git, the fused ranking is structural-only (`git_available=false`). An empty `priorities` plus a `note` is a real answer: nothing is both complex+churned and nothing is central+fragile above `min_risk`, so there is nothing for these two lenses to prioritize.
 
 ### 3. Edit the code
 
@@ -179,20 +179,14 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 |---|---|---|
 | `archy_snapshot` | `(path)` | Once at session start. Writes `.archy/baseline.json`. |
 | `archy_diff` | `(path)` | After every edit. Compares current state to the snapshot. |
-| `archy_impact` | `(path, files: list[str])` | Sizing a refactor or removal by transitive reverse-dependents. |
+| `archy_impact` | `(path, files: list[str], mode="blast", max_chains=..., depth=5, test_filter=None)` | `mode="blast"` (default): sizing a refactor or removal by transitive reverse-dependents (with `chains`). `mode="affected"` (replaces `archy_affected`): CI-shaped impact, returns modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped for monorepos. Use `affected` for "which tests should I run for this diff?". |
 | `archy_simulate` | `(path, add: list[{from,to}]=None, remove=None)` | Predict an import-edge change *before writing it*: would-be cycles, layer violations, score + blast-radius delta. Reshape a plan that introduces a cycle before editing. |
-| `archy_affected` | `(path, files: list[str], depth=5, test_filter=None)` | CI-shaped impact: given changed files, return modules pre-classified into `impacted_tests` and `impacted_modules`. Depth-capped so monorepos stay tractable. Use for "which tests should I run for this diff?". |
-| `archy_graph_focus` | `(path, modules: list[str], depth=1, direction="both", internal_only=True)` | Bounded local neighborhood with edges + line numbers. |
-| `archy_graph_summary` | `(path, top_n=20)` | Top-N overview by fan-in / fan-out / PageRank. |
-| `archy_graph` | `(path, response_format="summary", internal_only=True, max_nodes=500, top_n=20)` | `response_format="summary"` (default) = top-N overview (same as `archy_graph_summary`). `response_format="full"` = full dump, refused over `max_nodes`. |
-| `archy_high_risk_modules` | `(path, top_n=10, internal_only=True)` | "Is this edit dangerous?" Top-N modules by `edit_risk` (geomean of propagation cost, normalized fan-in, instability). Call before a non-trivial edit. |
-| `archy_hotspots` | `(path, top_n=20, since=None)` | "Where is the refactoring leverage?" Rank files by `cc_sum * git_commit_count` (Tornhill / CodeScene's "Code Red"). Pass `since` (e.g. `"1 year ago"`) for recency-weighted views. |
-| `archy_what_to_refactor_next` | `(path, top_n=10, since=None, min_risk=0.15)` | "What should I refactor first?" One ranked list fusing hotspots (CC x churn) and edit-risk (central+fragile) into a summed `priority`; both-lens modules generally rank above comparable single-lens ones. Each entry names the firing `lenses` + a `rationale`. Empty list + `note` when neither lens has anything to prioritize. |
+| `archy_graph` | `(path, response_format="summary", focus=None, depth=2, direction="both", internal_only=True, max_nodes=500, top_n=20)` | No `focus`: `response_format="summary"` (default) = top-N overview by fan-in / fan-out / PageRank (replaces `archy_graph_summary`); `response_format="full"` = full dump, refused over `max_nodes`. With `focus=[...]` (replaces `archy_graph_focus`): bounded local neighborhood with edges + line numbers; `depth`/`direction` apply and `response_format`/`max_nodes`/`top_n` do not. |
+| `archy_what_to_refactor_next` | `(path, lens="fused", top_n=10, since=None, min_risk=0.15)` | "What should I refactor first?" `lens="fused"` (default) sums hotspots (CC x churn) and edit-risk (central+fragile) into a `priority`. `lens="behavioral"` (replaces `archy_hotspots`): CC x churn only, needs git. `lens="structural"` (replaces `archy_high_risk_modules`): edit-risk only, git-free; pass `min_risk=0` for no floor. Each entry names the firing `lenses` + a `rationale`. |
 | `archy_check` | `(path, config_path=None)` | After import changes. Direct-edge layer + SDP rules from `archy.yaml`. |
 | `archy_contracts` | `(path, config_path=None)` | Transitive layer enforcement via import-linter. Requires `archy[contracts]`. |
 | `archy_cycles` | `(path, min_size=2, internal_only=True)` | Standalone cycle listing (Tarjan SCCs + self-loops). |
-| `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl`; `strict=True` fails on regression beyond tolerance. |
-| `archy_record_baseline` | `(path, internal_only=True)` | Convenience: `archy_score(record=True)` for the start-of-session entry. |
+| `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl` (replaces `archy_record_baseline` for the start-of-session entry); `strict=True` fails on regression beyond tolerance. |
 | `archy_trend` | `(path, last_n=10)` | Recent score history (oldest-first). |
 | `archy_dsm` | `(path, response_format="summary", group_by="community", weight="imports", focus=None, focus_depth=1, package=None, baseline_path=None)` | Design Structure Matrix view of the import graph. `response_format="summary"` (default) = compact block structure + counts + back-edges; `response_format="full"` = full matrix (refused over `DEFAULT_MAX_DSM_CELLS` cells). `group_by` is `community` / `layer` / `topological`. Narrow large projects with `focus` + `focus_depth` or `package`. When `baseline_path` is provided, returns a `DSMDiff` (regardless of `response_format`) whose `new_back_edges` flags cycles the edit just introduced. Visualization-only; not part of any score. |
 
@@ -213,13 +207,13 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 
 - "What breaks if I remove this?" → `archy_impact` (full blast radius, unbounded)
 - "If I add/remove this import, what breaks, before I write it?" → `archy_simulate` (would-be cycles / violations / score delta, no file written)
-- "Which tests should I run for this diff / PR?" → `archy_affected` (depth-capped, tests vs. modules separated)
-- "What does this module depend on?" → `archy_graph_focus(direction="out")`
-- "Who uses this and what edges?" → `archy_graph_focus(direction="both")` (carries import line numbers)
-- "Where should I start reading this codebase?" → `archy_graph_summary`
+- "Which tests should I run for this diff / PR?" → `archy_impact(mode="affected")` (depth-capped, tests vs. modules separated)
+- "What does this module depend on?" → `archy_graph(focus=[...], direction="out")`
+- "Who uses this and what edges?" → `archy_graph(focus=[...], direction="both")` (carries import line numbers)
+- "Where should I start reading this codebase?" → `archy_graph` (default summary)
 - "I really need the whole graph" → `archy_graph(response_format="full")` (bump `max_nodes` only after the default summary shows the project fits)
-- "Is this module dangerous to edit?" → `archy_high_risk_modules` (structural; no git required)
-- "Where should I focus refactoring effort?" → `archy_hotspots` (CC x git churn; needs a git repo)
+- "Is this module dangerous to edit?" → `archy_what_to_refactor_next(lens="structural")` (structural; no git required)
+- "Where should I focus refactoring effort?" → `archy_what_to_refactor_next(lens="behavioral")` (CC x git churn; needs a git repo)
 
 **Which DSM grouping?**
 
@@ -248,7 +242,7 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 
 ```
 archy_snapshot(path=".")
-archy_graph_focus(path=".", modules=["src/app/auth.py"], depth=2, direction="both")
+archy_graph(path=".", focus=["src/app/auth.py"], depth=2, direction="both")
 archy_impact(path=".", files=["src/app/auth.py"])
 # Read both. Decide on scope. Edit.
 archy_check(path=".")
@@ -259,7 +253,7 @@ archy_diff(path=".")
 ### Adding a new module
 
 ```
-archy_graph_summary(path=".", top_n=15)
+archy_graph(path=".", top_n=15)
 # Edit: create the module and import it from one or two callers.
 archy_check(path=".")  # confirms the new edges don't cross layers
 archy_diff(path=".")   # confirms score did not regress
@@ -274,14 +268,14 @@ archy_dsm(path=".", group_by="topological")
 # The default summary lists `back_edges` directly: the (source, target)
 # pairs that point against the topological order = the edges closing the
 # cycle. (Use response_format="full" to read the matrix positionally.)
-archy_graph_focus(path=".", modules=[<one back-edge source from the DSM>], depth=2, direction="both")
+archy_graph(path=".", focus=[<one back-edge source from the DSM>], depth=2, direction="both")
 # Read import line numbers from the edges; choose the edge to break.
 ```
 
 ### Orienting in an unfamiliar codebase
 
 ```
-archy_graph_summary(path=".", top_n=20)
+archy_graph(path=".", top_n=20)
 # Top fan-in / fan-out / PageRank modules. Names the hubs.
 archy_dsm(path=".", group_by="community")
 # The default summary names the Newman-community blocks and their sizes
@@ -297,17 +291,17 @@ archy_what_to_refactor_next(path=".", top_n=10)
 # One fused list: both-lens modules (a CC x churn hotspot AND central+fragile)
 # rank first. Read each entry's `lenses` and `rationale`. An empty list with a
 # `note` means there is genuinely nothing to prioritize - take it at face value.
-archy_graph_focus(path=".", modules=[<top entry>], depth=1, direction="both")
+archy_graph(path=".", focus=[<top entry>], depth=1, direction="both")
 # Decide whether the right move is "extract some functions" (CC-driven)
 # or "split the module" (structure-driven), then snapshot and edit.
 ```
 
-To inspect a single lens directly: `archy_hotspots` for behavioral leverage (CC x churn; needs git, supports `since="3 months ago"` for recency-weighted views) or `archy_high_risk_modules` for structural danger (edit-risk; no git required).
+To inspect a single lens directly: `archy_what_to_refactor_next(lens="behavioral")` for behavioral leverage (CC x churn; needs git, supports `since="3 months ago"` for recency-weighted views) or `archy_what_to_refactor_next(lens="structural")` for structural danger (edit-risk; no git required).
 
 ### Assessing edit risk before touching a module
 
 ```
-archy_high_risk_modules(path=".", top_n=10)
+archy_what_to_refactor_next(path=".", lens="structural", top_n=10, min_risk=0)
 # If the module you plan to edit is in this list, scope the edit down or
 # pause for review. `edit_risk` is the geometric mean of propagation
 # cost, normalized fan-in, and Martin's instability; high means the
