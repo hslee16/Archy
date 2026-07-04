@@ -73,7 +73,7 @@ parity = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
-    { name = "import-linter", marker = "extra == 'contracts'", specifier = ">=2.11,<2.12" },
+    { name = "import-linter", marker = "extra == 'contracts'", specifier = ">=2.11,<2.13" },
     { name = "mcp", specifier = ">=1.27.1" },
     { name = "networkx", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -88,7 +88,7 @@ provides-extras = ["contracts"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "import-linter", specifier = ">=2.11,<2.12" },
+    { name = "import-linter", specifier = ">=2.11,<2.13" },
     { name = "jsonschema", specifier = ">=4.0" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-cov", specifier = ">=5.0" },

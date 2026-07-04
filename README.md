@@ -32,7 +32,7 @@ archy mcp             # expose 13 tools to Claude Code, Cursor, any MCP client
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | Refactor priority | `archy hotspots` (CC x git churn), `archy what-to-refactor-next` (fused hotspots + edit-risk) |
-| Duplicate detection | `archy duplicates` (cluster functions with identical normalized AST shape; advisory, not a score axis) |
+| Duplicate detection | `archy duplicates` (two-tier: likely duplicates vs demoted same-class/boilerplate variants; advisory, not a score axis) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
@@ -428,7 +428,7 @@ Next up (validated, queued, not yet started):
 - **Per-module score breakdown** so an agent can ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
 - **Change coupling (temporal coupling)**: rank module *pairs* that frequently change together in git history but share no import or call edge (a hidden dependency the structural graph can't see). Same Tornhill / CodeScene lineage as `archy_hotspots`; needs an empirical-validation pass first (co-change is noisy).
 - **Opt-in agent hooks (`archy install --hooks`)**: register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, ...) that runs the archy gate automatically after edits, so the loop fires whether or not the agent remembers to call the tools. Spec: [`docs/SPEC_INSTALL_HOOKS.md`](docs/SPEC_INSTALL_HOOKS.md).
-- **Static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Advisory, not a score axis. (Duplicate-function detection has shipped as the `archy duplicates` CLI command at a calibrated `--min-nodes 30` default; a bench false-positive spot-check put precision at ~42%, so it is an explicit high-recall / moderate-precision advisory, with a semantic de-noiser and the `archy_duplicates` MCP tool tracked in [#242](https://github.com/hslee16/archy/issues/242).)
+- **Static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Advisory, not a score axis. (Duplicate-function detection has shipped as the `archy duplicates` CLI command: a two-tier surfacer with a primary "likely duplicate" list and a demoted "same-class / boilerplate variant" list. A literature review confirmed ~50% refactorability precision is the expected ceiling for any similarity-only detector, so the semantic call is left to the agent; change-history co-change is the precision layer, planned with change-coupling [#131](https://github.com/hslee16/archy/issues/131). The `archy_duplicates` MCP tool follows.)
 
 Shipped:
 

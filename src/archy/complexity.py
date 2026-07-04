@@ -87,18 +87,8 @@ def walk_functions(root_node, source: bytes) -> tuple[FunctionComplexity, ...]:
     tree with import extraction rather than running tree-sitter twice per file.
     """
     out: list[FunctionComplexity] = []
-    _walk(root_node, (), out, source)
-    out.sort(key=lambda f: (f.line, f.qualified_name))
-    return tuple(out)
 
-
-def _walk(
-    node,
-    scope: tuple[str, ...],
-    out: list[FunctionComplexity],
-    source: bytes,
-) -> None:
-    if node.type == "function_definition":
+    def visit(node, scope: tuple[str, ...]) -> None:
         name = _name_of(node, source)
         qualified = ".".join((*scope, name)) if scope else name
         cyclomatic, size, shape_hash = _analyze_body(node)
@@ -112,20 +102,30 @@ def _walk(
                 size=size,
             )
         )
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for child in body.named_children:
-                _walk(child, (*scope, name), out, source)
-        return
-    if node.type == "class_definition":
+
+    _walk_function_defs(root_node, source, visit)
+    out.sort(key=lambda f: (f.line, f.qualified_name))
+    return tuple(out)
+
+
+def _walk_function_defs(node, source: bytes, visit, scope: tuple[str, ...] = ()) -> None:
+    """Depth-first walk calling `visit(function_definition_node, scope)` per function.
+
+    Owns the scope-tracking traversal skeleton (functions and classes extend the
+    dotted scope; other nodes recurse unchanged) so callers supply only the
+    per-function payload. `scope` is the tuple of enclosing class/function names.
+    """
+    if node.type in ("function_definition", "class_definition"):
         name = _name_of(node, source)
+        if node.type == "function_definition":
+            visit(node, scope)
         body = node.child_by_field_name("body")
         if body is not None:
             for child in body.named_children:
-                _walk(child, (*scope, name), out, source)
+                _walk_function_defs(child, source, visit, (*scope, name))
         return
     for child in node.named_children:
-        _walk(child, scope, out, source)
+        _walk_function_defs(child, source, visit, scope)
 
 
 # Leaf/literal node types folded to a single placeholder token so that two
@@ -192,3 +192,99 @@ def _name_of(node, source: bytes) -> str:
     if name_node is None:
         return "<anonymous>"
     return source[name_node.start_byte : name_node.end_byte].decode("utf-8", errors="replace")
+
+
+class FunctionFeatures(BaseModel):
+    """Extra per-function signals used to de-noise duplicate clusters (issue #242).
+
+    `decorators` is the tuple of decorator head names on the function (dotted, so
+    `@typing.overload` -> `"typing.overload"`, `@app.get("/x")` -> `"app.get"`).
+    `is_trivial` marks a body that is pure boilerplate (no branch, no call, no
+    nested block) - a getter, a `__init__` of assignments, a `pass` stub - which
+    clusters by shape but is not refactorable duplication. Both are computed
+    lazily (see `extract_function_features`) only for already-clustered members,
+    so they never touch the persisted `ParseResult` / `FunctionComplexity`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    decorators: tuple[str, ...] = ()
+    is_trivial: bool = False
+
+
+# A body containing any of these is not trivial boilerplate. Branch nodes are
+# already covered by _BRANCH_NODE_TYPES; the rest are blocks/effects that make a
+# body worth reading. `call` is the load-bearing one: it separates a getter
+# (`return self._x`) from a delegation (`return self._x.foo()`).
+_NONTRIVIAL_NODE_TYPES = frozenset(
+    _BRANCH_NODE_TYPES
+    | {
+        "call",
+        "with_statement",
+        "try_statement",
+        "await",
+        "yield",
+        "function_definition",
+        "class_definition",
+    }
+)
+
+
+def extract_function_features(source: bytes) -> dict[int, FunctionFeatures]:
+    """Parse `source` and return per-function features keyed by 1-indexed def line.
+
+    The key matches `FunctionComplexity.line` (the `def` line, not the decorator
+    line), so a duplicate-cluster member can be looked up directly. Reuses the
+    shared tree-sitter parser; no new dependency.
+    """
+    parser = Parser(PY_LANGUAGE)
+    tree = parser.parse(source)
+    out: dict[int, FunctionFeatures] = {}
+
+    def visit(node, scope: tuple[str, ...]) -> None:
+        out[node.start_point[0] + 1] = FunctionFeatures(
+            decorators=_decorator_names(node, source),
+            is_trivial=_is_trivial_body(node),
+        )
+
+    _walk_function_defs(tree.root_node, source, visit)
+    return out
+
+
+def _decorator_names(func_node, source: bytes) -> tuple[str, ...]:
+    """Decorator head names on a function, or () if undecorated.
+
+    A decorated function is wrapped in a `decorated_definition`; each `decorator`
+    child holds one expression. For `@app.get(...)` the call wrapper is stripped
+    to its `function` (`app.get`) so the arguments do not pollute the name.
+    """
+    parent = func_node.parent
+    if parent is None or parent.type != "decorated_definition":
+        return ()
+    names: list[str] = []
+    for child in parent.children:
+        if child.type != "decorator":
+            continue
+        expr = next((c for c in child.named_children), None)
+        if expr is None:
+            continue
+        if expr.type == "call":
+            fn = expr.child_by_field_name("function")
+            if fn is not None:
+                expr = fn
+        names.append(source[expr.start_byte : expr.end_byte].decode("utf-8", errors="replace"))
+    return tuple(names)
+
+
+def _is_trivial_body(func_node) -> bool:
+    """True when the body is pure boilerplate: no branch, call, block, or nested def."""
+    body = func_node.child_by_field_name("body")
+    if body is None:
+        return True
+    stack = list(body.named_children)
+    while stack:
+        n = stack.pop()
+        if n.type in _NONTRIVIAL_NODE_TYPES:
+            return False
+        stack.extend(n.named_children)
+    return True

@@ -7,18 +7,27 @@ literal values land in the same cluster. A minimum `size` (normalized AST-node
 count) threshold skips trivial getters and stubs, whose shapes collide but are
 not duplication in the refactor-this sense.
 
-This is deliberately advisory, and empirically high-recall / moderate-precision.
-A 15x3 false-positive spot-check on fastapi / pytest / django (RESEARCH_METRICS.md
-section 12) put precision at ~42% at the shipping default: shape-hashing clusters
-code that is structurally identical yet not real duplication (intentional
-public-API signature expansion; paired/symmetric methods differing only by the
-one constant that is the point). A node-count floor (`min_size`) removes the
-trivial-boilerplate tail but cannot separate those structural false positives, so
-a group means "investigate," not "provably identical." A semantic de-noiser
-(suppress same-class siblings differing only by a literal constant) is the real
-precision fix and is tracked as a follow-up. This is never folded into
-`archy score`; even so it beats dead-code detection, which the same FP discipline
-rejected outright at ~100% FP.
+This is a same-shape cluster *surfacer*, not a precision oracle. Output is split
+into two tiers by a semantic de-noiser (`classify_variants`): a primary "likely
+duplicate" tier (investigate these) and a demoted "variant" tier of
+likely-intentional clusters (same-class siblings, `@overload` stubs, trivial
+boilerplate). Nothing is hidden; the variant tier is down-ranked, not dropped.
+
+Refactorability is a *semantic* judgment that syntax cannot fully make. The clone
+literature is blunt about this: Kapser & Godfrey found up to 71% of real clones
+are benign (parameterized "templating" siblings, boilerplate, per-backend
+variants), so ~50% refactorability precision is the expected ceiling for any
+similarity-only detector, and no production tool (SourcererCC, NiCad, Deckard)
+solves the benign-vs-refactorable split - they measure Type-1/2/3 similarity, a
+different question. The one non-ML signal that measurably breaks the ceiling is
+change-history co-change (a cluster whose members co-change consistently is
+refactorable; one that never co-changes is benign, ~94% precision in the
+literature); that is the planned next phase, unified with change-coupling (#131).
+Until then, the two-tier split is the honest surface and the calling agent is the
+semantic judge. See `docs/research/RESEARCH_METRICS.md` section 12c.
+
+Never folded into `archy score`. Even at ~50% it beats dead-code detection, which
+the same FP discipline rejected outright at ~100% FP.
 
 Unlike module-grained diagnostics (`hotspots`, `dsm`) that read the shared
 `nx.DiGraph`, this one is function-grained: the graph keeps only per-module CC
@@ -28,8 +37,11 @@ from `archy.graph.parse_project` instead.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic import BaseModel, ConfigDict
 
+from archy.complexity import FunctionFeatures, extract_function_features
 from archy.graph import Module
 from archy.parser import ParseResult
 
@@ -37,8 +49,9 @@ from archy.parser import ParseResult
 # section 12) showed the trivial-boilerplate false positives (property shims,
 # one-line delegations) cluster below ~30 normalized nodes, while dropping the
 # floor lower floods the list and raising it much higher starts losing genuine
-# small duplicates. It does not remove the structural FP classes (that needs the
-# semantic de-noiser follow-up), only the trivial tail.
+# small duplicates. The floor removes only the trivial tail; the two-tier
+# de-noiser (classify_variants) handles the structural intentional-clone classes,
+# and co-change history (#131) is the semantic precision layer beyond that.
 DEFAULT_MIN_SIZE = 30
 DEFAULT_MIN_MEMBERS = 2
 
@@ -66,6 +79,14 @@ class DuplicateGroup(BaseModel):
     (`size * (member_count - 1)`) approximates how many normalized nodes could
     be removed by deduplicating down to a single definition, and is the primary
     ranking key.
+
+    `category` splits the output into two tiers (issue #242): `"duplicate"` is a
+    likely-real duplicate; `"variant"` is a likely-intentional cluster demoted by
+    the semantic de-noiser, with `variant_reason` naming which signal fired
+    (`same_class` / `trivial` / `overload` / `property`). `same_class` is the
+    free structural signal (all members are methods of one class); it is set by
+    `compute_duplicates`, while `variant_reason` / `category` are finalized by
+    `classify_variants` (which reads member source).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -75,6 +96,9 @@ class DuplicateGroup(BaseModel):
     member_count: int
     redundancy: int
     members: tuple[DuplicateMember, ...]
+    same_class: bool = False
+    variant_reason: str | None = None
+    category: str = "duplicate"
 
 
 def compute_duplicates(
@@ -131,7 +155,88 @@ def compute_duplicates(
                 member_count=len(ordered),
                 redundancy=size * (len(ordered) - 1),
                 members=ordered,
+                same_class=_same_class(ordered),
             )
         )
     groups.sort(key=lambda g: (-g.redundancy, -g.size, -g.member_count, g.shape_hash))
     return groups
+
+
+def _same_class(members: tuple[DuplicateMember, ...]) -> bool:
+    """True when every member is a method of one and the same class.
+
+    Detected from the dotted `qualified_name`: a method's parent is everything
+    before the last segment (`Foo.bar` -> `Foo`), so all members must share one
+    `(module, parent)` and have a non-empty parent. Module-level functions (no
+    dot) have no parent class and never count, so genuinely duplicated free
+    functions in one module stay in the primary tier.
+    """
+    scopes = set()
+    for m in members:
+        if "." not in m.qualified_name:
+            return False
+        scopes.add((m.module, m.qualified_name.rsplit(".", 1)[0]))
+    return len(scopes) == 1
+
+
+def classify_variants(groups: list[DuplicateGroup]) -> list[DuplicateGroup]:
+    """Finalize each group's `category` / `variant_reason` from member source.
+
+    Demotes likely-intentional clusters (issue #242) to the `"variant"` tier:
+    `@overload` stubs, trivial `@property` shims, pure-boilerplate bodies, and
+    same-class sibling methods. Reads each member file at most once; a member
+    whose file cannot be read is treated as featureless (its signals abstain).
+    """
+    features_by_path: dict[str, dict[int, FunctionFeatures]] = {}
+
+    def features_for(path: str) -> dict[int, FunctionFeatures]:
+        cached = features_by_path.get(path)
+        if cached is None:
+            try:
+                cached = extract_function_features(Path(path).read_bytes())
+            except OSError:
+                cached = {}
+            features_by_path[path] = cached
+        return cached
+
+    classified: list[DuplicateGroup] = []
+    for group in groups:
+        feats = [features_for(m.path).get(m.line) for m in group.members]
+        reason = _variant_reason(group, feats)
+        classified.append(
+            group.model_copy(
+                update={
+                    "variant_reason": reason,
+                    "category": "variant" if reason is not None else "duplicate",
+                }
+            )
+        )
+    return classified
+
+
+def _has_decorator(feat: FunctionFeatures | None, suffix: str) -> bool:
+    return feat is not None and any(d.rsplit(".", 1)[-1] == suffix for d in feat.decorators)
+
+
+def _variant_reason(group: DuplicateGroup, feats: list[FunctionFeatures | None]) -> str | None:
+    """Which de-noise signal (if any) makes this cluster a likely-intentional variant.
+
+    Precedence: overload -> property -> trivial -> same_class. `is_trivial` is a
+    structural property, so it is identical across shape-equal members; the
+    decorator checks require *every* member to carry the decorator (an API
+    surface is expanded uniformly, a copy-paste usually is not).
+    """
+    present = [f for f in feats if f is not None]
+    if present and all(_has_decorator(f, "overload") for f in feats):
+        return "overload"
+    if (
+        present
+        and all(_has_decorator(f, "property") for f in feats)
+        and all(f.is_trivial for f in present)
+    ):
+        return "property"
+    if present and all(f.is_trivial for f in present):
+        return "trivial"
+    if group.same_class:
+        return "same_class"
+    return None

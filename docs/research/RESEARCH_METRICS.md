@@ -632,6 +632,61 @@ siblings differing only by a literal constant) as the real precision fix (#242),
 which also gates the `archy_duplicates` MCP tool. Raw sweep + spot-check:
 `bench/duplicates_results.md`.
 
+### 12c. The semantic de-noiser and why precision plateaus at ~50% (2026-07-04)
+
+The #242 de-noiser split `archy duplicates` into two tiers: a primary "likely
+duplicate" list and a demoted "variant" list of likely-intentional clusters. Three
+pure-syntax signals demote a cluster to the variant tier: **same-class** (all
+members are methods of one class), **trivial** (pure-boilerplate body: no branch,
+no call, only assignments/returns), and **decorator** (`@overload` / `@property`
+surface). A re-run 15x3 spot-check on the PRIMARY tier at `--min-nodes 30`:
+
+| project | primary precision | wrongly-demoted (recall) |
+| --- | ---: | ---: |
+| fastapi | 8/14 (57%) | 2/4 |
+| pytest | 6/13 (46%) | 0/6 |
+| django | 7/15 (47%) | 0/8 |
+| aggregate | ~21/42 (~50%) | 2/18 |
+
+At the same floor the de-noiser lifts primary precision from ~38% (no filter) to
+~50% (~12 pt); `same_class` demotes correctly ~83% of the time. But it plateaus
+at ~50%, and a deep literature review (2026-07-04, 94-source adversarially-verified
+sweep) explains why this is a **ceiling, not a bug**:
+
+- **The benign base rate is high.** Kapser & Godfrey (ICSE'06/'08, Apache +
+  Gnumeric) found up to **71% of real clones are benign** - intentional
+  "templating" (parameterized siblings differing by one type/constant),
+  boiler-plating, per-backend/platform variants. So ~30-50% refactorability
+  precision for a similarity-only detector is the *expected* base rate.
+- **No production tool solves this split.** SourcererCC (91%), NiCad/SAGA (~99%),
+  Deckard (93%) report precision for *"is this a genuine Type-1/2/3 clone,"* not
+  *"is it worth refactoring."* Semantic/embedding detectors (BERT-based SSCD) top
+  out at 71-85% precision, still for similarity, not refactorability.
+- **The boundary is semantic.** `is_gen_callable`/`is_async_gen_callable` (real
+  dup) and X-Frame-Options `"DENY"`/`"SAMEORIGIN"` (intentional) both differ by
+  exactly one token; even human labelers disagree ~15%. Token-diff count is
+  explicitly non-predictive.
+- **Identifier normalization is a known precision-reducer** - SourcererCC credits
+  *not* normalizing identifiers for its 91%. archy's normalize-then-hash trades
+  precision for Type-2 recall; a Type-1 (concrete-identical) high-confidence
+  sub-tier is a documented future lever.
+- **ML/GNN classifiers overfit and don't transfer** (a trivial identifier-only
+  linear model matches SOTA on BigCloneBench; F1 drops 16-27% when names are
+  hidden), and they classify similarity-type, not refactorability. Rejected.
+
+**The one non-ML signal that measurably breaks the ceiling is change-history
+co-change.** A Bayesian classifier on change-history + context features predicted
+clone "worth-extracting" at **>94.9% precision** (Microsoft projects); the decisive
+signal is whether the members *co-change consistently*, not anything in the clone
+body. Kapser & Godfrey's canonical *harmful* example was a same-scope one-constant
+paste that later co-changed 4x - co-change is the tiebreaker `same_class` lacks.
+archy is uniquely placed to add it: it already mines git churn (`hotspots`) and
+change-coupling is planned as **#131**. Refactorable-duplication and change-coupling
+are the same signal; the co-change precision layer is the next phase, unified with
+#131. Until then the two-tier split is the honest surface and the calling agent
+(archy is an MCP tool used *with* an LLM) is the semantic judge - "judge, not
+librarian." Re-validation raw data: `bench/duplicates_results.md`.
+
 ---
 
 ## 13. Type-hint coverage (Python-specific)

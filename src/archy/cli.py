@@ -29,7 +29,7 @@ from archy.diff import (
     write_snapshot,
 )
 from archy.diff_summary import summarize_diff
-from archy.duplicates import DuplicateGroup, compute_duplicates
+from archy.duplicates import DuplicateGroup, classify_variants, compute_duplicates
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -601,13 +601,15 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
     help="Output format.",
 )
 def duplicates(path: Path, min_nodes: int, top_n: int, min_members: int, fmt: str) -> None:
-    """List clusters of functions with identical normalized body shape.
+    """Surface clusters of functions with identical normalized body shape.
 
-    Detects copy-paste functions by folding identifiers and literals to
-    placeholders, hashing the body's AST shape, and clustering matches (see
-    `archy.duplicates`). Advisory only: it never changes `archy score`, and a
-    cluster means "investigate," not "provably identical." Trivial functions
-    below `--min-nodes` are skipped.
+    Folds identifiers and literals to placeholders, hashes the body's AST shape,
+    and clusters matches (see `archy.duplicates`). Output is two tiers: "likely
+    duplicate(s)" to investigate, and demoted "same-class / boilerplate
+    variant(s)" that are likely intentional. Advisory only (never changes
+    `archy score`); a cluster means "investigate," not "provably identical."
+    Refactorability is a semantic call, so the ~50% precision ceiling is left to
+    the reader's judgment. Trivial functions below `--min-nodes` are skipped.
     """
     # Validate before any parse work so bad flags fail fast and consistently.
     if min_nodes < 1:
@@ -622,7 +624,9 @@ def duplicates(path: Path, min_nodes: int, top_n: int, min_members: int, fmt: st
         )
     except ScanTooLargeError as exc:
         raise click.ClickException(str(exc)) from exc
-    rows = compute_duplicates(modules, parse_results, min_size=min_nodes, min_members=min_members)
+    rows = classify_variants(
+        compute_duplicates(modules, parse_results, min_size=min_nodes, min_members=min_members)
+    )
     if fmt == "json":
         payload = _duplicates_to_dict(rows, top_n=top_n, min_nodes=min_nodes)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -1750,42 +1754,85 @@ def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> 
     return "\n".join(lines)
 
 
-def _duplicates_note(rows: list[DuplicateGroup], *, min_nodes: int) -> str | None:
-    """Machine-readable explanation for the empty case (mirrors the CLI/MCP note pattern)."""
-    if rows:
+def _duplicates_note(
+    dups: list[DuplicateGroup], *, min_nodes: int, variant_count: int = 0
+) -> str | None:
+    """Explain an empty primary tier (mirrors the CLI/MCP note pattern).
+
+    Speaks to the primary "likely duplicate" tier only; if the semantic de-noiser
+    demoted everything to the variant tier, say so rather than imply nothing was
+    found at all."""
+    if dups:
         return None
-    return (
-        f"No duplicated function bodies of >= {min_nodes} normalized nodes found; "
+    note = (
+        f"No likely-duplicate function bodies of >= {min_nodes} normalized nodes found; "
         "lower --min-nodes to widen the search."
     )
+    if variant_count:
+        note += (
+            f" ({variant_count} same-class/boilerplate variant(s) were found but demoted "
+            "as likely intentional.)"
+        )
+    return note
+
+
+def _duplicate_group_lines(group: DuplicateGroup, *, with_reason: bool) -> list[str]:
+    """Render one cluster: a header row for the first member, then one row per other."""
+    reason = f"  {(group.variant_reason or ''):<10}" if with_reason else ""
+    pad = f"  {'':<10}" if with_reason else ""
+    first, *rest = group.members
+    lines = [
+        f"  {group.redundancy:>6}  {group.size:>4}  {group.member_count:>5}{reason}  "
+        f"{first.module}:{first.line} {first.qualified_name}"
+    ]
+    lines.extend(
+        f"  {'':>6}  {'':>4}  {'':>5}{pad}  {m.module}:{m.line} {m.qualified_name}" for m in rest
+    )
+    return lines
 
 
 def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> dict:
+    dups = [g for g in rows if g.category == "duplicate"]
+    variants = [g for g in rows if g.category == "variant"]
     return {
         "min_nodes": min_nodes,
-        "total": len(rows),
-        "shown": min(top_n, len(rows)),
-        "duplicated_functions": sum(g.member_count for g in rows),
-        "groups": [g.model_dump() for g in rows[:top_n]],
-        "note": _duplicates_note(rows, min_nodes=min_nodes),
+        "total": len(dups),
+        "variant_total": len(variants),
+        "shown": min(top_n, len(dups)),
+        "duplicated_functions": sum(g.member_count for g in dups),
+        "duplicates": [g.model_dump() for g in dups[:top_n]],
+        "variants": [g.model_dump() for g in variants[:top_n]],
+        "note": _duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants)),
     }
 
 
 def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> str:
-    if not rows:
-        return f"# {_duplicates_note(rows, min_nodes=min_nodes)}"
-    shown = rows[:top_n]
-    header = f"# {len(rows)} duplicate cluster(s); showing top {len(shown)} (min-nodes {min_nodes})"
-    lines = [header, "", "  redund  size  count  members"]
-    for g in shown:
-        first, *rest = g.members
-        lines.append(
-            f"  {g.redundancy:>6}  {g.size:>4}  {g.member_count:>5}  "
-            f"{first.module}:{first.line} {first.qualified_name}"
+    dups = [g for g in rows if g.category == "duplicate"]
+    variants = [g for g in rows if g.category == "variant"]
+    out: list[str] = []
+    if dups:
+        shown = dups[:top_n]
+        out.append(
+            f"# {len(dups)} likely duplicate(s); showing top {len(shown)} (min-nodes {min_nodes})"
         )
-        for m in rest:
-            lines.append(f"  {'':>6}  {'':>4}  {'':>5}  {m.module}:{m.line} {m.qualified_name}")
-    return "\n".join(lines)
+        out.append("")
+        out.append("  redund  size  count  members")
+        for g in shown:
+            out.extend(_duplicate_group_lines(g, with_reason=False))
+    else:
+        out.append(f"# {_duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants))}")
+    if variants:
+        vshown = variants[:top_n]
+        out.append("")
+        out.append(
+            f"# {len(variants)} same-class / boilerplate variant(s) "
+            f"(likely intentional; showing top {len(vshown)})"
+        )
+        out.append("")
+        out.append("  redund  size  count  reason      members")
+        for g in vshown:
+            out.extend(_duplicate_group_lines(g, with_reason=True))
+    return "\n".join(out)
 
 
 def _refactor_note(
