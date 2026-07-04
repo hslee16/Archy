@@ -29,6 +29,7 @@ from archy.diff import (
     write_snapshot,
 )
 from archy.diff_summary import summarize_diff
+from archy.duplicates import DuplicateGroup, compute_duplicates
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -36,6 +37,7 @@ from archy.graph import (
     discover_modules,
     effective_max_modules,
     graph_to_dict,
+    parse_project,
 )
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
@@ -559,6 +561,73 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_hotspots_to_text(rows, top_n=top_n, since=since))
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--min-nodes",
+    "min_nodes",
+    type=int,
+    default=30,
+    show_default=True,
+    help="Minimum normalized AST-node count; smaller functions are ignored as trivial.",
+)
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Maximum duplicate clusters to show.",
+)
+@click.option(
+    "--members",
+    "min_members",
+    type=int,
+    default=2,
+    show_default=True,
+    help="Minimum functions in a cluster for it to count as duplication.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def duplicates(path: Path, min_nodes: int, top_n: int, min_members: int, fmt: str) -> None:
+    """List clusters of functions with identical normalized body shape.
+
+    Detects copy-paste functions by folding identifiers and literals to
+    placeholders, hashing the body's AST shape, and clustering matches (see
+    `archy.duplicates`). Advisory only: it never changes `archy score`, and a
+    cluster means "investigate," not "provably identical." Trivial functions
+    below `--min-nodes` are skipped.
+    """
+    # Validate before any parse work so bad flags fail fast and consistently.
+    if min_nodes < 1:
+        raise click.ClickException(f"--min-nodes must be >= 1; got {min_nodes}")
+    if top_n < 1:
+        raise click.ClickException(f"--top must be >= 1; got {top_n}")
+    if min_members < 2:
+        raise click.ClickException(f"--members must be >= 2; got {min_members}")
+    try:
+        modules, parse_results = parse_project(
+            path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path)
+        )
+    except ScanTooLargeError as exc:
+        raise click.ClickException(str(exc)) from exc
+    rows = compute_duplicates(modules, parse_results, min_size=min_nodes, min_members=min_members)
+    if fmt == "json":
+        payload = _duplicates_to_dict(rows, top_n=top_n, min_nodes=min_nodes)
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        click.echo(_duplicates_to_text(rows, top_n=top_n, min_nodes=min_nodes))
 
 
 @main.command(name="what-to-refactor-next")
@@ -1678,6 +1747,44 @@ def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> 
     lines = [header, "", "  score  churn  cc_sum  module"]
     for r in shown:
         lines.append(f"  {r.score:>5}  {r.churn:>5}  {r.cc_sum:>6}  {r.module}")
+    return "\n".join(lines)
+
+
+def _duplicates_note(rows: list[DuplicateGroup], *, min_nodes: int) -> str | None:
+    """Machine-readable explanation for the empty case (mirrors the CLI/MCP note pattern)."""
+    if rows:
+        return None
+    return (
+        f"No duplicated function bodies of >= {min_nodes} normalized nodes found; "
+        "lower --min-nodes to widen the search."
+    )
+
+
+def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> dict:
+    return {
+        "min_nodes": min_nodes,
+        "total": len(rows),
+        "shown": min(top_n, len(rows)),
+        "duplicated_functions": sum(g.member_count for g in rows),
+        "groups": [g.model_dump() for g in rows[:top_n]],
+        "note": _duplicates_note(rows, min_nodes=min_nodes),
+    }
+
+
+def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> str:
+    if not rows:
+        return f"# {_duplicates_note(rows, min_nodes=min_nodes)}"
+    shown = rows[:top_n]
+    header = f"# {len(rows)} duplicate cluster(s); showing top {len(shown)} (min-nodes {min_nodes})"
+    lines = [header, "", "  redund  size  count  members"]
+    for g in shown:
+        first, *rest = g.members
+        lines.append(
+            f"  {g.redundancy:>6}  {g.size:>4}  {g.member_count:>5}  "
+            f"{first.module}:{first.line} {first.qualified_name}"
+        )
+        for m in rest:
+            lines.append(f"  {'':>6}  {'':>4}  {'':>5}  {m.module}:{m.line} {m.qualified_name}")
     return "\n".join(lines)
 
 

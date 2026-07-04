@@ -17,6 +17,8 @@ module scope doesn't have a CC analogue.
 
 from __future__ import annotations
 
+import hashlib
+
 import tree_sitter_python as tsp
 from pydantic import BaseModel, ConfigDict
 from tree_sitter import Language, Parser
@@ -48,6 +50,13 @@ class FunctionComplexity(BaseModel):
     `qualified_name` is dotted via class/function ancestors, e.g.
     `Foo.bar` for a method or `outer.inner` for a nested def. Module
     functions are unqualified.
+
+    `shape_hash` / `size` describe the function *body* as a normalized
+    structural fingerprint (see `_analyze_body`): identifiers and literals
+    are folded to placeholders, so two functions that differ only by names
+    or literal values share a hash. `size` is the count of normalized tokens
+    (an AST-node count, layout-invariant). Both power duplicate-function
+    detection (`archy.duplicates`); `shape_hash` is `""` for an empty body.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -56,6 +65,8 @@ class FunctionComplexity(BaseModel):
     qualified_name: str
     line: int
     cyclomatic: int
+    shape_hash: str = ""
+    size: int = 0
 
 
 def compute_function_complexity(source: bytes) -> tuple[FunctionComplexity, ...]:
@@ -90,12 +101,15 @@ def _walk(
     if node.type == "function_definition":
         name = _name_of(node, source)
         qualified = ".".join((*scope, name)) if scope else name
+        cyclomatic, size, shape_hash = _analyze_body(node)
         out.append(
             FunctionComplexity(
                 name=name,
                 qualified_name=qualified,
                 line=node.start_point[0] + 1,
-                cyclomatic=_count_cc(node),
+                cyclomatic=cyclomatic,
+                shape_hash=shape_hash,
+                size=size,
             )
         )
         body = node.child_by_field_name("body")
@@ -114,23 +128,63 @@ def _walk(
         _walk(child, scope, out, source)
 
 
-def _count_cc(func_node) -> int:
-    """McCabe CC for a single function: 1 + branch-node count, excluding nested defs/classes."""
+# Leaf/literal node types folded to a single placeholder token so that two
+# functions differing only by names or literal values share a shape. Strings
+# are collapsed whole (their internal string_start/content/end structure is not
+# emitted); identifiers and the literal keywords map to fixed tokens.
+_STR_TYPES = frozenset({"string", "concatenated_string"})
+_TOKEN = {
+    "identifier": "ID",
+    "integer": "INT",
+    "float": "FLOAT",
+    "true": "BOOL",
+    "false": "BOOL",
+    "none": "NONE",
+}
+
+
+def _analyze_body(func_node) -> tuple[int, int, str]:
+    """One pre-order body walk yielding (cyclomatic, size, shape_hash).
+
+    Folds the McCabe CC count, the normalized-token count (`size`), and the
+    structural fingerprint (`shape_hash`) into a single traversal so no extra
+    parse or walk is added. The token stream is the pre-order sequence of
+    `node.type` over every child (anonymous children included, so `a + b` and
+    `a - b` differ), with identifiers/literals folded to placeholders, comments
+    dropped, and strings collapsed to one token. Nested `function_definition` /
+    `class_definition` subtrees are skipped (they get their own row/hash),
+    exactly as the CC count excludes them.
+
+    CC parity with the previous `named_children`-only walk holds because every
+    branch node in `_BRANCH_NODE_TYPES` is a named node, so widening the walk to
+    all children reaches the same branch set.
+    """
     body = func_node.child_by_field_name("body")
     if body is None:
-        return 1
+        return 1, 0, ""
     count = 1
-    stack = list(body.named_children)
+    tokens: list[str] = []
+    stack = [body]
     while stack:
         n = stack.pop()
-        if n.type in ("function_definition", "class_definition"):
-            # Nested definitions get their own CC row; their branches must
-            # not inflate the enclosing function's count.
+        t = n.type
+        if t in ("function_definition", "class_definition"):
+            # Nested definitions get their own row; their branches and shape
+            # must not inflate the enclosing function.
             continue
-        if n.type in _BRANCH_NODE_TYPES:
+        if t == "comment":
+            continue
+        if t in _STR_TYPES:
+            tokens.append("STR")
+            continue
+        if t in _BRANCH_NODE_TYPES:
             count += 1
-        stack.extend(n.named_children)
-    return count
+        tokens.append(_TOKEN.get(t, t))
+        stack.extend(reversed(n.children))
+    if not tokens:
+        return count, 0, ""
+    shape_hash = hashlib.blake2b("\x00".join(tokens).encode(), digest_size=16).hexdigest()
+    return count, len(tokens), shape_hash
 
 
 def _name_of(node, source: bytes) -> str:
