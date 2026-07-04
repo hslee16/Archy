@@ -109,6 +109,30 @@ def build_graph(
     line numbers where the import appears (a single source/target pair may
     occur on multiple lines).
     """
+    modules, parse_results = parse_project(
+        root,
+        ignored_dirs=ignored_dirs,
+        extra_roots=extra_roots,
+        max_modules=max_modules,
+    )
+    return assemble_graph(root, modules, parse_results)
+
+
+def parse_project(
+    root: Path,
+    *,
+    ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
+    extra_roots: Iterable[str] = (),
+    max_modules: int | None = None,
+) -> tuple[list[Module], dict[str, ParseResult]]:
+    """Discover and parse modules under `root`, returning `(modules, parse_results)`.
+
+    The discover + size-guard + per-file parse half of `build_graph`, split out
+    so function-grained diagnostics (e.g. `archy.duplicates`) can read the
+    individual `ParseResult.functions` rows that `assemble_graph` rolls up into
+    per-module aggregates and discards. `parse_results` is keyed by module
+    qualname; modules whose file vanished between discovery and parse are absent.
+    """
     ignored = frozenset(ignored_dirs)
     modules = _discover_modules(root, ignored, tuple(extra_roots))
     # Trip the size backstop here, at the cheap discovery boundary, BEFORE the
@@ -128,7 +152,7 @@ def build_graph(
             # rebuilding mid-flight). Skip it; assemble_graph drops modules with
             # no parse result, and the next build picks it up once disk settles.
             continue
-    return assemble_graph(root, modules, parse_results)
+    return modules, parse_results
 
 
 def discover_modules(

@@ -32,7 +32,12 @@ from archy.graph import (
 )
 from archy.parser import ParseResult, parse_file
 
-SCHEMA_VERSION = 1
+# Bump whenever the persisted `ParseResult` shape changes so stale rows are
+# dropped rather than silently deserialized with defaults. v2 added
+# `FunctionComplexity.shape_hash` / `size` (duplicate-function detection); old
+# v1 rows would validate with empty hashes and yield zero duplicates on a warm
+# cache until incidental reparse.
+SCHEMA_VERSION = 2
 
 
 class SyncStats(BaseModel):
