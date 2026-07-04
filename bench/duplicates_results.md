@@ -47,6 +47,21 @@ Output of `uv run --with pyyaml python bench/duplicates_sweep.py`. Captured 2026
 | 20 | 45.0 | 141.0 |
 | 40 | 22.0 | 58.0 |
 
-## FP spot-check
+## FP spot-check (manual, 2026-07-04)
 
-_Manual, not produced by this script._ At the chosen default, draw 15 random clusters each from a diverse trio (e.g. fastapi / pytest / django), hand-classify true-duplicate vs false-positive, and record the N/15 rate plus the dominant FP taxonomy. This is the accuracy half of the gate; the rejected dead-code study (RESEARCH_METRICS.md section 12) is the template.
+_Not produced by this script._ 15 stratified clusters (sampled across the full ranking, not top-only) hand-classified per project at `--min-nodes 20`, true-duplicate vs false-positive.
+
+| project | clusters@20 | clusters@40 | TRUE/15 | FP/15 | precision |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| fastapi | 23 | 16 | 7 | 8 | 47% |
+| pytest | 35 | 12 | 7 | 8 | 47% |
+| django | 432 | 153 | 5 | 10 | 33% |
+| **total** | | | **19** | **26** | **~42%** |
+
+**~58% false-positive rate at min-nodes 20.** Materially better than the rejected dead-code study (100% FP; RESEARCH_METRICS.md section 12), and real duplication is surfaced (3-way serializer copy-paste in django, byte-identical `__call__` overrides in fastapi, sibling-plugin drain loops in pytest). But not a low-FP signal, and **a bigger `--min-nodes` cannot fix it** because the FP classes live at different sizes per project:
+
+- **pytest** - trivial boilerplate (property shims, one-line delegations), all below ~size 40; the floor helps.
+- **fastapi** - intentional public-API signature expansion (HTTP-verb methods, `Query`/`Header`/`Form` factories), at the *largest* sizes (136-163); the floor is useless.
+- **django** - paired/symmetric methods differing only in the one constant that is the point (forward/backward migration halves, x/y setters, date/time SQL casts, per-backend dispatch), spanning sizes 22-73; the floor cannot separate them.
+
+**Decision:** ship the CLI at a **calibrated default of `--min-nodes 30`** (removes the trivial-boilerplate tail that concentrates below ~30 without losing most genuine small duplicates), framed frankly as a high-recall / moderate-precision advisory. The real precision fix is a semantic de-noiser (suppress same-class siblings differing only by a literal constant), tracked in #242, which also gates the `archy_duplicates` MCP tool.

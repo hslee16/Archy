@@ -591,6 +591,47 @@ dead-function detection until and unless archy can ingest a
 runtime-coverage source - at which point vulture's
 `--make-whitelist` workflow becomes optional.
 
+### 12b. Duplicate-function detection: shipped, with a measured FP ceiling (2026-07-04)
+
+Duplicate-function detection shipped as the CLI `archy duplicates` command
+(#133, PR #241): fold identifiers/literals to placeholders, blake2b the
+normalized body-token stream, cluster by shape over a `--min-nodes` size floor.
+Advisory only, never a score axis.
+
+The FP gate this section demanded was run: a 15-cluster **stratified** spot-check
+(sampled across the full ranking, not top-only) on fastapi / pytest / django at
+`--min-nodes 20`, hand-classified true-duplicate vs false-positive.
+
+| project | clusters@20 | TRUE/15 | FP/15 |
+| --- | ---: | ---: | ---: |
+| fastapi | 23 | 7 | 8 |
+| pytest | 35 | 7 | 8 |
+| django | 432 | 5 | 10 |
+| total | | 19 (~42% precision) | 26 (~58% FP) |
+
+The section's own hypothesis was half right. Precision (~42%) is far better than
+dead-code detection (0% on all three; §12 above), and real duplication is
+surfaced. But the caveat it named - "short generated stubs cluster by shape" -
+was only one of three FP classes, and **not** the dominant one:
+
+- **pytest** confirmed the hypothesis: FPs are trivial boilerplate (property
+  shims, one-line delegations), all below ~size 40. A length threshold works.
+- **fastapi** broke it: FPs are intentional public-API signature expansion (the
+  HTTP-verb methods, the `Query`/`Header`/`Form`/`File` factories), at the
+  *largest* node counts (136-163). A threshold is useless against them.
+- **django** broke it differently: the dominant FP is paired/symmetric methods
+  differing only in the one constant that is the point (forward/backward
+  migration halves, x/y coordinate setters, date/time SQL casts, per-backend
+  compiler dispatch), spanning sizes 22-73.
+
+So a node-count floor cannot separate the structural FPs; it only removes the
+trivial-boilerplate tail. **Decision:** ship at a calibrated `--min-nodes 30`
+(the trivial FPs concentrate below ~30) as an explicit high-recall /
+moderate-precision advisory, and pursue a semantic de-noiser (suppress same-class
+siblings differing only by a literal constant) as the real precision fix (#242),
+which also gates the `archy_duplicates` MCP tool. Raw sweep + spot-check:
+`bench/duplicates_results.md`.
+
 ---
 
 ## 13. Type-hint coverage (Python-specific)

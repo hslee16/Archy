@@ -7,12 +7,18 @@ literal values land in the same cluster. A minimum `size` (normalized AST-node
 count) threshold skips trivial getters and stubs, whose shapes collide but are
 not duplication in the refactor-this sense.
 
-This is deliberately advisory. Shape-hashing can cluster code that is
-structurally identical yet semantically different (two validators with the same
-control flow), so a group means "investigate," not "provably identical." It is
-never folded into `archy score`; the empirical FP rate is the whole reason
-duplicate detection ships where dead-code detection did not (see
-`docs/research/RESEARCH_METRICS.md` section 12).
+This is deliberately advisory, and empirically high-recall / moderate-precision.
+A 15x3 false-positive spot-check on fastapi / pytest / django (RESEARCH_METRICS.md
+section 12) put precision at ~42% at the shipping default: shape-hashing clusters
+code that is structurally identical yet not real duplication (intentional
+public-API signature expansion; paired/symmetric methods differing only by the
+one constant that is the point). A node-count floor (`min_size`) removes the
+trivial-boilerplate tail but cannot separate those structural false positives, so
+a group means "investigate," not "provably identical." A semantic de-noiser
+(suppress same-class siblings differing only by a literal constant) is the real
+precision fix and is tracked as a follow-up. This is never folded into
+`archy score`; even so it beats dead-code detection, which the same FP discipline
+rejected outright at ~100% FP.
 
 Unlike module-grained diagnostics (`hotspots`, `dsm`) that read the shared
 `nx.DiGraph`, this one is function-grained: the graph keeps only per-module CC
@@ -27,7 +33,13 @@ from pydantic import BaseModel, ConfigDict
 from archy.graph import Module
 from archy.parser import ParseResult
 
-DEFAULT_MIN_SIZE = 20
+# 30 is the calibrated shipping default: the FP spot-check (RESEARCH_METRICS.md
+# section 12) showed the trivial-boilerplate false positives (property shims,
+# one-line delegations) cluster below ~30 normalized nodes, while dropping the
+# floor lower floods the list and raising it much higher starts losing genuine
+# small duplicates. It does not remove the structural FP classes (that needs the
+# semantic de-noiser follow-up), only the trivial tail.
+DEFAULT_MIN_SIZE = 30
 DEFAULT_MIN_MEMBERS = 2
 
 

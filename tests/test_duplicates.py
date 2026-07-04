@@ -7,7 +7,7 @@ from click.testing import CliRunner
 
 from archy.cli import main
 from archy.complexity import FunctionComplexity, compute_function_complexity
-from archy.duplicates import DuplicateGroup, compute_duplicates
+from archy.duplicates import DEFAULT_MIN_SIZE, DuplicateGroup, compute_duplicates
 from archy.graph import Module
 from archy.parser import ParseResult
 
@@ -136,8 +136,15 @@ def test_groups_ranked_by_redundancy_desc():
             ],
         }
     )
-    groups = compute_duplicates(modules, results)
+    # min_size=20 keeps both clusters (size 25 and 40); this asserts ranking, not the floor.
+    groups = compute_duplicates(modules, results, min_size=20)
     assert [g.shape_hash for g in groups] == ["B", "S"]  # 40 redundancy before 25
+
+
+def test_default_min_size_is_calibrated_to_30():
+    # Locked by the FP spot-check (RESEARCH_METRICS.md section 12): trivial-boilerplate
+    # false positives cluster below ~30 normalized nodes.
+    assert DEFAULT_MIN_SIZE == 30
 
 
 def test_deterministic_under_permuted_input():

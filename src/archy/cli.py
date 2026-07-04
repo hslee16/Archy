@@ -573,7 +573,7 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
     "--min-nodes",
     "min_nodes",
     type=int,
-    default=20,
+    default=30,
     show_default=True,
     help="Minimum normalized AST-node count; smaller functions are ignored as trivial.",
 )
