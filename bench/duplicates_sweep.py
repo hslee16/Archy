@@ -52,55 +52,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-import yaml  # type: ignore[import-untyped]
+from _common import REPO_ROOT, clone_or_update, load_manifest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MANIFEST = REPO_ROOT / "bench" / "projects.yaml"
 RESULTS = REPO_ROOT / "bench" / "duplicates_results.md"
-WORKDIR = Path("/tmp/archy_bench")
 
 # The swept axis: minimum normalized AST-node count. The default the tool ships
 # with should sit at the knee where trivial-stub clusters have dropped out.
 THRESHOLDS: tuple[int, ...] = (5, 10, 20, 40)
 TOP = 100000  # effectively unbounded; we want the full count, not a top-K view
-
-
-def load_manifest() -> list[dict]:
-    return yaml.safe_load(MANIFEST.read_text())["projects"]
-
-
-def clone_or_update(proj: dict) -> Path | None:
-    """Mirrors bench/hotspots_sweep.py's clone_or_update; never raises -- on any
-    failure we skip the project so the sweep keeps going. The archy self-entry
-    uses REPO_ROOT directly."""
-    name = proj["name"]
-    sha = proj["sha"]
-    if name == "archy":
-        return REPO_ROOT
-    target = WORKDIR / name
-    if not target.exists():
-        WORKDIR.mkdir(parents=True, exist_ok=True)
-        res = subprocess.run(
-            ["git", "clone", "--quiet", f"https://github.com/{proj['repo']}.git", str(target)],
-        )
-        if res.returncode != 0:
-            return None
-    has_sha = subprocess.run(
-        ["git", "-C", str(target), "cat-file", "-e", sha],
-        capture_output=True,
-    )
-    if has_sha.returncode != 0:
-        subprocess.run(["git", "-C", str(target), "fetch", "--quiet", "origin"], check=False)
-    if (
-        subprocess.run(
-            ["git", "-C", str(target), "checkout", "--quiet", sha],
-        ).returncode
-        != 0
-    ):
-        return None
-    subprocess.run(["git", "-C", str(target), "reset", "--hard", "--quiet", sha], check=False)
-    subprocess.run(["git", "-C", str(target), "clean", "-fdx", "--quiet"], check=False)
-    return target
 
 
 def run_duplicates(src: Path, *, min_nodes: int) -> dict:

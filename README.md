@@ -32,6 +32,7 @@ archy mcp             # expose 13 tools to Claude Code, Cursor, any MCP client
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
 | Refactor priority | `archy hotspots` (CC x git churn), `archy what-to-refactor-next` (fused hotspots + edit-risk) |
+| Duplicate detection | `archy duplicates` (cluster functions with identical normalized AST shape; advisory, not a score axis) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
@@ -427,7 +428,7 @@ Next up (validated, queued, not yet started):
 - **Per-module score breakdown** so an agent can ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
 - **Change coupling (temporal coupling)**: rank module *pairs* that frequently change together in git history but share no import or call edge (a hidden dependency the structural graph can't see). Same Tornhill / CodeScene lineage as `archy_hotspots`; needs an empirical-validation pass first (co-change is noisy).
 - **Opt-in agent hooks (`archy install --hooks`)**: register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, ...) that runs the archy gate automatically after edits, so the loop fires whether or not the agent remembers to call the tools. Spec: [`docs/SPEC_INSTALL_HOOKS.md`](docs/SPEC_INSTALL_HOOKS.md).
-- **Duplicate-function detection** via AST-shape hashing, and a **static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Both advisory, not score axes.
+- **Static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Advisory, not a score axis. (Duplicate-function detection has shipped as the `archy duplicates` CLI command; the `archy_duplicates` MCP tool and the calibrated `--min-nodes` default follow once the bench false-positive gate settles.)
 
 Shipped:
 

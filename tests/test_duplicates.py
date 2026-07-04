@@ -47,7 +47,8 @@ def test_nested_def_gets_its_own_shape_and_does_not_inflate_parent():
     src = b"def outer():\n    def inner(x):\n        return x + 1\n    return inner\n"
     rows = _rows(src)
     solo = _rows(b"def inner(x):\n    return x + 1\n")["inner"]
-    # The nested inner has the same shape as a standalone one...
+    # Each def's body hashes independently of its enclosing scope, so a nested
+    # def matches the same function defined at module level.
     assert rows["outer.inner"].shape_hash == solo.shape_hash
     # ...and the outer body (which only calls/returns inner) differs from it.
     assert rows["outer"].shape_hash != rows["outer.inner"].shape_hash
