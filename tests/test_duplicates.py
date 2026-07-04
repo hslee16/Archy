@@ -167,6 +167,13 @@ def test_empty_input_yields_no_groups():
     assert compute_duplicates([], {}) == []
 
 
+def test_min_members_below_2_is_rejected():
+    import pytest
+
+    with pytest.raises(ValueError, match="min_members must be >= 2"):
+        compute_duplicates([], {}, min_members=1)
+
+
 # --------------------------------------------------------------------------- #
 # CLI smoke tests
 # --------------------------------------------------------------------------- #

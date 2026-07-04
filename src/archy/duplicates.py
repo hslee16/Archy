@@ -91,7 +91,13 @@ def compute_duplicates(
     `(-redundancy, -size, -member_count, shape_hash)`. Clustering is by
     `shape_hash` alone; the 128-bit blake2b digest makes accidental collision
     negligible, so a composite key is unnecessary.
+
+    Raises `ValueError` for `min_members < 2` (a group of one is not a
+    duplicate); the invariant lives here so every caller inherits it, not just
+    the CLI.
     """
+    if min_members < 2:
+        raise ValueError(f"min_members must be >= 2; got {min_members}")
     path_by_qual = {m.qualname: str(m.path) for m in modules}
     buckets: dict[str, list[DuplicateMember]] = {}
     size_by_hash: dict[str, int] = {}
