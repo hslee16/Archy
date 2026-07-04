@@ -1,0 +1,9 @@
+whats next?
+
+---
+
+lets leave the "good first issues" alone for commuity contributions. Should we dive into diagnostics features cluster?
+
+---
+
+continue
