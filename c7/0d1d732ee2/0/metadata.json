@@ -1,0 +1,110 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c70d1d732ee2",
+  "session_id": "eeb03caa-aaff-4c98-9eda-314f85d9e475",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-04T20:10:44.059307Z",
+  "branch": "alee/duplicates-detection-133",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "bench/_common.py",
+    "bench/duplicates_sweep.py",
+    "bench/hotspots_sweep.py",
+    "docs/FUTURE.md",
+    "docs/ROADMAP.md",
+    "tests/test_duplicates.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "c7d9df4099d6",
+  "checkpoint_transcript_start": 394,
+  "transcript_lines_at_start": 394,
+  "token_usage": {
+    "input_tokens": 4039,
+    "cache_creation_tokens": 217705,
+    "cache_read_tokens": 5685029,
+    "output_tokens": 27995,
+    "api_call_count": 30
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01KgJUT5wdbP66PK8UCjrimC",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:deepplan"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "c7d9df4099d6",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 81,
+        "end": 82,
+        "entry_ids": [
+          "c8fc6999-68a5-48b9-8d1d-01b8e76af31d"
+        ],
+        "tool_use_id": "toolu_01KgJUT5wdbP66PK8UCjrimC"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01KgJUT5wdbP66PK8UCjrimC"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:deepplan",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01XS9oKPW64JdsQGH9SjPhzo",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "c7d9df4099d6",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 432,
+        "end": 433,
+        "entry_ids": [
+          "7e9354a1-5ff8-4717-8031-3d1f7ca4acef"
+        ],
+        "tool_use_id": "toolu_01XS9oKPW64JdsQGH9SjPhzo"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01XS9oKPW64JdsQGH9SjPhzo"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-04T20:10:44.038397Z",
+    "agent_lines": 65,
+    "agent_removed": 89,
+    "human_added": 52,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 117,
+    "total_lines_changed": 206,
+    "agent_percentage": 74.75728155339806,
+    "metric_version": 2
+  }
+}

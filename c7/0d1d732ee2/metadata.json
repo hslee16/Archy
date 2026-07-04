@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c70d1d732ee2",
+  "strategy": "manual-commit",
+  "branch": "alee/duplicates-detection-133",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "bench/_common.py",
+    "bench/duplicates_sweep.py",
+    "bench/hotspots_sweep.py",
+    "docs/FUTURE.md",
+    "docs/ROADMAP.md",
+    "tests/test_duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c7/0d1d732ee2/0/metadata.json",
+      "transcript": "/c7/0d1d732ee2/0/full.jsonl",
+      "content_hash": "/c7/0d1d732ee2/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 4039,
+    "cache_creation_tokens": 217705,
+    "cache_read_tokens": 5685029,
+    "output_tokens": 27995,
+    "api_call_count": 30
+  }
+}
