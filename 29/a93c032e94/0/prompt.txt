@@ -1,0 +1,9 @@
+Lets do the FP spot check now
+
+---
+
+merge the PR and lets continue with the semantic filter work. Research on the internet if helpful/required
+
+---
+
+Refine same_class first but lets also do deep reserach on how to improve the precision. Research on the internet again as required
