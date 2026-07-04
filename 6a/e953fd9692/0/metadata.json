@@ -57,6 +57,37 @@
         "label": "Skill: deepwork:deepplan",
         "default_collapsed": true
       }
+    },
+    {
+      "id": "claude-skill-toolu_01XS9oKPW64JdsQGH9SjPhzo",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "c7d9df4099d6",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 432,
+        "end": 433,
+        "entry_ids": [
+          "7e9354a1-5ff8-4717-8031-3d1f7ca4acef"
+        ],
+        "tool_use_id": "toolu_01XS9oKPW64JdsQGH9SjPhzo"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01XS9oKPW64JdsQGH9SjPhzo"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
     }
   ],
   "session_metrics": {
