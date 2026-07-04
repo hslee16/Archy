@@ -65,3 +65,16 @@ _Not produced by this script._ 15 stratified clusters (sampled across the full r
 - **django** - paired/symmetric methods differing only in the one constant that is the point (forward/backward migration halves, x/y setters, date/time SQL casts, per-backend dispatch), spanning sizes 22-73; the floor cannot separate them.
 
 **Decision:** ship the CLI at a **calibrated default of `--min-nodes 30`** (removes the trivial-boilerplate tail that concentrates below ~30 without losing most genuine small duplicates), framed frankly as a high-recall / moderate-precision advisory. The real precision fix is a semantic de-noiser (suppress same-class siblings differing only by a literal constant), tracked in #242, which also gates the `archy_duplicates` MCP tool.
+
+## Post-de-noiser re-validation (#242, two-tier, min-nodes 30, 2026-07-04)
+
+The de-noiser (`classify_variants`: same-class + trivial + `@overload`/`@property`) splits output into a primary "likely duplicate" tier and a demoted "variant" tier. Re-run 15x3 spot-check on the PRIMARY tier:
+
+| project | primary precision | wrongly-demoted (recall loss) |
+| --- | ---: | ---: |
+| fastapi | 8/14 (57%) | 2/4 |
+| pytest | 6/13 (46%) | 0/6 |
+| django | 7/15 (47%) | 0/8 |
+| **aggregate** | **~21/42 (~50%)** | 2/18 |
+
+At the same floor the de-noiser lifts primary precision from ~38% (no filter) to ~50% (~12 pt); `same_class` demotes correctly ~83% of the time, with recall softened by the two-tier design (demoted != hidden). It plateaus at ~50% because the dominant residual FPs (cross-class / module-level symmetric siblings and public-API boilerplate) are semantically intentional, which no pure-syntax signal can separate - a finding confirmed by a 94-source literature review (RESEARCH_METRICS.md section 12c): ~50% refactorability precision is the expected ceiling (Kapser & Godfrey: up to 71% of real clones are benign). The one non-ML lever that breaks it is **change-history co-change** (>94% precision in the literature), planned as the next phase unified with change-coupling (#131).

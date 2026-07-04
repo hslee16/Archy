@@ -6,8 +6,19 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from archy.cli import main
-from archy.complexity import FunctionComplexity, compute_function_complexity
-from archy.duplicates import DEFAULT_MIN_SIZE, DuplicateGroup, compute_duplicates
+from archy.complexity import (
+    FunctionComplexity,
+    compute_function_complexity,
+    extract_function_features,
+)
+from archy.duplicates import (
+    DEFAULT_MIN_SIZE,
+    DuplicateGroup,
+    DuplicateMember,
+    _same_class,
+    classify_variants,
+    compute_duplicates,
+)
 from archy.graph import Module
 from archy.parser import ParseResult
 
@@ -175,8 +186,92 @@ def test_min_members_below_2_is_rejected():
 
 
 # --------------------------------------------------------------------------- #
-# CLI smoke tests
+# Semantic de-noiser signals (#242): same-class, decorators, triviality
 # --------------------------------------------------------------------------- #
+
+
+def _member(module: str, qualified_name: str) -> DuplicateMember:
+    return DuplicateMember(module=module, qualified_name=qualified_name, path="/x.py", line=1)
+
+
+def test_same_class_true_for_methods_of_one_class():
+    members = (_member("pkg.a", "Foo.bar"), _member("pkg.a", "Foo.baz"))
+    assert _same_class(members) is True
+
+
+def test_same_class_false_across_different_classes():
+    members = (_member("pkg.a", "Foo.bar"), _member("pkg.a", "Qux.bar"))
+    assert _same_class(members) is False
+
+
+def test_same_class_false_for_module_level_functions():
+    # Free functions have no parent class, so duplicated helpers stay primary.
+    members = (_member("pkg.a", "helper"), _member("pkg.a", "helper2"))
+    assert _same_class(members) is False
+
+
+def test_same_class_false_across_modules():
+    members = (_member("pkg.a", "Foo.bar"), _member("pkg.b", "Foo.bar"))
+    assert _same_class(members) is False
+
+
+def test_classify_variants_overload_reason(tmp_path: Path):
+    # @overload stubs cluster by shape but are type surface, not duplication.
+    # Precedence: overload wins even though the bodies are also trivial.
+    src = tmp_path / "m.py"
+    src.write_text(
+        "from typing import overload\n"  # 1
+        "@overload\n"  # 2
+        "def a(x):\n    return x\n"  # 3-4
+        "@overload\n"  # 5
+        "def b(x):\n    return x\n"  # 6-7
+    )
+    members = (
+        DuplicateMember(module="m", qualified_name="a", path=str(src), line=3),
+        DuplicateMember(module="m", qualified_name="b", path=str(src), line=6),
+    )
+    group = DuplicateGroup(shape_hash="h", size=10, member_count=2, redundancy=10, members=members)
+    [out] = classify_variants([group])
+    assert out.variant_reason == "overload"
+    assert out.category == "variant"
+
+
+def test_classify_variants_unreadable_member_abstains(tmp_path: Path):
+    # A cross-module cluster whose files cannot be read stays a plain duplicate.
+    members = (
+        DuplicateMember(module="a", qualified_name="f", path="/does/not/exist.py", line=1),
+        DuplicateMember(module="b", qualified_name="g", path="/also/missing.py", line=1),
+    )
+    group = DuplicateGroup(shape_hash="h", size=10, member_count=2, redundancy=10, members=members)
+    [out] = classify_variants([group])
+    assert out.category == "duplicate"
+    assert out.variant_reason is None
+
+
+def _feat(src: bytes, line: int = 1):
+    return extract_function_features(src)[line]
+
+
+def test_features_capture_decorators():
+    src = b"import typing\n\n@typing.overload\ndef f(x): ...\n"
+    assert _feat(src, line=4).decorators == ("typing.overload",)
+
+
+def test_features_strip_call_decorator_args():
+    src = b"@app.get('/x')\ndef f():\n    return 1\n"
+    assert _feat(src, line=2).decorators == ("app.get",)
+
+
+def test_is_trivial_true_for_pure_assignment_and_getter():
+    assign = _feat(b"def __init__(self, x, y):\n    self.x = x\n    self.y = y\n")
+    getter = _feat(b"def val(self):\n    return self._val\n")
+    assert assign.is_trivial and getter.is_trivial
+
+
+def test_is_trivial_false_for_call_or_branch():
+    call = _feat(b"def f(self):\n    return self._d.get('k')\n")
+    branch = _feat(b"def f(self, x):\n    if x:\n        return 1\n    return 0\n")
+    assert not call.is_trivial and not branch.is_trivial
 
 
 def _dup_body(name: str) -> str:
@@ -204,7 +299,7 @@ def test_cli_duplicates_text_smoke(tmp_path: Path):
     result = CliRunner().invoke(main, ["duplicates", str(tmp_path), "--min-nodes", "5"])
     assert result.exit_code == 0, result.output
     assert "pkg.a" in result.output and "pkg.b" in result.output
-    assert "duplicate cluster(s)" in result.output
+    assert "likely duplicate(s)" in result.output
 
 
 def test_cli_duplicates_json(tmp_path: Path):
@@ -214,10 +309,13 @@ def test_cli_duplicates_json(tmp_path: Path):
     )
     assert result.exit_code == 0, result.output
     payload = _json.loads(result.output)
+    # alpha/beta are cross-module (pkg.a, pkg.b) with a branch -> primary tier.
     assert payload["total"] == 1
+    assert payload["variant_total"] == 0
     assert payload["note"] is None
-    group = payload["groups"][0]
+    group = payload["duplicates"][0]
     assert group["member_count"] == 2
+    assert group["category"] == "duplicate"
     assert {m["module"] for m in group["members"]} == {"pkg.a", "pkg.b"}
 
 
@@ -229,8 +327,57 @@ def test_cli_duplicates_empty_has_note(tmp_path: Path):
     assert result.exit_code == 0, result.output
     payload = _json.loads(result.output)
     assert payload["total"] == 0
-    assert payload["groups"] == []
+    assert payload["duplicates"] == []
     assert "lower --min-nodes" in payload["note"]
+
+
+def _make_variant_project(root: Path) -> None:
+    # One class with two shape-equal methods (same-class variant), plus a
+    # cross-module real duplicate, so the two tiers are both populated.
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # Non-trivial (a call) so `same_class` is the firing signal, not `trivial`.
+    (pkg / "shapes.py").write_text(
+        "class Point:\n"
+        "    def scale_x(self, f):\n"
+        "        v = round(self.x * f)\n"
+        "        self.x = v + 1\n"
+        "        return self.x\n"
+        "    def scale_y(self, f):\n"
+        "        v = round(self.y * f)\n"
+        "        self.y = v + 1\n"
+        "        return self.y\n"
+    )
+    real = (
+        "def collect(items):\n"
+        "    out = []\n"
+        "    for it in items:\n"
+        "        if it > 0:\n"
+        "            out.append(it + 1)\n"
+        "    return out\n"
+    )
+    (pkg / "a.py").write_text(real)
+    (pkg / "b.py").write_text(real.replace("collect", "gather"))
+
+
+def test_cli_duplicates_two_tiers(tmp_path: Path):
+    _make_variant_project(tmp_path)
+    result = CliRunner().invoke(
+        main, ["duplicates", str(tmp_path), "--min-nodes", "5", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.output)
+    # cross-module collect/gather -> primary; Point.scale_x/scale_y -> variant.
+    dup_names = {m["qualified_name"] for g in payload["duplicates"] for m in g["members"]}
+    var = payload["variants"]
+    assert dup_names == {"collect", "gather"}
+    assert len(var) == 1
+    assert var[0]["variant_reason"] == "same_class"
+    assert {m["qualified_name"] for m in var[0]["members"]} == {
+        "Point.scale_x",
+        "Point.scale_y",
+    }
 
 
 def test_cli_duplicates_rejects_bad_flags(tmp_path: Path):
