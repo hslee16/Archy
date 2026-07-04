@@ -87,18 +87,8 @@ def walk_functions(root_node, source: bytes) -> tuple[FunctionComplexity, ...]:
     tree with import extraction rather than running tree-sitter twice per file.
     """
     out: list[FunctionComplexity] = []
-    _walk(root_node, (), out, source)
-    out.sort(key=lambda f: (f.line, f.qualified_name))
-    return tuple(out)
 
-
-def _walk(
-    node,
-    scope: tuple[str, ...],
-    out: list[FunctionComplexity],
-    source: bytes,
-) -> None:
-    if node.type == "function_definition":
+    def visit(node, scope: tuple[str, ...]) -> None:
         name = _name_of(node, source)
         qualified = ".".join((*scope, name)) if scope else name
         cyclomatic, size, shape_hash = _analyze_body(node)
@@ -112,20 +102,30 @@ def _walk(
                 size=size,
             )
         )
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for child in body.named_children:
-                _walk(child, (*scope, name), out, source)
-        return
-    if node.type == "class_definition":
+
+    _walk_function_defs(root_node, source, visit)
+    out.sort(key=lambda f: (f.line, f.qualified_name))
+    return tuple(out)
+
+
+def _walk_function_defs(node, source: bytes, visit, scope: tuple[str, ...] = ()) -> None:
+    """Depth-first walk calling `visit(function_definition_node, scope)` per function.
+
+    Owns the scope-tracking traversal skeleton (functions and classes extend the
+    dotted scope; other nodes recurse unchanged) so callers supply only the
+    per-function payload. `scope` is the tuple of enclosing class/function names.
+    """
+    if node.type in ("function_definition", "class_definition"):
         name = _name_of(node, source)
+        if node.type == "function_definition":
+            visit(node, scope)
         body = node.child_by_field_name("body")
         if body is not None:
             for child in body.named_children:
-                _walk(child, (*scope, name), out, source)
+                _walk_function_defs(child, source, visit, (*scope, name))
         return
     for child in node.named_children:
-        _walk(child, scope, out, source)
+        _walk_function_defs(child, source, visit, scope)
 
 
 # Leaf/literal node types folded to a single placeholder token so that two
@@ -240,29 +240,15 @@ def extract_function_features(source: bytes) -> dict[int, FunctionFeatures]:
     parser = Parser(PY_LANGUAGE)
     tree = parser.parse(source)
     out: dict[int, FunctionFeatures] = {}
-    _collect_features(tree.root_node, source, out)
-    return out
 
-
-def _collect_features(node, source: bytes, out: dict[int, FunctionFeatures]) -> None:
-    if node.type == "function_definition":
+    def visit(node, scope: tuple[str, ...]) -> None:
         out[node.start_point[0] + 1] = FunctionFeatures(
             decorators=_decorator_names(node, source),
             is_trivial=_is_trivial_body(node),
         )
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for child in body.named_children:
-                _collect_features(child, source, out)
-        return
-    if node.type == "class_definition":
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for child in body.named_children:
-                _collect_features(child, source, out)
-        return
-    for child in node.named_children:
-        _collect_features(child, source, out)
+
+    _walk_function_defs(tree.root_node, source, visit)
+    return out
 
 
 def _decorator_names(func_node, source: bytes) -> tuple[str, ...]:
