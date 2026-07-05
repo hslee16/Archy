@@ -1797,6 +1797,7 @@ def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
     return {
         "min_nodes": min_nodes,
         "total": len(dups),
+        "exact_total": sum(1 for g in dups if g.exact),
         "variant_total": len(variants),
         "shown": min(top_n, len(dups)),
         "duplicated_functions": sum(g.member_count for g in dups),
@@ -1806,32 +1807,49 @@ def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
     }
 
 
+def _duplicates_section(
+    out: list[str], header: str, groups: list[DuplicateGroup], *, with_reason: bool
+) -> None:
+    if out:
+        out.append("")
+    out.append(header)
+    out.append("")
+    out.append(f"  redund  size  count  {'reason      ' if with_reason else ''}members")
+    for g in groups:
+        out.extend(_duplicate_group_lines(g, with_reason=with_reason))
+
+
 def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> str:
-    dups = [g for g in rows if g.category == "duplicate"]
+    exact = [g for g in rows if g.category == "duplicate" and g.exact]
+    near = [g for g in rows if g.category == "duplicate" and not g.exact]
     variants = [g for g in rows if g.category == "variant"]
     out: list[str] = []
-    if dups:
-        shown = dups[:top_n]
-        out.append(
-            f"# {len(dups)} likely duplicate(s); showing top {len(shown)} (min-nodes {min_nodes})"
+    if exact:
+        _duplicates_section(
+            out,
+            f"# {len(exact)} exact duplicate(s) (byte-identical; high confidence); "
+            f"showing top {min(top_n, len(exact))} (min-nodes {min_nodes})",
+            exact[:top_n],
+            with_reason=False,
         )
-        out.append("")
-        out.append("  redund  size  count  members")
-        for g in shown:
-            out.extend(_duplicate_group_lines(g, with_reason=False))
-    else:
-        out.append(f"# {_duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants))}")
+    if near:
+        _duplicates_section(
+            out,
+            f"# {len(near)} likely duplicate(s) (same shape, differ by names/values); "
+            f"showing top {min(top_n, len(near))}",
+            near[:top_n],
+            with_reason=False,
+        )
+    if not exact and not near:
+        out.append(f"# {_duplicates_note([], min_nodes=min_nodes, variant_count=len(variants))}")
     if variants:
-        vshown = variants[:top_n]
-        out.append("")
-        out.append(
+        _duplicates_section(
+            out,
             f"# {len(variants)} same-class / boilerplate variant(s) "
-            f"(likely intentional; showing top {len(vshown)})"
+            f"(likely intentional; showing top {min(top_n, len(variants))})",
+            variants[:top_n],
+            with_reason=True,
         )
-        out.append("")
-        out.append("  redund  size  count  reason      members")
-        for g in vshown:
-            out.extend(_duplicate_group_lines(g, with_reason=True))
     return "\n".join(out)
 
 

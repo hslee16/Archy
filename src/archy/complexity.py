@@ -210,6 +210,7 @@ class FunctionFeatures(BaseModel):
 
     decorators: tuple[str, ...] = ()
     is_trivial: bool = False
+    concrete_hash: str = ""
 
 
 # A body containing any of these is not trivial boilerplate. Branch nodes are
@@ -245,10 +246,39 @@ def extract_function_features(source: bytes) -> dict[int, FunctionFeatures]:
         out[node.start_point[0] + 1] = FunctionFeatures(
             decorators=_decorator_names(node, source),
             is_trivial=_is_trivial_body(node),
+            concrete_hash=_concrete_hash(node, source),
         )
 
     _walk_function_defs(tree.root_node, source, visit)
     return out
+
+
+def _concrete_hash(func_node, source: bytes) -> str:
+    """Hash of the UN-normalized body: node types plus each leaf's actual text.
+
+    Unlike the shape hash (identifiers/literals folded to placeholders), this
+    preserves the concrete tokens, so two functions share it only when their
+    bodies are byte-identical modulo whitespace and comments (a Type-1 clone).
+    Members of a shape cluster that also share this are exact copy-paste, the
+    highest-confidence duplicates; those that differ are Type-2 (parameterized).
+    """
+    body = func_node.child_by_field_name("body")
+    if body is None:
+        return ""
+    tokens: list[str] = []
+    stack = [body]
+    while stack:
+        n = stack.pop()
+        if n.type == "comment":
+            continue
+        if n.child_count == 0:
+            tokens.append(source[n.start_byte : n.end_byte].decode("utf-8", errors="replace"))
+        else:
+            tokens.append(n.type)
+        stack.extend(reversed(n.children))
+    if not tokens:
+        return ""
+    return hashlib.blake2b("\x00".join(tokens).encode(), digest_size=16).hexdigest()
 
 
 def _decorator_names(func_node, source: bytes) -> tuple[str, ...]:

@@ -687,6 +687,31 @@ are the same signal; the co-change precision layer is the next phase, unified wi
 (archy is an MCP tool used *with* an LLM) is the semantic judge - "judge, not
 librarian." Re-validation raw data: `bench/duplicates_results.md`.
 
+### 12d. The Type-1 (exact) tier: the one static lever that measurably helped (2026-07-04)
+
+The literature named one flaw in our own pipeline: **identifier normalization is a
+precision-reducer** (SourcererCC credits *not* normalizing for its 91%). We
+normalize identifiers/literals before hashing, which is what lets Type-2
+parameterized siblings (mostly benign) cluster with real copy-paste. So we added a
+lazily-computed **concrete hash** (un-normalized: node types + each leaf's actual
+text, comments excluded) on top of the shape hash, and mark a cluster `exact` when
+all members share it - i.e. byte-identical modulo whitespace/comments (a Type-1
+clone).
+
+A spot-check of the `exact` subset across fastapi/pytest/django: **11/16 TRUE
+(~69%)**, versus the ~47-50% overall primary tier - a materially higher-precision
+slice, and a small one (50 of 195 primary clusters). It concentrates the genuine
+copy-paste (django's 135-node cross-backend `_alter_field`, the 3-way serializer
+`_handle_object`, cross-class `_assert_state`) into a "definitely refactor these"
+tier. This is the one *static, no-ML, no-git* lever that measurably helped, exactly
+as the de-normalize finding predicted; it ships as an `exact` flag + a dedicated
+exact section in the CLI, and an `exact_total` / per-group `exact` on the
+`archy_duplicates` payload. The 5 exact false positives are still recognizable
+intentional patterns (byte-identical public-API `__init__` forwarders, inverse
+migration ops, trivial per-backend overrides) - it does not beat the semantic
+ceiling, only surfaces the high-confidence slice within it. Co-change (#131) remains
+the lever for the rest.
+
 ---
 
 ## 13. Type-hint coverage (Python-specific)

@@ -78,3 +78,7 @@ The de-noiser (`classify_variants`: same-class + trivial + `@overload`/`@propert
 | **aggregate** | **~21/42 (~50%)** | 2/18 |
 
 At the same floor the de-noiser lifts primary precision from ~38% (no filter) to ~50% (~12 pt); `same_class` demotes correctly ~83% of the time, with recall softened by the two-tier design (demoted != hidden). It plateaus at ~50% because the dominant residual FPs (cross-class / module-level symmetric siblings and public-API boilerplate) are semantically intentional, which no pure-syntax signal can separate - a finding confirmed by a 94-source literature review (RESEARCH_METRICS.md section 12c): ~50% refactorability precision is the expected ceiling (Kapser & Godfrey: up to 71% of real clones are benign). The one non-ML lever that breaks it is **change-history co-change** (>94% precision in the literature), planned as the next phase unified with change-coupling (#131).
+
+### Exact (Type-1) sub-tier (#242 follow-up, 2026-07-04)
+
+Acting on the literature's "identifier normalization is a precision-reducer" finding, an un-normalized concrete hash marks byte-identical clusters as `exact`. Spot-check of the exact subset across the trio: **11/16 (~69%)** vs the ~50% primary tier - a small (50 of 195 primary clusters), high-yield "definitely refactor these" slice. Ships as an `exact` flag + a dedicated exact CLI section + `exact_total` on `archy_duplicates`. It surfaces the high-confidence slice within the semantic ceiling; it does not beat it. See RESEARCH_METRICS.md section 12d.

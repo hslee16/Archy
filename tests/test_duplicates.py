@@ -274,6 +274,37 @@ def test_is_trivial_false_for_call_or_branch():
     assert not call.is_trivial and not branch.is_trivial
 
 
+def test_concrete_hash_identical_bodies_match_differ_by_literal_do_not():
+    # Same body (name differs only in the def line) -> same concrete hash.
+    a = _feat(b"def a(x):\n    return x + 1\n")
+    b = _feat(b"def totally_other(x):\n    return x + 1\n")
+    assert a.concrete_hash == b.concrete_hash != ""
+    # Differ by a literal constant -> same shape, different concrete hash.
+    c = _feat(b"def a(x):\n    return x + 2\n")
+    assert c.concrete_hash != a.concrete_hash
+
+
+def test_exact_marks_byte_identical_not_parameterized(tmp_path: Path):
+    from archy.graph import parse_project
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    same = "def {n}(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n"
+    (pkg / "a.py").write_text(same.format(n="alpha"))  # byte-identical bodies
+    (pkg / "b.py").write_text(same.format(n="beta"))
+    param = "def {n}(xs):\n    t = 0\n    for x in xs:\n        t = t + {k}\n    return t\n"
+    (pkg / "c.py").write_text(param.format(n="gamma", k="1"))  # same shape,
+    (pkg / "d.py").write_text(param.format(n="delta", k="9"))  # differ by a literal
+    modules, results = parse_project(tmp_path)
+    groups = {
+        frozenset(m.qualified_name for m in g.members): g
+        for g in classify_variants(compute_duplicates(modules, results, min_size=5))
+    }
+    assert groups[frozenset({"alpha", "beta"})].exact is True
+    assert groups[frozenset({"gamma", "delta"})].exact is False
+
+
 def _dup_body(name: str) -> str:
     # A body large enough to clear a small --min-nodes floor.
     return (
@@ -299,7 +330,8 @@ def test_cli_duplicates_text_smoke(tmp_path: Path):
     result = CliRunner().invoke(main, ["duplicates", str(tmp_path), "--min-nodes", "5"])
     assert result.exit_code == 0, result.output
     assert "pkg.a" in result.output and "pkg.b" in result.output
-    assert "likely duplicate(s)" in result.output
+    # alpha/beta have byte-identical bodies -> the exact (Type-1) tier.
+    assert "exact duplicate(s)" in result.output
 
 
 def test_cli_duplicates_json(tmp_path: Path):
@@ -312,10 +344,12 @@ def test_cli_duplicates_json(tmp_path: Path):
     # alpha/beta are cross-module (pkg.a, pkg.b) with a branch -> primary tier.
     assert payload["total"] == 1
     assert payload["variant_total"] == 0
+    assert payload["exact_total"] == 1  # byte-identical bodies
     assert payload["note"] is None
     group = payload["duplicates"][0]
     assert group["member_count"] == 2
     assert group["category"] == "duplicate"
+    assert group["exact"] is True
     assert {m["module"] for m in group["members"]} == {"pkg.a", "pkg.b"}
 
 
