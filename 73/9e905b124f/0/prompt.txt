@@ -15,3 +15,11 @@ lets merge #249 and work on #131 after
 <summary>Monitor event: "coupling sweep completion (re-armed)"</summary>
 <event>[Monitor timed out — re-arm if needed.]</event>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>bd1i6x4ov</task-id>
+<summary>Monitor event: "coupling sweep final summary"</summary>
+<event>[Monitor timed out — re-arm if needed.]</event>
+</task-notification>
