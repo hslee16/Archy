@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6c7943f8204c",
+  "strategy": "manual-commit",
+  "branch": "alee/duplicates-type1-experiment",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/FUTURE.md",
+    "src/archy/complexity.py",
+    "tests/test_duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6c/7943f8204c/0/metadata.json",
+      "transcript": "/6c/7943f8204c/0/full.jsonl",
+      "content_hash": "/6c/7943f8204c/0/content_hash.txt",
+      "prompt": "/6c/7943f8204c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 58301,
+    "cache_creation_tokens": 3472877,
+    "cache_read_tokens": 136197039,
+    "output_tokens": 371418,
+    "api_call_count": 343
+  }
+}
