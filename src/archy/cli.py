@@ -605,8 +605,9 @@ def duplicates(path: Path, min_nodes: int, top_n: int, min_members: int, fmt: st
 
     Folds identifiers and literals to placeholders, hashes the body's AST shape,
     and clusters matches (see `archy.duplicates`). Output is two tiers: "likely
-    duplicate(s)" to investigate, and demoted "same-class / boilerplate
-    variant(s)" that are likely intentional. Advisory only (never changes
+    duplicate(s)" to investigate, and demoted "variant(s)" that are likely
+    intentional (same-class siblings, boilerplate, and test/vendored copies whose
+    shared body is scaffolding or deliberate isolation). Advisory only (never changes
     `archy score`); a cluster means "investigate," not "provably identical."
     Refactorability is a semantic call, so the ~50% precision ceiling is left to
     the reader's judgment. Trivial functions below `--min-nodes` are skipped.
@@ -1770,8 +1771,8 @@ def _duplicates_note(
     )
     if variant_count:
         note += (
-            f" ({variant_count} same-class/boilerplate variant(s) were found but demoted "
-            "as likely intentional.)"
+            f" ({variant_count} likely-intentional variant(s) were found but demoted: "
+            "same-class siblings, boilerplate, or test/vendored copies.)"
         )
     return note
 
@@ -1845,8 +1846,8 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
     if variants:
         _duplicates_section(
             out,
-            f"# {len(variants)} same-class / boilerplate variant(s) "
-            f"(likely intentional; showing top {min(top_n, len(variants))})",
+            f"# {len(variants)} likely-intentional variant(s) (same-class / boilerplate / "
+            f"test / vendored; showing top {min(top_n, len(variants))})",
             variants[:top_n],
             with_reason=True,
         )

@@ -725,8 +725,48 @@ and ~74% once test/vendored duplication is scoped out (tracked in #247); the
 residual FPs are recognizable intentional patterns (public-API forwarders,
 deliberate vendoring, declarative config, inverse ops). It does not beat the
 semantic ceiling, only surfaces the high-confidence slice within it. Path-scoping
-(#247) and co-change (#131) are the levers for the rest; the recall hole
+(§12e, shipped) and co-change (#131) are the levers for the rest; the recall hole
 (exact-shape-hashing misses Type-3 near-miss clones entirely) is tracked in #246.
+
+### 12e. Path-based de-noise: demoting test/vendored copies (2026-07-04, #247)
+
+§12d isolated the cause of the scientific/ML precision crash: the primary tier
+was dominated by *test-code and vendored duplication*, non-refactorable by
+construction (parallel/legacy test suites produce byte-identical bodies on
+purpose; `_vendor` / `module_utils` copies exist precisely so they do *not*
+import the original). The cheap static fix is two pure-path signals added to the
+semantic de-noiser (`classify_variants`): a cluster whose members sit **wholly**
+in test code (basename `test_*` / `*_test.py` / `conftest.py`, or a `tests`/`test`
+dir) is demoted with reason `test`; one **wholly** inside a vendoring/isolation
+dir (`_vendor`, `vendored`, `third_party`, `site-packages`, `module_utils`) is
+demoted with reason `vendored`. Both require *every* member to qualify, so a
+cross-tier clone (a test or vendored copy sharing a body with real source) stays
+primary - that is a genuine "your source duplicates isolated code" finding.
+
+**Whole-repo validation over all 29 bench repos** (min-nodes 30, tests included;
+each cluster classified with the path signals on vs off, so the delta is exactly
+the clusters #247 moves out of "investigate these"):
+
+| | primary clusters | demoted (net) |
+| --- | ---: | ---: |
+| all 29 repos | 15211 -> 4862 | -10349 (**68%**), test 15111 / vendored 117 |
+| numpy | 294 -> 58 | -236 |
+| pytorch | 4050 -> 1278 | -2772 |
+| scikit-learn | 227 -> 126 | -101 |
+
+The 68% figure is the whole-repo picture, where the test tree dominates; it is
+*net* of what the structural signals (`same_class` / `trivial`) already caught
+(mypy, e.g., has 54 all-test clusters but only 6 net-new demotions, the rest
+already being same-class siblings). It does **not** over-demote real source:
+click (8 -> 8) and flask (7 -> 7) have no test-dir clusters clearing the floor,
+so their primary tiers are untouched. The effect is to make the primary tier
+behave like the source-only slice (§12d, ~74%) by moving the ~10% test/vendored
+bucket out of it, without hiding anything - the demoted clusters are still
+reported in the `variant` tier with their reason. `exact` is still computed on
+demoted clusters, so a byte-identical test clone is flagged as copy-paste even
+while down-ranked. Path-scoping is the cheap stopgap; co-change (#131) is the
+principled version (a deliberate-isolation copy will not co-change), and Type-3
+recall (#246) is the orthogonal recall lever.
 
 ---
 
@@ -1475,7 +1515,7 @@ The "Role" column distinguishes:
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
 | Cross-file co-change (logical coupling)   | Medium | High   | Standalone command  | -                | Defer (skip if hotspots ships) |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
-| Redundancy - duplicate functions          | Medium | Medium | Advisory list       | -                | Maybe     |
+| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer; §12b-§12e) | ✓ 12-repo/60-cluster validation: ~50% primary-tier precision, ~63% on the exact (Type-1) subset, ~74% on non-test source | **Shipped** |
 | Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 
@@ -1532,8 +1572,9 @@ additive unless marked **Replace**.
   co-change matrix). Defer unless a specific use case requires it.
 - **Reflexion: absences** - evolve `archy.yaml` once users with
   authored architecture documents ask for it.
-- **Duplicate-function detection** - useful but off-positioning;
-  cede to existing tools unless explicitly requested.
+- ~~**Duplicate-function detection**~~ - shipped in v0.37 as `archy
+  duplicates` / `archy_duplicates` (a two-tier surfacer, not a librarian;
+  see §12b-§12e). No longer deferred.
 
 ---
 

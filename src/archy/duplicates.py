@@ -11,7 +11,9 @@ This is a same-shape cluster *surfacer*, not a precision oracle. Output is split
 into two tiers by a semantic de-noiser (`classify_variants`): a primary "likely
 duplicate" tier (investigate these) and a demoted "variant" tier of
 likely-intentional clusters (same-class siblings, `@overload` stubs, trivial
-boilerplate). Nothing is hidden; the variant tier is down-ranked, not dropped.
+boilerplate, and path-isolated copies - clusters wholly in test suites or
+vendoring/isolation dirs, issue #247). Nothing is hidden; the variant tier is
+down-ranked, not dropped.
 Within the primary tier, `exact` marks byte-identical (Type-1) clusters: the
 concrete (un-normalized) body hashes match, so these are real copy-paste, the
 highest-confidence slice (~63% precision on a 12-repo re-validation, ~74% on
@@ -87,10 +89,13 @@ class DuplicateGroup(BaseModel):
     `category` splits the output into two tiers (issue #242): `"duplicate"` is a
     likely-real duplicate; `"variant"` is a likely-intentional cluster demoted by
     the semantic de-noiser, with `variant_reason` naming which signal fired
-    (`same_class` / `trivial` / `overload` / `property`). `same_class` is the
-    free structural signal (all members are methods of one class); it is set by
-    `compute_duplicates`, while `variant_reason` / `category` are finalized by
-    `classify_variants` (which reads member source).
+    (`overload` / `property` / `vendored` / `test` / `trivial` / `same_class`).
+    `vendored` / `test` are pure-path signals (issue #247): every member sits in a
+    vendoring/isolation dir or a test suite, so the shared body is deliberate
+    isolation or frozen test scaffolding, not refactorable copy-paste. `same_class`
+    is the free structural signal (all members are methods of one class); it is set
+    by `compute_duplicates`, while `variant_reason` / `category` are finalized by
+    `classify_variants` (which reads member source and paths).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -233,6 +238,40 @@ def _is_exact(feats: list[FunctionFeatures | None]) -> bool:
     return len(hashes) == 1 and "" not in hashes
 
 
+# Path segments that mark a file as vendored / dependency-isolated: code copied
+# in on purpose (pip's `_vendor`, `third_party`) or re-implemented to avoid an
+# import (ansible `module_utils` ships to remote targets, so it must not import
+# controller-side packages). A byte-identical body across two such files is
+# deliberate isolation, not refactorable duplication (issue #247, class 1).
+_VENDOR_SEGMENTS = frozenset(
+    {"_vendor", "vendored", "third_party", "site-packages", "module_utils"}
+)
+# Conventional pytest/unittest suite-directory names. Per-file markers
+# (conftest.py, test_*.py, *_test.py) are matched separately in _is_test_path,
+# so this set only needs the directory-level convention, not every test file.
+_TEST_DIR_SEGMENTS = frozenset({"tests", "test"})
+
+
+def _is_vendored_path(path: str) -> bool:
+    """True when any path segment marks the file as vendored / isolation code."""
+    return any(seg in _VENDOR_SEGMENTS for seg in Path(path).parts)
+
+
+def _is_test_path(path: str) -> bool:
+    """True when the file is test code, by basename convention or a test dir.
+
+    Parallel/legacy test suites produce byte-identical bodies by design (numpy's
+    frozen `test_random.py` vs `test_randomstate.py`, per-module compliance
+    scaffolding), so a cluster wholly inside test code is scaffolding, not a
+    refactor target (issue #247, class 3).
+    """
+    p = Path(path)
+    name = p.name
+    if name == "conftest.py" or name.endswith("_test.py") or name.startswith("test_"):
+        return True
+    return any(seg in _TEST_DIR_SEGMENTS for seg in p.parts)
+
+
 def _has_decorator(feat: FunctionFeatures | None, suffix: str) -> bool:
     return feat is not None and any(d.rsplit(".", 1)[-1] == suffix for d in feat.decorators)
 
@@ -240,9 +279,13 @@ def _has_decorator(feat: FunctionFeatures | None, suffix: str) -> bool:
 def _variant_reason(group: DuplicateGroup, feats: list[FunctionFeatures | None]) -> str | None:
     """Which de-noise signal (if any) makes this cluster a likely-intentional variant.
 
-    Precedence: overload -> property -> trivial -> same_class. `is_trivial` is a
-    structural property, so it is identical across shape-equal members; the
-    decorator checks require *every* member to carry the decorator (an API
+    Precedence: overload -> property -> vendored -> test -> trivial -> same_class.
+    The decorator and `is_trivial` signals read member source; `vendored` / `test`
+    are pure-path (issue #247) and so fire even when a member file is unreadable.
+    Every signal requires *all* members to qualify: a cross-tier cluster (one test
+    or vendored member sharing a body with real source) stays primary, since that
+    is a genuine "your source duplicates isolated code" finding worth surfacing.
+    The decorator/path checks require *every* member to carry the marker (an API
     surface is expanded uniformly, a copy-paste usually is not).
     """
     present = [f for f in feats if f is not None]
@@ -254,6 +297,10 @@ def _variant_reason(group: DuplicateGroup, feats: list[FunctionFeatures | None])
         and all(f.is_trivial for f in present)
     ):
         return "property"
+    if all(_is_vendored_path(m.path) for m in group.members):
+        return "vendored"
+    if all(_is_test_path(m.path) for m in group.members):
+        return "test"
     if present and all(f.is_trivial for f in present):
         return "trivial"
     if group.same_class:

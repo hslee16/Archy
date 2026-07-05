@@ -17,6 +17,8 @@ from archy.duplicates import (
     DEFAULT_MIN_SIZE,
     DuplicateGroup,
     DuplicateMember,
+    _is_test_path,
+    _is_vendored_path,
     _same_class,
     classify_variants,
     compute_duplicates,
@@ -247,6 +249,120 @@ def test_classify_variants_unreadable_member_abstains(tmp_path: Path):
     [out] = classify_variants([group])
     assert out.category == "duplicate"
     assert out.variant_reason is None
+
+
+# --------------------------------------------------------------------------- #
+# Path-based de-noise signals (#247): test suites, vendored / isolation dirs
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "pkg/tests/test_x.py",
+        "tests/helpers.py",
+        "src/pkg/test/thing.py",
+        "numpy/random/test_random.py",  # basename convention, not in a tests/ dir
+        "pkg/conftest.py",
+        "pkg/features_test.py",
+    ],
+)
+def test_is_test_path_true(path: str):
+    assert _is_test_path(path) is True
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "pkg/testing.py",  # 'testing' is not 'test'
+        "pkg/latest.py",  # substring, not a segment / basename convention
+        "src/pkg/core.py",
+        "contest/a.py",
+    ],
+)
+def test_is_test_path_false(path: str):
+    assert _is_test_path(path) is False
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "pip/_vendor/requests/api.py",
+        "ansible/module_utils/basic.py",
+        "pkg/third_party/lib.py",
+        ".venv/lib/python3.12/site-packages/x.py",
+    ],
+)
+def test_is_vendored_path_true(path: str):
+    assert _is_vendored_path(path) is True
+
+
+def test_is_vendored_path_false():
+    assert _is_vendored_path("src/pkg/core.py") is False
+    assert _is_vendored_path("pkg/vendor.py") is False  # 'vendor' segment != '_vendor'
+
+
+def _path_group(*paths: str) -> DuplicateGroup:
+    """A cluster whose members live at the given (nonexistent) paths.
+
+    The files need not exist: the path signals are pure-path, and the
+    source-reading signals abstain on unreadable files.
+    """
+    members = tuple(
+        DuplicateMember(module=f"m{i}", qualified_name=f"m{i}.f", path=p, line=1)
+        for i, p in enumerate(paths)
+    )
+    return DuplicateGroup(
+        shape_hash="h", size=30, member_count=len(members), redundancy=30, members=members
+    )
+
+
+def test_all_test_members_demote_to_variant():
+    group = _path_group("pkg/tests/test_a.py", "pkg/tests/test_b.py")
+    [out] = classify_variants([group])
+    assert out.category == "variant"
+    assert out.variant_reason == "test"
+
+
+def test_all_vendored_members_demote_to_variant():
+    group = _path_group("ansible/module_utils/a.py", "ansible/module_utils/b.py")
+    [out] = classify_variants([group])
+    assert out.category == "variant"
+    assert out.variant_reason == "vendored"
+
+
+def test_cross_tier_test_and_source_stays_primary():
+    # One test member sharing a body with real source is a genuine finding, not
+    # scaffolding: it must not be demoted.
+    group = _path_group("pkg/tests/test_a.py", "pkg/core.py")
+    [out] = classify_variants([group])
+    assert out.category == "duplicate"
+    assert out.variant_reason is None
+
+
+def test_vendored_takes_precedence_over_test():
+    # A cluster that is both all-vendored and all-test reports the stronger
+    # (vendored) intent; either way it is demoted.
+    group = _path_group("pip/_vendor/tests/test_a.py", "pip/_vendor/tests/test_b.py")
+    [out] = classify_variants([group])
+    assert out.variant_reason == "vendored"
+
+
+def test_demoted_test_cluster_still_flagged_exact(tmp_path: Path):
+    # A byte-identical clone that lives wholly in test files is demoted as
+    # `test`, but `exact` is still computed so the reader sees it is copy-paste.
+    pkg = _make_pkg(tmp_path)
+    tests = pkg / "tests"
+    tests.mkdir()
+    (tests / "__init__.py").write_text("")
+    body = "def {n}(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n"
+    (tests / "test_a.py").write_text(body.format(n="alpha"))
+    (tests / "test_b.py").write_text(body.format(n="beta"))
+    modules, results = parse_project(tmp_path)
+    [out] = classify_variants(compute_duplicates(modules, results, min_size=5))
+    assert out.category == "variant"
+    assert out.variant_reason == "test"
+    assert out.exact is True
 
 
 def _feat(src: bytes, line: int = 1):
