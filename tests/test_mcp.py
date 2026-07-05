@@ -89,6 +89,7 @@ def test_create_server_registers_expected_tools():
     # (archy_affected, archy_record_baseline, archy_graph_focus,
     # archy_graph_summary, archy_high_risk_modules, archy_hotspots) are folded
     # into survivors via mode/lens/param switches; see the module docstring.
+    # archy_duplicates (#242) added the 14th.
     assert names == {
         "archy_score",
         "archy_cycles",
@@ -103,8 +104,9 @@ def test_create_server_registers_expected_tools():
         "archy_dsm",
         "archy_status",
         "archy_simulate",
+        "archy_duplicates",
     }
-    assert len(names) == 13
+    assert len(names) == 14
 
 
 def test_all_tools_declare_read_only_annotations():

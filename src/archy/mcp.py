@@ -1,10 +1,11 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The 13
+Built on the official Python `mcp` SDK using its FastMCP API. The 14
 tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
 `archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
-`archy_what_to_refactor_next`, `archy_dsm`, `archy_status`) so an agent
+`archy_what_to_refactor_next`, `archy_dsm`, `archy_status`,
+`archy_duplicates`) so an agent
 can treat archy as a structural sensor in its own feedback loop, the way
 the README pitches. Several tools carry a mode/lens/param switch that
 absorbs what used to be a separate tool: `archy_impact(mode='affected')`
@@ -113,6 +114,12 @@ from archy.dsm import (
     read_dsm,
     summarize_dsm,
 )
+from archy.duplicates import (
+    DEFAULT_MIN_SIZE,
+    DuplicateGroup,
+    classify_variants,
+    compute_duplicates,
+)
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -120,6 +127,7 @@ from archy.graph import (
     discover_modules,
     effective_max_modules,
     graph_to_dict,
+    parse_project,
     resolve_modules,
 )
 from archy.history import append as append_history
@@ -526,6 +534,45 @@ class StatusPayload(BaseModel):
     watching: bool
 
 
+class DuplicateGroupSummary(BaseModel):
+    """Concise (response_format='summary') form of a duplicate cluster: the
+    ranking fields plus one sample member, without the full member list."""
+
+    model_config = ConfigDict(frozen=True)
+
+    shape_hash: str
+    size: int
+    member_count: int
+    redundancy: int
+    category: str
+    variant_reason: str | None
+    sample: str
+
+
+class DuplicatesPayload(BaseModel):
+    """Two-tier duplicate-cluster result (issue #133/#242).
+
+    `duplicates` is the primary "likely duplicate" tier (investigate these);
+    `variants` is the demoted "same-class / boilerplate" tier (likely
+    intentional). `total` / `variant_total` count each tier; `shown` is how many
+    of the primary tier are returned (capped by `top_n`). An empty `duplicates`
+    with a `note` is a real answer. Advisory only, never a score axis;
+    refactorability is a semantic call, so ~50% precision is expected (see the
+    tool description).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    min_nodes: int
+    total: int
+    variant_total: int
+    shown: int
+    duplicated_functions: int
+    duplicates: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
+    variants: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
+    note: str | None
+
+
 def create_server() -> FastMCP:
     server: FastMCP = FastMCP("archy")
     _register_tools(server)
@@ -552,7 +599,7 @@ _READ_ONLY_ANNOTATIONS = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
-"""All 13 archy tools are read-only structural analysis: they compute over a
+"""All 14 archy tools are read-only structural analysis: they compute over a
 project and mutate nothing observable on the wire, are closed-domain (no
 network/external world), and are idempotent for a fixed source tree. Declaring
 this explicitly lets trusted clients auto-approve archy's calls instead of
@@ -909,6 +956,42 @@ def _register_tools(server: FastMCP) -> None:
             focus_depth=focus_depth,
             package=package,
             baseline_path=baseline_path,
+        )
+
+    @server.tool(
+        name="archy_duplicates",
+        title="Duplicate-function clusters",
+        annotations=_READ_ONLY_ANNOTATIONS,
+        description=(
+            "Cluster functions with an identical normalized body shape "
+            "(identifiers/literals folded to placeholders). Returns two tiers: "
+            "`duplicates` (the primary 'likely duplicate' list to investigate) "
+            "and `variants` (demoted same-class / boilerplate clusters that are "
+            "likely intentional, each carrying a `variant_reason`). "
+            f"`min_nodes` (default {DEFAULT_MIN_SIZE}) is the minimum normalized "
+            "AST-node count, skipping trivial getters/stubs. This is an advisory "
+            "SURFACER, never a score axis: refactorability is a semantic call the "
+            "reader (you) makes, so ~50% primary-tier precision is expected and a "
+            "cluster means 'investigate,' not 'provably identical.' "
+            "`response_format='summary'` (the DEFAULT) returns each cluster's "
+            "ranking fields plus one sample member; `response_format='full'` "
+            "returns the complete member lists. An empty `duplicates` with a "
+            "`note` is a real answer."
+        ),
+    )
+    def archy_duplicates(
+        path: str,
+        response_format: str = "summary",
+        min_nodes: int = DEFAULT_MIN_SIZE,
+        top_n: int = 20,
+        members: int = 2,
+    ) -> DuplicatesPayload:
+        return _run_duplicates(
+            Path(path),
+            response_format=response_format,
+            min_nodes=min_nodes,
+            top_n=top_n,
+            members=members,
         )
 
     @server.tool(
@@ -1447,6 +1530,77 @@ def _run_dsm(
     return current
 
 
+def _summarize_duplicate_group(group: DuplicateGroup) -> DuplicateGroupSummary:
+    first = group.members[0]
+    return DuplicateGroupSummary(
+        shape_hash=group.shape_hash,
+        size=group.size,
+        member_count=group.member_count,
+        redundancy=group.redundancy,
+        category=group.category,
+        variant_reason=group.variant_reason,
+        sample=f"{first.module}:{first.line} {first.qualified_name}",
+    )
+
+
+def _run_duplicates(
+    path: Path,
+    *,
+    response_format: str,
+    min_nodes: int,
+    top_n: int,
+    members: int,
+) -> DuplicatesPayload:
+    """Two-tier duplicate clusters for archy_duplicates.
+
+    Reads per-function rows via the function-grained warm path (`parse_map`),
+    classifies clusters into the primary/variant tiers, and shapes each tier by
+    `response_format` (a per-cluster summary vs the full member lists).
+    """
+    _validate_response_format(response_format)
+    if min_nodes < 1:
+        raise ValueError(f"min_nodes must be >= 1; got {min_nodes}")
+    if top_n < 1:
+        raise ValueError(f"top_n must be >= 1; got {top_n}")
+    # members < 2 is validated by compute_duplicates (raises ValueError).
+    modules, results = _parse_project(
+        path, max_modules=_resolve_max_modules(path), **_graph_kwargs(path)
+    )
+    rows = classify_variants(
+        compute_duplicates(modules, results, min_size=min_nodes, min_members=members)
+    )
+    dups = [g for g in rows if g.category == "duplicate"]
+    variants = [g for g in rows if g.category == "variant"]
+
+    def shape(groups: list[DuplicateGroup]):
+        top = groups[:top_n]
+        if response_format == "full":
+            return tuple(top)
+        return tuple(_summarize_duplicate_group(g) for g in top)
+
+    note: str | None = None
+    if not dups:
+        note = (
+            f"No likely-duplicate function bodies of >= {min_nodes} normalized "
+            "nodes found; lower min_nodes to widen the search."
+        )
+        if variants:
+            note += (
+                f" ({len(variants)} same-class/boilerplate variant(s) were found "
+                "but demoted as likely intentional.)"
+            )
+    return DuplicatesPayload(
+        min_nodes=min_nodes,
+        total=len(dups),
+        variant_total=len(variants),
+        shown=min(top_n, len(dups)),
+        duplicated_functions=sum(g.member_count for g in dups),
+        duplicates=shape(dups),
+        variants=shape(variants),
+        note=note,
+    )
+
+
 def _empty_subgraph(graph):
     import networkx as nx
 
@@ -1688,6 +1842,20 @@ def _build_graph(path: Path, *, max_modules: int | None = None, **kwargs):
         return _manager_for(path, max_modules=max_modules, **kwargs).build_graph()
     except (sqlite3.Error, OSError):
         return build_graph(path, max_modules=max_modules, **kwargs)
+
+
+def _parse_project(path: Path, *, max_modules: int | None = None, **kwargs):
+    """Function-grained warm path: `(modules, parse_results)` for archy_duplicates.
+
+    Mirrors `_build_graph` -- routes through the per-root IndexManager's
+    `parse_map` (persistent cache + background watcher) and falls back to a cold
+    `graph.parse_project` if the cache cannot be used. A `ScanTooLargeError` from
+    the guard propagates rather than being retried by the cold path.
+    """
+    try:
+        return _manager_for(path, max_modules=max_modules, **kwargs).parse_map()
+    except (sqlite3.Error, OSError):
+        return parse_project(path, max_modules=max_modules, **kwargs)
 
 
 def _resolve_max_modules(path: Path) -> int | None:

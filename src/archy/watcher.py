@@ -84,6 +84,17 @@ class IndexManager:
             # from results), so passing the full list is safe.
             return assemble_graph(self.root, modules, results)
 
+    def parse_map(self) -> tuple[list, dict]:
+        """Sync the cache and return `(modules, parse_results)` without assembling.
+
+        The function-grained warm path (used by `archy_duplicates`): duplicate
+        detection needs the individual `ParseResult.functions` rows that
+        `assemble_graph` rolls up into per-module aggregates and discards.
+        """
+        with self._lock:
+            modules, results, _ = self._sync_locked()
+            return modules, results
+
     def sync_now(self) -> SyncStats:
         """Run a sync without assembling a graph (used by the debounce fire)."""
         with self._lock:

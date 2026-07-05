@@ -15,7 +15,7 @@
 pip install archy
 archy score .         # one-shot architectural health number
 archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 13 tools to Claude Code, Cursor, any MCP client
+archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
 ```
 
 ![archy demo](docs/demo.gif)
@@ -240,7 +240,7 @@ archy mcp
 
 The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, so a cached result is never stale. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
-`archy mcp` exposes thirteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes fourteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
@@ -257,6 +257,7 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 | `archy_what_to_refactor_next` | Ranked refactor-priority list (replaces the removed `archy_hotspots` and `archy_high_risk_modules` via `lens`). `lens="fused"` (**default**) sums the behavioral lens (CC x churn) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal can still rank first). `lens="behavioral"` ranks CC x churn hotspots only (needs git); `lens="structural"` ranks the edit-risk composite only (git-free; pass `min_risk=0` for no floor). Each entry names which lenses fired and carries a one-line `rationale`. An empty list plus a `note` is a real answer. |
 | `archy_dsm` | Design Structure Matrix view of the import graph. `response_format="summary"` (**default**) returns a compact overview (block structure, counts, back-edges, cross-block coupling) without the full cell list. `response_format="full"` returns the positional matrix (cell `(row=source, col=target)` non-empty when source imports target), refusing matrices over `DEFAULT_MAX_DSM_CELLS` cells with a `DSMTooLargePayload`. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff (regardless of `response_format`) whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md). |
 | `archy_status` | Report the persistent index's freshness: `last_synced_at`, `cached_files`, and whether the background watcher is `watching`. The `archy mcp` server keeps a debounced filesystem watcher warming `.archy/index.db` so graph builds stay fast; every tool also syncs on demand, so results are never stale even when `last_synced_at` looks a moment behind. |
+| `archy_duplicates` | Cluster functions with identical normalized body shape into two tiers: `duplicates` (likely-real, investigate) and `variants` (demoted same-class / boilerplate, likely intentional, each with a `variant_reason`). `response_format="summary"` (**default**) returns ranking fields + one sample member per cluster; `"full"` returns member lists. Advisory surfacer, not a score axis: refactorability is a semantic call, so ~50% primary-tier precision is expected (see [`docs/research/RESEARCH_METRICS.md`](docs/research/RESEARCH_METRICS.md) §12c). `min_nodes` (default 30) skips trivial stubs. |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
@@ -428,7 +429,7 @@ Next up (validated, queued, not yet started):
 - **Per-module score breakdown** so an agent can ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
 - **Change coupling (temporal coupling)**: rank module *pairs* that frequently change together in git history but share no import or call edge (a hidden dependency the structural graph can't see). Same Tornhill / CodeScene lineage as `archy_hotspots`; needs an empirical-validation pass first (co-change is noisy).
 - **Opt-in agent hooks (`archy install --hooks`)**: register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, ...) that runs the archy gate automatically after edits, so the loop fires whether or not the agent remembers to call the tools. Spec: [`docs/SPEC_INSTALL_HOOKS.md`](docs/SPEC_INSTALL_HOOKS.md).
-- **Static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Advisory, not a score axis. (Duplicate-function detection has shipped as the `archy duplicates` CLI command: a two-tier surfacer with a primary "likely duplicate" list and a demoted "same-class / boilerplate variant" list. A literature review confirmed ~50% refactorability precision is the expected ceiling for any similarity-only detector, so the semantic call is left to the agent; change-history co-change is the precision layer, planned with change-coupling [#131](https://github.com/hslee16/archy/issues/131). The `archy_duplicates` MCP tool follows.)
+- **Static fragility proxy** (high-instability x high-fan-in) as a git-free hotspot stand-in. Advisory, not a score axis. (Duplicate-function detection has shipped as the `archy duplicates` CLI command: a two-tier surfacer with a primary "likely duplicate" list and a demoted "same-class / boilerplate variant" list. A literature review confirmed ~50% refactorability precision is the expected ceiling for any similarity-only detector, so the semantic call is left to the agent; change-history co-change is the precision layer, planned with change-coupling [#131](https://github.com/hslee16/archy/issues/131). Exposed on both the CLI (`archy duplicates`) and MCP (`archy_duplicates`, the 14th tool).)
 
 Shipped:
 
