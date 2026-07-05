@@ -395,8 +395,7 @@ edited X; historically Y co-changes with no import edge, check Y" - opt-in and
 source-only, the only path that makes `archy_impact` read git. This is also the
 **principled precision lever for duplicate detection** (§12c/§12d): a duplicate
 cluster whose members co-change is refactorable, one that never co-changes is
-benign - consuming this signal in `archy duplicates` is the remaining queued
-follow-up.
+benign - `archy duplicates` now consumes it (`demote_independent`, §12f).
 
 ---
 
@@ -742,12 +741,12 @@ body. Kapser & Godfrey's canonical *harmful* example was a same-scope one-consta
 paste that later co-changed 4x - co-change is the tiebreaker `same_class` lacks.
 archy is uniquely placed to add it: it already mines git churn (`hotspots`), and
 change-coupling has **shipped** as `archy coupling` (#131, §7a). Refactorable-duplication
-and change-coupling are the same signal; consuming the co-change signal as a
-duplicate-precision layer (demote clusters whose members never co-change) is the
-queued follow-up (#242), not the coupling feature itself. Until that consumption
-lands, the two-tier split is the honest surface and the calling agent (archy is an
-MCP tool used *with* an LLM) is the semantic judge - "judge, not librarian."
-Re-validation raw data: `bench/duplicates_results.md`.
+and change-coupling are the same signal; `archy duplicates` now consumes it as a
+duplicate-precision layer (`demote_independent` demotes clusters whose copies
+never co-change, #242, §12f). The two-tier split plus that demotion is the honest
+surface and the calling agent (archy is an MCP tool used *with* an LLM) is the
+semantic judge - "judge, not librarian." Re-validation raw data:
+`bench/duplicates_results.md`.
 
 ### 12d. The Type-1 (exact) tier: the one static lever that measurably helped (2026-07-04)
 
@@ -829,6 +828,58 @@ demoted clusters, so a byte-identical test clone is flagged as copy-paste even
 while down-ranked. Path-scoping is the cheap stopgap; co-change (#131) is the
 principled version (a deliberate-isolation copy will not co-change), and Type-3
 recall (#246) is the orthogonal recall lever.
+
+### 12f. Co-change demotion: the principled precision lever (2026-07-05, #242)
+
+§12c named the one non-ML signal that breaks the ~50% syntactic ceiling:
+change-history co-change (~94% precision in the Microsoft study). With the
+change-coupling machinery shipped (#131, `git_cochange`), `archy duplicates` now
+consumes it. `demote_independent` runs after the two-tier de-noiser: a primary
+cluster whose copies live in **>=2 actively-maintained files that never
+co-change** is demoted to the variant tier, reason `"independent"` - deliberately
+parallel implementations (per-backend siblings, symmetric methods), not
+refactorable copy-paste. On-by-default when git is available (`--no-co-change` /
+`co_change=false` to skip); `archy duplicates` is an on-demand audit, so the
+git-log cost (negligible under ~1k modules, +13-20s only on 5k-18k-module giants)
+is paid per deliberate scan, not per edit.
+
+**The demotion's own precision - the evidence guard.** Absence of co-change is
+only meaningful when both files change *often enough to have had the chance* to
+move together. So a cluster any of whose files has fewer than `min_evidence` (5)
+focused commits is left primary: a rarely-touched genuine duplicate must not be
+demoted for merely lacking history. Thresholds `min_support 3` / `min_confidence
+0.3` / `min_evidence 5`, calibrated on the bench.
+
+**Whole-repo 29-project sweep** (`bench/duplicates_cochange_sweep.py` ->
+`bench/duplicates_cochange_results.md`): **median 12% of the primary tier
+demoted, 877 clusters total (709 source-only)**, and - the key selectivity
+result - **zero demotion on repos without the benign-parallel class** (click
+8->8, flask 7->7, fastapi 68->68, requests, anyio, msgspec, datasette, mkdocs).
+The demotion concentrates exactly where the FP class lives: django 171->115 (44
+source), pytorch 1278->1036 (152), sklearn 126->92 (30), sqlalchemy 151->120
+(29), pydantic 89->72 (15), home-assistant 1930->1579 (341). fastapi demotes 0
+because its FP class (public-API HTTP-verb expansion) is same-class (already
+demoted by §12b's Phase 1) and co-changes.
+
+**Manual spot-check (the §12c methodology, re-run):** 15 django source-only
+`independent` demotions hand-classified **15/15 genuinely benign** - `_alter_field`
+per-backend schema editors, `get_many` per-backend caches, `_get_post` asgi/wsgi
+handlers, per-field `formfield`/`check`/`deconstruct`, symmetric dunders
+(`__eq__`, `__getstate__`), coincidental `__init__` shape collisions. **Zero real
+refactorable duplicates were wrongly demoted.** Estimated primary-tier precision
+lift on django: removing ~44 benign source clusters from a ~50%-precision tier of
+171 (~85 genuine) leaves ~115 at ~74% - matching the source-only §12d figure, now
+reached by the principled signal rather than a path heuristic.
+
+**Recall caveat (honest).** The evidence guard catches "rarely touched" but not
+"recently forked": a copy created by pasting a sibling that has not *yet*
+co-changed is demoted `independent` even though it is real refactorable
+duplication. Observed live on a private repo (two analysis pipelines,
+`ccr_analysis` / `reserve_study_analysis`, with identical function structure that
+had not co-changed). This is why the demotion is advisory and reversible
+(`--no-co-change`), and the cluster is down-ranked to `variant`, never hidden -
+the reader remains the final judge. Co-change is the strongest *static* precision
+lever, not an oracle.
 
 ---
 
@@ -1577,7 +1628,7 @@ The "Role" column distinguishes:
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
 | Cross-file co-change (logical coupling)   | Medium | High   | **Shipped** as `archy coupling` (advisory pair list; §7a) | ✓ 29-project bench: source-only default, knee at (support 5, confidence 0.5), 15/15 genuine on the spot-check trio | **Shipped** |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
-| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer; §12b-§12e) | ✓ 12-repo/60-cluster validation: ~50% primary-tier precision, ~63% on the exact (Type-1) subset, ~74% on non-test source | **Shipped** |
+| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer + co-change demotion; §12b-§12f) | ✓ 12-repo/60-cluster validation (~50% primary, ~63% exact, ~74% non-test source); co-change demotion 15/15 benign on the django spot-check, ~50%->~74% primary lift | **Shipped** |
 | Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 

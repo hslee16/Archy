@@ -28,9 +28,12 @@ solves the benign-vs-refactorable split - they measure Type-1/2/3 similarity, a
 different question. The one non-ML signal that measurably breaks the ceiling is
 change-history co-change (a cluster whose members co-change consistently is
 refactorable; one that never co-changes is benign, ~94% precision in the
-literature); that is the planned next phase, unified with change-coupling (#131).
-Until then, the two-tier split is the honest surface and the calling agent is the
-semantic judge. See `docs/research/RESEARCH_METRICS.md` section 12c.
+literature). `demote_independent` consumes it (issue #242, via the
+change-coupling machinery from #131): a primary cluster whose copies live in
+actively-maintained files that never co-change is demoted to the `variant` tier
+(reason `"independent"`), lifting primary precision above the syntactic ceiling.
+The calling agent remains the final semantic judge. See
+`docs/research/RESEARCH_METRICS.md` §12c/§12f.
 
 Never folded into `archy score`. Even at ~50% it beats dead-code detection, which
 the same FP discipline rejected outright at ~100% FP.
@@ -43,6 +46,7 @@ from `archy.graph.parse_project` instead.
 
 from __future__ import annotations
 
+from itertools import combinations
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -60,6 +64,16 @@ from archy.parser import ParseResult
 # and co-change history (#131) is the semantic precision layer beyond that.
 DEFAULT_MIN_SIZE = 30
 DEFAULT_MIN_MEMBERS = 2
+
+# Change-coupling demotion thresholds (issue #242), calibrated on the bench.
+# A primary cluster whose copies live in >=2 actively-maintained files that
+# never co-change is deliberately independent (per-backend siblings, symmetric
+# methods) -> demote. `min_evidence` is the guard against demoting a real but
+# rarely-touched duplicate: absence of co-change is only meaningful when both
+# files change often enough to have HAD the chance to move together.
+DEFAULT_COCHANGE_MIN_SUPPORT = 3
+DEFAULT_COCHANGE_MIN_CONFIDENCE = 0.3
+DEFAULT_COCHANGE_MIN_EVIDENCE = 5
 
 
 class DuplicateMember(BaseModel):
@@ -89,13 +103,16 @@ class DuplicateGroup(BaseModel):
     `category` splits the output into two tiers (issue #242): `"duplicate"` is a
     likely-real duplicate; `"variant"` is a likely-intentional cluster demoted by
     the semantic de-noiser, with `variant_reason` naming which signal fired
-    (`overload` / `property` / `vendored` / `test` / `trivial` / `same_class`).
-    `vendored` / `test` are pure-path signals (issue #247): every member sits in a
-    vendoring/isolation dir or a test suite, so the shared body is deliberate
-    isolation or frozen test scaffolding, not refactorable copy-paste. `same_class`
+    (`overload` / `property` / `vendored` / `test` / `trivial` / `same_class` /
+    `independent`). `vendored` / `test` are pure-path signals (issue #247): every
+    member sits in a vendoring/isolation dir or a test suite, so the shared body is
+    deliberate isolation or frozen test scaffolding, not refactorable copy-paste.
+    `independent` is the git co-change signal (issue #242, set by
+    `demote_independent`): the copies live in actively-maintained files that never
+    change together, i.e. deliberately parallel implementations. `same_class`
     is the free structural signal (all members are methods of one class); it is set
     by `compute_duplicates`, while `variant_reason` / `category` are finalized by
-    `classify_variants` (which reads member source and paths).
+    `classify_variants` (source + paths) and then `demote_independent` (git).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -223,6 +240,62 @@ def classify_variants(groups: list[DuplicateGroup]) -> list[DuplicateGroup]:
             )
         )
     return classified
+
+
+def demote_independent(
+    groups: list[DuplicateGroup],
+    *,
+    counts: dict[str, int],
+    pair_support: dict[tuple[str, str], int],
+    min_support: int = DEFAULT_COCHANGE_MIN_SUPPORT,
+    min_confidence: float = DEFAULT_COCHANGE_MIN_CONFIDENCE,
+    min_evidence: int = DEFAULT_COCHANGE_MIN_EVIDENCE,
+) -> list[DuplicateGroup]:
+    """Demote primary clusters whose copies never co-change to the variant tier (#242).
+
+    The one non-ML signal that breaks the ~50% syntactic precision ceiling
+    (RESEARCH_METRICS §12c): a duplicate cluster whose member modules co-change
+    in git is real shared logic drifting together (refactor it); one whose
+    files are actively maintained yet never move together is deliberately
+    independent (per-backend implementations, symmetric methods) - demote it,
+    reason `"independent"`.
+
+    `counts` / `pair_support` come from `coupling.git_cochange` (per-file focused
+    commit counts and per-file-pair co-change support, keyed by sorted resolved
+    path); the dicts are passed raw rather than the `CoChangeData` type to keep
+    this module free of a `coupling` import (coupling already imports
+    `is_test_path` from here). Only re-checks clusters still in the primary tier;
+    an already-demoted cluster keeps its reason. Uninformative cases abstain:
+    a same-file cluster (co-change can't distinguish its members) and a cluster
+    any of whose files is below `min_evidence` commits (too little history to
+    call it independent rather than merely stable).
+    """
+    out: list[DuplicateGroup] = []
+    for group in groups:
+        if group.category != "duplicate":
+            out.append(group)
+            continue
+        distinct = sorted({m.path for m in group.members})
+        if len(distinct) < 2 or any(counts.get(p, 0) < min_evidence for p in distinct):
+            out.append(group)
+            continue
+        # `distinct` is sorted, so `combinations` yields (a, b) with a < b,
+        # matching `pair_support`'s sorted keys. confidence = support / the rarer
+        # file's commit count (same metric as `coupling`, inlined to avoid the
+        # import cycle). One co-changing pair is enough to call the copies coupled.
+        co_changes = any(
+            (support := pair_support.get((a, b), 0)) >= min_support
+            and (denom := min(counts.get(a, 0), counts.get(b, 0))) > 0
+            and support / denom >= min_confidence
+            for a, b in combinations(distinct, 2)
+        )
+        if co_changes:
+            out.append(group)
+        else:
+            out.append(
+                group.model_copy(update={"category": "variant", "variant_reason": "independent"})
+            )
+    return out
 
 
 def _is_exact(feats: list[FunctionFeatures | None]) -> bool:

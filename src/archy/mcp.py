@@ -126,6 +126,7 @@ from archy.duplicates import (
     DuplicateGroup,
     classify_variants,
     compute_duplicates,
+    demote_independent,
     is_test_path,
 )
 from archy.graph import (
@@ -986,19 +987,23 @@ def _register_tools(server: FastMCP) -> None:
             "(identifiers/literals folded to placeholders). Returns two tiers: "
             "`duplicates` (the primary 'likely duplicate' list to investigate) "
             "and `variants` (demoted clusters that are likely intentional: "
-            "same-class siblings, boilerplate, and copies wholly in test suites "
-            "or vendoring/isolation dirs, each carrying a `variant_reason`). Within the "
+            "same-class siblings, boilerplate, copies wholly in test suites or "
+            "vendoring/isolation dirs, and - with `co_change` (the DEFAULT) - "
+            "`independent` copies whose files are actively maintained yet never "
+            "co-change in git, i.e. deliberately parallel implementations; each "
+            "carries a `variant_reason`). Within the "
             "primary tier, `exact=true` marks byte-identical (Type-1) clusters, "
             "the highest-confidence 'definitely refactor these' subset. "
             f"`min_nodes` (default {DEFAULT_MIN_SIZE}) is the minimum normalized "
             "AST-node count, skipping trivial getters/stubs. This is an advisory "
             "SURFACER, never a score axis: refactorability is a semantic call the "
-            "reader (you) makes, so ~50% primary-tier precision is expected and a "
-            "cluster means 'investigate,' not 'provably identical.' "
+            "reader (you) makes, so a cluster means 'investigate,' not 'provably "
+            "identical' (the co-change demotion lifts primary precision above the "
+            "~50% syntactic ceiling by moving benign parallel copies to variants). "
             "`response_format='summary'` (the DEFAULT) returns each cluster's "
             "ranking fields plus one sample member; `response_format='full'` "
-            "returns the complete member lists. An empty `duplicates` with a "
-            "`note` is a real answer."
+            "returns the complete member lists. `co_change=false` skips the git "
+            "pass. An empty `duplicates` with a `note` is a real answer."
         ),
     )
     def archy_duplicates(
@@ -1007,6 +1012,7 @@ def _register_tools(server: FastMCP) -> None:
         min_nodes: int = DEFAULT_MIN_SIZE,
         top_n: int = 20,
         members: int = 2,
+        co_change: bool = True,
     ) -> DuplicatesPayload:
         return _run_duplicates(
             Path(path),
@@ -1014,6 +1020,7 @@ def _register_tools(server: FastMCP) -> None:
             min_nodes=min_nodes,
             top_n=top_n,
             members=members,
+            co_change=co_change,
         )
 
     @server.tool(
@@ -1599,12 +1606,15 @@ def _run_duplicates(
     min_nodes: int,
     top_n: int,
     members: int,
+    co_change: bool = True,
 ) -> DuplicatesPayload:
     """Two-tier duplicate clusters for archy_duplicates.
 
     Reads per-function rows via the function-grained warm path (`parse_map`),
     classifies clusters into the primary/variant tiers, and shapes each tier by
-    `response_format` (a per-cluster summary vs the full member lists).
+    `response_format` (a per-cluster summary vs the full member lists). When
+    `co_change` and git history is available, demotes primary clusters whose
+    copies never co-change (issue #242); best-effort (no git -> unchanged).
     """
     _validate_response_format(response_format)
     if min_nodes < 1:
@@ -1618,6 +1628,12 @@ def _run_duplicates(
     rows = classify_variants(
         compute_duplicates(modules, results, min_size=min_nodes, min_members=members)
     )
+    if co_change:
+        cochange = git_cochange(path, keep_paths=frozenset(str(m.path) for m in modules))
+        if cochange is not None:
+            rows = demote_independent(
+                rows, counts=cochange.counts, pair_support=cochange.pair_support
+            )
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
 
@@ -1635,8 +1651,8 @@ def _run_duplicates(
         )
         if variants:
             note += (
-                f" ({len(variants)} same-class/boilerplate variant(s) were found "
-                "but demoted as likely intentional.)"
+                f" ({len(variants)} likely-intentional variant(s) were found but demoted: "
+                "same-class / boilerplate / test / vendored / independent.)"
             )
     return DuplicatesPayload(
         min_nodes=min_nodes,
