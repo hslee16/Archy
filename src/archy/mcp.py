@@ -94,6 +94,13 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
 from archy.contracts import ContractCheck
+from archy.coupling import (
+    DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_MIN_SUPPORT,
+    co_changed_with,
+    git_cochange,
+    internal_module_paths,
+)
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     DiffReport,
@@ -119,6 +126,7 @@ from archy.duplicates import (
     DuplicateGroup,
     classify_variants,
     compute_duplicates,
+    is_test_path,
 )
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
@@ -740,7 +748,14 @@ def _register_tools(server: FastMCP) -> None:
             "thousands of nodes. Test detection uses pytest conventions "
             "(test_*.py, *_test.py, files under tests/) unless `test_filter` "
             "overrides with a recursive glob. Files that resolve to no module "
-            "are returned in `unresolved`; internal modules only."
+            "are returned in `unresolved`; internal modules only. "
+            "`co_change=true` (blast mode only, opt-in) adds a `co_changed` list: "
+            "modules that historically co-change with the edited set in git but "
+            "have NO import/call edge to it, so the structural blast radius above "
+            "misses them (the behavioral complement, `archy coupling` scoped to "
+            "your edit - 'you changed X; historically Y changes with it, check "
+            "Y'). Source-only and best-effort (empty without git); the only path "
+            "that makes this tool read git history."
         ),
     )
     def archy_impact(
@@ -750,6 +765,7 @@ def _register_tools(server: FastMCP) -> None:
         max_chains: int = DEFAULT_MAX_CHAINS,
         depth: int = DEFAULT_DEPTH,
         test_filter: str | None = None,
+        co_change: bool = False,
     ) -> Impact | Affected:
         _validate_impact_mode(mode)
         resolved = [Path(f) for f in files]
@@ -760,7 +776,7 @@ def _register_tools(server: FastMCP) -> None:
                 depth=depth,
                 test_filter=test_filter,
             )
-        return _run_impact(Path(path), files=resolved, max_chains=max_chains)
+        return _run_impact(Path(path), files=resolved, max_chains=max_chains, co_change=co_change)
 
     # removed v0.36 (#227): archy_affected folded into archy_impact(mode='affected').
 
@@ -1233,9 +1249,35 @@ def _resolve_against(path: Path, files: list[Path]) -> list[Path]:
     return [path / f if not f.is_absolute() else f for f in files]
 
 
-def _run_impact(path: Path, *, files: list[Path], max_chains: int = DEFAULT_MAX_CHAINS) -> Impact:
+def _run_impact(
+    path: Path,
+    *,
+    files: list[Path],
+    max_chains: int = DEFAULT_MAX_CHAINS,
+    co_change: bool = False,
+) -> Impact:
     graph = _load_graph(path, internal_only=True)
-    return find_impact(graph, _resolve_against(path, files), max_chains=max_chains)
+    result = find_impact(graph, _resolve_against(path, files), max_chains=max_chains)
+    if not co_change or not result.changed:
+        return result
+    # Opt-in behavioral overlay: surface modules that co-change with the edited
+    # set but have no structural edge (so the blast radius above missed them).
+    # Source-only (test co-change is mostly the module's own test) and best-effort
+    # (no git -> empty). Exclude modules already in `impacted` - the point is the
+    # HIDDEN dependents. This is the only path that makes archy_impact touch git.
+    source_paths = frozenset(p for p in internal_module_paths(graph) if not is_test_path(p))
+    cochange = git_cochange(path, keep_paths=source_paths)
+    if cochange is None:
+        return result
+    hints = co_changed_with(
+        graph,
+        cochange,
+        targets=frozenset(result.changed),
+        exclude=frozenset(result.impacted),
+        min_support=DEFAULT_MIN_SUPPORT,
+        min_confidence=DEFAULT_MIN_CONFIDENCE,
+    )
+    return result.model_copy(update={"co_changed": tuple(hints)})
 
 
 def _run_affected(
