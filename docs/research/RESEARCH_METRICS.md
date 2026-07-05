@@ -881,6 +881,41 @@ had not co-changed). This is why the demotion is advisory and reversible
 the reader remains the final judge. Co-change is the strongest *static* precision
 lever, not an oracle.
 
+### 12g. Recall by clone type: the Type-3 cliff (2026-07-05, #246 motivation)
+
+§12b-§12f are all about *precision* (which surfaced clusters are genuine). The
+other axis is **recall** - of the duplicates that exist, how many does the
+detector find? There is no labelled duplicate corpus in the bench, so recall was
+measured by **synthetic clone injection** (the controlled complement to a labelled
+benchmark): 120 real functions from django + fastapi (size >= 35) were each mutated
+into known clone types, and recovery = the clone shares the seed's `shape_hash` at
+min-nodes 30 (exactly what `compute_duplicates` clusters on).
+`bench/duplicates_recall_experiment.py`:
+
+| clone type | recall |
+| --- | ---: |
+| Type-1 (byte-identical copy) | **100%** (120/120) |
+| Type-2 (identifiers renamed, literals changed) | **100%** (120/120) |
+| Type-3: insert one statement | **0%** (0/120) |
+| Type-3: delete one statement | **0%** (0/79) |
+| Type-3: reorder two statements | **1%** (1/105) |
+| Type-3: flip one operator (`+`/`-`) | **0%** (0/14) |
+
+The result is the theory made concrete. **Type-1/2 recall is total** - the shape
+hash folds identifiers and literals to placeholders, so a byte-identical or
+parameterized copy always clusters (the detector is *complete* for these). **Type-3
+recall is ~0%** - the hash is exact, so *any* gap moves it: inserting or deleting a
+single statement, or flipping one `+` to `-`, drops the clone off the radar
+entirely. The lone reorder hit (1/105) is two same-typed statements whose swap
+left the node stream unchanged. So overall recall on real code is bounded by the
+clone-type mix, and Type-3 (gapped) clones are the *plurality* of real clones
+(~52% mean on BigCloneBench; Bellon et al.) - meaning the exact detector
+structurally cannot find roughly half the duplicates that exist. This is the
+empirical case for a Type-3-tolerant primitive (token-multiset overlap / MinHash,
+SourcererCC-style), tracked in #246; the full honest picture today is **~74%
+source precision, 100% Type-1/2 recall, ~0% Type-3 recall** - a high-precision,
+partial-recall surfacer.
+
 ---
 
 ## 13. Type-hint coverage (Python-specific)
@@ -1628,7 +1663,7 @@ The "Role" column distinguishes:
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
 | Cross-file co-change (logical coupling)   | Medium | High   | **Shipped** as `archy coupling` (advisory pair list; §7a) | ✓ 29-project bench: source-only default, knee at (support 5, confidence 0.5), 15/15 genuine on the spot-check trio | **Shipped** |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
-| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer + co-change demotion; §12b-§12f) | ✓ 12-repo/60-cluster validation (~50% primary, ~63% exact, ~74% non-test source); co-change demotion 15/15 benign on the django spot-check, ~50%->~74% primary lift | **Shipped** |
+| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer + co-change demotion; §12b-§12g) | ✓ ~74% source precision (co-change demotion 15/15 benign on the django spot-check, ~50%->~74% lift); recall 100% Type-1/2, ~0% Type-3 by injection (§12g) -> #246 | **Shipped** |
 | Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 
