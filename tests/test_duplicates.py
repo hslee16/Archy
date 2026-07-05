@@ -13,15 +13,18 @@ from archy.complexity import (
     FunctionComplexity,
     compute_function_complexity,
     extract_function_features,
+    extract_token_bags,
 )
 from archy.duplicates import (
     DEFAULT_MIN_SIZE,
     DuplicateGroup,
     DuplicateMember,
     _is_vendored_path,
+    _jaccard,
     _same_class,
     classify_variants,
     compute_duplicates,
+    compute_near_duplicates,
     demote_independent,
     is_test_path,
 )
@@ -662,3 +665,102 @@ def test_cli_duplicates_co_change_on_non_git_is_noop(tmp_path: Path):
     )
     assert result.exit_code == 0, result.output
     assert _json.loads(result.output)["total"] == 1  # unchanged from git-free behavior
+
+
+# --------------------------------------------------------------------------- #
+# Type-3 near-miss: token-multiset overlap (#246)
+# --------------------------------------------------------------------------- #
+
+
+def test_jaccard_multiset_math():
+    from collections import Counter
+
+    assert _jaccard(Counter("aabbc"), Counter("aabbc")) == 1.0
+    # inter = min per token = a:2,b:1 -> 3; union = max = a:2,b:2,c:1 -> 5
+    assert _jaccard(Counter("aab"), Counter("abbc")) == pytest.approx(2 / 5)
+    assert _jaccard(Counter(), Counter()) == 0.0
+
+
+def test_extract_token_bags_folds_like_shape_hash():
+    # A rename + literal change (Type-2) must yield the IDENTICAL bag: the bag
+    # reuses shape-hash's identifier/literal folding.
+    seed = b"def f(xs):\n    t = 0\n    for x in xs:\n        t = t + x\n    return t\n"
+    t2 = b"def g(ys):\n    s = 9\n    for y in ys:\n        s = s + y\n    return s\n"
+    assert extract_token_bags(seed)[1] == extract_token_bags(t2)[1]
+
+
+_NEAR_BODY = (
+    "def {n}(items):\n"
+    "    total = 0\n"
+    "    kept = []\n"
+    "    for it in items:\n"
+    "        if it > 0:\n"
+    "            total = total + it\n"
+    "            kept.append(it)\n"
+    "    return total, kept\n"
+)
+
+
+def test_near_miss_clusters_gapped_clone(tmp_path: Path):
+    pkg = _make_pkg(tmp_path)
+    (pkg / "a.py").write_text(_NEAR_BODY.format(n="alpha"))
+    # beta = alpha + one inserted statement -> different shape_hash (Type-3).
+    (pkg / "b.py").write_text(
+        _NEAR_BODY.format(n="beta").replace("    kept = []\n", "    kept = []\n    seen = set()\n")
+    )
+    modules, results = parse_project(tmp_path)
+    assert compute_duplicates(modules, results, min_size=10) == []  # shapes differ
+    near = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8)
+    assert len(near) == 1
+    g = near[0]
+    assert g.category == "near_miss"
+    assert g.similarity is not None and g.similarity >= 0.8
+    assert {m.qualified_name for m in g.members} == {"alpha", "beta"}
+
+
+def test_near_miss_excludes_unrelated(tmp_path: Path):
+    pkg = _make_pkg(tmp_path)
+    (pkg / "a.py").write_text(_NEAR_BODY.format(n="alpha"))
+    (pkg / "b.py").write_text(
+        "def gamma(text):\n"
+        "    parts = text.split(',')\n"
+        "    out = {}\n"
+        "    for p in parts:\n"
+        "        k, v = p.split('=')\n"
+        "        out[k] = v.strip()\n"
+        "    return out\n"
+    )
+    modules, results = parse_project(tmp_path)
+    assert compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8) == []
+
+
+def test_near_miss_excludes_exact_clustered(tmp_path: Path):
+    # Two byte-identical bodies share a shape_hash (an exact cluster), so they
+    # are NOT singletons -> the near-miss pass leaves them to the exact tier.
+    pkg = _make_pkg(tmp_path)
+    (pkg / "a.py").write_text(_NEAR_BODY.format(n="alpha"))
+    (pkg / "b.py").write_text(_NEAR_BODY.format(n="beta"))
+    modules, results = parse_project(tmp_path)
+    assert len(compute_duplicates(modules, results, min_size=10)) == 1  # exact cluster
+    assert compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8) == []
+
+
+def test_cli_duplicates_near_miss_json(tmp_path: Path):
+    pkg = _make_pkg(tmp_path)
+    (pkg / "a.py").write_text(_NEAR_BODY.format(n="alpha"))
+    (pkg / "b.py").write_text(
+        _NEAR_BODY.format(n="beta").replace("    kept = []\n", "    kept = []\n    seen = set()\n")
+    )
+    result = CliRunner().invoke(
+        main,
+        ["duplicates", str(tmp_path), "--min-nodes", "10", "--near-miss", "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.output)
+    assert payload["near_total"] == 1
+    assert payload["near_miss"][0]["category"] == "near_miss"
+    # Off by default: no --near-miss key populated.
+    off = CliRunner().invoke(
+        main, ["duplicates", str(tmp_path), "--min-nodes", "10", "--format", "json"]
+    )
+    assert _json.loads(off.output)["near_total"] == 0

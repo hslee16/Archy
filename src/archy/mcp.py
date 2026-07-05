@@ -126,6 +126,7 @@ from archy.duplicates import (
     DuplicateGroup,
     classify_variants,
     compute_duplicates,
+    compute_near_duplicates,
     demote_independent,
     is_test_path,
 )
@@ -556,20 +557,23 @@ class DuplicateGroupSummary(BaseModel):
     category: str
     variant_reason: str | None
     exact: bool
+    similarity: float | None
     sample: str
 
 
 class DuplicatesPayload(BaseModel):
-    """Two-tier duplicate-cluster result (issue #133/#242).
+    """Two-tier duplicate-cluster result (issue #133/#242), plus an optional
+    Type-3 tier (#246).
 
     `duplicates` is the primary "likely duplicate" tier (investigate these);
     `variants` is the demoted "likely-intentional" tier (same-class siblings,
-    boilerplate, and test/vendored copies - see `variant_reason`). `total` /
-    `variant_total` count each tier; `shown` is how many
-    of the primary tier are returned (capped by `top_n`). An empty `duplicates`
-    with a `note` is a real answer. Advisory only, never a score axis;
-    refactorability is a semantic call, so ~50% precision is expected (see the
-    tool description).
+    boilerplate, and test/vendored/independent copies - see `variant_reason`).
+    `near_miss` is the opt-in (`co_change` unrelated; `near_miss=True`) Type-3
+    tier: gapped clones found by token overlap, each with a `similarity`, LOWER
+    confidence. `total` / `variant_total` / `near_total` count each tier; `shown`
+    is how many of the primary tier are returned (capped by `top_n`). An empty
+    `duplicates` with a `note` is a real answer. Advisory only, never a score
+    axis; refactorability is a semantic call (see the tool description).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -578,10 +582,12 @@ class DuplicatesPayload(BaseModel):
     total: int
     exact_total: int
     variant_total: int
+    near_total: int
     shown: int
     duplicated_functions: int
     duplicates: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
     variants: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
+    near_miss: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
     note: str | None
 
 
@@ -1000,6 +1006,11 @@ def _register_tools(server: FastMCP) -> None:
             "reader (you) makes, so a cluster means 'investigate,' not 'provably "
             "identical' (the co-change demotion lifts primary precision above the "
             "~50% syntactic ceiling by moving benign parallel copies to variants). "
+            "`near_miss=true` (opt-in, slower) adds a `near_miss` tier: Type-3 "
+            "(gapped) clones - a copy with statements inserted/removed that the "
+            "exact shape-hash cannot see - found by token-multiset overlap, each "
+            "with a `similarity`. LOWER confidence than the shape tiers; use it "
+            "for recall (the exact hash finds ~0% of Type-3). "
             "`response_format='summary'` (the DEFAULT) returns each cluster's "
             "ranking fields plus one sample member; `response_format='full'` "
             "returns the complete member lists. `co_change=false` skips the git "
@@ -1013,6 +1024,7 @@ def _register_tools(server: FastMCP) -> None:
         top_n: int = 20,
         members: int = 2,
         co_change: bool = True,
+        near_miss: bool = False,
     ) -> DuplicatesPayload:
         return _run_duplicates(
             Path(path),
@@ -1021,6 +1033,7 @@ def _register_tools(server: FastMCP) -> None:
             top_n=top_n,
             members=members,
             co_change=co_change,
+            near_miss=near_miss,
         )
 
     @server.tool(
@@ -1595,6 +1608,7 @@ def _summarize_duplicate_group(group: DuplicateGroup) -> DuplicateGroupSummary:
         category=group.category,
         variant_reason=group.variant_reason,
         exact=group.exact,
+        similarity=group.similarity,
         sample=f"{first.module}:{first.line} {first.qualified_name}",
     )
 
@@ -1607,6 +1621,7 @@ def _run_duplicates(
     top_n: int,
     members: int,
     co_change: bool = True,
+    near_miss: bool = False,
 ) -> DuplicatesPayload:
     """Two-tier duplicate clusters for archy_duplicates.
 
@@ -1614,7 +1629,8 @@ def _run_duplicates(
     classifies clusters into the primary/variant tiers, and shapes each tier by
     `response_format` (a per-cluster summary vs the full member lists). When
     `co_change` and git history is available, demotes primary clusters whose
-    copies never co-change (issue #242); best-effort (no git -> unchanged).
+    copies never co-change (issue #242); best-effort (no git -> unchanged). When
+    `near_miss`, adds a lower-confidence Type-3 tier via token overlap (#246).
     """
     _validate_response_format(response_format)
     if min_nodes < 1:
@@ -1634,6 +1650,7 @@ def _run_duplicates(
             rows = demote_independent(
                 rows, counts=cochange.counts, pair_support=cochange.pair_support
             )
+    near = compute_near_duplicates(modules, results, min_size=min_nodes) if near_miss else []
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
 
@@ -1659,10 +1676,12 @@ def _run_duplicates(
         total=len(dups),
         exact_total=sum(1 for g in dups if g.exact),
         variant_total=len(variants),
+        near_total=len(near),
         shown=min(top_n, len(dups)),
         duplicated_functions=sum(g.member_count for g in dups),
         duplicates=shape(dups),
         variants=shape(variants),
+        near_miss=shape(near),
         note=note,
     )
 
