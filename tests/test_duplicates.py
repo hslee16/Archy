@@ -17,11 +17,11 @@ from archy.duplicates import (
     DEFAULT_MIN_SIZE,
     DuplicateGroup,
     DuplicateMember,
-    _is_test_path,
     _is_vendored_path,
     _same_class,
     classify_variants,
     compute_duplicates,
+    is_test_path,
 )
 from archy.graph import Module, parse_project
 from archy.parser import ParseResult
@@ -268,7 +268,7 @@ def test_classify_variants_unreadable_member_abstains(tmp_path: Path):
     ],
 )
 def test_is_test_path_true(path: str):
-    assert _is_test_path(path) is True
+    assert is_test_path(path) is True
 
 
 @pytest.mark.parametrize(
@@ -281,7 +281,7 @@ def test_is_test_path_true(path: str):
     ],
 )
 def test_is_test_path_false(path: str):
-    assert _is_test_path(path) is False
+    assert is_test_path(path) is False
 
 
 @pytest.mark.parametrize(

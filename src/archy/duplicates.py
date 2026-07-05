@@ -247,7 +247,7 @@ _VENDOR_SEGMENTS = frozenset(
     {"_vendor", "vendored", "third_party", "site-packages", "module_utils"}
 )
 # Conventional pytest/unittest suite-directory names. Per-file markers
-# (conftest.py, test_*.py, *_test.py) are matched separately in _is_test_path,
+# (conftest.py, test_*.py, *_test.py) are matched separately in is_test_path,
 # so this set only needs the directory-level convention, not every test file.
 _TEST_DIR_SEGMENTS = frozenset({"tests", "test"})
 
@@ -257,8 +257,12 @@ def _is_vendored_path(path: str) -> bool:
     return any(seg in _VENDOR_SEGMENTS for seg in Path(path).parts)
 
 
-def _is_test_path(path: str) -> bool:
+def is_test_path(path: str) -> bool:
     """True when the file is test code, by basename convention or a test dir.
+
+    Public because change-coupling (#131) reuses it to default `archy coupling`
+    to source-only (test co-change is mostly a test tracking the module it
+    covers, which buries the source-to-source hidden coupling that matters).
 
     Parallel/legacy test suites produce byte-identical bodies by design (numpy's
     frozen `test_random.py` vs `test_randomstate.py`, per-module compliance
@@ -299,7 +303,7 @@ def _variant_reason(group: DuplicateGroup, feats: list[FunctionFeatures | None])
         return "property"
     if all(_is_vendored_path(m.path) for m in group.members):
         return "vendored"
-    if all(_is_test_path(m.path) for m in group.members):
+    if all(is_test_path(m.path) for m in group.members):
         return "test"
     if present and all(f.is_trivial for f in present):
         return "trivial"
