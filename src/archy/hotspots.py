@@ -43,6 +43,8 @@ from pathlib import Path
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from archy.gitlog import fold_rename, normalize_py_path, resolve_repo_root
+
 
 class Hotspot(BaseModel):
     """A single file's hotspot row: module qualname, file path, the two
@@ -73,21 +75,9 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
     that matches no live graph node, systematically under-ranking exactly
     the files that have been reorganized.
     """
-    try:
-        top_proc = subprocess.run(
-            ["git", "-C", str(root), "rev-parse", "--show-toplevel"],
-            capture_output=True,
-            text=True,
-            # `surrogateescape` round-trips non-UTF8 path bytes instead of
-            # raising: git's default `core.quotePath` already ASCII-escapes
-            # them, but a repo with `core.quotePath=false` would otherwise
-            # crash the decode and break the documented "return None" contract.
-            errors="surrogateescape",
-            check=True,
-        )
-    except (FileNotFoundError, subprocess.CalledProcessError):
+    repo_root = resolve_repo_root(root)
+    if repo_root is None:
         return None
-    repo_root = Path(top_proc.stdout.strip())
 
     # `-M` forces rename detection regardless of the user's `diff.renames`
     # config so the `R` lines we rely on are always present.
@@ -103,7 +93,10 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
 
     raw_counts: Counter[str] = Counter()
     renames: dict[str, str] = {}
-    for line in log_proc.stdout.splitlines():
+    # Split on "\n" only, not str.splitlines() (which also breaks on U+2028/
+    # U+0085/etc.): git delimits with "\n", so an exotic byte in a path must
+    # not be treated as a line boundary. Matches `coupling.git_cochange`.
+    for line in log_proc.stdout.split("\n"):
         if not line:
             continue  # `--format=` leaves a blank line between commits
         parts = line.split("\t")
@@ -120,23 +113,12 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
         elif len(parts) >= 2:
             raw_counts[parts[1]] += 1
 
-    def _final_path(path: str) -> str:
-        seen = {path}
-        while path in renames:
-            path = renames[path]
-            if path in seen:  # defensive: never loop on a pathological chain
-                break
-            seen.add(path)
-        return path
-
     counts: Counter[str] = Counter()
     for path, n in raw_counts.items():
-        final = _final_path(path)
-        if not final.endswith(".py"):
+        normalized = normalize_py_path(repo_root, fold_rename(renames, path))
+        if normalized is None:
             continue
-        # `resolve()` here normalizes against symlinks and `..` segments,
-        # matching what `parse_file` / graph node `path` produce upstream.
-        counts[str((repo_root / final).resolve())] += n
+        counts[normalized] += n
     return dict(counts)
 
 

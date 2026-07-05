@@ -18,6 +18,14 @@ from archy.contracts import (
     ContractsResult,
     run_contracts,
 )
+from archy.coupling import (
+    DEFAULT_MIN_CONFIDENCE,
+    DEFAULT_MIN_SUPPORT,
+    CouplingPair,
+    compute_coupling,
+    git_cochange,
+    internal_module_paths,
+)
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     DiffReport,
@@ -29,7 +37,12 @@ from archy.diff import (
     write_snapshot,
 )
 from archy.diff_summary import summarize_diff
-from archy.duplicates import DuplicateGroup, classify_variants, compute_duplicates
+from archy.duplicates import (
+    DuplicateGroup,
+    classify_variants,
+    compute_duplicates,
+    is_test_path,
+)
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -561,6 +574,97 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_hotspots_to_text(rows, top_n=top_n, since=since))
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Maximum coupled pairs to show.",
+)
+@click.option(
+    "--since",
+    default=None,
+    help="Restrict history to commits since this date or refspec (passed to `git log --since`).",
+)
+@click.option(
+    "--min-support",
+    type=int,
+    default=DEFAULT_MIN_SUPPORT,
+    show_default=True,
+    help="Minimum focused commits touching both modules for a pair to count.",
+)
+@click.option(
+    "--min-confidence",
+    type=float,
+    default=DEFAULT_MIN_CONFIDENCE,
+    show_default=True,
+    help="Minimum coupling strength (co-change commits / the rarer module's commits).",
+)
+@click.option(
+    "--include-tests",
+    is_flag=True,
+    default=False,
+    help="Include test modules (default: source-only; test co-change is mostly noise).",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def coupling(
+    path: Path,
+    top_n: int,
+    since: str | None,
+    min_support: int,
+    min_confidence: float,
+    include_tests: bool,
+    fmt: str,
+) -> None:
+    """Rank module pairs that co-change in git history but share no import/call edge.
+
+    Behavioral (temporal) coupling the structural graph can't see: two modules
+    that keep changing together yet have no edge between them signal a hidden
+    dependency or a missing abstraction. Strength is `confidence = co-change
+    commits / the rarer module's commits`; sweeping (bulk) commits are
+    normalized away internally so they don't couple everything they touch.
+    Test modules are excluded by default (a test co-changing with the module it
+    covers is expected, and on test-heavy repos it buries the source-to-source
+    couplings that matter); pass `--include-tests` to keep them. Advisory only
+    (never changes `archy score`); a pair means "check the other when you touch
+    one," not "these must be merged." Needs git history.
+    """
+    if top_n < 1:
+        raise click.ClickException(f"--top must be >= 1; got {top_n}")
+    if min_support < 1:
+        raise click.ClickException(f"--min-support must be >= 1; got {min_support}")
+    if not 0.0 < min_confidence <= 1.0:
+        raise click.ClickException(f"--min-confidence must be in (0, 1]; got {min_confidence}")
+    g = _load_graph(path, internal_only=True)
+    module_paths = internal_module_paths(g)
+    keep = frozenset(p for p in module_paths if include_tests or not is_test_path(p))
+    cochange = git_cochange(path, since=since, keep_paths=keep)
+    if cochange is None:
+        raise click.ClickException(
+            f"{path} is not inside a git repository, has no commit history, or git "
+            "is unavailable; `archy coupling` needs git history to compute co-change."
+        )
+    rows = compute_coupling(g, cochange, min_support=min_support, min_confidence=min_confidence)
+    if fmt == "json":
+        payload = _coupling_to_dict(rows, top_n=top_n, since=since, min_support=min_support)
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        click.echo(_coupling_to_text(rows, top_n=top_n, since=since, min_support=min_support))
 
 
 @main.command()
@@ -1752,6 +1856,51 @@ def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> 
     lines = [header, "", "  score  churn  cc_sum  module"]
     for r in shown:
         lines.append(f"  {r.score:>5}  {r.churn:>5}  {r.cc_sum:>6}  {r.module}")
+    return "\n".join(lines)
+
+
+def _coupling_note(rows: list[CouplingPair], *, min_support: int, since: str | None) -> str | None:
+    """Machine-readable explanation for the empty case (mirrors _refactor_note).
+
+    An empty list is a real answer: either the history is too short to clear
+    `--min-support`, or every co-changing pair already has a structural edge (so
+    the graph already captures it). Say which lever to relax rather than imply
+    the project has no coupling."""
+    if rows:
+        return None
+    suffix = f" since {since}" if since else ""
+    return (
+        f"No structurally-unconnected module pairs co-change above the thresholds{suffix}. "
+        "Lower --min-support / --min-confidence to widen, or the graph already "
+        "captures the coupling as import/call edges."
+    )
+
+
+def _coupling_to_dict(
+    rows: list[CouplingPair], *, top_n: int, since: str | None, min_support: int
+) -> dict:
+    return {
+        "since": since,
+        "min_support": min_support,
+        "total": len(rows),
+        "shown": min(top_n, len(rows)),
+        "pairs": [r.model_dump() for r in rows[:top_n]],
+        "note": _coupling_note(rows, min_support=min_support, since=since),
+    }
+
+
+def _coupling_to_text(
+    rows: list[CouplingPair], *, top_n: int, since: str | None, min_support: int
+) -> str:
+    if not rows:
+        return f"# {_coupling_note(rows, min_support=min_support, since=since)}"
+    shown = rows[:top_n]
+    header = f"# {len(rows)} hidden-coupling pair(s); showing top {len(shown)}"
+    if since:
+        header += f" since {since}"
+    lines = [header, "", "  conf  commits  modules (no import/call edge)"]
+    for r in shown:
+        lines.append(f"  {r.confidence:>4.2f}  {r.support:>7}  {r.module_a} <-> {r.module_b}")
     return "\n".join(lines)
 
 

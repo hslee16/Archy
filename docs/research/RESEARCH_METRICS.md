@@ -338,6 +338,60 @@ filters are standard counter-measures.
 **Possible shape:** `archy cochange` as a separate command;
 optionally fold a `logical_coupling_count` into the score breakdown.
 
+### 7a. Shipped: `archy coupling` (2026-07-04, #131)
+
+Shipped as an advisory CLI command `archy coupling` (never a score axis,
+matching the DSM / propagation-cost discipline). It ranks module **pairs** that
+co-change in git history but have **no import/call edge** in either direction -
+the behavioral coupling the structural graph misses. `src/archy/coupling.py`;
+git plumbing shared with `hotspots.git_churn` via `src/archy/gitlog.py`.
+
+**Strength metric.** `confidence = support / min(count_a, count_b)`, the
+CodeScene/Tornhill "degree of coupling": of the commits touching the *rarer* of
+the two modules, the fraction that also touched the other (the most actionable
+framing for "when I touch X, how often must I also touch Y"). Gated by a minimum
+`support` so a 2-of-2 accident cannot reach 100%.
+
+**Two noise defenses, both required (the same FP discipline as §12).**
+1. *Commit-size normalization.* A commit touching more than `max_commit_files`
+   (default 30) `.py` files is a sweep (reformat, mass rename, dependency bump)
+   and is dropped wholesale - it would otherwise mint C(n,2) spurious pairs.
+   Measured on the *whole* commit footprint, before scoping to internal modules,
+   so a 300-file reformat grazing three modules is still discarded.
+2. *A source-only default.* Test modules are excluded unless `--include-tests`.
+
+**Calibration (29-project bench, `bench/coupling_sweep.py` ->
+`bench/coupling_results.md`).** Swept `(min_support, min_confidence)` and
+classified every surfaced pair src<->src / src<->test / test<->test. Two
+findings set the defaults:
+- *Test co-change is ~half the raw volume and mostly noise.* Summed across the
+  corpus at (5, 0.5): src<->src 5566 (46%), src<->test 3384, test<->test 3114.
+  A test co-changing with the module it covers is expected, and on test-heavy
+  repos (django, sqlalchemy, botocore) test pairs *buried* the source pairs in
+  the top-N. Hence source-only by default (reusing `duplicates.is_test_path`,
+  the #247 classifier) - the same "test code dominates and drowns the real
+  signal" lesson as #247, applied to a different diagnostic.
+- *The volume knee is (min_support 5, min_confidence 0.5).* Median source pairs
+  per project fall 120 -> 60 -> **20** -> 8 -> 4 across
+  (3,.3)/(5,.3)/(5,.5)/(8,.5)/(5,.7); 0.5 keeps a manageable ~20 while 0.7 starts
+  dropping genuine mid-strength couplings.
+
+**Precision.** High by construction, and the FP taxonomy differs from
+duplicates: the confidence metric guarantees genuine co-change and the no-edge
+filter guarantees structural disconnection, so every surfaced pair *is* a real
+behavioral coupling. A source-only top-15 hand-check on fastapi / django / mypy
+was 15/15 genuine co-change each; the dominant pattern is
+**parallel-implementation families** (per-backend adapters/clients/cache in
+django, per-scheme security classes in fastapi, the `semanal`/`semanal_pass1`
+two-pass and type-op cluster in mypy) - precisely the "missing shared
+abstraction / hidden dependency" the tool is meant to surface. The
+benign-vs-refactorable call (an intentional parallel family vs a real missing
+abstraction) is the same semantic judgment left to the reader as in §12c;
+co-change is the honest surface for it. This is also the **principled precision
+lever for duplicate detection** (§12c/§12d): a duplicate cluster whose members
+co-change is refactorable, one that never co-changes is benign - consuming this
+signal in `archy duplicates` is the queued follow-up.
+
 ---
 
 ## 8. Hotspots = complexity × churn (Tornhill / CodeScene)
@@ -680,12 +734,14 @@ clone "worth-extracting" at **>94.9% precision** (Microsoft projects); the decis
 signal is whether the members *co-change consistently*, not anything in the clone
 body. Kapser & Godfrey's canonical *harmful* example was a same-scope one-constant
 paste that later co-changed 4x - co-change is the tiebreaker `same_class` lacks.
-archy is uniquely placed to add it: it already mines git churn (`hotspots`) and
-change-coupling is planned as **#131**. Refactorable-duplication and change-coupling
-are the same signal; the co-change precision layer is the next phase, unified with
-#131. Until then the two-tier split is the honest surface and the calling agent
-(archy is an MCP tool used *with* an LLM) is the semantic judge - "judge, not
-librarian." Re-validation raw data: `bench/duplicates_results.md`.
+archy is uniquely placed to add it: it already mines git churn (`hotspots`), and
+change-coupling has **shipped** as `archy coupling` (#131, §7a). Refactorable-duplication
+and change-coupling are the same signal; consuming the co-change signal as a
+duplicate-precision layer (demote clusters whose members never co-change) is the
+queued follow-up (#242), not the coupling feature itself. Until that consumption
+lands, the two-tier split is the honest surface and the calling agent (archy is an
+MCP tool used *with* an LLM) is the semantic judge - "judge, not librarian."
+Re-validation raw data: `bench/duplicates_results.md`.
 
 ### 12d. The Type-1 (exact) tier: the one static lever that measurably helped (2026-07-04)
 
@@ -1513,7 +1569,7 @@ The "Role" column distinguishes:
 | PageRank per module                       | Medium | Low    | Sub-stat (diagnostic) | -              | **Yes**   |
 | Core/periphery size                       | Medium | Trivial| Sub-stat (diagnostic) | -              | **Yes**   |
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
-| Cross-file co-change (logical coupling)   | Medium | High   | Standalone command  | -                | Defer (skip if hotspots ships) |
+| Cross-file co-change (logical coupling)   | Medium | High   | **Shipped** as `archy coupling` (advisory pair list; §7a) | ✓ 29-project bench: source-only default, knee at (support 5, confidence 0.5), 15/15 genuine on the spot-check trio | **Shipped** |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
 | Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer; §12b-§12e) | ✓ 12-repo/60-cluster validation: ~50% primary-tier precision, ~63% on the exact (Type-1) subset, ~74% on non-test source | **Shipped** |
 | Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
@@ -1567,9 +1623,9 @@ additive unless marked **Replace**.
 
 ### Deferred
 
-- **Cross-file co-change** - hotspots covers the high-leverage
-  subset with much less infrastructure (per-file churn vs full
-  co-change matrix). Defer unless a specific use case requires it.
+- ~~**Cross-file co-change**~~ - shipped in v0.38 as `archy coupling`
+  (see §7a). Hotspots covers the high-leverage per-file subset;
+  coupling adds the pairwise, structurally-unconnected view on top.
 - **Reflexion: absences** - evolve `archy.yaml` once users with
   authored architecture documents ask for it.
 - ~~**Duplicate-function detection**~~ - shipped in v0.37 as `archy
