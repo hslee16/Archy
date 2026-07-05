@@ -1515,7 +1515,7 @@ The "Role" column distinguishes:
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
 | Cross-file co-change (logical coupling)   | Medium | High   | Standalone command  | -                | Defer (skip if hotspots ships) |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
-| Redundancy - duplicate functions          | Medium | Medium | Advisory list       | -                | Maybe     |
+| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer; §12b-§12e) | ✓ 12-repo/60-cluster validation: ~50% primary-tier precision, ~63% on the exact (Type-1) subset, ~74% on non-test source | **Shipped** |
 | Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 
@@ -1572,8 +1572,9 @@ additive unless marked **Replace**.
   co-change matrix). Defer unless a specific use case requires it.
 - **Reflexion: absences** - evolve `archy.yaml` once users with
   authored architecture documents ask for it.
-- **Duplicate-function detection** - useful but off-positioning;
-  cede to existing tools unless explicitly requested.
+- ~~**Duplicate-function detection**~~ - shipped in v0.37 as `archy
+  duplicates` / `archy_duplicates` (a two-tier surfacer, not a librarian;
+  see §12b-§12e). No longer deferred.
 
 ---
 

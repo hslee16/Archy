@@ -246,7 +246,9 @@ def _is_exact(feats: list[FunctionFeatures | None]) -> bool:
 _VENDOR_SEGMENTS = frozenset(
     {"_vendor", "vendored", "third_party", "site-packages", "module_utils"}
 )
-# Directory names that mark a file as test code.
+# Conventional pytest/unittest suite-directory names. Per-file markers
+# (conftest.py, test_*.py, *_test.py) are matched separately in _is_test_path,
+# so this set only needs the directory-level convention, not every test file.
 _TEST_DIR_SEGMENTS = frozenset({"tests", "test"})
 
 
