@@ -55,8 +55,10 @@ from __future__ import annotations
 
 import warnings
 from collections import Counter
+from collections.abc import Callable, Iterator
 from itertools import combinations
 from pathlib import Path
+from typing import TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -68,6 +70,8 @@ from archy.complexity import (
 )
 from archy.graph import Module
 from archy.parser import ParseResult
+
+_V = TypeVar("_V")
 
 # 30 is the calibrated shipping default: the FP spot-check (RESEARCH_METRICS.md
 # section 12) showed the trivial-boilerplate false positives (property shims,
@@ -163,6 +167,41 @@ class DuplicateGroup(BaseModel):
     similarity: float | None = None
 
 
+def _read_cached(
+    cache: dict[str, dict[int, _V]], path: str, extract: Callable[[bytes], dict[int, _V]]
+) -> dict[int, _V]:
+    """Memoize `extract(file_bytes)` (a per-def-line map) by path, reading each
+    file at most once across a duplicate pass. A file that cannot be read caches
+    as `{}` so its per-function signals abstain rather than crash. Shared by the
+    source-reading (`classify_variants`) and token-bag (`compute_near_duplicates`)
+    passes."""
+    cached = cache.get(path)
+    if cached is None:
+        try:
+            cached = extract(Path(path).read_bytes())
+        except OSError:
+            cached = {}
+        cache[path] = cached
+    return cached
+
+
+def _sized_functions(
+    modules: list[Module], parse_results: dict[str, ParseResult], min_size: int
+) -> Iterator[tuple[str, str, FunctionComplexity]]:
+    """Yield `(module_qualname, resolved_path, fn)` for each function clearing the
+    size floor with a non-empty shape - the candidate set shared by the exact
+    (`compute_duplicates`) and near-miss (`compute_near_duplicates`) passes. The
+    resolved `path` matches what `git_cochange` / a graph node emit."""
+    path_by_qual = {m.qualname: str(m.path) for m in modules}
+    for qual, result in parse_results.items():
+        path = path_by_qual.get(qual)
+        if path is None:
+            continue
+        for fn in result.functions:
+            if fn.shape_hash and fn.size >= min_size:
+                yield qual, path, fn
+
+
 def compute_duplicates(
     modules: list[Module],
     parse_results: dict[str, ParseResult],
@@ -184,25 +223,18 @@ def compute_duplicates(
     """
     if min_members < 2:
         raise ValueError(f"min_members must be >= 2; got {min_members}")
-    path_by_qual = {m.qualname: str(m.path) for m in modules}
     buckets: dict[str, list[DuplicateMember]] = {}
     size_by_hash: dict[str, int] = {}
-    for qual, result in parse_results.items():
-        path = path_by_qual.get(qual)
-        if path is None:
-            continue
-        for fn in result.functions:
-            if not fn.shape_hash or fn.size < min_size:
-                continue
-            buckets.setdefault(fn.shape_hash, []).append(
-                DuplicateMember(
-                    module=qual,
-                    qualified_name=fn.qualified_name,
-                    path=path,
-                    line=fn.line,
-                )
+    for qual, path, fn in _sized_functions(modules, parse_results, min_size):
+        buckets.setdefault(fn.shape_hash, []).append(
+            DuplicateMember(
+                module=qual,
+                qualified_name=fn.qualified_name,
+                path=path,
+                line=fn.line,
             )
-            size_by_hash[fn.shape_hash] = fn.size
+        )
+        size_by_hash[fn.shape_hash] = fn.size
 
     groups: list[DuplicateGroup] = []
     for shape_hash, members in buckets.items():
@@ -265,18 +297,8 @@ def compute_near_duplicates(
     `max_comparisons` budget bounds giant repos; exceeding it warns rather than
     silently truncating.
     """
-    path_by_qual = {m.qualname: str(m.path) for m in modules}
-    shape_counts: Counter[str] = Counter()
-    sized: list[tuple[str, str, FunctionComplexity]] = []
-    for qual, result in parse_results.items():
-        path = path_by_qual.get(qual)
-        if path is None:
-            continue
-        for fn in result.functions:
-            if not fn.shape_hash or fn.size < min_size:
-                continue
-            shape_counts[fn.shape_hash] += 1
-            sized.append((qual, path, fn))
+    sized = list(_sized_functions(modules, parse_results, min_size))
+    shape_counts: Counter[str] = Counter(fn.shape_hash for _, _, fn in sized)
 
     # Candidates: singleton-shaped functions (exact-hash already surfaces the
     # rest). Attach each one's token bag, re-parsing each file at most once.
@@ -285,14 +307,7 @@ def compute_near_duplicates(
     for qual, path, fn in sized:
         if shape_counts[fn.shape_hash] >= DEFAULT_MIN_MEMBERS:
             continue
-        bags = bags_by_path.get(path)
-        if bags is None:
-            try:
-                bags = extract_token_bags(Path(path).read_bytes())
-            except OSError:
-                bags = {}
-            bags_by_path[path] = bags
-        bag = bags.get(fn.line)
+        bag = _read_cached(bags_by_path, path, extract_token_bags).get(fn.line)
         if bag:
             items.append((qual, path, fn, bag))
 
@@ -342,8 +357,10 @@ def compute_near_duplicates(
         member_set = set(members_idx)
         sims = [w for key, w in edge_weight.items() if key <= member_set]
         similarity = min(sims) if sims else min_similarity
+        # A near-miss group's members differ in size (unlike an exact cluster's
+        # one shared size), so use the median as the representative for ranking.
         sizes = sorted(items[k][2].size for k in members_idx)
-        rep_size = sizes[len(sizes) // 2]  # median member size
+        rep_size = sizes[len(sizes) // 2]
         members = tuple(
             sorted(
                 (
@@ -401,14 +418,7 @@ def classify_variants(groups: list[DuplicateGroup]) -> list[DuplicateGroup]:
     features_by_path: dict[str, dict[int, FunctionFeatures]] = {}
 
     def features_for(path: str) -> dict[int, FunctionFeatures]:
-        cached = features_by_path.get(path)
-        if cached is None:
-            try:
-                cached = extract_function_features(Path(path).read_bytes())
-            except OSError:
-                cached = {}
-            features_by_path[path] = cached
-        return cached
+        return _read_cached(features_by_path, path, extract_function_features)
 
     classified: list[DuplicateGroup] = []
     for group in groups:
