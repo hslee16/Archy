@@ -3,7 +3,9 @@ from __future__ import annotations
 import json as _json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
+from pydantic import BaseModel
 
 from archy.cli import main
 from archy.complexity import (
@@ -19,7 +21,7 @@ from archy.duplicates import (
     classify_variants,
     compute_duplicates,
 )
-from archy.graph import Module
+from archy.graph import Module, parse_project
 from archy.parser import ParseResult
 
 # --------------------------------------------------------------------------- #
@@ -179,8 +181,6 @@ def test_empty_input_yields_no_groups():
 
 
 def test_min_members_below_2_is_rejected():
-    import pytest
-
     with pytest.raises(ValueError, match="min_members must be >= 2"):
         compute_duplicates([], {}, min_members=1)
 
@@ -218,13 +218,14 @@ def test_same_class_false_across_modules():
 def test_classify_variants_overload_reason(tmp_path: Path):
     # @overload stubs cluster by shape but are type surface, not duplication.
     # Precedence: overload wins even though the bodies are also trivial.
+    # The `line=` args on the members below must be the `def` lines: a=3, b=6.
     src = tmp_path / "m.py"
     src.write_text(
-        "from typing import overload\n"  # 1
-        "@overload\n"  # 2
-        "def a(x):\n    return x\n"  # 3-4
-        "@overload\n"  # 5
-        "def b(x):\n    return x\n"  # 6-7
+        "from typing import overload\n"
+        "@overload\n"
+        "def a(x):\n    return x\n"
+        "@overload\n"
+        "def b(x):\n    return x\n"
     )
     members = (
         DuplicateMember(module="m", qualified_name="a", path=str(src), line=3),
@@ -285,11 +286,7 @@ def test_concrete_hash_identical_bodies_match_differ_by_literal_do_not():
 
 
 def test_exact_marks_byte_identical_not_parameterized(tmp_path: Path):
-    from archy.graph import parse_project
-
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    pkg = _make_pkg(tmp_path)
     same = "def {n}(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n"
     (pkg / "a.py").write_text(same.format(n="alpha"))  # byte-identical bodies
     (pkg / "b.py").write_text(same.format(n="beta"))
@@ -317,10 +314,15 @@ def _dup_body(name: str) -> str:
     )
 
 
-def _make_project(root: Path) -> None:
+def _make_pkg(root: Path) -> Path:
     pkg = root / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
+    return pkg
+
+
+def _make_project(root: Path) -> None:
+    pkg = _make_pkg(root)
     (pkg / "a.py").write_text(_dup_body("alpha"))
     (pkg / "b.py").write_text(_dup_body("beta"))  # same shape, different name
 
@@ -368,9 +370,7 @@ def test_cli_duplicates_empty_has_note(tmp_path: Path):
 def _make_variant_project(root: Path) -> None:
     # One class with two shape-equal methods (same-class variant), plus a
     # cross-module real duplicate, so the two tiers are both populated.
-    pkg = root / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    pkg = _make_pkg(root)
     # Non-trivial (a call) so `same_class` is the firing signal, not `trivial`.
     (pkg / "shapes.py").write_text(
         "class Point:\n"
@@ -424,4 +424,4 @@ def test_cli_duplicates_rejects_bad_flags(tmp_path: Path):
 
 def test_cli_duplicates_isinstance_check():
     # Guards the public type name the MCP follow-up (PR2) will import.
-    assert issubclass(DuplicateGroup, __import__("pydantic").BaseModel)
+    assert issubclass(DuplicateGroup, BaseModel)

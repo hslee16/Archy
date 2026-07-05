@@ -183,8 +183,12 @@ def _analyze_body(func_node) -> tuple[int, int, str]:
         stack.extend(reversed(n.children))
     if not tokens:
         return count, 0, ""
-    shape_hash = hashlib.blake2b("\x00".join(tokens).encode(), digest_size=16).hexdigest()
-    return count, len(tokens), shape_hash
+    return count, len(tokens), _hash_tokens(tokens)
+
+
+def _hash_tokens(tokens: list[str]) -> str:
+    """blake2b-128 hexdigest of a NUL-joined token stream (shared by both hashers)."""
+    return hashlib.blake2b("\x00".join(tokens).encode(), digest_size=16).hexdigest()
 
 
 def _name_of(node, source: bytes) -> str:
@@ -278,7 +282,7 @@ def _concrete_hash(func_node, source: bytes) -> str:
         stack.extend(reversed(n.children))
     if not tokens:
         return ""
-    return hashlib.blake2b("\x00".join(tokens).encode(), digest_size=16).hexdigest()
+    return _hash_tokens(tokens)
 
 
 def _decorator_names(func_node, source: bytes) -> tuple[str, ...]:
