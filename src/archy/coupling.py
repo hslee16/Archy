@@ -29,6 +29,17 @@ Two defenses, both required before the signal is trustworthy:
 Both defaults are calibrated on the bench, same FP discipline as the duplicate
 (§12b) and dead-code (§12) studies; see `docs/research/RESEARCH_METRICS.md` §7.
 Advisory only, never folded into `archy score`.
+
+Known limitations (all advisory-tolerable): a module that changes mostly in
+sweeps but co-changes with another in a handful of *focused* commits can show
+high `confidence` on thin evidence, since sweeps are excluded from both the
+numerator and the denominator; the displayed `support` (commit count) is the
+honest evidence base and `min_support` is the backstop. Merge-commit conflict
+resolutions are invisible under the default `git log` (which shows no diff for
+merges), so co-change that happens only in an evil merge is undercounted.
+Non-ASCII module filenames may be undercounted: git's default `core.quotePath`
+escapes them, and the git-vs-filesystem path encoding does not always join to a
+graph node - a pre-existing limitation shared with `hotspots.git_churn`.
 """
 
 from __future__ import annotations
@@ -141,7 +152,10 @@ def git_cochange(
     commits: list[list[str]] = []
     current: list[str] = []
     renames: dict[str, str] = {}
-    for line in log_proc.stdout.splitlines():
+    # Split on "\n" only, NOT str.splitlines(): git delimits records with "\n",
+    # but splitlines() also breaks on U+2028/U+0085/etc., so a path byte like
+    # those would forge a phantom line boundary and mis-group a commit.
+    for line in log_proc.stdout.split("\n"):
         if not line:
             continue
         if _is_commit_marker(line):
@@ -235,8 +249,8 @@ def compute_coupling(
             continue
         if graph.has_edge(module_a, module_b) or graph.has_edge(module_b, module_a):
             continue
-        count_a = cochange.counts[path_a]
-        count_b = cochange.counts[path_b]
+        count_a = cochange.counts.get(path_a, 0)
+        count_b = cochange.counts.get(path_b, 0)
         denom = min(count_a, count_b)
         if denom == 0:  # defensive: a supported pair always has positive counts
             continue

@@ -93,7 +93,10 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
 
     raw_counts: Counter[str] = Counter()
     renames: dict[str, str] = {}
-    for line in log_proc.stdout.splitlines():
+    # Split on "\n" only, not str.splitlines() (which also breaks on U+2028/
+    # U+0085/etc.): git delimits with "\n", so an exotic byte in a path must
+    # not be treated as a line boundary. Matches `coupling.git_cochange`.
+    for line in log_proc.stdout.split("\n"):
         if not line:
             continue  # `--format=` leaves a blank line between commits
         parts = line.split("\t")

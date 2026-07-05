@@ -67,6 +67,14 @@ def test_pair_with_non_module_endpoint_is_dropped():
     assert compute_coupling(g, co, min_support=1, min_confidence=0.0) == []
 
 
+def test_pair_with_count_missing_is_skipped_not_raised():
+    # Defensive: a pair key absent from `counts` (only reachable via malformed
+    # CoChangeData) is skipped via the zero-denominator guard, not a KeyError.
+    g = _graph({"pkg.a": "/a.py", "pkg.b": "/b.py"})
+    co = _cochange({"/a.py": 10}, {("/a.py", "/b.py"): 9})  # /b.py missing
+    assert compute_coupling(g, co, min_support=1, min_confidence=0.0) == []
+
+
 def test_min_support_floor():
     g = _graph({"pkg.a": "/a.py", "pkg.b": "/b.py"})
     co = _cochange({"/a.py": 4, "/b.py": 4}, {("/a.py", "/b.py"): 4})
