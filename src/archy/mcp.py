@@ -1,10 +1,11 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The 13
+Built on the official Python `mcp` SDK using its FastMCP API. The 14
 tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
 `archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
-`archy_what_to_refactor_next`, `archy_dsm`, `archy_status`) so an agent
+`archy_what_to_refactor_next`, `archy_dsm`, `archy_status`,
+`archy_duplicates`) so an agent
 can treat archy as a structural sensor in its own feedback loop, the way
 the README pitches. Several tools carry a mode/lens/param switch that
 absorbs what used to be a separate tool: `archy_impact(mode='affected')`
