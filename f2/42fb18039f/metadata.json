@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f242fb18039f",
+  "strategy": "manual-commit",
+  "branch": "alee/change-coupling-131",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "bench/coupling_sweep.py",
+    "docs/research/RESEARCH_METRICS.md",
+    "src/archy/cli.py",
+    "src/archy/coupling.py",
+    "tests/test_coupling.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f2/42fb18039f/0/metadata.json",
+      "transcript": "/f2/42fb18039f/0/full.jsonl",
+      "content_hash": "/f2/42fb18039f/0/content_hash.txt",
+      "prompt": "/f2/42fb18039f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46906,
+    "cache_creation_tokens": 1427649,
+    "cache_read_tokens": 59170062,
+    "output_tokens": 174880,
+    "api_call_count": 264
+  }
+}
