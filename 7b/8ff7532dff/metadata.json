@@ -3,9 +3,10 @@
   "checkpoint_id": "7b8ff7532dff",
   "strategy": "manual-commit",
   "branch": "alee/duplicates-path-scoping-247",
-  "checkpoints_count": 2,
+  "checkpoints_count": 5,
   "files_touched": [
     "README.md",
+    "docs/research/RESEARCH_METRICS.md",
     "plugins/claude/skills/archy/SKILL.md",
     "skills/archy/SKILL.md",
     "src/archy/cli.py",
@@ -19,13 +20,19 @@
       "transcript": "/7b/8ff7532dff/0/full.jsonl",
       "content_hash": "/7b/8ff7532dff/0/content_hash.txt",
       "prompt": "/7b/8ff7532dff/0/prompt.txt"
+    },
+    {
+      "metadata": "/7b/8ff7532dff/1/metadata.json",
+      "transcript": "/7b/8ff7532dff/1/full.jsonl",
+      "content_hash": "/7b/8ff7532dff/1/content_hash.txt",
+      "prompt": "/7b/8ff7532dff/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 13733,
-    "cache_creation_tokens": 391843,
-    "cache_read_tokens": 8907311,
-    "output_tokens": 44276,
-    "api_call_count": 84
+    "input_tokens": 79562,
+    "cache_creation_tokens": 6202610,
+    "cache_read_tokens": 193134299,
+    "output_tokens": 487821,
+    "api_call_count": 493
   }
 }
