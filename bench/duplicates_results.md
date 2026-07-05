@@ -81,4 +81,10 @@ At the same floor the de-noiser lifts primary precision from ~38% (no filter) to
 
 ### Exact (Type-1) sub-tier (#242 follow-up, 2026-07-04)
 
-Acting on the literature's "identifier normalization is a precision-reducer" finding, an un-normalized concrete hash marks byte-identical clusters as `exact`. Spot-check of the exact subset across the trio: **11/16 (~69%)** vs the ~50% primary tier - a small (50 of 195 primary clusters), high-yield "definitely refactor these" slice. Ships as an `exact` flag + a dedicated exact CLI section + `exact_total` on `archy_duplicates`. It surfaces the high-confidence slice within the semantic ceiling; it does not beat it. See RESEARCH_METRICS.md section 12d.
+Acting on the literature's "identifier normalization is a precision-reducer" finding, an un-normalized concrete hash marks byte-identical clusters as `exact`. An initial 3-repo spot-check read 11/16 (~69%); a broader **12-repo, 60-cluster, domain-stratified re-validation** corrected it to **38/60 = ~63% (95% CI ~[51%, 74%])** vs the ~50% primary tier - a small, high-yield slice (exact is a stable ~20% of primary corpus-wide). Ships as an `exact` flag + a dedicated exact CLI section + `exact_total` on `archy_duplicates`.
+
+**Large domain variance:** ORM/SDK 80%, web/tooling 71%, web/test 69%, **scientific/ML 33%** - the last is almost all test-code / vendored duplication (numpy exact tier is 99% test files). Re-tallying the 60-cluster sample by path bucket: source-only (excl. test + `_vendor`/`module_utils`) is **37/50 = ~74%**; the test/vendor bucket is **1/10 = ~10%** (near-pure non-refactorable noise). Path-scoping (#247) and co-change (#131) are the levers for the rest; the recall hole (Type-3 near-miss clones are missed entirely) is #246. It surfaces the high-confidence slice within the semantic ceiling; it does not beat it. See RESEARCH_METRICS.md section 12d.
+
+### Exact-tier volume across the 29-project corpus (2026-07-04)
+
+The exact tier is a stable **~20% of the primary tier** (887 exact / 4369 primary across 29 repos), range ~10-40% per repo (0% on scrapy/msgspec/boto3, 100% on the tiny rich/requests tiers). It is a consistent minority high-confidence slice, not a fluke of the original trio.

@@ -698,19 +698,35 @@ text, comments excluded) on top of the shape hash, and mark a cluster `exact` wh
 all members share it - i.e. byte-identical modulo whitespace/comments (a Type-1
 clone).
 
-A spot-check of the `exact` subset across fastapi/pytest/django: **11/16 TRUE
-(~69%)**, versus the ~47-50% overall primary tier - a materially higher-precision
-slice, and a small one (50 of 195 primary clusters). It concentrates the genuine
+An initial spot-check of the `exact` subset across fastapi/pytest/django read
+11/16 TRUE (~69%), versus the ~47-50% overall primary tier. That number was a
+small, favorable-domain sample; a broader **12-repo, 60-cluster, domain-stratified
+re-validation** corrected it to **38/60 = ~63% (95% CI ~[51%, 74%])**, still
+materially above the ~50% primary tier, and a small high-yield slice (the exact
+tier is a stable ~20% of primary clusters corpus-wide). It concentrates genuine
 copy-paste (django's 135-node cross-backend `_alter_field`, the 3-way serializer
 `_handle_object`, cross-class `_assert_state`) into a "definitely refactor these"
 tier. This is the one *static, no-ML, no-git* lever that measurably helped, exactly
 as the de-normalize finding predicted; it ships as an `exact` flag + a dedicated
 exact section in the CLI, and an `exact_total` / per-group `exact` on the
-`archy_duplicates` payload. The 5 exact false positives are still recognizable
-intentional patterns (byte-identical public-API `__init__` forwarders, inverse
-migration ops, trivial per-backend overrides) - it does not beat the semantic
-ceiling, only surfaces the high-confidence slice within it. Co-change (#131) remains
-the lever for the rest.
+`archy_duplicates` payload.
+
+**Large domain variance, and a clear cause.** Per-domain source: ORM/SDK/config
+80% (sqlalchemy/botocore/ansible), web/async/tooling 71% (aiohttp/mypy/pygments),
+web/test 69% (the original trio), **scientific/ML 33% (numpy/sklearn/pytorch)**.
+The scientific/ML crash is almost entirely *test-code and vendored duplication*:
+numpy's exact tier is 99% test files (parallel/legacy test suites), sklearn ~half
+test plus `__sklearn_tags__` declarative config, pytorch mostly real source with
+dependency-isolation copies (`_inductor.runtime`) as its FPs. Re-tallying the
+60-cluster sample by path bucket: **source-only (excluding test + `_vendor` /
+`module_utils`) is 37/50 = ~74%; the excluded test/vendor bucket is 1/10 = ~10%**
+(near-pure non-refactorable noise). So the exact tier is honestly ~63% as shipped
+and ~74% once test/vendored duplication is scoped out (tracked in #247); the
+residual FPs are recognizable intentional patterns (public-API forwarders,
+deliberate vendoring, declarative config, inverse ops). It does not beat the
+semantic ceiling, only surfaces the high-confidence slice within it. Path-scoping
+(#247) and co-change (#131) are the levers for the rest; the recall hole
+(exact-shape-hashing misses Type-3 near-miss clones entirely) is tracked in #246.
 
 ---
 
