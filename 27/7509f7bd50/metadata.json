@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "277509f7bd50",
+  "strategy": "manual-commit",
+  "branch": "alee/near-miss-type3-246",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "README.md",
+    "src/archy/duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/27/7509f7bd50/0/metadata.json",
+      "transcript": "/27/7509f7bd50/0/full.jsonl",
+      "content_hash": "/27/7509f7bd50/0/content_hash.txt",
+      "prompt": "/27/7509f7bd50/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 102255,
+    "cache_creation_tokens": 8269710,
+    "cache_read_tokens": 356987785,
+    "output_tokens": 512431,
+    "api_call_count": 722
+  }
+}
