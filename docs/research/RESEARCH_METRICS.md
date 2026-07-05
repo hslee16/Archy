@@ -912,9 +912,57 @@ clone-type mix, and Type-3 (gapped) clones are the *plurality* of real clones
 (~52% mean on BigCloneBench; Bellon et al.) - meaning the exact detector
 structurally cannot find roughly half the duplicates that exist. This is the
 empirical case for a Type-3-tolerant primitive (token-multiset overlap / MinHash,
-SourcererCC-style), tracked in #246; the full honest picture today is **~74%
-source precision, 100% Type-1/2 recall, ~0% Type-3 recall** - a high-precision,
-partial-recall surfacer.
+SourcererCC-style), tracked in #246.
+
+### 12h. The Type-3 near-miss primitive: token-multiset overlap (2026-07-05, #246)
+
+§12g's ~0% Type-3 recall is closed by `compute_near_duplicates` (opt-in
+`--near-miss` / `near_miss=true`): the exact shape-hash's normalized token stream
+is re-derived as a **multiset** (`extract_token_bags`, the same folding hashed as
+a bag not a sequence), and two functions are a Type-3 near-miss when their
+multiset **Jaccard >= min_similarity**. A gapped edit barely perturbs the bag, so
+the primitive is Type-3-tolerant by construction (SourcererCC's design). Only
+size >= min_nodes functions whose `shape_hash` is a **singleton** are candidates
+(a Type-3 pair are both singletons; this keeps the tier disjoint from
+exact/near). Jaccard `>= t` forces the two sizes within `1/t`, so candidates are
+size-sorted and each compared only forward while in band - the prefilter that
+avoids O(n^2), since the tiny normalized vocabulary offers no rare token to index
+on. A global comparison budget bounds giant repos (warns, never silently
+truncates).
+
+**Recall - the deliverable.** Re-running the §12g injection with a token-overlap
+recovery predicate at the shipped floor (0.85) lifts Type-3 from ~0% to: insert
+one statement **100%**, delete one statement **60%**, reorder **100%**, flip an
+operator **100%** (delete is hardest - removing tokens drops a small function's
+overlap under the floor). This is the SourcererCC-predicted range and validates
+the primitive.
+
+**Precision - the FP gate.** A similarity threshold over the tiny normalized
+vocabulary can collide unrelated same-shaped functions, so `min_similarity`
+matters. Calibrated on the bench (`bench/near_duplicates_sweep.py`) at 0.85. The
+raw whole-repo *count* is a poor precision proxy (it is inflated by near-clones
+in test/example code, as in #247, and is even non-monotonic in the threshold
+because connected-component clustering splits as edges thin). The **source-only
+spot-check** is the real signal: fastapi source at 0.9 was **5/5 genuine**
+(parallel `__init__`s, route-registration methods, OAuth2 flows); the django
+source top-15 at 0.85 was **14/15 genuine** - the one FP a coincidental
+`__iter__`/`__enter__` dunder collision. Django's high count (339 source
+clusters) is **real duplication, not FPs**: django duplicated its entire sync API
+as async, so `acreate_superuser`/`create_superuser`,
+`_ahandle_redirects`/`_handle_redirects`, `_aget_permissions`/`_get_permissions`
+are pervasive async/sync twins - genuine Type-3 clones the exact hash was blind
+to, exactly the recall this primitive exists to recover. (Whether an async/sync
+twin is *refactorable* is the same benign-vs-refactorable semantic call as
+elsewhere; the reader judges.)
+
+**Caveats.** Opt-in and lower confidence than the shape tiers (a distinct
+lower-precision section, not mixed into the primary list). Cost is an extra parse
++ a bounded pairwise pass: negligible on typical repos, ~30-44s on 5k-18k-module
+giants where the comparison budget is hit and results are then *incomplete*
+(warned). Type-4 (semantically equivalent, different structure) remains out of
+reach for all cheap syntactic methods. The full honest picture is now **~74%
+source precision on the exact tiers; recall 100% Type-1/2, and (with
+`--near-miss`) ~60-100% Type-3 by edit type, up from ~0%.**
 
 ---
 
@@ -1663,7 +1711,7 @@ The "Role" column distinguishes:
 | Reflexion: Absences                       | Medium | Medium | Check rule          | -                | Defer     |
 | Cross-file co-change (logical coupling)   | Medium | High   | **Shipped** as `archy coupling` (advisory pair list; §7a) | ✓ 29-project bench: source-only default, knee at (support 5, confidence 0.5), 15/15 genuine on the spot-check trio | **Shipped** |
 | Martin's `A` / `D` / SAP                  | Low    | Medium | -                   | -                | **No** (Python translation murky) |
-| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer + co-change demotion; §12b-§12g) | ✓ ~74% source precision (co-change demotion 15/15 benign on the django spot-check, ~50%->~74% lift); recall 100% Type-1/2, ~0% Type-3 by injection (§12g) -> #246 | **Shipped** |
+| Redundancy - duplicate functions          | Medium | Medium | **Shipped** as `archy duplicates` CLI + `archy_duplicates` MCP tool (two-tier surfacer + co-change demotion + opt-in Type-3 near-miss; §12b-§12h) | ✓ ~74% source precision (co-change demotion 15/15 benign); recall 100% Type-1/2, and with `--near-miss` ~60-100% Type-3 (token overlap, 14/15 genuine on the django spot-check; §12g/§12h) | **Shipped** |
 | Redundancy - dead functions               | Low    | Medium | -                   | ✓ FP rate confirmed: vulture finds 10–2,017 issues per project, ~all FPs from framework patterns | **No** |
 | Graph entropy                             | Low    | Trivial| -                   | -                | **No**    |
 

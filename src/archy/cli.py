@@ -41,6 +41,7 @@ from archy.duplicates import (
     DuplicateGroup,
     classify_variants,
     compute_duplicates,
+    compute_near_duplicates,
     demote_independent,
     is_test_path,
 )
@@ -706,6 +707,13 @@ def coupling(
     help="Demote clusters whose copies never co-change in git history (needs git).",
 )
 @click.option(
+    "--near-miss",
+    "near_miss",
+    is_flag=True,
+    default=False,
+    help="Also find Type-3 (gapped) near-miss clones via token overlap (slower, lower confidence).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["text", "json"]),
@@ -713,7 +721,13 @@ def coupling(
     help="Output format.",
 )
 def duplicates(
-    path: Path, min_nodes: int, top_n: int, min_members: int, co_change: bool, fmt: str
+    path: Path,
+    min_nodes: int,
+    top_n: int,
+    min_members: int,
+    co_change: bool,
+    near_miss: bool,
+    fmt: str,
 ) -> None:
     """Surface clusters of functions with identical normalized body shape.
 
@@ -723,10 +737,12 @@ def duplicates(
     intentional (same-class siblings, boilerplate, test/vendored copies, and -
     with `--co-change`, the default when git is present - copies whose files are
     actively maintained yet never change together, i.e. deliberately independent
-    implementations). Advisory only (never changes `archy score`); a cluster
-    means "investigate," not "provably identical." Refactorability is a semantic
-    call, so the ~50% precision ceiling is left to the reader's judgment. Trivial
-    functions below `--min-nodes` are skipped.
+    implementations). `--near-miss` adds a lower-confidence Type-3 tier: gapped
+    clones (a copy with statements inserted/removed) that the exact shape-hash
+    cannot see, found by token-multiset overlap. Advisory only (never changes
+    `archy score`); a cluster means "investigate," not "provably identical."
+    Refactorability is a semantic call, so the ~50% precision ceiling is left to
+    the reader's judgment. Trivial functions below `--min-nodes` are skipped.
     """
     # Validate before any parse work so bad flags fail fast and consistently.
     if min_nodes < 1:
@@ -752,6 +768,11 @@ def duplicates(
             rows = demote_independent(
                 rows, counts=cochange.counts, pair_support=cochange.pair_support
             )
+    if near_miss:
+        # Type-3 recall layer (#246): opt-in token-overlap pass over the
+        # singletons the exact hash missed, appended as `near_miss` groups the
+        # renderers show in their own lower-confidence section.
+        rows = rows + compute_near_duplicates(modules, parse_results, min_size=min_nodes)
     if fmt == "json":
         payload = _duplicates_to_dict(rows, top_n=top_n, min_nodes=min_nodes)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -1965,17 +1986,36 @@ def _duplicate_group_lines(group: DuplicateGroup, *, with_reason: bool) -> list[
 def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> dict:
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
+    near = [g for g in rows if g.category == "near_miss"]
     return {
         "min_nodes": min_nodes,
         "total": len(dups),
         "exact_total": sum(1 for g in dups if g.exact),
         "variant_total": len(variants),
+        "near_total": len(near),
         "shown": min(top_n, len(dups)),
         "duplicated_functions": sum(g.member_count for g in dups),
         "duplicates": [g.model_dump() for g in dups[:top_n]],
         "variants": [g.model_dump() for g in variants[:top_n]],
+        "near_miss": [g.model_dump() for g in near[:top_n]],
         "note": _duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants)),
     }
+
+
+def _near_miss_section(out: list[str], header: str, groups: list[DuplicateGroup]) -> None:
+    """Render the Type-3 near-miss tier: a `sim` column instead of redund/size."""
+    if out:
+        out.append("")
+    out.append(header)
+    out.append("")
+    out.append("   sim  count  members")
+    for g in groups:
+        first, *rest = g.members
+        out.append(
+            f"  {g.similarity or 0:>4.2f}  {g.member_count:>5}  {first.module}:{first.line} "
+            f"{first.qualified_name}"
+        )
+        out.extend(f"  {'':>4}  {'':>5}  {m.module}:{m.line} {m.qualified_name}" for m in rest)
 
 
 def _duplicates_section(
@@ -2020,6 +2060,14 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
             f"test / vendored / independent; showing top {min(top_n, len(variants))})",
             variants[:top_n],
             with_reason=True,
+        )
+    near = [g for g in rows if g.category == "near_miss"]
+    if near:
+        _near_miss_section(
+            out,
+            f"# {len(near)} possible near-miss (Type-3, gapped) cluster(s) (LOWER confidence; "
+            f"showing top {min(top_n, len(near))})",
+            near[:top_n],
         )
     return "\n".join(out)
 

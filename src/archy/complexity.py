@@ -18,6 +18,7 @@ module scope doesn't have a CC analogue.
 from __future__ import annotations
 
 import hashlib
+from collections import Counter
 
 import tree_sitter_python as tsp
 from pydantic import BaseModel, ConfigDict
@@ -159,9 +160,23 @@ def _analyze_body(func_node) -> tuple[int, int, str]:
     branch node in `_BRANCH_NODE_TYPES` is a named node, so widening the walk to
     all children reaches the same branch set.
     """
+    count, tokens = _walk_body_tokens(func_node)
+    if not tokens:
+        return count, 0, ""
+    return count, len(tokens), _hash_tokens(tokens)
+
+
+def _walk_body_tokens(func_node) -> tuple[int, list[str]]:
+    """The shared body walk: (cyclomatic, normalized-token stream).
+
+    The single source of the normalization used by `shape_hash` (sequence hash),
+    `size` (`len(tokens)`), and the Type-3 token *multiset* (`extract_token_bags`,
+    #246), so all three fold identifiers/literals identically. Returns `1, []`
+    for a bodiless def (matching the old `1, 0, ""` for `_analyze_body`).
+    """
     body = func_node.child_by_field_name("body")
     if body is None:
-        return 1, 0, ""
+        return 1, []
     count = 1
     tokens: list[str] = []
     stack = [body]
@@ -181,9 +196,7 @@ def _analyze_body(func_node) -> tuple[int, int, str]:
             count += 1
         tokens.append(_TOKEN.get(t, t))
         stack.extend(reversed(n.children))
-    if not tokens:
-        return count, 0, ""
-    return count, len(tokens), _hash_tokens(tokens)
+    return count, tokens
 
 
 def _hash_tokens(tokens: list[str]) -> str:
@@ -252,6 +265,30 @@ def extract_function_features(source: bytes) -> dict[int, FunctionFeatures]:
             is_trivial=_is_trivial_body(node),
             concrete_hash=_concrete_hash(node, source),
         )
+
+    _walk_function_defs(tree.root_node, source, visit)
+    return out
+
+
+def extract_token_bags(source: bytes) -> dict[int, Counter[str]]:
+    """Parse `source` and return each function's normalized-token *multiset*.
+
+    Keyed by 1-indexed `def` line (matching `FunctionComplexity.line`), the same
+    key `compute_duplicates` members carry. The multiset is the bag of the same
+    folded tokens `shape_hash` hashes as a *sequence* (`_walk_body_tokens`), so a
+    Type-3 clone - which reorders/inserts/deletes and thus changes the sequence
+    (and the hash) - keeps a nearly-identical bag. This is the position-agnostic
+    representation the token-overlap near-miss pass (#246) compares. Computed on
+    demand (a second parse, like `extract_function_features`); nothing is
+    persisted, so the warm index cache is untouched.
+    """
+    parser = Parser(PY_LANGUAGE)
+    tree = parser.parse(source)
+    out: dict[int, Counter[str]] = {}
+
+    def visit(node, scope: tuple[str, ...]) -> None:
+        _, tokens = _walk_body_tokens(node)
+        out[node.start_point[0] + 1] = Counter(tokens)
 
     _walk_function_defs(tree.root_node, source, visit)
     return out

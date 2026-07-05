@@ -35,6 +35,13 @@ actively-maintained files that never co-change is demoted to the `variant` tier
 The calling agent remains the final semantic judge. See
 `docs/research/RESEARCH_METRICS.md` §12c/§12f.
 
+All of the above is exact AST-shape hashing, which finds only Type-1/2 clones; a
+single inserted/reordered statement moves the hash (measured ~0% Type-3 recall,
+§12g). `compute_near_duplicates` (issue #246) adds an opt-in, lower-confidence
+`"near_miss"` tier for Type-3 (gapped) recall: a graded token-multiset overlap
+(`extract_token_bags`, the same folding hashed as a *set* not a sequence) that a
+small edit barely perturbs. See §12h.
+
 Never folded into `archy score`. Even at ~50% it beats dead-code detection, which
 the same FP discipline rejected outright at ~100% FP.
 
@@ -46,14 +53,25 @@ from `archy.graph.parse_project` instead.
 
 from __future__ import annotations
 
+import warnings
+from collections import Counter
+from collections.abc import Callable, Iterator
 from itertools import combinations
 from pathlib import Path
+from typing import TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
-from archy.complexity import FunctionFeatures, extract_function_features
+from archy.complexity import (
+    FunctionComplexity,
+    FunctionFeatures,
+    extract_function_features,
+    extract_token_bags,
+)
 from archy.graph import Module
 from archy.parser import ParseResult
+
+_V = TypeVar("_V")
 
 # 30 is the calibrated shipping default: the FP spot-check (RESEARCH_METRICS.md
 # section 12) showed the trivial-boilerplate false positives (property shims,
@@ -74,6 +92,20 @@ DEFAULT_MIN_MEMBERS = 2
 DEFAULT_COCHANGE_MIN_SUPPORT = 3
 DEFAULT_COCHANGE_MIN_CONFIDENCE = 0.3
 DEFAULT_COCHANGE_MIN_EVIDENCE = 5
+
+# Type-3 near-miss thresholds (issue #246), calibrated on the bench (§12h). The
+# exact shape-hash catches Type-1/2 but nothing gapped; the token-multiset overlap
+# below finds Type-3 clones (a small edit changes the bag only slightly). The
+# similarity floor is high (0.85) because the normalized-token vocabulary is tiny,
+# so a loose threshold collides unrelated same-shaped functions; the spot-check
+# put the FP tail there in coincidental trivial-method (dunder) matches, with the
+# top-ranked clusters (async/sync twins, parallel validators) genuine.
+DEFAULT_MIN_SIMILARITY = 0.85
+# Global cap on pairwise token comparisons in the near-miss pass, the safety
+# valve against a size-band with thousands of same-sized functions on a giant
+# repo. If hit, the pass warns (never silently truncates) and returns what it
+# found within budget.
+DEFAULT_MAX_NEAR_COMPARISONS = 5_000_000
 
 
 class DuplicateMember(BaseModel):
@@ -100,9 +132,11 @@ class DuplicateGroup(BaseModel):
     be removed by deduplicating down to a single definition, and is the primary
     ranking key.
 
-    `category` splits the output into two tiers (issue #242): `"duplicate"` is a
-    likely-real duplicate; `"variant"` is a likely-intentional cluster demoted by
-    the semantic de-noiser, with `variant_reason` naming which signal fired
+    `category` is `"duplicate"` (a likely-real duplicate) or `"variant"` (a
+    likely-intentional cluster demoted by the semantic de-noiser); a third value
+    `"near_miss"` (issue #246) is produced separately by `compute_near_duplicates`
+    for Type-3 (gapped) clones, which share no `shape_hash` and instead carry a
+    graded `similarity`. `variant_reason` names which de-noise signal fired
     (`overload` / `property` / `vendored` / `test` / `trivial` / `same_class` /
     `independent`). `vendored` / `test` are pure-path signals (issue #247): every
     member sits in a vendoring/isolation dir or a test suite, so the shared body is
@@ -126,6 +160,46 @@ class DuplicateGroup(BaseModel):
     variant_reason: str | None = None
     category: str = "duplicate"
     exact: bool = False
+    # Set only for `category == "near_miss"` (Type-3 clusters from
+    # `compute_near_duplicates`, issue #246): the group's weakest pairwise token
+    # overlap (multiset Jaccard). None for exact/near-shape clusters, which share
+    # one `shape_hash` and so have no graded similarity.
+    similarity: float | None = None
+
+
+def _read_cached(
+    cache: dict[str, dict[int, _V]], path: str, extract: Callable[[bytes], dict[int, _V]]
+) -> dict[int, _V]:
+    """Memoize `extract(file_bytes)` (a per-def-line map) by path, reading each
+    file at most once across a duplicate pass. A file that cannot be read caches
+    as `{}` so its per-function signals abstain rather than crash. Shared by the
+    source-reading (`classify_variants`) and token-bag (`compute_near_duplicates`)
+    passes."""
+    cached = cache.get(path)
+    if cached is None:
+        try:
+            cached = extract(Path(path).read_bytes())
+        except OSError:
+            cached = {}
+        cache[path] = cached
+    return cached
+
+
+def _sized_functions(
+    modules: list[Module], parse_results: dict[str, ParseResult], min_size: int
+) -> Iterator[tuple[str, str, FunctionComplexity]]:
+    """Yield `(module_qualname, resolved_path, fn)` for each function clearing the
+    size floor with a non-empty shape - the candidate set shared by the exact
+    (`compute_duplicates`) and near-miss (`compute_near_duplicates`) passes. The
+    resolved `path` matches what `git_cochange` / a graph node emit."""
+    path_by_qual = {m.qualname: str(m.path) for m in modules}
+    for qual, result in parse_results.items():
+        path = path_by_qual.get(qual)
+        if path is None:
+            continue
+        for fn in result.functions:
+            if fn.shape_hash and fn.size >= min_size:
+                yield qual, path, fn
 
 
 def compute_duplicates(
@@ -149,25 +223,18 @@ def compute_duplicates(
     """
     if min_members < 2:
         raise ValueError(f"min_members must be >= 2; got {min_members}")
-    path_by_qual = {m.qualname: str(m.path) for m in modules}
     buckets: dict[str, list[DuplicateMember]] = {}
     size_by_hash: dict[str, int] = {}
-    for qual, result in parse_results.items():
-        path = path_by_qual.get(qual)
-        if path is None:
-            continue
-        for fn in result.functions:
-            if not fn.shape_hash or fn.size < min_size:
-                continue
-            buckets.setdefault(fn.shape_hash, []).append(
-                DuplicateMember(
-                    module=qual,
-                    qualified_name=fn.qualified_name,
-                    path=path,
-                    line=fn.line,
-                )
+    for qual, path, fn in _sized_functions(modules, parse_results, min_size):
+        buckets.setdefault(fn.shape_hash, []).append(
+            DuplicateMember(
+                module=qual,
+                qualified_name=fn.qualified_name,
+                path=path,
+                line=fn.line,
             )
-            size_by_hash[fn.shape_hash] = fn.size
+        )
+        size_by_hash[fn.shape_hash] = fn.size
 
     groups: list[DuplicateGroup] = []
     for shape_hash, members in buckets.items():
@@ -186,6 +253,140 @@ def compute_duplicates(
             )
         )
     groups.sort(key=lambda g: (-g.redundancy, -g.size, -g.member_count, g.shape_hash))
+    return groups
+
+
+def _jaccard(a: Counter[str], b: Counter[str]) -> float:
+    """Multiset Jaccard: |a & b| / |a | b| over token counts.
+
+    Symmetric and size-penalizing, unlike the overlap coefficient: with the tiny
+    normalized-token vocabulary a small function's bag is a subset of almost any
+    larger one, so overlap-coefficient would score containment 1.0; Jaccard
+    instead drops as the sizes diverge, which is the behavior a near-clone
+    threshold needs.
+    """
+    inter = sum((a & b).values())
+    union = sum((a | b).values())
+    return inter / union if union else 0.0
+
+
+def compute_near_duplicates(
+    modules: list[Module],
+    parse_results: dict[str, ParseResult],
+    *,
+    min_size: int = DEFAULT_MIN_SIZE,
+    min_similarity: float = DEFAULT_MIN_SIMILARITY,
+    max_comparisons: int = DEFAULT_MAX_NEAR_COMPARISONS,
+) -> list[DuplicateGroup]:
+    """Type-3 (gapped) clone clusters via token-multiset overlap (issue #246).
+
+    The exact `shape_hash` finds Type-1/2 clones but nothing gapped (one inserted
+    statement moves the hash; §12g measured ~0% Type-3 recall). This pass
+    compares the normalized-token *multiset* (`extract_token_bags`, the same
+    folding `shape_hash` hashes as a sequence) with a graded `min_similarity`
+    threshold, which a small edit barely perturbs. Returns `category="near_miss"`
+    groups carrying a `similarity` (the component's weakest edge).
+
+    Only functions with `size >= min_size` whose `shape_hash` is a **singleton**
+    (fewer than 2 occurrences) are candidates: a Type-3 pair are both singletons,
+    and this keeps the near-miss tier disjoint from the exact/near tiers. Because
+    Jaccard `>= t` forces the two sizes within a factor `1/t`, candidates are
+    sorted by size and each is compared only forward while the size stays in
+    band - the cheap prefilter that avoids the O(n^2) blow-up the tiny token
+    vocabulary would otherwise cause (no rare tokens to index on). A global
+    `max_comparisons` budget bounds giant repos; exceeding it warns rather than
+    silently truncating.
+    """
+    sized = list(_sized_functions(modules, parse_results, min_size))
+    shape_counts: Counter[str] = Counter(fn.shape_hash for _, _, fn in sized)
+
+    # Candidates: singleton-shaped functions (exact-hash already surfaces the
+    # rest). Attach each one's token bag, re-parsing each file at most once.
+    bags_by_path: dict[str, dict[int, Counter[str]]] = {}
+    items: list[tuple[str, str, FunctionComplexity, Counter[str]]] = []
+    for qual, path, fn in sized:
+        if shape_counts[fn.shape_hash] >= DEFAULT_MIN_MEMBERS:
+            continue
+        bag = _read_cached(bags_by_path, path, extract_token_bags).get(fn.line)
+        if bag:
+            items.append((qual, path, fn, bag))
+
+    items.sort(key=lambda it: it[2].size)
+    parent = list(range(len(items)))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    edge_weight: dict[frozenset[int], float] = {}
+    budget = max_comparisons
+    truncated = False
+    for i in range(len(items)):
+        size_i = items[i][2].size
+        limit = size_i / min_similarity  # sizes above this cannot reach the floor
+        for j in range(i + 1, len(items)):
+            if items[j][2].size > limit:
+                break  # sorted ascending: no later j is in band either
+            if budget <= 0:
+                truncated = True
+                break
+            budget -= 1
+            sim = _jaccard(items[i][3], items[j][3])
+            if sim >= min_similarity:
+                parent[find(i)] = find(j)
+                edge_weight[frozenset((i, j))] = sim
+        if truncated:
+            break
+    if truncated:
+        warnings.warn(
+            f"near-miss: hit the {max_comparisons} token-comparison budget; results "
+            "may be incomplete. Raise max_comparisons or min_similarity to widen.",
+            stacklevel=2,
+        )
+
+    components: dict[int, list[int]] = {}
+    for idx in range(len(items)):
+        components.setdefault(find(idx), []).append(idx)
+
+    groups: list[DuplicateGroup] = []
+    for members_idx in components.values():
+        if len(members_idx) < DEFAULT_MIN_MEMBERS:
+            continue
+        member_set = set(members_idx)
+        sims = [w for key, w in edge_weight.items() if key <= member_set]
+        similarity = min(sims) if sims else min_similarity
+        # A near-miss group's members differ in size (unlike an exact cluster's
+        # one shared size), so use the median as the representative for ranking.
+        sizes = sorted(items[k][2].size for k in members_idx)
+        rep_size = sizes[len(sizes) // 2]
+        members = tuple(
+            sorted(
+                (
+                    DuplicateMember(
+                        module=items[k][0],
+                        qualified_name=items[k][2].qualified_name,
+                        path=items[k][1],
+                        line=items[k][2].line,
+                    )
+                    for k in members_idx
+                ),
+                key=lambda m: (m.module, m.line, m.qualified_name),
+            )
+        )
+        groups.append(
+            DuplicateGroup(
+                shape_hash="",
+                size=rep_size,
+                member_count=len(members),
+                redundancy=rep_size * (len(members) - 1),
+                members=members,
+                category="near_miss",
+                similarity=similarity,
+            )
+        )
+    groups.sort(key=lambda g: (-(g.similarity or 0.0), -g.redundancy, -g.size))
     return groups
 
 
@@ -217,14 +418,7 @@ def classify_variants(groups: list[DuplicateGroup]) -> list[DuplicateGroup]:
     features_by_path: dict[str, dict[int, FunctionFeatures]] = {}
 
     def features_for(path: str) -> dict[int, FunctionFeatures]:
-        cached = features_by_path.get(path)
-        if cached is None:
-            try:
-                cached = extract_function_features(Path(path).read_bytes())
-            except OSError:
-                cached = {}
-            features_by_path[path] = cached
-        return cached
+        return _read_cached(features_by_path, path, extract_function_features)
 
     classified: list[DuplicateGroup] = []
     for group in groups:
