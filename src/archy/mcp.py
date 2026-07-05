@@ -554,8 +554,9 @@ class DuplicatesPayload(BaseModel):
     """Two-tier duplicate-cluster result (issue #133/#242).
 
     `duplicates` is the primary "likely duplicate" tier (investigate these);
-    `variants` is the demoted "same-class / boilerplate" tier (likely
-    intentional). `total` / `variant_total` count each tier; `shown` is how many
+    `variants` is the demoted "likely-intentional" tier (same-class siblings,
+    boilerplate, and test/vendored copies - see `variant_reason`). `total` /
+    `variant_total` count each tier; `shown` is how many
     of the primary tier are returned (capped by `top_n`). An empty `duplicates`
     with a `note` is a real answer. Advisory only, never a score axis;
     refactorability is a semantic call, so ~50% precision is expected (see the
@@ -968,8 +969,9 @@ def _register_tools(server: FastMCP) -> None:
             "Cluster functions with an identical normalized body shape "
             "(identifiers/literals folded to placeholders). Returns two tiers: "
             "`duplicates` (the primary 'likely duplicate' list to investigate) "
-            "and `variants` (demoted same-class / boilerplate clusters that are "
-            "likely intentional, each carrying a `variant_reason`). Within the "
+            "and `variants` (demoted clusters that are likely intentional: "
+            "same-class siblings, boilerplate, and copies wholly in test suites "
+            "or vendoring/isolation dirs, each carrying a `variant_reason`). Within the "
             "primary tier, `exact=true` marks byte-identical (Type-1) clusters, "
             "the highest-confidence 'definitely refactor these' subset. "
             f"`min_nodes` (default {DEFAULT_MIN_SIZE}) is the minimum normalized "
