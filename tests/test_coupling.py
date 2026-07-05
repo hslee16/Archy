@@ -129,6 +129,16 @@ def _write(repo: Path, name: str, body: str) -> None:
     (repo / name).write_text(body)
 
 
+def _p(repo: Path, name: str) -> str:
+    """The resolved absolute path string a graph node / git_cochange key uses."""
+    return str((repo / name).resolve())
+
+
+def _key(a: str, b: str) -> tuple[str, str]:
+    """The sorted pair key git_cochange stores (order-independent)."""
+    return (min(a, b), max(a, b))
+
+
 def test_git_cochange_returns_none_outside_repo(tmp_path: Path):
     assert git_cochange(tmp_path) is None
 
@@ -136,7 +146,8 @@ def test_git_cochange_returns_none_outside_repo(tmp_path: Path):
 def test_git_cochange_counts_pair_support(tmp_path: Path):
     repo = tmp_path
     _init_repo(repo)
-    # 3 commits touch a+b together, 1 touches a alone.
+    # a's count (4) exceeds the pair support (3) because the 4th commit touched
+    # a alone, so min(count_a, count_b) is b's 3 - the coupling denominator.
     for i in range(3):
         _write(repo, "a.py", f"x = {i}\n")
         _write(repo, "b.py", f"y = {i}\n")
@@ -148,10 +159,9 @@ def test_git_cochange_counts_pair_support(tmp_path: Path):
 
     data = git_cochange(repo)
     assert data is not None
-    a = str((repo / "a.py").resolve())
-    b = str((repo / "b.py").resolve())
+    a, b = _p(repo, "a.py"), _p(repo, "b.py")
     assert data.counts[a] == 4 and data.counts[b] == 3
-    assert data.pair_support[(min(a, b), max(a, b))] == 3
+    assert data.pair_support[_key(a, b)] == 3
 
 
 def test_git_cochange_folds_rename_into_pair(tmp_path: Path):
@@ -168,17 +178,17 @@ def test_git_cochange_folds_rename_into_pair(tmp_path: Path):
 
     data = git_cochange(repo)
     assert data is not None
-    renamed = str((repo / "renamed.py").resolve())
-    b = str((repo / "b.py").resolve())
+    renamed, b = _p(repo, "renamed.py"), _p(repo, "b.py")
     # Both commits touched the (a->renamed) file together with b, folded onto
     # the current path, so support is 2 - not split across old/new names.
-    assert data.pair_support[(min(renamed, b), max(renamed, b))] == 2
+    assert data.pair_support[_key(renamed, b)] == 2
 
 
 def test_git_cochange_skips_sweeping_commit(tmp_path: Path):
     repo = tmp_path
     _init_repo(repo)
-    # One sweeping commit touches 4 files; a small commit touches 2 of them.
+    # 4 files in the sweep so it exceeds cap=3 below; 2 also touched in a
+    # focused commit, so the same pair is reachable with or without the sweep.
     for name in ("a.py", "b.py", "c.py", "d.py"):
         _write(repo, name, "v = 0\n")
     _git(repo, "add", "-A")
@@ -188,9 +198,8 @@ def test_git_cochange_skips_sweeping_commit(tmp_path: Path):
     _git(repo, "add", "a.py", "b.py")
     _git(repo, "commit", "-q", "-m", "focused a+b")
 
-    a = str((repo / "a.py").resolve())
-    b = str((repo / "b.py").resolve())
-    key = (min(a, b), max(a, b))
+    a, b = _p(repo, "a.py"), _p(repo, "b.py")
+    key = _key(a, b)
     # cap=3 drops the 4-file sweep, leaving only the focused commit's pair.
     capped = git_cochange(repo, max_commit_files=3)
     assert capped is not None
@@ -211,13 +220,12 @@ def test_git_cochange_keep_paths_restricts_counting(tmp_path: Path):
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "all three")
 
-    a = str((repo / "a.py").resolve())
-    b = str((repo / "b.py").resolve())
+    a, b = _p(repo, "a.py"), _p(repo, "b.py")
     data = git_cochange(repo, keep_paths=frozenset({a, b}))
     assert data is not None
     # vendor.py is outside keep_paths, so no pair references it.
     assert set(data.counts) == {a, b}
-    assert list(data.pair_support) == [(min(a, b), max(a, b))]
+    assert list(data.pair_support) == [_key(a, b)]
 
 
 def test_git_cochange_ignores_non_python(tmp_path: Path):
@@ -230,7 +238,7 @@ def test_git_cochange_ignores_non_python(tmp_path: Path):
 
     data = git_cochange(repo)
     assert data is not None
-    assert set(data.counts) == {str((repo / "a.py").resolve())}
+    assert set(data.counts) == {_p(repo, "a.py")}
     assert data.pair_support == {}  # a.py alone -> no pair
 
 

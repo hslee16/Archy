@@ -53,6 +53,11 @@ GRID: tuple[tuple[int, float], ...] = (
 )
 
 
+def _column(rows: list[dict], key: tuple[int, float], field: str) -> list[int]:
+    """The per-project values of one composition field at one grid cell."""
+    return [r["cells"][key][field] for r in rows]
+
+
 def _bucket(path_a: str, path_b: str) -> str:
     ta, tb = is_test_path(path_a), is_test_path(path_b)
     if ta and tb:
@@ -149,12 +154,10 @@ def main() -> int:
     emit("| (min_support, min_confidence) | median total | median src_src | median src_test |")
     emit("| --- | ---: | ---: | ---: |")
     for key in GRID:
-        totals = [r["cells"][key]["total"] for r in rows]
-        srcsrc = [r["cells"][key]["src_src"] for r in rows]
-        srctest = [r["cells"][key]["src_test"] for r in rows]
         emit(
-            f"| {key} | {statistics.median(totals):.0f} | "
-            f"{statistics.median(srcsrc):.0f} | {statistics.median(srctest):.0f} |"
+            f"| {key} | {statistics.median(_column(rows, key, 'total')):.0f} | "
+            f"{statistics.median(_column(rows, key, 'src_src')):.0f} | "
+            f"{statistics.median(_column(rows, key, 'src_test')):.0f} |"
         )
     emit()
     emit("## FP spot-check")
@@ -176,10 +179,10 @@ def main() -> int:
     # Composition summary to stderr for calibration.
     print("\n=== COMPOSITION @ grid (summed across repos) ===", file=sys.stderr)
     for key in GRID:
-        tot = sum(r["cells"][key]["total"] for r in rows)
-        ss = sum(r["cells"][key]["src_src"] for r in rows)
-        st = sum(r["cells"][key]["src_test"] for r in rows)
-        tt = sum(r["cells"][key]["test_test"] for r in rows)
+        tot = sum(_column(rows, key, "total"))
+        ss = sum(_column(rows, key, "src_src"))
+        st = sum(_column(rows, key, "src_test"))
+        tt = sum(_column(rows, key, "test_test"))
         frac = 100 * ss / tot if tot else 0
         print(
             f"  {key}: total={tot} src_src={ss} ({frac:.0f}%) src_test={st} test_test={tt}",

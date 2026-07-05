@@ -734,12 +734,14 @@ clone "worth-extracting" at **>94.9% precision** (Microsoft projects); the decis
 signal is whether the members *co-change consistently*, not anything in the clone
 body. Kapser & Godfrey's canonical *harmful* example was a same-scope one-constant
 paste that later co-changed 4x - co-change is the tiebreaker `same_class` lacks.
-archy is uniquely placed to add it: it already mines git churn (`hotspots`) and
-change-coupling is planned as **#131**. Refactorable-duplication and change-coupling
-are the same signal; the co-change precision layer is the next phase, unified with
-#131. Until then the two-tier split is the honest surface and the calling agent
-(archy is an MCP tool used *with* an LLM) is the semantic judge - "judge, not
-librarian." Re-validation raw data: `bench/duplicates_results.md`.
+archy is uniquely placed to add it: it already mines git churn (`hotspots`), and
+change-coupling has **shipped** as `archy coupling` (#131, §7a). Refactorable-duplication
+and change-coupling are the same signal; consuming the co-change signal as a
+duplicate-precision layer (demote clusters whose members never co-change) is the
+queued follow-up (#242), not the coupling feature itself. Until that consumption
+lands, the two-tier split is the honest surface and the calling agent (archy is an
+MCP tool used *with* an LLM) is the semantic judge - "judge, not librarian."
+Re-validation raw data: `bench/duplicates_results.md`.
 
 ### 12d. The Type-1 (exact) tier: the one static lever that measurably helped (2026-07-04)
 

@@ -656,8 +656,8 @@ def coupling(
     cochange = git_cochange(path, since=since, keep_paths=keep)
     if cochange is None:
         raise click.ClickException(
-            f"{path} is not inside a git repository (or git is unavailable); "
-            "`archy coupling` needs git history to compute co-change."
+            f"{path} is not inside a git repository, has no commit history, or git "
+            "is unavailable; `archy coupling` needs git history to compute co-change."
         )
     rows = compute_coupling(g, cochange, min_support=min_support, min_confidence=min_confidence)
     if fmt == "json":

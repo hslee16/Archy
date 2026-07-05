@@ -115,6 +115,12 @@ def git_cochange(
     project's internal module files); this both scopes the result to rankable
     pairs and bounds `pair_support` on large repos, where the unrestricted
     cross product would be enormous.
+
+    Rename folding shares `git_churn`'s model: if a path is reused after a
+    `git mv` (a *new* `a.py` created after `a.py` was renamed to `b.py`), both
+    fold onto `b.py`, so the reused path's history is attributed to the current
+    file. This is a rare edge that needs `min_support` recurrences to surface a
+    pair, accepted for parity with the churn pass.
     """
     repo_root = resolve_repo_root(root)
     if repo_root is None:
