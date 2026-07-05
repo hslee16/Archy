@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json as _json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,7 @@ from archy.duplicates import (
     _same_class,
     classify_variants,
     compute_duplicates,
+    demote_independent,
     is_test_path,
 )
 from archy.graph import Module, parse_project
@@ -365,6 +367,79 @@ def test_demoted_test_cluster_still_flagged_exact(tmp_path: Path):
     assert out.exact is True
 
 
+# --------------------------------------------------------------------------- #
+# Co-change demotion (#242): demote copies that never co-change in git
+# --------------------------------------------------------------------------- #
+
+
+def _primary(*paths: str) -> DuplicateGroup:
+    """A primary-tier cluster with members at the given paths (co-change input)."""
+    return _path_group(*paths).model_copy(update={"category": "duplicate"})
+
+
+def test_independent_cluster_demotes_when_files_never_co_change():
+    group = _primary("/a.py", "/b.py")
+    # both files actively maintained (>= min_evidence) but no shared commits
+    counts = {"/a.py": 20, "/b.py": 20}
+    [out] = demote_independent(
+        [group], counts=counts, pair_support={}, min_support=3, min_confidence=0.3, min_evidence=5
+    )
+    assert out.category == "variant"
+    assert out.variant_reason == "independent"
+
+
+def test_co_changing_cluster_stays_primary():
+    group = _primary("/a.py", "/b.py")
+    counts = {"/a.py": 20, "/b.py": 20}
+    pair = {("/a.py", "/b.py"): 12}  # confidence 12/20 = 0.6 >= 0.3, support 12 >= 3
+    [out] = demote_independent(
+        [group], counts=counts, pair_support=pair, min_support=3, min_confidence=0.3, min_evidence=5
+    )
+    assert out.category == "duplicate"
+    assert out.variant_reason is None
+
+
+def test_evidence_guard_blocks_demotion_for_rarely_touched_file():
+    # /b.py has too little history to conclude "deliberately independent";
+    # absence of co-change is lack of data, so the cluster stays primary.
+    group = _primary("/a.py", "/b.py")
+    counts = {"/a.py": 20, "/b.py": 2}  # /b.py below min_evidence=5
+    [out] = demote_independent(
+        [group], counts=counts, pair_support={}, min_support=3, min_confidence=0.3, min_evidence=5
+    )
+    assert out.category == "duplicate"
+
+
+def test_same_file_cluster_is_untouched():
+    # Both members in one file -> co-change can't distinguish them; abstain
+    # (same_class already covers this case).
+    group = _primary("/a.py", "/a.py")
+    [out] = demote_independent(
+        [group], counts={"/a.py": 20}, pair_support={}, min_support=3, min_confidence=0.3
+    )
+    assert out.category == "duplicate"
+
+
+def test_already_variant_cluster_keeps_its_reason():
+    variant = _path_group("/a.py", "/b.py").model_copy(
+        update={"category": "variant", "variant_reason": "same_class"}
+    )
+    [out] = demote_independent([variant], counts={"/a.py": 20, "/b.py": 20}, pair_support={})
+    assert out.category == "variant"
+    assert out.variant_reason == "same_class"  # not overwritten by "independent"
+
+
+def test_low_confidence_co_change_still_demotes():
+    # They share a few commits but well below min_confidence -> still independent.
+    group = _primary("/a.py", "/b.py")
+    counts = {"/a.py": 100, "/b.py": 100}
+    pair = {("/a.py", "/b.py"): 5}  # confidence 5/100 = 0.05 < 0.3
+    [out] = demote_independent(
+        [group], counts=counts, pair_support=pair, min_support=3, min_confidence=0.3, min_evidence=5
+    )
+    assert out.variant_reason == "independent"
+
+
 def _feat(src: bytes, line: int = 1):
     return extract_function_features(src)[line]
 
@@ -541,3 +616,49 @@ def test_cli_duplicates_rejects_bad_flags(tmp_path: Path):
 def test_cli_duplicates_isinstance_check():
     # Guards the public type name the MCP follow-up (PR2) will import.
     assert issubclass(DuplicateGroup, BaseModel)
+
+
+def _git(repo: Path, *args: str) -> None:
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+
+
+def test_cli_duplicates_co_change_demotes_independent_copies(tmp_path: Path):
+    # pkg.a and pkg.b hold the same duplicated body but are committed in
+    # SEPARATE commits (never together) with enough history to clear the
+    # evidence guard -> --co-change demotes them as `independent`.
+    _make_project(tmp_path)
+    _git(tmp_path, "init", "-q", "-b", "main")
+    _git(tmp_path, "config", "user.email", "t@t.t")
+    _git(tmp_path, "config", "user.name", "t")
+    _git(tmp_path, "config", "commit.gpgsign", "false")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    for i in range(6):  # 6 separate edits each, never co-changing
+        (tmp_path / "pkg" / "a.py").write_text(_dup_body("alpha") + f"# a{i}\n")
+        _git(tmp_path, "commit", "-q", "-am", f"a{i}")
+        (tmp_path / "pkg" / "b.py").write_text(_dup_body("beta") + f"# b{i}\n")
+        _git(tmp_path, "commit", "-q", "-am", f"b{i}")
+
+    def primary_total(*flags: str) -> dict:
+        result = CliRunner().invoke(
+            main, ["duplicates", str(tmp_path), "--min-nodes", "5", "--format", "json", *flags]
+        )
+        assert result.exit_code == 0, result.output
+        return _json.loads(result.output)
+
+    on = primary_total("--co-change")
+    off = primary_total("--no-co-change")
+    # --no-co-change keeps the cross-module pair primary; --co-change demotes it.
+    assert off["total"] == 1 and off["variant_total"] == 0
+    assert on["total"] == 0 and on["variant_total"] == 1
+    assert on["variants"][0]["variant_reason"] == "independent"
+
+
+def test_cli_duplicates_co_change_on_non_git_is_noop(tmp_path: Path):
+    # Default --co-change on a non-git tree is best-effort: no crash, no demotion.
+    _make_project(tmp_path)
+    result = CliRunner().invoke(
+        main, ["duplicates", str(tmp_path), "--min-nodes", "5", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    assert _json.loads(result.output)["total"] == 1  # unchanged from git-free behavior

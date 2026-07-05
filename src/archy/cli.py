@@ -41,6 +41,7 @@ from archy.duplicates import (
     DuplicateGroup,
     classify_variants,
     compute_duplicates,
+    demote_independent,
     is_test_path,
 )
 from archy.graph import (
@@ -698,23 +699,34 @@ def coupling(
     help="Minimum functions in a cluster for it to count as duplication.",
 )
 @click.option(
+    "--co-change/--no-co-change",
+    "co_change",
+    default=True,
+    show_default=True,
+    help="Demote clusters whose copies never co-change in git history (needs git).",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["text", "json"]),
     default="text",
     help="Output format.",
 )
-def duplicates(path: Path, min_nodes: int, top_n: int, min_members: int, fmt: str) -> None:
+def duplicates(
+    path: Path, min_nodes: int, top_n: int, min_members: int, co_change: bool, fmt: str
+) -> None:
     """Surface clusters of functions with identical normalized body shape.
 
     Folds identifiers and literals to placeholders, hashes the body's AST shape,
     and clusters matches (see `archy.duplicates`). Output is two tiers: "likely
     duplicate(s)" to investigate, and demoted "variant(s)" that are likely
-    intentional (same-class siblings, boilerplate, and test/vendored copies whose
-    shared body is scaffolding or deliberate isolation). Advisory only (never changes
-    `archy score`); a cluster means "investigate," not "provably identical."
-    Refactorability is a semantic call, so the ~50% precision ceiling is left to
-    the reader's judgment. Trivial functions below `--min-nodes` are skipped.
+    intentional (same-class siblings, boilerplate, test/vendored copies, and -
+    with `--co-change`, the default when git is present - copies whose files are
+    actively maintained yet never change together, i.e. deliberately independent
+    implementations). Advisory only (never changes `archy score`); a cluster
+    means "investigate," not "provably identical." Refactorability is a semantic
+    call, so the ~50% precision ceiling is left to the reader's judgment. Trivial
+    functions below `--min-nodes` are skipped.
     """
     # Validate before any parse work so bad flags fail fast and consistently.
     if min_nodes < 1:
@@ -732,6 +744,14 @@ def duplicates(path: Path, min_nodes: int, top_n: int, min_members: int, fmt: st
     rows = classify_variants(
         compute_duplicates(modules, parse_results, min_size=min_nodes, min_members=min_members)
     )
+    if co_change:
+        # git-backed precision layer (#242): demote clusters whose copies never
+        # co-change. Best-effort - a non-git tree simply leaves the tiers as-is.
+        cochange = git_cochange(path, keep_paths=frozenset(str(m.path) for m in modules))
+        if cochange is not None:
+            rows = demote_independent(
+                rows, counts=cochange.counts, pair_support=cochange.pair_support
+            )
     if fmt == "json":
         payload = _duplicates_to_dict(rows, top_n=top_n, min_nodes=min_nodes)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -1921,7 +1941,8 @@ def _duplicates_note(
     if variant_count:
         note += (
             f" ({variant_count} likely-intentional variant(s) were found but demoted: "
-            "same-class siblings, boilerplate, or test/vendored copies.)"
+            "same-class siblings, boilerplate, test/vendored copies, or independent "
+            "copies that never co-change.)"
         )
     return note
 
@@ -1996,7 +2017,7 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
         _duplicates_section(
             out,
             f"# {len(variants)} likely-intentional variant(s) (same-class / boilerplate / "
-            f"test / vendored; showing top {min(top_n, len(variants))})",
+            f"test / vendored / independent; showing top {min(top_n, len(variants))})",
             variants[:top_n],
             with_reason=True,
         )
