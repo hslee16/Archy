@@ -22,7 +22,7 @@ archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.37.0. Usable today via:
+**Status:** v0.38.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -298,7 +298,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.37.0
+- uses: hslee16/archy@v0.38.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -324,7 +324,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.37.0
+    rev: v0.38.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -456,6 +456,7 @@ Shipped:
 - **v0.35, MCP surface modernization**: brought the `archy mcp` tools up to current MCP best practice (2025-2026 spec) without changing the tool set (still 19, no plugin-pin bump). All tools now declare `readOnlyHint` / `title` annotations so trusted clients can auto-approve archy's read-only calls instead of prompting on every read ([#225](https://github.com/hslee16/archy/issues/225)); every tool declares a structured-output `outputSchema` and returns conforming `structuredContent` alongside the text block ([#228](https://github.com/hslee16/archy/issues/228)); the token-heavy `archy_dsm` and `archy_graph` are concise-by-default with a `response_format="summary"|"full"` enum and a truncation cap (DSM summary ~89% smaller than the full matrix) ([#226](https://github.com/hslee16/archy/issues/226)); and a single three-tier error model gives agents one recovery contract (`isError:true` for usage errors, in-band result variants for recoverable conditions like no-baseline / too-large / no-config) ([#229](https://github.com/hslee16/archy/issues/229)). No new tool, axis, or graph; MCP-DX over the existing surface. Tracker [#230](https://github.com/hslee16/archy/issues/230).
 - **v0.37, duplicate-function detection** ([#133](https://github.com/hslee16/archy/issues/133)/[#242](https://github.com/hslee16/archy/issues/242)): a new CLI command `archy duplicates` and MCP tool `archy_duplicates` (14th) that cluster functions with an identical normalized body shape (tree-sitter AST-shape hashing, folded into the existing complexity walk, no new parse). Output is a two-tier surfacer: a primary "likely duplicate" list and a demoted "same-class / boilerplate variant" list (a semantic de-noiser using same-class / `@overload` / trivial signals), with `exact=true` flagging byte-identical (Type-1) clusters as the highest-confidence subset. Advisory only, never a score axis. Deliberately framed as a *surfacer*, not a precision oracle: a 94-source literature review + a 12-repo false-positive validation established that ~50% refactorability precision (~63% on the exact tier, ~74% on non-test source) is the expected ceiling for any similarity-only detector, so the semantic call is left to the reader/agent. Change-history co-change ([#131](https://github.com/hslee16/archy/issues/131)), path-scoping ([#247](https://github.com/hslee16/archy/issues/247)), and a Type-3-tolerant primitive ([#246](https://github.com/hslee16/archy/issues/246)) are the queued precision/recall follow-ups. Additive tool, so the plugin pin stays `archy>=0.36,<1.0`. Empirics: [`RESEARCH_METRICS.md` §12b-§12d](docs/research/RESEARCH_METRICS.md).
 - **v0.38, change coupling** ([#131](https://github.com/hslee16/archy/issues/131)): a new CLI command `archy coupling` that ranks module *pairs* which co-change in git history but have no import/call edge - behavioral (temporal) coupling the structural graph can't see (Tornhill / CodeScene lineage, reusing the `archy hotspots` git machinery). Strength is `confidence = co-change commits / the rarer module's commits`; sweeping bulk commits are normalized away, and test modules are excluded by default (`--include-tests` to keep them) because test co-change is ~half the raw volume and mostly noise. Advisory only, never a score axis. A 29-project bench set the defaults (source-only, `--min-support 5 --min-confidence 0.5`); a spot-check trio was 15/15 genuine co-change, dominated by parallel-implementation families (per-backend, per-scheme siblings) - the "missing shared abstraction" signal. Also surfaced on `archy_impact(co_change=true)` as a `co_changed` overlay (the behavioral blind spot the structural blast radius misses); the duplicate-precision consumption ([#242](https://github.com/hslee16/archy/issues/242)) is the remaining queued follow-up. Empirics: [`RESEARCH_METRICS.md` §7a](docs/research/RESEARCH_METRICS.md).
+- **v0.38, duplicate path-scoping** ([#247](https://github.com/hslee16/archy/issues/247)): `archy duplicates` now demotes clusters that sit wholly in test suites or vendoring/isolation dirs (`_vendor`, `module_utils`, ...) to the `variant` tier by default, so the primary "likely duplicate" list behaves like the source-only slice. A whole-repo 29-project validation drove it: the demotion is ~68% test-dominated, recovering the scientific/ML precision crash (numpy's exact tier was 99% test-code duplication) without over-demoting real source (a cross-tier clone that shares a body with source stays primary). Empirics: [`RESEARCH_METRICS.md` §12e](docs/research/RESEARCH_METRICS.md).
 
 **Diagnostics**
 
