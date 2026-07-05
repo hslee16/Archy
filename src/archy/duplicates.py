@@ -14,7 +14,8 @@ likely-intentional clusters (same-class siblings, `@overload` stubs, trivial
 boilerplate). Nothing is hidden; the variant tier is down-ranked, not dropped.
 Within the primary tier, `exact` marks byte-identical (Type-1) clusters: the
 concrete (un-normalized) body hashes match, so these are real copy-paste, the
-highest-confidence slice (~69% precision vs ~50% for the tier overall; §12d).
+highest-confidence slice (~63% precision on a 12-repo re-validation, ~74% on
+non-test source, vs ~50% for the tier overall; §12d).
 
 Refactorability is a *semantic* judgment that syntax cannot fully make. The clone
 literature is blunt about this: Kapser & Godfrey found up to 71% of real clones
