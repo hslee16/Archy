@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "88b27eeac7e8",
+  "strategy": "manual-commit",
+  "branch": "alee/near-miss-type3-246",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "README.md",
+    "bench/duplicates_recall_experiment.py",
+    "bench/near_duplicates_sweep.py",
+    "docs/research/RESEARCH_METRICS.md",
+    "src/archy/cli.py",
+    "src/archy/complexity.py",
+    "src/archy/duplicates.py",
+    "src/archy/mcp.py",
+    "tests/test_duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/88/b27eeac7e8/0/metadata.json",
+      "transcript": "/88/b27eeac7e8/0/full.jsonl",
+      "content_hash": "/88/b27eeac7e8/0/content_hash.txt",
+      "prompt": "/88/b27eeac7e8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 99646,
+    "cache_creation_tokens": 7347419,
+    "cache_read_tokens": 326430721,
+    "output_tokens": 487754,
+    "api_call_count": 688
+  }
+}

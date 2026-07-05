@@ -1,0 +1,113 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "88b27eeac7e8",
+  "session_id": "c1b7f83e-7ccd-429d-a4bc-24aa80d802d7",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-05T22:47:28.877185Z",
+  "branch": "alee/near-miss-type3-246",
+  "checkpoints_count": 5,
+  "save_step_count": 4,
+  "files_touched": [
+    "README.md",
+    "bench/duplicates_recall_experiment.py",
+    "bench/near_duplicates_sweep.py",
+    "docs/research/RESEARCH_METRICS.md",
+    "src/archy/cli.py",
+    "src/archy/complexity.py",
+    "src/archy/duplicates.py",
+    "src/archy/mcp.py",
+    "tests/test_duplicates.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "3503a4732896",
+  "token_usage": {
+    "input_tokens": 99646,
+    "cache_creation_tokens": 7347419,
+    "cache_read_tokens": 326430721,
+    "output_tokens": 487754,
+    "api_call_count": 688
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01Noik6WeUjHPzkFZNbBRcmP",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "3503a4732896",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 447,
+        "end": 448,
+        "entry_ids": [
+          "2d9e3714-35db-4b5a-bd96-917842405009"
+        ],
+        "tool_use_id": "toolu_01Noik6WeUjHPzkFZNbBRcmP"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Noik6WeUjHPzkFZNbBRcmP"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 22
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-05T22:47:28.792831Z",
+    "agent_lines": 564,
+    "agent_removed": 40,
+    "human_added": 113,
+    "human_modified": 11,
+    "human_removed": 0,
+    "total_committed": 688,
+    "total_lines_changed": 741,
+    "agent_percentage": 81.5114709851552,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 575,
+      "agent_lines_removed": 40
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 575,
+      "agent_lines_removed": 40
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 45,
+      "user_lines_removed": 0,
+      "agent_lines_added": 575,
+      "agent_lines_removed": 40,
+      "user_added_per_file": {
+        "bench/near_duplicates_results.md": 45
+      }
+    }
+  ]
+}
