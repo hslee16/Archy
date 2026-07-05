@@ -1,0 +1,48 @@
+Lets do the FP spot check now
+
+---
+
+merge the PR and lets continue with the semantic filter work. Research on the internet if helpful/required
+
+---
+
+Refine same_class first but lets also do deep reserach on how to improve the precision. Research on the internet again as required
+
+---
+
+<task-notification>
+<task-id>wg2x8z8zq</task-id>
+<tool-use-id>toolu_01AgVfQVdEhFSUE7oRGkHyhy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/eeb03caa-aaff-4c98-9eda-314f85d9e475/tasks/wg2x8z8zq.output</output-file>
+<status>failed</status>
+<summary>Dynamic workflow "Deep research harness — fan-out web searches, fetch sources, adversarially verify claims, synthesize a cited report." failed: TelemetrySafeError: agent({schema}): StructuredOutput retry cap (5) exceeded — 5 failed calls with no valid output
+    at &lt;anonymous&gt; (/$bunfs/root/src/entrypoints/cli.js:7617:2700)
+    at processTicksAndRejections (native:7:39)</summary>
+<recovery>To resume after editing the script, call: Workflow({scriptPath: '/Users/hosanglee/.claude/projects/-Users-hosanglee-archy/eeb03caa-aaff-4c98-9eda-314f85d9e475/workflows/scripts/deep-research-wf_1d97ffeb-2ab.js', resumeFromRunId: 'wf_1d97ffeb-2ab', args: "How to improve the PRECISION of AST-based duplicate/clone-function detection — specifically, how to separate INTENTIONAL / benign clones (public-API signature expansion, symmetric/parameterized sibling methods that differ only by one constant, per-backend dispatch, framework boilerplate) from REFACTORABLE copy-paste duplication that a maintainer would actually extract.\n\nContext: I have a working Python tool (tree-sitter AST-shape hashing: normalize identifiers/literals, blake2b the body token stream, cluster by shape over a size floor). A 45-cluster hand-labeled false-positive study on fastapi/pytest/django puts precision at ~42-50%. Pure-syntax heuristics I tried (same-class scope, non-triviality floor, decorator/@overload awareness) only reach ~50% because the FP/TP boundary is semantic: e.g. `is_gen_callable`/`is_async_gen_callable` (a REAL dup worth extracting) and `X-Frame-Options \"DENY\"`/`\"SAMEORIGIN\"` (an intentional FP) BOTH differ by exactly one token, so token-diff count cannot separate them.\n\nResearch these concrete questions:\n1. What PRECISION do production clone detectors actually ship at and REPORT (PMD-CPD, SonarQube/Sonar, CodeScene, Simian, NiCad, SourcererCC, Deckard, iClones, jscpd)? Is ~50-70% precision on real repos actually normal for this class of tool? Give numbers with sources.\n2. Benign / intentional clone taxonomies — Kapser &amp; Godfrey \"Cloning Considered Harmful Considered Harmful\" cloning patterns (templating, customization, boilerplate, parameterized), and follow-up work on automatically CLASSIFYING a clone as benign vs harmful. What features do they use?\n3. Machine-learning / embedding / graph-neural-net clone classifiers (trained on BigCloneBench) — do they distinguish refactorable from intentional clones, or only Type-1/2/3/4 similarity? Features/precision?\n4. LLM-as-judge for clone/duplication validation — has anyone used an LLM to classify whether a clone cluster is worth refactoring? Precision/cost tradeoffs, prompt patterns.\n5. Refactorability-specific signals: program-dependence-graph slicing for refactorable clones, \"clone recommendation for refactoring\", token-level anti-unification / difference-ratio thresholds, and whether \"clones in the same enclosing scope\" is an established benign signal.\n6. Any lightweight, non-ML heuristic that measurably improves precision on this exact problem that I have not tried.\n\nDeliver a prioritized, actionable set of techniques ranked by (precision impact) x (implementation cost for a local, no-ML-dependency Python CLI tool), with empirical precision numbers and citations for each. Flag which require ML/LLM vs pure static heuristics."})
+Agent transcripts: /Users/hosanglee/.claude/projects/-Users-hosanglee-archy/eeb03caa-aaff-4c98-9eda-314f85d9e475/subagents/workflows/wf_1d97ffeb-2ab</recovery>
+<usage><agent_count>95</agent_count><agents_done>94</agents_done><agents_error>1</agents_error><agents_skipped>0</agents_skipped><agents_empty_result>0</agents_empty_result><subagent_tokens>2679500</subagent_tokens><tool_uses>645</tool_uses><duration_ms>1113011</duration_ms></usage>
+</task-notification>
+
+---
+
+merge it and lets continue
+
+---
+
+lets merge PR first and contiue on with the experiment and the Co-change precision layer
+
+---
+
+merge it
+
+---
+
+how confident are you on the score 69%? Should we run the duplication feature on more bench repos? we only ran it against 3 repos
+
+---
+
+update #247 and run a quick source-only precision re-estimate
+
+---
+
+do the doc correction and prep the v0.37.0 release PR

@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "5b37dce3aa26",
+  "strategy": "manual-commit",
+  "branch": "alee/release-v0.37.0",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "README.md",
+    "bench/duplicates_results.md",
+    "docs/FUTURE.md",
+    "docs/research/RESEARCH_METRICS.md",
+    "skills/archy/SKILL.md",
+    "src/archy/duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5b/37dce3aa26/0/metadata.json",
+      "transcript": "/5b/37dce3aa26/0/full.jsonl",
+      "content_hash": "/5b/37dce3aa26/0/content_hash.txt",
+      "prompt": "/5b/37dce3aa26/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 64778,
+    "cache_creation_tokens": 4233204,
+    "cache_read_tokens": 167552032,
+    "output_tokens": 425975,
+    "api_call_count": 386
+  }
+}
