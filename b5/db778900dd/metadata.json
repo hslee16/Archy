@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "b5db778900dd",
+  "strategy": "manual-commit",
+  "branch": "alee/archy-duplicates-mcp",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/archy/mcp.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b5/db778900dd/0/metadata.json",
+      "transcript": "/b5/db778900dd/0/full.jsonl",
+      "content_hash": "/b5/db778900dd/0/content_hash.txt",
+      "prompt": "/b5/db778900dd/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 44959,
+    "cache_creation_tokens": 2795682,
+    "cache_read_tokens": 92394724,
+    "output_tokens": 309334,
+    "api_call_count": 274
+  }
+}
