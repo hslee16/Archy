@@ -12,6 +12,9 @@ into two tiers by a semantic de-noiser (`classify_variants`): a primary "likely
 duplicate" tier (investigate these) and a demoted "variant" tier of
 likely-intentional clusters (same-class siblings, `@overload` stubs, trivial
 boilerplate). Nothing is hidden; the variant tier is down-ranked, not dropped.
+Within the primary tier, `exact` marks byte-identical (Type-1) clusters: the
+concrete (un-normalized) body hashes match, so these are real copy-paste, the
+highest-confidence slice (~69% precision vs ~50% for the tier overall; §12d).
 
 Refactorability is a *semantic* judgment that syntax cannot fully make. The clone
 literature is blunt about this: Kapser & Godfrey found up to 71% of real clones
@@ -99,6 +102,7 @@ class DuplicateGroup(BaseModel):
     same_class: bool = False
     variant_reason: str | None = None
     category: str = "duplicate"
+    exact: bool = False
 
 
 def compute_duplicates(
@@ -208,10 +212,24 @@ def classify_variants(groups: list[DuplicateGroup]) -> list[DuplicateGroup]:
                 update={
                     "variant_reason": reason,
                     "category": "variant" if reason is not None else "duplicate",
+                    "exact": _is_exact(feats),
                 }
             )
         )
     return classified
+
+
+def _is_exact(feats: list[FunctionFeatures | None]) -> bool:
+    """True when every member's body is byte-identical (a Type-1 clone).
+
+    Requires every member to be readable and to share one non-empty
+    `concrete_hash`. These are the highest-confidence duplicates: real
+    copy-paste, not parameterized siblings that merely share a normalized shape.
+    """
+    if not feats or any(f is None for f in feats):
+        return False
+    hashes = {f.concrete_hash for f in feats if f is not None}
+    return len(hashes) == 1 and "" not in hashes
 
 
 def _has_decorator(feat: FunctionFeatures | None, suffix: str) -> bool:

@@ -546,6 +546,7 @@ class DuplicateGroupSummary(BaseModel):
     redundancy: int
     category: str
     variant_reason: str | None
+    exact: bool
     sample: str
 
 
@@ -565,6 +566,7 @@ class DuplicatesPayload(BaseModel):
 
     min_nodes: int
     total: int
+    exact_total: int
     variant_total: int
     shown: int
     duplicated_functions: int
@@ -967,7 +969,9 @@ def _register_tools(server: FastMCP) -> None:
             "(identifiers/literals folded to placeholders). Returns two tiers: "
             "`duplicates` (the primary 'likely duplicate' list to investigate) "
             "and `variants` (demoted same-class / boilerplate clusters that are "
-            "likely intentional, each carrying a `variant_reason`). "
+            "likely intentional, each carrying a `variant_reason`). Within the "
+            "primary tier, `exact=true` marks byte-identical (Type-1) clusters, "
+            "the highest-confidence 'definitely refactor these' subset. "
             f"`min_nodes` (default {DEFAULT_MIN_SIZE}) is the minimum normalized "
             "AST-node count, skipping trivial getters/stubs. This is an advisory "
             "SURFACER, never a score axis: refactorability is a semantic call the "
@@ -1539,6 +1543,7 @@ def _summarize_duplicate_group(group: DuplicateGroup) -> DuplicateGroupSummary:
         redundancy=group.redundancy,
         category=group.category,
         variant_reason=group.variant_reason,
+        exact=group.exact,
         sample=f"{first.module}:{first.line} {first.qualified_name}",
     )
 
@@ -1592,6 +1597,7 @@ def _run_duplicates(
     return DuplicatesPayload(
         min_nodes=min_nodes,
         total=len(dups),
+        exact_total=sum(1 for g in dups if g.exact),
         variant_total=len(variants),
         shown=min(top_n, len(dups)),
         duplicated_functions=sum(g.member_count for g in dups),
