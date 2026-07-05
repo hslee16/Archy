@@ -1,0 +1,33 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "570997bc9f3f",
+  "strategy": "manual-commit",
+  "branch": "alee/duplicates-cochange-242",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "README.md",
+    "bench/duplicates_cochange_sweep.py",
+    "docs/FUTURE.md",
+    "docs/ROADMAP.md",
+    "docs/research/RESEARCH_METRICS.md",
+    "src/archy/cli.py",
+    "src/archy/duplicates.py",
+    "src/archy/mcp.py",
+    "tests/test_duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/57/0997bc9f3f/0/metadata.json",
+      "transcript": "/57/0997bc9f3f/0/full.jsonl",
+      "content_hash": "/57/0997bc9f3f/0/content_hash.txt",
+      "prompt": "/57/0997bc9f3f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 65816,
+    "cache_creation_tokens": 4190907,
+    "cache_read_tokens": 186061542,
+    "output_tokens": 334996,
+    "api_call_count": 505
+  }
+}
