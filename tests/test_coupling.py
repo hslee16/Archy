@@ -13,10 +13,12 @@ from archy.cli import main
 from archy.coupling import (
     CoChangeData,
     CouplingPair,
+    co_changed_with,
     compute_coupling,
     git_cochange,
     internal_module_paths,
 )
+from archy.mcp import _run_impact
 
 # --------------------------------------------------------------------------- #
 # compute_coupling unit tests (constructed graph + CoChangeData, no disk)
@@ -115,6 +117,54 @@ def test_internal_module_paths_skips_external_and_pathless():
     g.add_node("ext", external=True)
     g.add_node("nopath", external=False)
     assert internal_module_paths(g) == {str(Path("/a.py").resolve()): "pkg.a"}
+
+
+# --------------------------------------------------------------------------- #
+# co_changed_with: the directional overlay for archy_impact (#131 -> impact)
+# --------------------------------------------------------------------------- #
+
+
+def test_co_changed_with_surfaces_hidden_partner():
+    g = _graph({"a": "/a.py", "b": "/b.py"})
+    co = _cochange({"/a.py": 10, "/b.py": 10}, {("/a.py", "/b.py"): 9})
+    [hint] = co_changed_with(g, co, frozenset({"a"}), min_support=1, min_confidence=0.0)
+    # Directional: b co-changes with the edited a, and carries b's own path.
+    assert hint.module == "b" and hint.coupled_to == "a" and hint.path == "/b.py"
+    assert hint.confidence > 0 and hint.support == 9
+
+
+def test_co_changed_with_skips_pair_fully_inside_targets():
+    # Both endpoints edited -> not a "check this other module" hint.
+    g = _graph({"a": "/a.py", "b": "/b.py"})
+    co = _cochange({"/a.py": 10, "/b.py": 10}, {("/a.py", "/b.py"): 9})
+    assert co_changed_with(g, co, frozenset({"a", "b"}), min_support=1, min_confidence=0.0) == []
+
+
+def test_co_changed_with_excludes_already_impacted_partner():
+    # b is already in the structural blast radius, so it is not a hidden hint.
+    g = _graph({"a": "/a.py", "b": "/b.py"})
+    co = _cochange({"/a.py": 10, "/b.py": 10}, {("/a.py", "/b.py"): 9})
+    assert (
+        co_changed_with(
+            g, co, frozenset({"a"}), exclude=frozenset({"b"}), min_support=1, min_confidence=0.0
+        )
+        == []
+    )
+
+
+def test_co_changed_with_ignores_structurally_connected_and_untargeted():
+    # a->b edge means compute_coupling drops the pair (graph already sees it);
+    # (c,d) touches no target. Only the no-edge, one-target pair (a,e) survives.
+    g = _graph(
+        {"a": "/a.py", "b": "/b.py", "c": "/c.py", "d": "/d.py", "e": "/e.py"},
+        edges=[("a", "b")],
+    )
+    co = _cochange(
+        {"/a.py": 10, "/b.py": 10, "/c.py": 10, "/d.py": 10, "/e.py": 10},
+        {("/a.py", "/b.py"): 9, ("/c.py", "/d.py"): 9, ("/a.py", "/e.py"): 8},
+    )
+    hints = co_changed_with(g, co, frozenset({"a"}), min_support=1, min_confidence=0.0)
+    assert [(h.module, h.coupled_to) for h in hints] == [("e", "a")]
 
 
 # --------------------------------------------------------------------------- #
@@ -345,3 +395,33 @@ def test_coupling_pair_is_frozen_model():
     )
     with pytest.raises(ValidationError):
         p.support = 4  # frozen
+
+
+# --------------------------------------------------------------------------- #
+# archy_impact co_change piggyback (the MCP overlay)
+# --------------------------------------------------------------------------- #
+
+
+def test_run_impact_co_change_surfaces_hidden_partner(tmp_path: Path):
+    _make_coupled_project(tmp_path)  # pkg.a and pkg.b co-change 6x, no import edge
+    result = _run_impact(tmp_path, files=[tmp_path / "pkg" / "a.py"], co_change=True)
+    assert result.changed == ("pkg.a",)
+    assert "pkg.b" not in result.impacted  # no structural edge -> not in blast radius
+    hints = {(h.coupled_to, h.module) for h in result.co_changed}
+    assert ("pkg.a", "pkg.b") in hints  # ...but surfaced as a hidden co-change
+
+
+def test_run_impact_co_change_off_is_git_free_and_empty(tmp_path: Path):
+    _make_coupled_project(tmp_path)
+    result = _run_impact(tmp_path, files=[tmp_path / "pkg" / "a.py"])  # co_change defaults False
+    assert result.co_changed == ()
+
+
+def test_run_impact_co_change_without_git_is_empty(tmp_path: Path):
+    # A non-git project: co_change requested but best-effort, so no error, no hints.
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("VALUE = 1\n")
+    result = _run_impact(tmp_path, files=[pkg / "a.py"], co_change=True)
+    assert result.co_changed == ()

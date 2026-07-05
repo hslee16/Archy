@@ -21,6 +21,8 @@ from pathlib import Path
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from archy.coupling import CoChangeHint
+
 DEFAULT_MAX_CHAINS = 20
 
 
@@ -61,6 +63,12 @@ class Impact(BaseModel):
     propagation_cost: float = 0.0
     chains: tuple[CausalChain, ...] = ()
     chains_omitted: int = 0
+    # Behavioral (temporal) coupling the structural blast radius above cannot
+    # see: modules that historically co-change with the edited set but have no
+    # import/call edge to it (issue #131 consumed via co_change=True). Empty
+    # unless requested and git history is available; `find_impact` never fills
+    # it (it is git-free), the MCP layer attaches it.
+    co_changed: tuple[CoChangeHint, ...] = ()
 
 
 def find_impact(

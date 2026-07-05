@@ -105,6 +105,26 @@ class CouplingPair(BaseModel):
     count_b: int
 
 
+class CoChangeHint(BaseModel):
+    """A directional co-change hint for one edited (target) module.
+
+    `module` is the structurally-unconnected module that historically
+    co-changes with `coupled_to` (an edited module), so the reader should check
+    it even though the import graph shows no dependency. `confidence` / `support`
+    are the same coupling strength / commit count as `CouplingPair`. Directional
+    (unlike the symmetric `CouplingPair`) so it can hang off a blast-radius
+    result as "you edited X; historically Y co-changes, check Y".
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    path: str
+    coupled_to: str
+    confidence: float
+    support: int
+
+
 def git_cochange(
     root: Path,
     *,
@@ -274,3 +294,47 @@ def compute_coupling(
         )
     out.sort(key=lambda c: (-c.confidence, -c.support, c.module_a, c.module_b))
     return out
+
+
+def co_changed_with(
+    graph: nx.DiGraph,
+    cochange: CoChangeData,
+    targets: frozenset[str],
+    *,
+    exclude: frozenset[str] = frozenset(),
+    min_support: int = DEFAULT_MIN_SUPPORT,
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+) -> list[CoChangeHint]:
+    """Modules that co-change with a `targets` set but have no structural edge to it.
+
+    Reuses `compute_coupling`'s pair logic, then keeps each no-edge pair with
+    exactly one endpoint in `targets` (a pair fully inside `targets` is two
+    modules already being edited together, not a hint). The other endpoint is
+    the hint; a partner in `exclude` (e.g. modules already in the blast radius)
+    or itself a target is dropped, so hints surface only the *hidden* couplings.
+    Ranked by `(-confidence, -support, module)`.
+    """
+    hints: list[CoChangeHint] = []
+    for pair in compute_coupling(
+        graph, cochange, min_support=min_support, min_confidence=min_confidence
+    ):
+        a_in, b_in = pair.module_a in targets, pair.module_b in targets
+        if a_in == b_in:  # both edited, or neither a target: not a hint
+            continue
+        if a_in:
+            target, partner, partner_path = pair.module_a, pair.module_b, pair.path_b
+        else:
+            target, partner, partner_path = pair.module_b, pair.module_a, pair.path_a
+        if partner in targets or partner in exclude:
+            continue
+        hints.append(
+            CoChangeHint(
+                module=partner,
+                path=partner_path,
+                coupled_to=target,
+                confidence=pair.confidence,
+                support=pair.support,
+            )
+        )
+    hints.sort(key=lambda h: (-h.confidence, -h.support, h.module))
+    return hints

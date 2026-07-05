@@ -387,10 +387,16 @@ two-pass and type-op cluster in mypy) - precisely the "missing shared
 abstraction / hidden dependency" the tool is meant to surface. The
 benign-vs-refactorable call (an intentional parallel family vs a real missing
 abstraction) is the same semantic judgment left to the reader as in §12c;
-co-change is the honest surface for it. This is also the **principled precision
-lever for duplicate detection** (§12c/§12d): a duplicate cluster whose members
-co-change is refactorable, one that never co-changes is benign - consuming this
-signal in `archy duplicates` is the queued follow-up.
+co-change is the honest surface for it. Beyond the standalone `archy coupling`
+CLI, the signal is also surfaced on `archy_impact(co_change=true)` as a
+`co_changed` overlay (`co_changed_with` filters the pairs to those touching the
+edited set, excluding modules already in the structural blast radius) - "you
+edited X; historically Y co-changes with no import edge, check Y" - opt-in and
+source-only, the only path that makes `archy_impact` read git. This is also the
+**principled precision lever for duplicate detection** (§12c/§12d): a duplicate
+cluster whose members co-change is refactorable, one that never co-changes is
+benign - consuming this signal in `archy duplicates` is the remaining queued
+follow-up.
 
 ---
 
