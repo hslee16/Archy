@@ -22,7 +22,7 @@ archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.38.0. Usable today via:
+**Status:** v0.39.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -298,7 +298,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.38.0
+- uses: hslee16/archy@v0.39.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -324,7 +324,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.38.0
+    rev: v0.39.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -457,6 +457,7 @@ Shipped:
 - **v0.37, duplicate-function detection** ([#133](https://github.com/hslee16/archy/issues/133)/[#242](https://github.com/hslee16/archy/issues/242)): a new CLI command `archy duplicates` and MCP tool `archy_duplicates` (14th) that cluster functions with an identical normalized body shape (tree-sitter AST-shape hashing, folded into the existing complexity walk, no new parse). Output is a two-tier surfacer: a primary "likely duplicate" list and a demoted "same-class / boilerplate variant" list (a semantic de-noiser using same-class / `@overload` / trivial signals), with `exact=true` flagging byte-identical (Type-1) clusters as the highest-confidence subset. Advisory only, never a score axis. Deliberately framed as a *surfacer*, not a precision oracle: a 94-source literature review + a 12-repo false-positive validation established that ~50% refactorability precision (~63% on the exact tier, ~74% on non-test source) is the expected ceiling for any similarity-only detector, so the semantic call is left to the reader/agent. Change-history co-change ([#131](https://github.com/hslee16/archy/issues/131)), path-scoping ([#247](https://github.com/hslee16/archy/issues/247)), and a Type-3-tolerant primitive ([#246](https://github.com/hslee16/archy/issues/246)) are the queued precision/recall follow-ups. Additive tool, so the plugin pin stays `archy>=0.36,<1.0`. Empirics: [`RESEARCH_METRICS.md` §12b-§12d](docs/research/RESEARCH_METRICS.md).
 - **v0.38, change coupling** ([#131](https://github.com/hslee16/archy/issues/131)): a new CLI command `archy coupling` that ranks module *pairs* which co-change in git history but have no import/call edge - behavioral (temporal) coupling the structural graph can't see (Tornhill / CodeScene lineage, reusing the `archy hotspots` git machinery). Strength is `confidence = co-change commits / the rarer module's commits`; sweeping bulk commits are normalized away, and test modules are excluded by default (`--include-tests` to keep them) because test co-change is ~half the raw volume and mostly noise. Advisory only, never a score axis. A 29-project bench set the defaults (source-only, `--min-support 5 --min-confidence 0.5`); a spot-check trio was 15/15 genuine co-change, dominated by parallel-implementation families (per-backend, per-scheme siblings) - the "missing shared abstraction" signal. Also surfaced on `archy_impact(co_change=true)` as a `co_changed` overlay (the behavioral blind spot the structural blast radius misses); the duplicate-precision consumption ([#242](https://github.com/hslee16/archy/issues/242)) is the remaining queued follow-up. Empirics: [`RESEARCH_METRICS.md` §7a](docs/research/RESEARCH_METRICS.md).
 - **v0.38, duplicate path-scoping** ([#247](https://github.com/hslee16/archy/issues/247)): `archy duplicates` now demotes clusters that sit wholly in test suites or vendoring/isolation dirs (`_vendor`, `module_utils`, ...) to the `variant` tier by default, so the primary "likely duplicate" list behaves like the source-only slice. A whole-repo 29-project validation drove it: the demotion is ~68% test-dominated, recovering the scientific/ML precision crash (numpy's exact tier was 99% test-code duplication) without over-demoting real source (a cross-tier clone that shares a body with source stays primary). Empirics: [`RESEARCH_METRICS.md` §12e](docs/research/RESEARCH_METRICS.md).
+- **v0.39, duplicate co-change demotion** ([#242](https://github.com/hslee16/archy/issues/242)): the change-coupling precision lever consumed by `archy duplicates`. A primary cluster whose copies live in actively-maintained files that never co-change in git is demoted to the `variant` tier (reason `independent`) - deliberately parallel implementations (per-backend siblings, symmetric methods), not refactorable copy-paste. On-by-default when git is available (`--no-co-change` / `co_change=false` to skip; it's an on-demand audit, so the git cost is per-scan, not per-edit). A 29-project bench + a 15/15-benign django spot-check put the primary-tier lift at ~50% -> ~74%, with zero over-demotion on repos without the parallel-implementation class. A synthetic-injection recall experiment established the other axis: 100% Type-1/2 recall, ~0% Type-3 (the exact hash has no gap tolerance), so the honest full picture is a high-precision, partial-recall surfacer, motivating the queued Type-3 primitive ([#246](https://github.com/hslee16/archy/issues/246)). Additive, no plugin-pin bump (still 14 tools). Empirics: [`RESEARCH_METRICS.md` §12f/§12g](docs/research/RESEARCH_METRICS.md).
 
 **Diagnostics**
 
