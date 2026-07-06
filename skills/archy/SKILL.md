@@ -1,6 +1,6 @@
 ---
 name: archy
-description: Track architectural health of a Python codebase via the archy CLI and MCP server. Computes a five-axis quality score (modularity, acyclicity, depth, equality, complexity), detects import cycles via Tarjan SCCs, enforces YAML layer rules directly and transitively (via import-linter), ranks refactor priority via `cyclomatic_complexity * git_churn` hotspots, surfaces high-risk modules before edits, maps `git diff` to impacted test files for CI selection, and runs a snapshot/diff feedback loop so AI-assisted edits do not silently regress structure. Use when working in a Python project that contains `archy.yaml`, when the user mentions architectural drift, import cycles, layer violations, module coupling, blast radius, refactor risk, refactor priority, hotspots, affected tests, "what depends on this", "which tests should I run", "where should I refactor first", or before any multi-file Python refactor.
+description: Track architectural health of a Python codebase via the archy CLI and MCP server. Computes a five-axis quality score (modularity, acyclicity, depth, equality, complexity), detects import cycles via Tarjan SCCs, enforces YAML layer rules directly and transitively (via import-linter), ranks refactor priority via `cyclomatic_complexity * git_churn` hotspots, surfaces high-risk modules before edits, surfaces duplicate-function clusters and git change-coupling as advisory signals, maps `git diff` to impacted test files for CI selection, and runs a snapshot/diff feedback loop so AI-assisted edits do not silently regress structure. Use when working in a Python project that contains `archy.yaml`, when the user mentions architectural drift, import cycles, layer violations, module coupling, blast radius, refactor risk, refactor priority, hotspots, duplicate code, change coupling, affected tests, "what depends on this", "which tests should I run", "where should I refactor first", or before any multi-file Python refactor.
 license: MIT
 compatibility: Requires Python 3.10+ and `pip install archy` (or `archy[contracts]` for transitive import-linter checks). The MCP server runs over stdio.
 metadata:
@@ -34,7 +34,7 @@ If the `archy_*` tools below are not visible, stop and ask the user to install a
 Activate this skill when any of the following is true:
 
 - The repository root contains `archy.yaml` (definitive signal: the project has opted in)
-- The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, refactor priority, dependency graph, hotspots, affected tests, "what depends on X", "which tests should I run for this PR", "is this safe to remove", or "where should I refactor first"
+- The user mentions: import cycle, architectural drift, layer violation, module coupling, blast radius, refactor risk, refactor priority, dependency graph, hotspots, duplicate functions or duplicate code, change coupling or co-change, affected tests, "what depends on X", "which tests should I run for this PR", "is this safe to remove", or "where should I refactor first"
 - An edit is about to touch more than one Python module
 - An edit adds, removes, or changes an `import` statement
 - The user asks for a structural review of a Python project
