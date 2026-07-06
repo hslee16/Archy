@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "0fd4520629e3",
+  "strategy": "manual-commit",
+  "branch": "alee/docs-refresh-v040-arc",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/LEARNINGS.md",
+    "plugins/claude/README.md",
+    "plugins/claude/skills/archy/SKILL.md",
+    "skills/archy/SKILL.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0f/d4520629e3/0/metadata.json",
+      "transcript": "/0f/d4520629e3/0/full.jsonl",
+      "content_hash": "/0f/d4520629e3/0/content_hash.txt",
+      "prompt": "/0f/d4520629e3/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 11684,
+    "cache_creation_tokens": 154603,
+    "cache_read_tokens": 1371804,
+    "output_tokens": 16263,
+    "api_call_count": 19
+  }
+}
