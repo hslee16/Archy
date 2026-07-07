@@ -55,6 +55,12 @@ AI agents generate code at machine speed. Without a feedback loop on *structural
 
 The agent-feedback framing is empirically supported by 2025-2026 research: the Navigation Paradox paper shows large LLM context windows do not eliminate the need for structural graph navigation, LocAgent's ablation finds graph edges materially improve code-localization accuracy, the Constraint Decay paper ([arxiv:2605.06445](https://arxiv.org/html/2605.06445v1)) finds agents lose ~30 points in pass rate as architectural constraints accumulate (Clean Architecture layering alone costs -9.1 points, on the open and mid-tier models tested) and that its ground-truth layer/dependency-direction verifier is essentially `archy check`, and the coding-agent failure-mode literature names the specific patterns (scope drift, cross-file reasoning failure) that an architectural feedback loop is built to catch. Citations, a failure-mode-to-archy-capability mapping, and the resulting roadmap priorities are in [`docs/research/RESEARCH_METRICS.md` §14c](docs/research/RESEARCH_METRICS.md).
 
+### The underlying mechanism
+
+Beneath the empirical case is a structural one. Anthony Hobday, writing about software quality, names it precisely: "as the number of things goes up, the number of relationships goes up even faster. Eventually it's impossible for people to properly consider all of those relationships." Coherence is the state where those relationships still hold together; entropy is its steady loss as a system grows. A single author keeps a codebase coherent by remembering every edge. An agent generating code at machine speed cannot, and neither can a team past a certain size.
+
+That relationship load is exactly what archy reads. Coupling, the DSM, import cycles, and change-coupling are all measures of how far the graph has drifted from "one person can hold it in their head." archy externalizes that memory into a number and a trend, so the growth in relationships stays visible instead of being discovered during a refactor that blows up.
+
 ## Scope
 
 - **Python only.** The cross-language story belongs to [sentrux](https://github.com/sentrux/sentrux); that division is settled. archy goes deep on Python (transitive contracts, SDP, NCCD, `if TYPE_CHECKING:` semantics) rather than broad across languages; see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) §"Competitive landscape".

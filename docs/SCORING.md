@@ -735,6 +735,42 @@ The most useful comparison is almost always **a project against
 itself over time**, not against these bands or other projects. That's
 what `archy score --record` and `archy trend` are for.
 
+### The composite is a signal, not a verdict
+
+Shipping a single `overall` number carries a standing risk: that the
+number becomes the target and quietly displaces the thing it was meant
+to proxy. Hobday's note on software quality states the general form -
+"an organisation can set objective measures of quality ... hopefully
+those objective measures don't blind the organisation to the
+subjective measures" - and it is Goodhart's law in the specific. Once
+a team optimizes `overall`, `overall` stops measuring architectural
+health and starts measuring how hard the team is working the metric.
+
+archy's defense is to keep the number decomposable and to keep
+pointing past it:
+
+- The geometric-mean aggregation already refuses to let a high axis
+  paper over a low one; the guidance above is to read the **lowest**
+  sub-metric first, not the composite.
+- `Score.inputs` exposes the raw, un-normalized values so the number
+  can always be grounded in an actual graph property rather than taken
+  on its own authority.
+- Two roadmap items exist specifically to route attention past the
+  composite rather than concentrate it there: per-module score
+  breakdown ([#129](https://github.com/hslee16/archy/issues/129)), so
+  "did my edit make *this module* worse?" is answerable without moving
+  the project number, and the per-PR review brief
+  ([#145](https://github.com/hslee16/archy/issues/145)), whose whole
+  job is to send a human's scarce judgment at the causally-
+  consequential parts of a change and to state plainly what archy
+  cannot vouch for.
+
+The discipline that follows: treat a clean `overall` as an invitation
+to look, not a certificate that there is nothing to find. A rising
+trend on a project measured against itself is the honest signal; a
+high absolute number chased for its own sake is the failure mode this
+note exists to name.
+
 ## Deferred metrics
 
 sentrux ships a fifth sub-metric, **redundancy**: dead functions plus
