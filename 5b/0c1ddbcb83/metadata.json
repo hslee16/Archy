@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "5b0c1ddbcb83",
+  "strategy": "manual-commit",
+  "branch": "alee/quality-framing-docs",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "README.md",
+    "docs/SCORING.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5b/0c1ddbcb83/0/metadata.json",
+      "transcript": "/5b/0c1ddbcb83/0/full.jsonl",
+      "content_hash": "/5b/0c1ddbcb83/0/content_hash.txt",
+      "prompt": "/5b/0c1ddbcb83/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 11680,
+    "cache_creation_tokens": 105199,
+    "cache_read_tokens": 772232,
+    "output_tokens": 11049,
+    "api_call_count": 16
+  }
+}

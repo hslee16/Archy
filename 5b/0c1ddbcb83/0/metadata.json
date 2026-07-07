@@ -1,0 +1,68 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "5b0c1ddbcb83",
+  "session_id": "8cd67a57-e4ea-4279-97cd-e0e7cc73632d",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-07T23:42:32.43396Z",
+  "branch": "alee/quality-framing-docs",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "README.md",
+    "docs/SCORING.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "9bf3d8d25eb6",
+  "token_usage": {
+    "input_tokens": 11680,
+    "cache_creation_tokens": 105199,
+    "cache_read_tokens": 772232,
+    "output_tokens": 11049,
+    "api_call_count": 16
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-07T23:42:32.427594Z",
+    "agent_lines": 42,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 42,
+    "total_lines_changed": 42,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "uv.lock": 2
+      },
+      "user_removed_per_file": {
+        "uv.lock": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 44,
+      "agent_lines_removed": 2
+    }
+  ]
+}
