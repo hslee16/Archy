@@ -1,0 +1,10 @@
+lets deeply research this article - https://ics.uci.edu/~taylor/documents/2000-ADLs-TSE.pdf
+What are some aspects that we can consider for Archy?
+
+---
+
+sketch a design doc AND file tickets for both
+
+---
+
+run deepwork review on the docs and ticekts

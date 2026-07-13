@@ -1,0 +1,108 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "bf140f230c83",
+  "session_id": "cead1646-5733-444f-b9b4-7d5429ba3aa3",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-13T03:17:37.360405Z",
+  "branch": "alee/adl-typed-connectors-conformance-spec",
+  "checkpoints_count": 3,
+  "save_step_count": 3,
+  "files_touched": [
+    "docs/SPEC_TYPED_CONNECTORS_AND_CONFORMANCE.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "e486a2a5cf49",
+  "token_usage": {
+    "input_tokens": 37,
+    "cache_creation_tokens": 49958,
+    "cache_read_tokens": 1133676,
+    "output_tokens": 18845,
+    "api_call_count": 20
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01TKhZecB5XBeG53VTt4CdEg",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "e486a2a5cf49",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 79,
+        "end": 80,
+        "entry_ids": [
+          "eab263c0-35b9-492d-9c19-e63b87e483bc"
+        ],
+        "tool_use_id": "toolu_01TKhZecB5XBeG53VTt4CdEg"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01TKhZecB5XBeG53VTt4CdEg"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-13T03:17:37.35323Z",
+    "agent_lines": 258,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 258,
+    "total_lines_changed": 258,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2,
+      "user_lines_removed": 2,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "uv.lock": 2
+      },
+      "user_removed_per_file": {
+        "uv.lock": 2
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 260,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 260,
+      "agent_lines_removed": 2
+    }
+  ]
+}
