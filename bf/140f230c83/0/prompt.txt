@@ -8,3 +8,7 @@ sketch a design doc AND file tickets for both
 ---
 
 run deepwork review on the docs and ticekts
+
+---
+
+do it and merge
