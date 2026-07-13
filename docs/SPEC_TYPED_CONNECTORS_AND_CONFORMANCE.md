@@ -240,6 +240,43 @@ Reported payload:
 
 ---
 
+## Gating: anti-theater + OECD (read before building)
+
+This spec is motivated by an external paper, which is exactly the kind of proposal
+`docs/research/AGENT_CAUSAL_REASONING_SYNTHESIS.md` and `docs/research/AXIS_REVIEW.md`
+exist to vet. Neither feature ships on "the ADL paper says connectors/refinement
+matter." Both must clear the project's own gates first:
+
+- **Anti-theater test** (PR #142/#143): *what does an agent or human do differently
+  because of this?* A different action, not a different dashboard. Corollary: a new
+  number or synthesis that changes no user action is a vanity thermometer.
+- **OECD four-condition gate** (`AXIS_REVIEW.md`), required only if a signal reaches
+  the score: independence, directionality, actionability, discriminant validity.
+
+Applied here:
+
+- **Typed connectors**: the *consumer* is the deliverable, the typing is plumbing.
+  Enrichment alone (richer `kinds` + a wire `severity`) changes no action and fails
+  the test. Ship only with a concrete consumer: conformance `forbid_kinds`, coupling
+  de-inflation for `type_only` edges in `duplicates`/`impact`, or a load-bearing-edge
+  brief. The signal itself is sound (unlike the rejected `calls_per_edge`: "replace
+  inheritance with composition" is canonical, `type_only` is lower coupling
+  cross-population), so the only real risk is shipping without a consumer. Stays out
+  of `score.py` (no baseline re-anchor).
+- **Conformance**: the divergence *list* is the action-changer (an agent removes the
+  divergent edge, exactly as `archy_contracts`/`archy_check` already work). The
+  `conformance` *number* is the theater-risk surface: never fold it into `overall`,
+  justify it only as an erosion-trend signal a human acts on. Known ceiling: it
+  measures conformance to a hand-authored `intended:` spec, not intrinsic quality, so
+  its discriminant validity decays as the spec goes stale (`absent_connectors` /
+  `unassigned_modules` exist to make that staleness visible). Evaluate it *inside* the
+  #268 constraint-tool consolidation, not as a standalone surface.
+
+**Sequencing reality:** per the maintainer's recorded 2026-05-26 prioritization, the
+highest-leverage next move is a **usage signal** (does anyone call archy inside an
+agent loop?), not more capability. Both features are "more capability" and sit below
+that line until usage evidence exists.
+
 ## Suggested sequencing
 
 1. **Feature 1, enrichment-only** (graph + `GraphEdge` wire + DSM `severity`
