@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2fed4601e30f",
+  "strategy": "manual-commit",
+  "branch": "alee/adl-spec-anti-theater-gate",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/2f/ed4601e30f/0/metadata.json",
+      "transcript": "/2f/ed4601e30f/0/full.jsonl",
+      "content_hash": "/2f/ed4601e30f/0/content_hash.txt",
+      "prompt": "/2f/ed4601e30f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 58,
+    "cache_creation_tokens": 78221,
+    "cache_read_tokens": 2124694,
+    "output_tokens": 33154,
+    "api_call_count": 32
+  }
+}
