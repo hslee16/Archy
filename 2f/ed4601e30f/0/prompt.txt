@@ -16,3 +16,7 @@ do it and merge
 ---
 
 why was typed connectors and conformance chosen for implementation? Did we adversarially consider them against the performance theater findings from previous research?
+
+---
+
+yep do both
