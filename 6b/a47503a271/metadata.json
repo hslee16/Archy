@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6ba47503a271",
+  "strategy": "manual-commit",
+  "branch": "alee/viz-spec",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/SPEC_VISUALIZATION.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6b/a47503a271/0/metadata.json",
+      "transcript": "/6b/a47503a271/0/full.jsonl",
+      "content_hash": "/6b/a47503a271/0/content_hash.txt",
+      "prompt": "/6b/a47503a271/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12834,
+    "cache_creation_tokens": 129621,
+    "cache_read_tokens": 909687,
+    "output_tokens": 18809,
+    "api_call_count": 14
+  }
+}

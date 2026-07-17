@@ -1,0 +1,5 @@
+one gap I can identify right now is the lack of "visualization" capabilities of archy. Sentrux clearly has a visualization component (check their github repo) but archy doesn't. Let's explore how/what we can actually visualize as archy runs in a code base.
+
+---
+
+do both and lets file tickets the terminal-native makes sense to me and the static export first also makes sense
