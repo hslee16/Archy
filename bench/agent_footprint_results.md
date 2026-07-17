@@ -6,12 +6,31 @@ Harness: [`bench/agent_footprint.py`](agent_footprint.py). Parser unit tests:
 
 ## Status
 
-**Harness landed; no live numbers yet.** The deterministic core
-(`parse_transcript`, `summarize`) is implemented and CI-tested against a
+**Harness landed and validated end-to-end; no comparative numbers yet.** The
+deterministic core (`parse_transcript`, `summarize`) is CI-tested against a
 synthetic transcript fixture. The live runner (`run_variant` / `run_pair`)
-invokes `claude` headless and needs `ANTHROPIC_API_KEY` plus real agent time,
-so it is run out of band, not in CI. The first live minimal-pair (below) is the
-next step; this file will carry its numbers when it runs.
+invokes `claude` headless and needs real agent time, so it runs out of band,
+not in CI.
+
+**Runner validation (no API key required).** A single live `run_variant` was
+exercised inside a logged-in Claude Code session, authenticating via the
+session's own subscription login with no `ANTHROPIC_API_KEY`. The run completed
+(a trivial edit task), and `parse_transcript`'s token totals matched the CLI's
+own `usage` object exactly (input 26 / output 456, 3 turns). Two bugs the
+synthetic fixture could not have caught surfaced and were fixed:
+
+- **Project-slug sanitization.** Claude Code names `~/.claude/projects/<slug>/`
+  by replacing *every* non-alphanumeric char (`/`, `_`, `.`) with `-`, not just
+  `/`. The first version missed the transcript for any path containing `_`.
+- **Streaming-duplicate dedup.** The transcript writes several partials of one
+  assistant message (same `message.id`, identical `usage`); summing raw lines
+  triple-counted tokens. `parse_transcript` now dedupes by message id.
+- Config note: `--bare` breaks `-p` headless execution in this nested context;
+  `--setting-sources local` is the working isolation substitute. See the spec
+  section 10.
+
+The first *comparative* minimal-pair (below) is the next step; this file will
+carry its A-vs-B numbers when it runs.
 
 ## First live-pair target (chosen, not yet run)
 

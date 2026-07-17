@@ -13,8 +13,10 @@ Two layers, deliberately split:
   `tests/test_agent_footprint.py` against a synthetic fixture.
 * `run_variant` / `run_pair` are the **live runner**: they invoke `claude -p`
   headless, copy the persisted transcript, and run the repo's test suite as the
-  regression gate the paper lacks. They need `ANTHROPIC_API_KEY` and real agent
-  time, so they run only when this file is executed directly, never in CI.
+  regression gate the paper lacks. They need a working `claude` CLI (any auth:
+  an API key or a subscription login, so a logged-in Claude Code session runs
+  them with no key) and real agent time, so they run only when this file is
+  executed directly, never in CI.
 
 Sweep scripts are run as `python bench/agent_footprint.py`, so `bench/` is on
 `sys.path[0]`; keep imports self-contained.
@@ -25,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -137,12 +140,16 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
     any write is not a revisit.
     """
     path = Path(path)
-    in_toks = cache_read = cache_create = out_toks = 0
-    assistant_messages = 0
-    touched: set[str] = set()
-    written: set[str] = set()
-    revisitations = 0
 
+    # Claude Code writes streaming partials of the same assistant message: the
+    # same `message.id` appears on several lines with identical usage, and the
+    # tool_use blocks land on the final, most-complete copy. Dedupe by id
+    # (last-wins), preserving first-seen order, so usage is counted once and
+    # tool calls are read once. Verified against a live transcript where summing
+    # raw lines triple-counted tokens (7 lines for 3 real turns).
+    deduped: dict[str, dict] = {}
+    order: list[str] = []
+    unkeyed = 0
     with path.open(encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -155,42 +162,62 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
             if entry.get("type") != "assistant":
                 continue
             message = entry.get("message", {})
-            assistant_messages += 1
+            mid = message.get("id")
+            if not mid:
+                # No id to dedupe on: treat each occurrence as its own message.
+                mid = f"_noid_{unkeyed}"
+                unkeyed += 1
+            if mid not in deduped:
+                order.append(mid)
+            deduped[mid] = message  # last copy wins (most complete)
 
-            usage = message.get("usage") or {}
-            in_toks += int(usage.get("input_tokens", 0) or 0)
-            cache_read += int(usage.get("cache_read_input_tokens", 0) or 0)
-            cache_create += int(usage.get("cache_creation_input_tokens", 0) or 0)
-            out_toks += int(usage.get("output_tokens", 0) or 0)
+    in_toks = cache_read = cache_create = out_toks = 0
+    touched: set[str] = set()
+    written: set[str] = set()
+    revisitations = 0
+    for mid in order:
+        message = deduped[mid]
+        usage = message.get("usage") or {}
+        in_toks += int(usage.get("input_tokens", 0) or 0)
+        cache_read += int(usage.get("cache_read_input_tokens", 0) or 0)
+        cache_create += int(usage.get("cache_creation_input_tokens", 0) or 0)
+        out_toks += int(usage.get("output_tokens", 0) or 0)
 
-            for name, file_path in _iter_tool_uses(message):
-                # file_path is non-None only for a file tool (Read/Edit/Write),
-                # so any such touch of an already-written path is a revisit.
-                if file_path is None:
-                    continue
-                touched.add(file_path)
-                if file_path in written:
-                    revisitations += 1
-                if name in _WRITE_TOOLS:
-                    written.add(file_path)
+        for name, file_path in _iter_tool_uses(message):
+            # file_path is non-None only for a file tool (Read/Edit/Write), so
+            # any such touch of an already-written path is a revisit.
+            if file_path is None:
+                continue
+            touched.add(file_path)
+            if file_path in written:
+                revisitations += 1
+            if name in _WRITE_TOOLS:
+                written.add(file_path)
 
     return ParsedTranscript(
         input_tokens=in_toks,
         cache_read_input_tokens=cache_read,
         cache_creation_input_tokens=cache_create,
         output_tokens=out_toks,
-        assistant_messages=assistant_messages,
+        assistant_messages=len(order),
         distinct_files_touched=len(touched),
         file_revisitations=revisitations,
     )
 
 
-# --- live runner (needs ANTHROPIC_API_KEY; never invoked in CI) --------------
+# --- live runner (needs a working `claude` CLI; never invoked in CI) ---------
 
 
 def _project_slug(repo_dir: Path) -> str:
-    """Claude Code's on-disk project dir name: the abs path with '/' -> '-'."""
-    return str(repo_dir.resolve()).replace("/", "-")
+    """Claude Code's on-disk project dir name for a working directory.
+
+    Claude Code derives the `~/.claude/projects/<slug>/` dir from the resolved
+    absolute path with *every* non-alphanumeric character collapsed to '-', not
+    just '/': e.g. `/tmp/af_smoke` -> `-private-tmp-af-smoke` (the `_` becomes
+    `-` too, and `/tmp` resolves to `/private/tmp`). Verified against a live
+    headless run; the '/'-only version silently missed the transcript.
+    """
+    return re.sub(r"[^a-zA-Z0-9]", "-", str(repo_dir.resolve()))
 
 
 def _locate_transcript(repo_dir: Path, session_id: str) -> Path:
@@ -201,9 +228,12 @@ def _locate_transcript(repo_dir: Path, session_id: str) -> Path:
 def _run_claude(repo_dir: Path, task_prompt: str, *, model: str, allowed_tools) -> dict:
     """Invoke `claude -p` headless in `repo_dir`; return the parsed JSON result.
 
-    `--bare` isolates hooks / CLAUDE.md / MCP so the repo under test, not the
-    local environment, is the variable. Requires `claude` on PATH and
-    ANTHROPIC_API_KEY in the environment.
+    Isolation comes from `--setting-sources local`: only the project's own
+    settings load, not the user/global CLAUDE.md / hooks / MCP, so the repo
+    under test is the variable. (`--bare` would isolate more but breaks `-p`
+    headless execution in a nested/sandboxed context, verified by a live run.)
+    `claude` authenticates however it is configured: an ANTHROPIC_API_KEY or a
+    subscription login, so no key is required inside a logged-in session.
     """
     cmd = [
         "claude",
@@ -214,13 +244,14 @@ def _run_claude(repo_dir: Path, task_prompt: str, *, model: str, allowed_tools) 
         "--model",
         model,
         "--dangerously-skip-permissions",
-        "--bare",
         "--allowedTools",
         ",".join(allowed_tools),
         "--setting-sources",
         "local",
     ]
-    proc = subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True)
+    proc = subprocess.run(
+        cmd, cwd=repo_dir, capture_output=True, text=True, stdin=subprocess.DEVNULL
+    )
     if proc.returncode != 0:
         raise RuntimeError(f"claude exited {proc.returncode}: {proc.stderr[:500]}")
     return json.loads(proc.stdout)
@@ -369,8 +400,12 @@ def _main(argv: list[str]) -> int:
     ap.add_argument("--test-cmd", default=None, help="test command for the regression gate")
     args = ap.parse_args(argv)
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY is required for live runs.", file=sys.stderr)
+    # The runner shells out to `claude`, which authenticates however it is
+    # configured: an ANTHROPIC_API_KEY, or an interactive subscription login
+    # (so this bench runs inside a logged-in Claude Code session with no key).
+    # Only the CLI's presence is a hard requirement.
+    if shutil.which("claude") is None:
+        print("`claude` CLI not found on PATH; the live runner needs it.", file=sys.stderr)
         return 2
     if args.n < 10:
         print(f"warning: n={args.n} < 10; a single pair is not a result (spec section 8).")

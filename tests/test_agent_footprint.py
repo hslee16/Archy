@@ -20,18 +20,24 @@ sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 import agent_footprint as af  # ty: ignore[unresolved-import]  (added to sys.path above)
 
 
-def _assistant(usage: dict, tool_uses: list[tuple[str, str | None]]) -> dict:
-    """A synthetic Claude Code transcript `assistant` line."""
+def _assistant(
+    usage: dict, tool_uses: list[tuple[str, str | None]], msg_id: str | None = None
+) -> dict:
+    """A synthetic Claude Code transcript `assistant` line.
+
+    `msg_id` sets `message.id`; lines sharing an id are streaming partials of one
+    logical message and must be deduped (usage counted once).
+    """
     content: list[dict] = []
     for name, file_path in tool_uses:
         block: dict = {"type": "tool_use", "id": f"toolu_{name}", "name": name, "input": {}}
         if file_path is not None:
             block["input"]["file_path"] = file_path
         content.append(block)
-    return {
-        "type": "assistant",
-        "message": {"role": "assistant", "content": content, "usage": usage},
-    }
+    message: dict = {"role": "assistant", "content": content, "usage": usage}
+    if msg_id is not None:
+        message["id"] = msg_id
+    return {"type": "assistant", "message": message}
 
 
 def _user_tool_result(text: str = "ok") -> dict:
@@ -165,6 +171,31 @@ def test_malformed_lines_are_skipped(tmp_path: Path):
     parsed = af.parse_transcript(t)
     assert parsed.input_tokens == 7
     assert parsed.assistant_messages == 1
+
+
+def test_streaming_duplicate_messages_counted_once(tmp_path: Path):
+    # Regression for the real-transcript bug: Claude Code writes several
+    # streaming partials of one assistant message (same message.id, identical
+    # usage), with the tool_use only on the final copy. Summing raw lines
+    # triple-counts tokens; dedup by id must recover the true per-message total.
+    t = tmp_path / "session.jsonl"
+    usage = {"input_tokens": 10, "output_tokens": 192}
+    _write_transcript(
+        t,
+        [
+            _assistant(usage, [], msg_id="msg_1"),  # streamed text partial
+            _assistant(usage, [], msg_id="msg_1"),  # duplicate
+            _assistant(usage, [("Read", "a.py")], msg_id="msg_1"),  # final, with the tool
+            _assistant({"input_tokens": 8, "output_tokens": 57}, [], msg_id="msg_2"),
+            _assistant({"input_tokens": 8, "output_tokens": 57}, [], msg_id="msg_2"),  # duplicate
+        ],
+    )
+    parsed = af.parse_transcript(t)
+    assert parsed.assistant_messages == 2  # two logical messages, not five lines
+    assert parsed.input_tokens == 10 + 8  # counted once per id
+    assert parsed.output_tokens == 192 + 57
+    assert parsed.distinct_files_touched == 1  # the Read on the final copy is seen once
+    assert parsed.file_revisitations == 0
 
 
 def _record(variant: str, run_index: int, **over) -> af.FootprintRecord:
