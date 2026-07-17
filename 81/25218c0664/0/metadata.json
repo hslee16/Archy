@@ -3,20 +3,24 @@
   "checkpoint_id": "8125218c0664",
   "session_id": "3f0e5416-fe5b-4862-9f7e-d8ccb5f5c8cd",
   "strategy": "manual-commit",
-  "created_at": "2026-07-17T19:13:10.30358Z",
+  "created_at": "2026-07-17T19:24:11.246284Z",
   "branch": "alee/259-footprint-harness",
   "checkpoints_count": 1,
   "save_step_count": 1,
-  "files_touched": [],
+  "files_touched": [
+    "bench/agent_footprint.py",
+    "bench/agent_footprint_results.md",
+    "tests/test_agent_footprint.py"
+  ],
   "agent": "Claude Code",
   "model": "claude-opus-4-8[1m]",
   "turn_id": "aa258df7d82c",
   "token_usage": {
-    "input_tokens": 1099,
-    "cache_creation_tokens": 1528548,
-    "cache_read_tokens": 60143258,
-    "output_tokens": 190204,
-    "api_call_count": 305
+    "input_tokens": 1119,
+    "cache_creation_tokens": 1541730,
+    "cache_read_tokens": 64903748,
+    "output_tokens": 196897,
+    "api_call_count": 316
   },
   "skill_events_version": 1,
   "skill_events": [
@@ -86,13 +90,16 @@
   "session_metrics": {
     "turn_count": 12
   },
-  "prompt_attributions": [
-    {
-      "checkpoint_number": 2,
-      "user_lines_added": 0,
-      "user_lines_removed": 0,
-      "agent_lines_added": 0,
-      "agent_lines_removed": 0
-    }
-  ]
+  "initial_attribution": {
+    "calculated_at": "2026-07-17T19:24:11.19399Z",
+    "agent_lines": 22,
+    "agent_removed": 7,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 22,
+    "total_lines_changed": 29,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
 }
