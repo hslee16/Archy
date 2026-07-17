@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "17448be503e4",
+  "strategy": "manual-commit",
+  "branch": "alee/259-footprint-bench-spec",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/17/448be503e4/0/metadata.json",
+      "transcript": "/17/448be503e4/0/full.jsonl",
+      "content_hash": "/17/448be503e4/0/content_hash.txt",
+      "prompt": "/17/448be503e4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1031,
+    "cache_creation_tokens": 1474799,
+    "cache_read_tokens": 46098834,
+    "output_tokens": 153354,
+    "api_call_count": 270
+  }
+}
