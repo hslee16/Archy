@@ -4,7 +4,14 @@
   "strategy": "manual-commit",
   "branch": "alee/mcp-consolidation-268",
   "checkpoints_count": 2,
-  "files_touched": null,
+  "files_touched": [
+    "README.md",
+    "skills/archy/SKILL.md",
+    "src/archy/contracts.py",
+    "src/archy/install/base.py",
+    "src/archy/mcp.py",
+    "tests/test_mcp.py"
+  ],
   "sessions": [
     {
       "metadata": "/31/47e67b4a9c/0/metadata.json",
@@ -14,10 +21,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 594,
-    "cache_creation_tokens": 492538,
-    "cache_read_tokens": 23220377,
-    "output_tokens": 86428,
-    "api_call_count": 187
+    "input_tokens": 900,
+    "cache_creation_tokens": 516600,
+    "cache_read_tokens": 26539539,
+    "output_tokens": 93506,
+    "api_call_count": 201
   }
 }

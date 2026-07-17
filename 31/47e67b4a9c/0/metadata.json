@@ -3,20 +3,27 @@
   "checkpoint_id": "3147e67b4a9c",
   "session_id": "3f0e5416-fe5b-4862-9f7e-d8ccb5f5c8cd",
   "strategy": "manual-commit",
-  "created_at": "2026-07-17T17:56:39.368591Z",
+  "created_at": "2026-07-17T18:02:26.738598Z",
   "branch": "alee/mcp-consolidation-268",
   "checkpoints_count": 2,
   "save_step_count": 1,
-  "files_touched": [],
+  "files_touched": [
+    "README.md",
+    "skills/archy/SKILL.md",
+    "src/archy/contracts.py",
+    "src/archy/install/base.py",
+    "src/archy/mcp.py",
+    "tests/test_mcp.py"
+  ],
   "agent": "Claude Code",
   "model": "claude-opus-4-8[1m]",
   "turn_id": "7c305c6d5957",
   "token_usage": {
-    "input_tokens": 594,
-    "cache_creation_tokens": 492538,
-    "cache_read_tokens": 23220377,
-    "output_tokens": 86428,
-    "api_call_count": 187
+    "input_tokens": 900,
+    "cache_creation_tokens": 516600,
+    "cache_read_tokens": 26539539,
+    "output_tokens": 93506,
+    "api_call_count": 201
   },
   "skill_events_version": 1,
   "skill_events": [
@@ -55,13 +62,16 @@
   "session_metrics": {
     "turn_count": 6
   },
-  "prompt_attributions": [
-    {
-      "checkpoint_number": 2,
-      "user_lines_added": 0,
-      "user_lines_removed": 0,
-      "agent_lines_added": 0,
-      "agent_lines_removed": 0
-    }
-  ]
+  "initial_attribution": {
+    "calculated_at": "2026-07-17T18:02:26.716315Z",
+    "agent_lines": 17,
+    "agent_removed": 22,
+    "human_added": 7,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 24,
+    "total_lines_changed": 61,
+    "agent_percentage": 63.934426229508205,
+    "metric_version": 2
+  }
 }
