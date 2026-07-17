@@ -1,0 +1,36 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "065721200785",
+  "strategy": "manual-commit",
+  "branch": "alee/mcp-consolidation-v2",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".claude-plugin/marketplace.json",
+    "README.md",
+    "docs/AGENT_LOOP.md",
+    "plugins/claude/.claude-plugin/plugin.json",
+    "pyproject.toml",
+    "skills/archy/SKILL.md",
+    "src/archy/__init__.py",
+    "src/archy/cli.py",
+    "src/archy/install/base.py",
+    "src/archy/mcp.py",
+    "tests/install/unit/test_claude.py",
+    "tests/test_mcp.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/06/5721200785/0/metadata.json",
+      "transcript": "/06/5721200785/0/full.jsonl",
+      "content_hash": "/06/5721200785/0/content_hash.txt",
+      "prompt": "/06/5721200785/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 182,
+    "cache_creation_tokens": 92275,
+    "cache_read_tokens": 9458451,
+    "output_tokens": 34654,
+    "api_call_count": 93
+  }
+}

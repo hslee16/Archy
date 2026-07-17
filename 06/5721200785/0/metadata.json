@@ -1,0 +1,59 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "065721200785",
+  "session_id": "3f0e5416-fe5b-4862-9f7e-d8ccb5f5c8cd",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-17T17:32:28.32441Z",
+  "branch": "alee/mcp-consolidation-v2",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "src/archy/mcp.py",
+    "src/archy/cli.py",
+    "src/archy/install/base.py",
+    "README.md",
+    "skills/archy/SKILL.md",
+    "docs/AGENT_LOOP.md",
+    "plugins/claude/.claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    "pyproject.toml",
+    "src/archy/__init__.py",
+    "tests/test_mcp.py",
+    "tests/install/unit/test_claude.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "333af3cbb586",
+  "checkpoint_transcript_start": 142,
+  "transcript_lines_at_start": 142,
+  "token_usage": {
+    "input_tokens": 182,
+    "cache_creation_tokens": 92275,
+    "cache_read_tokens": 9458451,
+    "output_tokens": 34654,
+    "api_call_count": 93
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-17T17:32:28.310258Z",
+    "agent_lines": 111,
+    "agent_removed": 96,
+    "human_added": 4,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 115,
+    "total_lines_changed": 228,
+    "agent_percentage": 90.78947368421053,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
