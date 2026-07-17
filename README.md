@@ -15,14 +15,14 @@
 pip install archy
 archy score .         # one-shot architectural health number
 archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 14 tools to Claude Code, Cursor, any MCP client
+archy mcp             # expose 12 tools to Claude Code, Cursor, any MCP client
 ```
 
 ![archy demo](docs/demo.gif)
 
 **Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.40.0. Usable today via:
+**Status:** v0.41.0. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -247,15 +247,14 @@ archy mcp
 
 The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, so a cached result is never stale. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
-`archy mcp` exposes fourteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
+`archy mcp` exposes twelve tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 
 | Tool | Purpose |
 |---|---|
-| `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. Pass `record=True` to record a start-of-session baseline (replaces the removed `archy_record_baseline`). |
+| `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. Pass `record=True` to record a start-of-session baseline (replaces the removed `archy_record_baseline`). `view="history"` returns the recent score history from `.archy/history.jsonl` (up to `last_n` rows, oldest-first, for comparing deltas over time; replaces the removed `archy_trend`). |
 | `archy_cycles` | Find import cycles. |
 | `archy_check` | Run layer rules from `archy.yaml`. |
 | `archy_contracts` | Run import-linter contracts (transitive Layers, Forbidden, Independence, Protected, AcyclicSiblings). Stricter than `archy_check`; requires `archy[contracts]`. |
-| `archy_trend` | Read recent score history. |
 | `archy_impact` | Given changed file paths, return what they affect. `mode="blast"` (**default**) returns the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. `mode="affected"` (replaces the removed `archy_affected`) is the CI-shaped lookup instead: modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes; `test_filter` overrides pytest test detection with a recursive glob. `co_change=true` (blast mode, opt-in) adds a `co_changed` list: modules that historically co-change with the edit in git but have no import/call edge to it, so the structural blast radius misses them (`archy coupling` scoped to your edit; source-only, best-effort, the only path that reads git). |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. Also returns an `invariant_brief` (declared layers, forbidden edges, acyclic invariant, baseline score, load-bearing modules) to read before the first edit. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations, per-component score deltas, and a risk-weighted `summary` whose items carry a `prompt` reframing each delta as a judgment question ("new cycle a -> b; intended, or invert an edge?"). |
@@ -263,14 +262,15 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 | `archy_graph` | Inspect the dependency graph. With no `focus`, `response_format="summary"` (**default**) returns the top-N overview by fan-in / fan-out / PageRank plus top external deps (replaces the removed `archy_graph_summary`; `top_n` controls N); `response_format="full"` returns the complete node/edge dump matching `archy graph --format json`, refusing graphs larger than `max_nodes` (default 500) with an explicit `GraphTooLargePayload`. Pass `focus=[...]` (replaces the removed `archy_graph_focus`) for a bounded subgraph around one or more modules (qualnames or file paths): `depth` caps hops, `direction` is `in`/`out`/`both`, each edge carries import line numbers, and `response_format`/`max_nodes`/`top_n` do not apply. |
 | `archy_what_to_refactor_next` | Ranked refactor-priority list (replaces the removed `archy_hotspots` and `archy_high_risk_modules` via `lens`). `lens="fused"` (**default**) sums the behavioral lens (CC x churn) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal can still rank first). `lens="behavioral"` ranks CC x churn hotspots only (needs git); `lens="structural"` ranks the edit-risk composite only (git-free; pass `min_risk=0` for no floor). Each entry names which lenses fired and carries a one-line `rationale`. An empty list plus a `note` is a real answer. |
 | `archy_dsm` | Design Structure Matrix view of the import graph. `response_format="summary"` (**default**) returns a compact overview (block structure, counts, back-edges, cross-block coupling) without the full cell list. `response_format="full"` returns the positional matrix (cell `(row=source, col=target)` non-empty when source imports target), refusing matrices over `DEFAULT_MAX_DSM_CELLS` cells with a `DSMTooLargePayload`. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff (regardless of `response_format`) whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md). |
-| `archy_status` | Report the persistent index's freshness: `last_synced_at`, `cached_files`, and whether the background watcher is `watching`. The `archy mcp` server keeps a debounced filesystem watcher warming `.archy/index.db` so graph builds stay fast; every tool also syncs on demand, so results are never stale even when `last_synced_at` looks a moment behind. |
 | `archy_duplicates` | Cluster functions with identical normalized body shape into two tiers: `duplicates` (likely-real, investigate) and `variants` (demoted likely-intentional clusters - same-class / boilerplate / test / vendored / `independent`, each with a `variant_reason`). `co_change=true` (**default**, needs git) adds the `independent` demotion: copies in actively-maintained files that never co-change (deliberately parallel implementations), the principled precision lever that lifts the primary tier above the ~50% syntactic ceiling (§12f). Within the primary tier, `exact=true` marks byte-identical (Type-1) clusters, the highest-confidence subset. `near_miss=true` (opt-in, slower) adds a lower-confidence `near_miss` tier: Type-3 (gapped) clones the exact shape-hash misses, found by token-multiset overlap (§12h). `response_format="summary"` (**default**) returns ranking fields + one sample member per cluster; `"full"` returns member lists. Advisory surfacer, not a score axis: refactorability is a semantic call (see [`docs/research/RESEARCH_METRICS.md`](docs/research/RESEARCH_METRICS.md) §12c/§12f/§12h). `min_nodes` (default 30) skips trivial stubs. |
 
 The server also exposes a `loop` **prompt** with the agent feedback-loop playbook (snapshot at start, impact before edit, diff after edit). Discoverable via the standard MCP `prompts/list` call. See [`docs/AGENT_LOOP.md`](docs/AGENT_LOOP.md) for the human-readable version.
 
+The `archy mcp` server still keeps a debounced filesystem watcher warming `.archy/index.db` so graph builds stay fast, and every tool syncs on demand so a result is never stale. The index-freshness readout that used to be the `archy_status` MCP tool is now the CLI `archy index status` (#267): freshness is diagnostic plumbing an agent rarely needs mid-task, not a per-edit decision.
+
 #### Tool output contract (structured output)
 
-Every tool declares an `outputSchema` (JSON Schema, derived from its return model) in `tools/list`, and every `tools/call` returns both a `structuredContent` object (validated against that schema) and a text block with the same JSON, per the [2025-06-18 MCP structured-output spec](https://modelcontextprotocol.io/specification/2025-06-18). All tools are also annotated `readOnlyHint: true` (closed-domain, idempotent, non-destructive), so trusted clients can auto-approve archy's calls instead of prompting on every read. Sequence returns (`archy_cycles`, `archy_trend`) and union returns (`archy_diff`, `archy_graph`, `archy_dsm`) are wrapped under a top-level `result` key since `structuredContent` must be a JSON object; for unions every branch (including the in-band `*ErrorPayload` shapes) is a conforming `anyOf` member.
+Every tool declares an `outputSchema` (JSON Schema, derived from its return model) in `tools/list`, and every `tools/call` returns both a `structuredContent` object (validated against that schema) and a text block with the same JSON, per the [2025-06-18 MCP structured-output spec](https://modelcontextprotocol.io/specification/2025-06-18). All tools are also annotated `readOnlyHint: true` (closed-domain, idempotent, non-destructive), so trusted clients can auto-approve archy's calls instead of prompting on every read. Sequence returns (`archy_cycles`, `archy_score(view="history")`) and union returns (`archy_diff`, `archy_graph`, `archy_dsm`) are wrapped under a top-level `result` key since `structuredContent` must be a JSON object; for unions every branch (including the in-band `*ErrorPayload` shapes) is a conforming `anyOf` member.
 
 #### Error model (recovery contract)
 
@@ -304,7 +304,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.40.0
+- uses: hslee16/archy@v0.41.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -330,7 +330,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.40.0
+    rev: v0.41.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score

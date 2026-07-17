@@ -12,8 +12,8 @@
     {
       "name": "archy",
       "source": "./plugins/claude",
-      "description": "Architectural health for Python codebases: trended five-axis score, cycle detection, layer rules, blast radius, CI test selection. Exposes 19 MCP tools and bundles the archy skill so Claude can run the snapshot/impact/edit/diff loop without manual prompting.",
-      "version": "0.1.0",
+      "description": "Architectural health for Python codebases: trended five-axis score, cycle detection, layer rules, blast radius, CI test selection. Exposes 12 MCP tools and bundles the archy skill so Claude can run the snapshot/impact/edit/diff loop without manual prompting.",
+      "version": "0.3.0",
       "homepage": "https://github.com/hslee16/archy",
       "license": "MIT",
       "category": "developer-tools"

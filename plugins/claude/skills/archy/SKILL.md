@@ -13,7 +13,7 @@ metadata:
 
 Archy turns the structural health of a Python codebase into numbers and rule violations an agent can act on between edits. This skill explains when to reach for it and how to drive its MCP tools as a tight feedback loop.
 
-Archy keeps a persistent parse cache (`.archy/index.db`), kept warm by a background file watcher in `archy mcp`, so its tools stay cheap to call: warm graph builds take a few seconds even on 10k+ module repos because only files whose content changed are re-parsed. Lean on that. Consult archy on *each* edit to keep your working surface relevant (impact before, diff after), not only at the start and end of a task. Freshness is automatic (every tool re-syncs changed files on demand, so a result is never stale); `archy_status` reports `last_synced_at` and whether the watcher is running if you want to check.
+Archy keeps a persistent parse cache (`.archy/index.db`), kept warm by a background file watcher in `archy mcp`, so its tools stay cheap to call: warm graph builds take a few seconds even on 10k+ module repos because only files whose content changed are re-parsed. Lean on that. Consult archy on *each* edit to keep your working surface relevant (impact before, diff after), not only at the start and end of a task. Freshness is automatic (every tool re-syncs changed files on demand, so a result is never stale); the CLI `archy index status` reports the cache state if you ever want to confirm it out of band.
 
 ## Prerequisites
 
@@ -186,8 +186,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_check` | `(path, config_path=None)` | After import changes. Direct-edge layer + SDP rules from `archy.yaml`. |
 | `archy_contracts` | `(path, config_path=None)` | Transitive layer enforcement via import-linter. Requires `archy[contracts]`. |
 | `archy_cycles` | `(path, min_size=2, internal_only=True)` | Standalone cycle listing (Tarjan SCCs + self-loops). |
-| `archy_score` | `(path, internal_only=True, record=False, strict=False, strict_tolerance=0.02)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl` (replaces `archy_record_baseline` for the start-of-session entry); `strict=True` fails on regression beyond tolerance. |
-| `archy_trend` | `(path, last_n=10)` | Recent score history (oldest-first). |
+| `archy_score` | `(path, view="current", internal_only=True, record=False, strict=False, strict_tolerance=0.02, last_n=10)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl` (replaces `archy_record_baseline` for the start-of-session entry); `strict=True` fails on regression beyond tolerance. `view="history"` returns the recent score history (up to `last_n` rows, oldest-first) instead of the current score (replaces `archy_trend`). |
 | `archy_dsm` | `(path, response_format="summary", group_by="community", weight="imports", focus=None, focus_depth=1, package=None, baseline_path=None)` | Design Structure Matrix view of the import graph. `response_format="summary"` (default) = compact block structure + counts + back-edges; `response_format="full"` = full matrix (refused over `DEFAULT_MAX_DSM_CELLS` cells). `group_by` is `community` / `layer` / `topological`. Narrow large projects with `focus` + `focus_depth` or `package`. When `baseline_path` is provided, returns a `DSMDiff` (regardless of `response_format`) whose `new_back_edges` flags cycles the edit just introduced. Visualization-only; not part of any score. |
 | `archy_duplicates` | `(path, response_format="summary", min_nodes=30, top_n=20, members=2, co_change=True, near_miss=False)` | Two-tier duplicate-function clusters (identical normalized body shape): `duplicates` (likely-real, investigate) + `variants` (demoted likely-intentional clusters - same-class / boilerplate / test / vendored / `independent`, each with a `variant_reason`). `co_change=True` (default, needs git) demotes `independent` clusters (copies in actively-maintained files that never co-change = deliberately parallel), the principled lever that lifts primary precision above the ~50% syntactic ceiling (§12f). `near_miss=True` (opt-in, slower) adds a lower-confidence `near_miss` tier: Type-3 (gapped) clones the exact shape-hash misses (a copy with statements inserted/removed), found by token-multiset overlap, each with a `similarity` (§12h). Within `duplicates`, `exact=true` marks byte-identical (Type-1) clusters, the highest-confidence "definitely refactor these" subset. Advisory surfacer, not a score axis; refactorability is a semantic call you make. `response_format="summary"` (default) = ranking fields + one sample member per cluster; `"full"` = full member lists. |
 
@@ -230,7 +229,7 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 
 - Active editing session → snapshot + diff (no history pollution)
 - CI gate or pre-commit hook → `archy_score(strict=True, record=True)` against `.archy/history.jsonl`
-- Long-term trend question → `archy_trend`
+- Long-term trend question → `archy_score(view="history")`
 
 **SDP (Stable Dependencies Principle) violations:**
 

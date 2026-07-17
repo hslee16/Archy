@@ -1220,6 +1220,36 @@ def index_clear(path: Path) -> None:
         click.echo("no cache to remove.")
 
 
+@index.command("status")
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+def index_status(path: Path) -> None:
+    """Report the persistent cache's freshness for PATH.
+
+    Diagnostic plumbing demoted off the MCP surface in v0.41 (#267): every
+    analysis tool syncs on demand, so a result is never stale and an agent
+    rarely needs this mid-task. Reports the on-disk cache state (db location
+    and cached file count); `watching` is an MCP-server-only concept and does
+    not apply to a one-shot CLI call.
+    """
+    from archy.index import default_db_path, open_index
+
+    db = default_db_path(path)
+    if not db.exists():
+        click.echo(f"no cache at {db} (a build or `archy index sync` will create it).")
+        return
+    conn = open_index(db)
+    try:
+        row = conn.execute("SELECT COUNT(*) FROM files").fetchone()
+    finally:
+        conn.close()
+    cached = int(row[0]) if row else 0
+    click.echo(f"cache: {db}\ncached_files: {cached}")
+
+
 def _confirm_targets(adapters, location: str, action: str) -> bool:
     """Preview the affected adapters and prompt before install/uninstall writes.
 

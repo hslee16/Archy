@@ -12,9 +12,9 @@ few seconds even on 10k+ module repos, because only files whose content
 changed are re-parsed. That economics is the point of the loop below: consult
 archy on *each* edit to keep your working surface relevant (impact before,
 diff after), not just once at the start and end. Freshness is automatic: every
-tool re-syncs changed files on demand, so a result is never stale; the
-`archy_status` tool reports `last_synced_at` and whether the watcher is running
-if you want to confirm it explicitly.
+tool re-syncs changed files on demand, so a result is never stale; the CLI
+`archy index status` reports the cache state if you ever want to confirm it
+explicitly.
 
 ## The loop
 
