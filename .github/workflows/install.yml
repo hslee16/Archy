@@ -7,6 +7,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   fast:
     # Layers 1 (unit) + 2 (snapshot). Pure renders + mocked detection, so one
