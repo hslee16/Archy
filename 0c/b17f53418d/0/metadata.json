@@ -1,0 +1,98 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "0cb17f53418d",
+  "session_id": "3f0e5416-fe5b-4862-9f7e-d8ccb5f5c8cd",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-17T18:41:21.647078Z",
+  "branch": "alee/260-cleanliness-research-note",
+  "checkpoints_count": 4,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "6efb7f69d10c",
+  "token_usage": {
+    "input_tokens": 1013,
+    "cache_creation_tokens": 1118461,
+    "cache_read_tokens": 42850137,
+    "output_tokens": 137867,
+    "api_call_count": 260
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_017c4fDG2wjAMdHrCHLFxgdg",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "6efb7f69d10c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 639,
+        "end": 640,
+        "entry_ids": [
+          "91f38c05-f671-44ae-b59e-ec422727709f"
+        ],
+        "tool_use_id": "toolu_017c4fDG2wjAMdHrCHLFxgdg"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_017c4fDG2wjAMdHrCHLFxgdg"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01VPM1mjVF6XcrQv3gMtLprK",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deep-research"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "6efb7f69d10c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 1441,
+        "end": 1442,
+        "entry_ids": [
+          "39a615cb-acbe-4168-b6b7-aaf656ffc935"
+        ],
+        "tool_use_id": "toolu_01VPM1mjVF6XcrQv3gMtLprK"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01VPM1mjVF6XcrQv3gMtLprK"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deep-research",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 10
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

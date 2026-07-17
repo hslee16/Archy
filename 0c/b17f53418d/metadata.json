@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "0cb17f53418d",
+  "strategy": "manual-commit",
+  "branch": "alee/260-cleanliness-research-note",
+  "checkpoints_count": 4,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/0c/b17f53418d/0/metadata.json",
+      "transcript": "/0c/b17f53418d/0/full.jsonl",
+      "content_hash": "/0c/b17f53418d/0/content_hash.txt",
+      "prompt": "/0c/b17f53418d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1013,
+    "cache_creation_tokens": 1118461,
+    "cache_read_tokens": 42850137,
+    "output_tokens": 137867,
+    "api_call_count": 260
+  }
+}
