@@ -1386,6 +1386,92 @@ a bench validation that "structurally cleanest peer" actually
 correlates with "useful exemplar," plus the clean-but-trivial guard (a
 one-function module must not win by default).
 
+### 14c.6. Code cleanliness and the change-spread non-result (why #260 did not ship a metric)
+
+The SonarSource minimal-pair study ([arxiv:2605.20049][cleanliness],
+"Does Code Cleanliness Affect Coding Agents?", Claude Sonnet 4.6 in
+Claude Code, Python + Java) is the sharpest agent-footprint evidence to
+date, and it prompted a proposed archy feature (#260): a *change-spread
+/ grep-targetability guard* that would compute each candidate module's
+historical git **co-change degree** as a proxy for agent navigation
+cost, and warn on god-object splits to "keep a single grep-targetable
+anchor rather than scatter logic across files." An adversarial research
+pass (18 sources, 25 claims through 3-vote verification, 2026-07-17)
+concluded the metric would be **theater**, and the feature was
+downscoped to this note. The reasoning is worth recording because it is
+a reusable anti-theater template.
+
+**What the paper actually establishes (the part that survives).** In
+aggregate, the *cleaner* variant **shrinks** the agent's footprint:
+input tokens -7.1%, output -8.5%, reasoning -11.1%, and file
+revisitation **-34%** (the largest effect), concentrated on
+**multi-module** tasks. Crucially, **there is no pass-rate effect**
+(+0.1 pp; and on Claude Code specifically a separate study found no
+significant health-vs-unhealth break-rate difference, 96.19% vs 94.81%,
+p=0.439 [ai-friendliness][ai-friendliness]). So cleanliness moves
+*cost*, not *capability*. Any archy claim here must be scoped to
+footprint, never correctness.
+
+**Why the change-spread metric is theater (four failures).**
+
+1. *The motivating result is a single-task anecdote below the noise
+   floor.* The "+8% input tokens from extraction scatter" (the paper's
+   Case 2, `genie/cluster-active-job-limit`) is one exemplar of a
+   *tension*, not a powered finding. The 13-task cognitive-hotspot track
+   where helper-extraction actually happens is **footprint-neutral**
+   (+1.8% input tokens, the authors' word is "essentially unchanged"),
+   not negative. Per-task input-token deltas span -47% to +44%, and the
+   paper itself states a single per-task delta around 10% "may be agent
+   noise rather than signal" - input tokens vary **2.5x** on repeated
+   runs of the *same* task. Case 2's +8% even runs *counter* to the
+   pooled -7% direction, the signature of task-specific noise. Building a
+   ranking or annotation on Case 2 is fitting to noise.
+2. *Historical git co-change degree is not a validated proxy for agent
+   navigation.* The one 2026 study on co-committal
+   ([doi:10.3390/software5010011][co-committal], 5 repos, 14k+ commits)
+   concludes it indicates evolutionary coupling only "in certain
+   scenarios," with usefulness that "depends on project-specific
+   development practices" and link strength "strongly influenced by the
+   development style ... of contributing developers." A majority of
+   co-evolving classes are not structurally linked at all. And **no**
+   agent-navigation paper tests co-change against agent file-reads: the
+   ones that study navigation (CodeCompass §14c.1; ContextBench
+   [arxiv:2602.05892][contextbench]) operationalize **structural
+   AST/import** dependencies, which archy already computes. Co-change
+   measures human commit habit; the design silently reinterpreted it as
+   an agent-navigation cost, unvalidated.
+3. *No study supports a tooling intervention that flags change-spread.*
+   The evidence is descriptive. With no measured pass-rate effect and a
+   token-only, directional, single-config (one model, one harness,
+   2026-preprint) result, "keep a grep anchor" is advice dressed as a
+   metric. Several 2026 claims that such structural/scaffolding
+   interventions add little over the base model (the "bitter lesson")
+   verified as *more* supported than their negations.
+4. *archy already ships the signal the literature actually
+   operationalizes.* The navigation bottleneck the papers name is
+   *navigational salience* (§14c.1), and the structural predictor they
+   use is AST/import coupling - which is precisely `edit_risk`
+   (propagation cost x instability x fan-in, §14c.3) and `archy_impact`.
+   A git-co-change "change_spread" field would be a second, weaker,
+   redundant proxy for a signal archy surfaces better structurally.
+
+**What this leaves.** `archy_what_to_refactor_next` stays as-is; #260
+ships no metric and no ranking change. The one honest, hedged takeaway -
+that a *cleaner* structure tends to shrink an agent's navigation
+footprint (not its success rate), and that a decomposition is most
+footprint-friendly when it stays grep-targetable rather than scattering
+logic - is recorded here as a documented caveat, not surfaced as a
+quantified tool output. This is the anti-theater line: the paper is real
+and useful positioning evidence (cleanliness lowers agent *cost*), but
+it does not license a per-module change-spread number, so archy does not
+manufacture one. The reusable rule: an external paper motivates a
+*claim*; a shippable metric additionally needs a *validated proxy* and a
+stake beyond the noise floor, and #260 had neither.
+
+[cleanliness]: https://arxiv.org/abs/2605.20049
+[co-committal]: https://doi.org/10.3390/software5010011
+[ai-friendliness]: https://arxiv.org/abs/2601.02200
+[contextbench]: https://arxiv.org/abs/2602.05892
 [nav-paradox]: https://arxiv.org/html/2602.20048v1
 [constraint-decay]: https://arxiv.org/html/2605.06445v1
 [constraint-decay-hn]: https://news.ycombinator.com/item?id=48256912
