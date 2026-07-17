@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "b067a15bbf64",
+  "strategy": "manual-commit",
+  "branch": "alee/workflow-permissions",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/install-e2e.yml",
+    ".github/workflows/install.yml",
+    ".github/workflows/publish.yml",
+    ".github/workflows/smoke.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b0/67a15bbf64/0/metadata.json",
+      "transcript": "/b0/67a15bbf64/0/full.jsonl",
+      "content_hash": "/b0/67a15bbf64/0/content_hash.txt",
+      "prompt": "/b0/67a15bbf64/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 17,
+    "cache_creation_tokens": 23882,
+    "cache_read_tokens": 348724,
+    "output_tokens": 3014,
+    "api_call_count": 9
+  }
+}
