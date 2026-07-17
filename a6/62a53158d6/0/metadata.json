@@ -1,0 +1,63 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "a662a53158d6",
+  "session_id": "3f0e5416-fe5b-4862-9f7e-d8ccb5f5c8cd",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-17T17:10:16.685812Z",
+  "branch": "alee/bump-mcp-security",
+  "checkpoints_count": 2,
+  "save_step_count": 2,
+  "files_touched": [
+    "uv.lock"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "3020a76c63e5",
+  "checkpoint_transcript_start": 68,
+  "transcript_lines_at_start": 68,
+  "token_usage": {
+    "input_tokens": 23,
+    "cache_creation_tokens": 27963,
+    "cache_read_tokens": 538053,
+    "output_tokens": 3132,
+    "api_call_count": 12
+  },
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-17T17:10:16.681733Z",
+    "agent_lines": 0,
+    "agent_removed": 2,
+    "human_added": 13,
+    "human_modified": 11,
+    "human_removed": 0,
+    "total_committed": 15,
+    "total_lines_changed": 27,
+    "agent_percentage": 7.4074074074074066,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2,
+      "agent_lines_removed": 2
+    }
+  ]
+}
