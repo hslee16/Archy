@@ -157,15 +157,18 @@ claude -p "<TASK>" \
   --output-format json \
   --model <pinned-model-id> \
   --dangerously-skip-permissions \
-  --bare \
   --allowedTools "Read,Write,Edit,Bash,Grep,Glob" \
   --setting-sources local
 ```
 
-`--bare` isolates hooks / CLAUDE.md / MCP so the repo under test, not the local
-environment, is what varies. The persisted session transcript is copied into the
-bench artifact dir immediately after each run (it is the parse source, and it is
-overwritten by later sessions).
+`--setting-sources local` isolates the run to the project's own settings, so the
+user/global CLAUDE.md / hooks / MCP do not leak in and the repo under test is
+what varies. (`--bare` would isolate more but breaks `-p` headless execution in
+a nested/sandboxed context, verified against a live run; `--setting-sources
+local` is the working substitute. `stdin` is fed from `/dev/null` so the CLI
+does not block waiting for piped input.) The persisted session transcript is
+copied into the bench artifact dir immediately after each run (it is the parse
+source, and it is overwritten by later sessions).
 
 ## 11. Harness shape (for the follow-up implementation PR)
 
