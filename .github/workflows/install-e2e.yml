@@ -12,6 +12,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   e2e:
     name: ${{ matrix.client }} on ${{ matrix.os }}
