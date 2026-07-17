@@ -89,14 +89,14 @@ def test_create_server_registers_expected_tools():
     # (archy_affected, archy_record_baseline, archy_graph_focus,
     # archy_graph_summary, archy_high_risk_modules, archy_hotspots) are folded
     # into survivors via mode/lens/param switches; see the module docstring.
-    # archy_duplicates (#242) added the 14th. v0.41 (#265): 12 after the v2
-    # consolidation folded archy_trend into archy_score(view="history") (#266)
-    # and demoted archy_status to the CLI `archy index status` (#267).
+    # archy_duplicates (#242) added the 14th. v0.41 (#265): 11 after the v2
+    # consolidation folded archy_trend into archy_score(view="history") (#266),
+    # demoted archy_status to the CLI `archy index status` (#267), and folded
+    # archy_contracts into archy_check(contracts=True) (#268).
     assert names == {
         "archy_score",
         "archy_cycles",
         "archy_check",
-        "archy_contracts",
         "archy_impact",
         "archy_snapshot",
         "archy_diff",
@@ -106,7 +106,7 @@ def test_create_server_registers_expected_tools():
         "archy_simulate",
         "archy_duplicates",
     }
-    assert len(names) == 12
+    assert len(names) == 11
 
 
 def test_all_tools_declare_read_only_annotations():
@@ -275,6 +275,19 @@ def _fan_out_project(tmp_path: Path, fan: int) -> Path:
     return tmp_path
 
 
+def _write_core_cli_forbid_config(root: Path) -> None:
+    # The canonical two-layer archy.yaml shared by the check / snapshot / fold
+    # tests: a `core` layer forbidden from reaching `cli`. Kept as one helper so
+    # the layer/forbid shape lives in a single place.
+    (root / "archy.yaml").write_text(
+        "layers:\n"
+        "  core: {modules: [myapp.core.**]}\n"
+        "  cli: {modules: [myapp.cli.**]}\n"
+        "forbid:\n"
+        "  - {from: core, to: cli}\n"
+    )
+
+
 @pytest.mark.parametrize("runner", [_run_graph, _run_dsm])
 def test_response_format_rejects_unknown_value(acyclic_project: Path, runner):
     # Both heavy tools validate the enum up front, before any graph work.
@@ -420,13 +433,7 @@ def test_run_check_payload_shape(tmp_path: Path):
     cli.mkdir()
     (cli / "__init__.py").write_text("")
     (cli / "runner.py").write_text("")
-    (tmp_path / "archy.yaml").write_text(
-        "layers:\n"
-        "  core: {modules: [myapp.core.**]}\n"
-        "  cli: {modules: [myapp.cli.**]}\n"
-        "forbid:\n"
-        "  - {from: core, to: cli}\n"
-    )
+    _write_core_cli_forbid_config(tmp_path)
     result = _run_check(tmp_path, config_path=None)
     assert isinstance(result, CheckPayload)
     assert result.passed is False
@@ -455,6 +462,43 @@ def test_run_check_malformed_config_raises(tmp_path: Path):
     (tmp_path / "archy.yaml").write_text("layers: [not a mapping\n")
     with pytest.raises(LayerConfigError):
         _run_check(tmp_path, config_path=None)
+
+
+def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
+    # #268: archy_check(contracts=True) folds the old archy_contracts tool,
+    # nesting the transitive import-linter result under CheckPayload.contracts.
+    # contracts=False (the default) leaves the field None, so a routine check
+    # stays a pure direct-edge layer-rule result.
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for sub in ("core", "cli"):
+        (pkg / sub).mkdir()
+        (pkg / sub / "__init__.py").write_text("")
+    (pkg / "core" / "api.py").write_text("")
+    (pkg / "cli" / "runner.py").write_text("")
+    _write_core_cli_forbid_config(tmp_path)
+
+    server = create_server()
+    path = str(tmp_path)
+
+    # CheckPayload | CheckErrorPayload is a union return, so FastMCP wraps it
+    # under a top-level `result` key (see the module docstring's wrapping rules).
+    _c, plain = asyncio.run(server.call_tool("archy_check", {"path": path}))
+    assert isinstance(plain, dict)
+    assert plain["result"]["passed"] is True
+    assert plain["result"]["contracts"] is None
+
+    _c2, withc = asyncio.run(server.call_tool("archy_check", {"path": path, "contracts": True}))
+    assert isinstance(withc, dict)
+    result = withc["result"]
+    assert result["passed"] is True
+    # import-linter is a dev dependency (see tests/test_contracts.py), so the
+    # fold runs the real contract derived from the archy.yaml `forbid` rule and
+    # keeps it clean here.
+    assert isinstance(result["contracts"], dict)
+    assert result["contracts"]["available"] is True
+    assert result["contracts"]["all_kept"] is True
 
 
 def _make_sdp_violating_project(tmp_path: Path) -> Path:
@@ -596,13 +640,7 @@ def test_snapshot_brief_reports_layers_and_forbidden_edges(tmp_path: Path):
     cli.mkdir()
     (cli / "__init__.py").write_text("")
     (cli / "runner.py").write_text("from myapp.core.api import go\n")
-    (tmp_path / "archy.yaml").write_text(
-        "layers:\n"
-        "  core: {modules: [myapp.core.**]}\n"
-        "  cli: {modules: [myapp.cli.**]}\n"
-        "forbid:\n"
-        "  - {from: core, to: cli}\n"
-    )
+    _write_core_cli_forbid_config(tmp_path)
     brief = _run_snapshot(tmp_path).invariant_brief
     assert {layer.name for layer in brief.layers} == {"core", "cli"}
     assert ForbiddenEdge(from_layer="core", to_layer="cli") in brief.forbidden_edges

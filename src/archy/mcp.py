@@ -1,8 +1,8 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The 12
+Built on the official Python `mcp` SDK using its FastMCP API. The 11
 tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
-`archy_check`, `archy_contracts`, `archy_impact`,
+`archy_check`, `archy_impact`,
 `archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
 `archy_what_to_refactor_next`, `archy_dsm`,
 `archy_duplicates`) so an agent
@@ -13,9 +13,10 @@ absorbs what used to be a separate tool: `archy_impact(mode='affected')`
 and `archy_graph(response_format='summary')` (was `archy_graph_summary`),
 `archy_what_to_refactor_next(lens=...)` (was `archy_hotspots` /
 `archy_high_risk_modules`), `archy_score(record=True)` (was
-`archy_record_baseline`), and `archy_score(view='history')` (was
-`archy_trend`). See docs/LEARNINGS.md for the v0.36/v0.41 consolidations.
-The removed `archy_status` freshness check now lives in the CLI as
+`archy_record_baseline`), `archy_score(view='history')` (was
+`archy_trend`), and `archy_check(contracts=True)` (was `archy_contracts`).
+See docs/LEARNINGS.md for the v0.36/v0.41 consolidations. The removed
+`archy_status` freshness check now lives in the CLI as
 `archy index status` (#267).
 
 The server runs over stdio (the MCP convention for local tools); start
@@ -286,6 +287,19 @@ class ScorePayload(BaseModel):
     gate: ScoreGate | None = None
 
 
+class ContractsPayload(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    available: bool
+    error: str | None = None
+    all_kept: bool | None = None
+    kept: int | None = None
+    broken: int | None = None
+    module_count: int | None = None
+    import_count: int | None = None
+    contracts: tuple[ContractCheck, ...] = ()
+
+
 class CheckPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -293,6 +307,10 @@ class CheckPayload(BaseModel):
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
     passed: bool
+    # Nested only when archy_check(contracts=True) additionally runs
+    # import-linter (#268): the transitive contract results that used to be the
+    # separate archy_contracts tool. None when contracts were not requested.
+    contracts: ContractsPayload | None = None
 
 
 class CheckErrorPayload(BaseModel):
@@ -309,19 +327,6 @@ class CheckErrorPayload(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     error: str
-
-
-class ContractsPayload(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    available: bool
-    error: str | None = None
-    all_kept: bool | None = None
-    kept: int | None = None
-    broken: int | None = None
-    module_count: int | None = None
-    import_count: int | None = None
-    contracts: tuple[ContractCheck, ...] = ()
 
 
 class BriefLayer(BaseModel):
@@ -611,7 +616,7 @@ _READ_ONLY_ANNOTATIONS = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
-"""All 12 archy tools are read-only structural analysis: they compute over a
+"""All 11 archy tools are read-only structural analysis: they compute over a
 project and mutate nothing observable on the wire, are closed-domain (no
 network/external world), and are idempotent for a fixed source tree. Declaring
 this explicitly lets trusted clients auto-approve archy's calls instead of
@@ -687,44 +692,46 @@ def _register_tools(server: FastMCP) -> None:
             "declared in archy.yaml under `violations`, plus Stable Dependencies "
             "Principle violations (when `sdp.enabled: true` in archy.yaml) under "
             "`sdp_violations`. Empty lists on both mean no direct boundary "
-            "crossings; pair with archy_contracts for transitive (multi-hop) "
-            "checks. If no archy.yaml is found, returns an in-band "
-            "CheckErrorPayload (an `error` field, not a raised error) so you can "
-            "create one or pass `config_path`; a malformed archy.yaml instead "
+            "crossings. Pass `contracts=True` to ALSO run the transitive "
+            "(multi-hop) import-linter contracts (Layers, Forbidden, "
+            "Independence, Protected, AcyclicSiblings) - stricter than the direct "
+            "archy.yaml edges - nested under the `contracts` field; a failed "
+            "contract means an indirect import path violates the architecture, so "
+            "restructure rather than weaken the rule. That path reads .importlinter "
+            "(or pyproject.toml, override with `contracts_config_path`) and needs "
+            "`pip install archy[contracts]`; if the extra is absent, `contracts` "
+            "comes back with `available=false` and an advisory rather than "
+            "raising (replaces the removed archy_contracts tool). If no archy.yaml "
+            "is found, returns an in-band CheckErrorPayload (an `error` field, not "
+            "a raised error) so you can create one or pass `config_path`, and "
+            "contracts are not run in that case; a malformed archy.yaml instead "
             "raises (it cannot be checked against)."
         ),
     )
     def archy_check(
         path: str,
         config_path: str | None = None,
+        contracts: bool = False,
+        contracts_config_path: str | None = None,
     ) -> CheckPayload | CheckErrorPayload:
-        return _run_check(Path(path), config_path=Path(config_path) if config_path else None)
-
-    @server.tool(
-        name="archy_contracts",
-        title="Check import contracts",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "**Call after any Python edit that adds, removes, or changes an "
-            "import statement, especially across package boundaries.** A "
-            "failed contract means the new import violates the architecture - "
-            "revert or restructure before continuing. Runs import-linter "
-            "contracts (transitive Layers, Forbidden, Independence, Protected, "
-            "AcyclicSiblings); stricter than archy_check, which only catches "
-            "direct edges between layers in archy.yaml. Reads .importlinter "
-            "(or pyproject.toml). Requires `pip install archy[contracts]`."
-        ),
-    )
-    def archy_contracts(
-        path: str,
-        config_path: str | None = None,
-    ) -> ContractsPayload:
-        return _run_contracts(
-            Path(path),
-            config_filename=Path(config_path) if config_path else None,
-        )
+        result = _run_check(Path(path), config_path=Path(config_path) if config_path else None)
+        if contracts and isinstance(result, CheckPayload):
+            result = result.model_copy(
+                update={
+                    "contracts": _run_contracts(
+                        Path(path),
+                        config_filename=(
+                            Path(contracts_config_path) if contracts_config_path else None
+                        ),
+                    )
+                }
+            )
+        return result
 
     # removed v0.41 (#266): archy_trend folded into archy_score(view="history").
+    # removed v0.41 (#268): archy_contracts folded into
+    # archy_check(contracts=True), nesting the transitive import-linter results
+    # under the CheckPayload.contracts field.
 
     @server.tool(
         name="archy_impact",

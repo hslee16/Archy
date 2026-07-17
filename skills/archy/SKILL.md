@@ -140,13 +140,13 @@ If the edit added, removed, or changed any `import` statement:
 archy_check(path=".")
 ```
 
-Returns direct layer-rule violations from `archy.yaml` plus Stable Dependencies Principle violations (when `sdp.enabled: true`). For transitive enforcement (A → B → C still counts as A reaching C), additionally run:
+Returns direct layer-rule violations from `archy.yaml` plus Stable Dependencies Principle violations (when `sdp.enabled: true`). For transitive enforcement (A → B → C still counts as A reaching C), pass `contracts=True`:
 
 ```
-archy_contracts(path=".")
+archy_check(path=".", contracts=True)
 ```
 
-Requires `pip install archy[contracts]`. A failed contract means the new import violates the declared architecture; revert or restructure rather than weakening the rule.
+This nests the import-linter contract results under the `contracts` field (requires `pip install archy[contracts]`; degrades to `available=false` with an advisory if the extra is absent). A failed contract means the new import violates the declared architecture; revert or restructure rather than weakening the rule.
 
 ### 5. Diff against the baseline
 
@@ -183,8 +183,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists each `source -> target` pair th
 | `archy_simulate` | `(path, add: list[{from,to}]=None, remove=None)` | Predict an import-edge change *before writing it*: would-be cycles, layer violations, score + blast-radius delta. Reshape a plan that introduces a cycle before editing. |
 | `archy_graph` | `(path, response_format="summary", focus=None, depth=2, direction="both", internal_only=True, max_nodes=500, top_n=20)` | No `focus`: `response_format="summary"` (default) = top-N overview by fan-in / fan-out / PageRank (replaces `archy_graph_summary`); `response_format="full"` = full dump, refused over `max_nodes`. With `focus=[...]` (replaces `archy_graph_focus`): bounded local neighborhood with edges + line numbers; `depth`/`direction` apply and `response_format`/`max_nodes`/`top_n` do not. |
 | `archy_what_to_refactor_next` | `(path, lens="fused", top_n=10, since=None, min_risk=0.15)` | "What should I refactor first?" `lens="fused"` (default) sums hotspots (CC x churn) and edit-risk (central+fragile) into a `priority`. `lens="behavioral"` (replaces `archy_hotspots`): CC x churn only, needs git. `lens="structural"` (replaces `archy_high_risk_modules`): edit-risk only, git-free; pass `min_risk=0` for no floor. Each entry names the firing `lenses` + a `rationale`. |
-| `archy_check` | `(path, config_path=None)` | After import changes. Direct-edge layer + SDP rules from `archy.yaml`. |
-| `archy_contracts` | `(path, config_path=None)` | Transitive layer enforcement via import-linter. Requires `archy[contracts]`. |
+| `archy_check` | `(path, config_path=None, contracts=False, contracts_config_path=None)` | After import changes. Direct-edge layer + SDP rules from `archy.yaml`. `contracts=True` also runs transitive import-linter contracts (replaces `archy_contracts`), nested under `contracts`; requires `archy[contracts]` (else `available=false` advisory), and is skipped when no `archy.yaml` is found. |
 | `archy_cycles` | `(path, min_size=2, internal_only=True)` | Standalone cycle listing (Tarjan SCCs + self-loops). |
 | `archy_score` | `(path, view="current", internal_only=True, record=False, strict=False, strict_tolerance=0.02, last_n=10)` | Composite five-axis quality score (modularity, acyclicity, depth, equality, complexity). Exposes a call-weighted Newman Q diagnostic alongside the unweighted modularity axis. `record=True` appends to `.archy/history.jsonl` (replaces `archy_record_baseline` for the start-of-session entry); `strict=True` fails on regression beyond tolerance. `view="history"` returns the recent score history (up to `last_n` rows, oldest-first) instead of the current score (replaces `archy_trend`). |
 | `archy_dsm` | `(path, response_format="summary", group_by="community", weight="imports", focus=None, focus_depth=1, package=None, baseline_path=None)` | Design Structure Matrix view of the import graph. `response_format="summary"` (default) = compact block structure + counts + back-edges; `response_format="full"` = full matrix (refused over `DEFAULT_MAX_DSM_CELLS` cells). `group_by` is `community` / `layer` / `topological`. Narrow large projects with `focus` + `focus_depth` or `package`. When `baseline_path` is provided, returns a `DSMDiff` (regardless of `response_format`) whose `new_back_edges` flags cycles the edit just introduced. Visualization-only; not part of any score. |
@@ -199,9 +198,9 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 **Which check tool to run after an import edit:**
 
 - Project has `archy.yaml` and no `.importlinter` → `archy_check`
-- Project has `.importlinter` (or `archy[contracts]` installed and the user wants transitive enforcement) → `archy_check` AND `archy_contracts`
+- Project has `.importlinter` (or `archy[contracts]` installed and the user wants transitive enforcement) → `archy_check(contracts=True)`
 - Failed direct-edge check (`archy_check`) → fix or revert before continuing
-- Passed direct-edge check but `archy_contracts` fails → an indirect path violates the rules; do not weaken the rule, restructure the path
+- Passed direct-edge check but a nested `contracts` result fails → an indirect path violates the rules; do not weaken the rule, restructure the path
 
 **Which graph tool to reach for:**
 
@@ -245,8 +244,7 @@ archy_snapshot(path=".")
 archy_graph(path=".", focus=["src/app/auth.py"], depth=2, direction="both")
 archy_impact(path=".", files=["src/app/auth.py"])
 # Read both. Decide on scope. Edit.
-archy_check(path=".")
-archy_contracts(path=".")  # if archy[contracts] available
+archy_check(path=".", contracts=True)  # contracts nested if archy[contracts] available
 archy_diff(path=".")
 ```
 

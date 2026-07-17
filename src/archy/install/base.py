@@ -39,7 +39,6 @@ TOOL_NAMES: tuple[str, ...] = (
     "archy_score",
     "archy_cycles",
     "archy_check",
-    "archy_contracts",
     "archy_impact",
     "archy_snapshot",
     "archy_diff",
