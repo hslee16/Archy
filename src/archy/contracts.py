@@ -3,7 +3,8 @@
 archy.yaml ships direct-edge layer rules; import-linter ships transitive
 contracts (Layers, Forbidden, Independence, Protected, AcyclicSiblings).
 This module surfaces import-linter results as plain dataclasses, ready
-for `archy contracts` (CLI) or `archy_contracts` (MCP) to consume.
+for `archy contracts` (CLI) or `archy_check(contracts=True)` (MCP, which
+nests the result under `CheckPayload.contracts`) to consume.
 
 Config resolution order:
   1. Explicit `config_filename` argument (.importlinter or pyproject.toml).
