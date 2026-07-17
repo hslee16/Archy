@@ -89,24 +89,24 @@ def test_create_server_registers_expected_tools():
     # (archy_affected, archy_record_baseline, archy_graph_focus,
     # archy_graph_summary, archy_high_risk_modules, archy_hotspots) are folded
     # into survivors via mode/lens/param switches; see the module docstring.
-    # archy_duplicates (#242) added the 14th.
+    # archy_duplicates (#242) added the 14th. v0.41 (#265): 12 after the v2
+    # consolidation folded archy_trend into archy_score(view="history") (#266)
+    # and demoted archy_status to the CLI `archy index status` (#267).
     assert names == {
         "archy_score",
         "archy_cycles",
         "archy_check",
         "archy_contracts",
-        "archy_trend",
         "archy_impact",
         "archy_snapshot",
         "archy_diff",
         "archy_graph",
         "archy_what_to_refactor_next",
         "archy_dsm",
-        "archy_status",
         "archy_simulate",
         "archy_duplicates",
     }
-    assert len(names) == 14
+    assert len(names) == 12
 
 
 def test_all_tools_declare_read_only_annotations():
@@ -159,7 +159,12 @@ def test_all_tools_declare_output_schema():
     # edge in the module docstring).
     ("name", "extra_args", "expect_text"),
     [
-        ("archy_score", {}, True),  # BaseModel return
+        ("archy_score", {}, True),  # BaseModel return (default view="current")
+        (
+            "archy_score",
+            {"view": "history"},
+            False,
+        ),  # union bare-list branch, empty -> {"result": []}
         ("archy_graph", {}, True),  # union, default summary branch (GraphSummaryPayload)
         ("archy_graph", {"response_format": "full"}, True),  # union, full branch (GraphPayload)
         ("archy_dsm", {}, True),  # union, default summary branch (DSMSummary)
@@ -207,6 +212,8 @@ def test_error_model_tier2_raises_tier3_returns_in_band(acyclic_project: Path):
     # Tier 2: bad argument value -> isError.
     with pytest.raises(ToolError):
         asyncio.run(server.call_tool("archy_graph", {"path": path, "response_format": "xml"}))
+    with pytest.raises(ToolError):
+        asyncio.run(server.call_tool("archy_score", {"path": path, "view": "sideways"}))
 
     # Tier 3: recoverable preconditions -> in-band result (no raise).
     for name in ("archy_check", "archy_diff"):
@@ -514,6 +521,22 @@ def test_run_trend_payload_shape(acyclic_project: Path):
     [row] = _run_trend(acyclic_project, last_n=10)
     assert row.timestamp
     assert row.score.overall > 0
+
+
+def test_score_view_history_routes_to_trend(acyclic_project: Path):
+    # #266: archy_score(view="history") is the fold that replaced archy_trend.
+    # Record a baseline, then the history view must return that row through the
+    # tool (wrapped under {"result": [...]} like any bare-sequence return).
+    server = create_server()
+    path = str(acyclic_project)
+    asyncio.run(server.call_tool("archy_score", {"path": path, "record": True}))
+    _content, structured = asyncio.run(
+        server.call_tool("archy_score", {"path": path, "view": "history", "last_n": 5})
+    )
+    assert isinstance(structured, dict)
+    [row] = structured["result"]
+    assert row["timestamp"]
+    assert row["score"]["overall"] > 0
 
 
 @pytest.mark.parametrize("bad", [0, -1, -10])

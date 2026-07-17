@@ -1,10 +1,10 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The 14
+Built on the official Python `mcp` SDK using its FastMCP API. The 12
 tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
-`archy_check`, `archy_contracts`, `archy_trend`, `archy_impact`,
+`archy_check`, `archy_contracts`, `archy_impact`,
 `archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
-`archy_what_to_refactor_next`, `archy_dsm`, `archy_status`,
+`archy_what_to_refactor_next`, `archy_dsm`,
 `archy_duplicates`) so an agent
 can treat archy as a structural sensor in its own feedback loop, the way
 the README pitches. Several tools carry a mode/lens/param switch that
@@ -12,8 +12,11 @@ absorbs what used to be a separate tool: `archy_impact(mode='affected')`
 (was `archy_affected`), `archy_graph(focus=...)` (was `archy_graph_focus`)
 and `archy_graph(response_format='summary')` (was `archy_graph_summary`),
 `archy_what_to_refactor_next(lens=...)` (was `archy_hotspots` /
-`archy_high_risk_modules`), and `archy_score(record=True)` (was
-`archy_record_baseline`). See docs/LEARNINGS.md for the v0.36 consolidation.
+`archy_high_risk_modules`), `archy_score(record=True)` (was
+`archy_record_baseline`), and `archy_score(view='history')` (was
+`archy_trend`). See docs/LEARNINGS.md for the v0.36/v0.41 consolidations.
+The removed `archy_status` freshness check now lives in the CLI as
+`archy index status` (#267).
 
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.
@@ -35,8 +38,9 @@ free from the SDK; no per-tool opt-in is needed.
 Two wrapping rules worth knowing:
 
 - A tool whose return is a bare sequence (`list[Cycle]` for `archy_cycles`,
-  `list[TrendRow]` for `archy_trend`) is wrapped under a top-level `result`
-  key, because `structuredContent` MUST be a JSON object, not an array.
+  `list[TrendRow]` for `archy_score(view='history')`) is wrapped under a
+  top-level `result` key, because `structuredContent` MUST be a JSON object,
+  not an array.
 - A tool whose return is a union (`DiffReport | DiffErrorPayload`,
   `GraphPayload | GraphTooLargePayload`, `DSM | DSMDiff | DSMErrorPayload`)
   is likewise wrapped under `result`, with the union expressed as the
@@ -170,9 +174,8 @@ watcher, makes every call cheap (warm graph builds are a few seconds even on
 10k+ module repos), so consult archy on *each* edit to keep your working
 surface relevant, not just at the start and end of a task. You never need to
 worry about staleness: every tool re-syncs the changed files on demand, so a
-result always reflects the current code. `archy_status(path)` reports the
-index's `last_synced_at` and whether the watcher is running if you want to
-confirm freshness explicitly. The loop is:
+result always reflects the current code (the CLI `archy index status` reports
+the cache state if you ever want to confirm it out of band). The loop is:
 
 1. **Snapshot** at session start so you have a baseline:
    `archy_snapshot(path)`
@@ -535,15 +538,6 @@ class DSMTooLargePayload(BaseModel):
     max_cells: int
 
 
-class StatusPayload(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    root: str
-    last_synced_at: str | None
-    cached_files: int
-    watching: bool
-
-
 class DuplicateGroupSummary(BaseModel):
     """Concise (response_format='summary') form of a duplicate cluster: the
     ranking fields plus one sample member, without the full member list."""
@@ -617,7 +611,7 @@ _READ_ONLY_ANNOTATIONS = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
-"""All 14 archy tools are read-only structural analysis: they compute over a
+"""All 12 archy tools are read-only structural analysis: they compute over a
 project and mutate nothing observable on the wire, are closed-domain (no
 network/external world), and are idempotent for a fixed source tree. Declaring
 this explicitly lets trusted clients auto-approve archy's calls instead of
@@ -635,19 +629,30 @@ def _register_tools(server: FastMCP) -> None:
         description=(
             "Compute the composite quality score (modularity, acyclicity, depth, "
             "equality, complexity - geometric mean of five axes) for a Python "
-            "project. Optionally append "
-            "the result to .archy/history.jsonl and/or compare against the most "
-            "recent recorded run as a regression gate. Pass record=True to record "
-            "a baseline at session start (replaces the removed archy_record_baseline)."
+            "project. `view='current'` (the DEFAULT) returns the five-axis score "
+            "payload; optionally append the result to .archy/history.jsonl "
+            "(record=True) and/or compare against the most recent recorded run as "
+            "a regression gate (strict=True). Pass record=True to record a "
+            "baseline at session start (replaces the removed archy_record_baseline). "
+            "`view='history'` instead reads the recent score history "
+            "(.archy/history.jsonl), returning up to `last_n` rows oldest-first so "
+            "you can compare deltas over time (replaces the removed archy_trend); "
+            "last_n must be >= 1, and record/strict/strict_tolerance do not apply."
         ),
     )
     def archy_score(
         path: str,
+        view: str = "current",
         internal_only: bool = True,
         record: bool = False,
         strict: bool = False,
         strict_tolerance: float = 0.02,
-    ) -> ScorePayload:
+        last_n: int = 10,
+    ) -> ScorePayload | list[TrendRow]:
+        if view == "history":
+            return _run_trend(Path(path), last_n=last_n)
+        if view != "current":
+            raise ValueError(f"view must be 'current' or 'history'; got {view!r}")
         return _run_score(
             Path(path),
             internal_only=internal_only,
@@ -719,18 +724,7 @@ def _register_tools(server: FastMCP) -> None:
             config_filename=Path(config_path) if config_path else None,
         )
 
-    @server.tool(
-        name="archy_trend",
-        title="Read score history",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Read the recent score history (.archy/history.jsonl) for a Python "
-            "project. Returns up to last_n rows ordered oldest-first so an agent "
-            "can compare deltas. last_n must be >= 1."
-        ),
-    )
-    def archy_trend(path: str, last_n: int = 10) -> list[TrendRow]:
-        return _run_trend(Path(path), last_n=last_n)
+    # removed v0.41 (#266): archy_trend folded into archy_score(view="history").
 
     @server.tool(
         name="archy_impact",
@@ -1036,42 +1030,13 @@ def _register_tools(server: FastMCP) -> None:
             near_miss=near_miss,
         )
 
-    @server.tool(
-        name="archy_status",
-        title="Report index freshness",
-        annotations=_READ_ONLY_ANNOTATIONS,
-        description=(
-            "Report the persistent index's freshness for a project. Returns "
-            "`last_synced_at` (ISO timestamp of the most recent cache sync), "
-            "`cached_files` (parsed files held in `.archy/index.db`), and "
-            "`watching` (whether the background file watcher is running). Call "
-            "to sanity-check that the graph an agent is about to read reflects "
-            "recent edits; the watcher keeps the index warm on a short debounce, "
-            "and every other tool also syncs on demand, so a tool result is "
-            "never stale even if `last_synced_at` looks a moment behind."
-        ),
-    )
-    def archy_status(path: str) -> StatusPayload:
-        return _run_status(Path(path))
+    # removed v0.41 (#267): archy_status demoted off the agent surface. Index
+    # freshness is diagnostic plumbing, not a mid-task decision (every tool
+    # syncs on demand, so a result is never stale); the capability now lives in
+    # the CLI as `archy index status`.
 
 
 # --- thin internals ----------------------------------------------------------
-
-
-def _run_status(path: Path) -> StatusPayload:
-    root = path.resolve()
-    try:
-        manager = _manager_for(path, max_modules=_resolve_max_modules(path), **_graph_kwargs(path))
-        if manager.last_synced_at is None:
-            manager.sync_now()  # seed freshness so a first status call is meaningful
-        return StatusPayload(
-            root=str(root),
-            last_synced_at=manager.last_synced_at,
-            cached_files=manager.cached_file_count(),
-            watching=manager.watching,
-        )
-    except (sqlite3.Error, OSError):
-        return StatusPayload(root=str(root), last_synced_at=None, cached_files=0, watching=False)
 
 
 def _run_score(

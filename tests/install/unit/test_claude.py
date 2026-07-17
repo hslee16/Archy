@@ -105,6 +105,6 @@ def test_permissions_render_contains_all_tools(simulate_os):
     content = perm_action.render(None)
     allow = json.loads(content)["permissions"]["allow"]
     assert "mcp__archy__archy_dsm" in allow
-    assert "mcp__archy__archy_status" in allow
+    assert "mcp__archy__archy_score" in allow
     # One pattern per registered tool; count-agnostic so new tools don't re-break it.
     assert len(allow) == len(TOOL_NAMES)
