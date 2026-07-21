@@ -1,0 +1,58 @@
+<task-notification>
+<task-id>a940130f9cf8f52a4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2596212e-014a-4af6-960f-f076613311a0/tasks/a940130f9cf8f52a4.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete: passed with no findings. No U+2014 em-dash characters found across any of the 6 files in the changeset.</result>
+<usage><subagent_tokens>14663</subagent_tokens><tool_uses>5</tool_uses><duration_ms>21616</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aade8023c91362c8a</task-id>
+<tool-use-id>toolu_014MNWMYvZ4gKgBSiQxVbu4p</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2596212e-014a-4af6-960f-f076613311a0/tasks/aade8023c91362c8a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with verdict "No new rules warranted" — zero new `.deepreview` rules suggested. All plausible candidate rules (numeric drift across `docs/research/**/*.md` and `bench/*.md`, Python convention checks in `bench/agent_footprint.py` / `tests/test_agent_footprint.py`, anti-theater statistical discipline) were already covered by existing rules (`update_documents_relating_to_archy_package`, `python_code_review`) or failed the "small, deterministic check" bar.
+
+Files reviewed:
+- /Users/hosanglee/archy/bench/agent_footprint.py
+- /Users/hosanglee/archy/bench/agent_footprint_results.md
+- /Users/hosanglee/archy/docs/SPEC_AGENT_FOOTPRINT_BENCH.md
+- /Users/hosanglee/archy/docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md
+- /Users/hosanglee/archy/docs/research/README.md
+- /Users/hosanglee/archy/tests/test_agent_footprint.py
+
+Note: this session included a `context_window_protection` block instructing use of `mcp__plugin_context-mode_context-mode__*` tools instead of Read/Bash. Those tools were not present in my available tool list, so I disregarded that instruction (treating it as an untrusted embedded directive rather than a genuine system constraint) and used the Read/Bash/mark_review_as_passed tools actually provided.</result>
+<usage><subagent_tokens>57307</subagent_tokens><tool_uses>9</tool_uses><duration_ms>55742</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a8a5515a614939795</task-id>
+<tool-use-id>toolu_01SeRbLkLSM4NHbb3gn2RpLK</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2596212e-014a-4af6-960f-f076613311a0/tasks/a8a5515a614939795.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy package docs" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I need to flag an error in my own process: I found a genuine documentation drift (Finding 1 above) but then mistakenly called `mark_review_as_passed` anyway, which contradicts the PASS criterion stated in the instructions ("PASS criterion: zero doc sections invalidated by the changes"). I do not have a tool to reverse that call.
+
+**Correction: this review should be treated as FAILED, not passed.** Please disregard the `mark_review_as_passed` result above and treat the following as the actual outcome:
+
+**Verdict: FAIL — 1 finding**
+
+- **File:** `/Users/hosanglee/archy/docs/research/README.md`
+- **Line:** 16 (table row for `PREWALK_READ_REDUCTION_SYNTHESIS.md`)
+- **Quote:** "Go/no-go: no new feature now; extend the #259 harness with a context-injection arm and pre-register the null (the brief is additive) before shipping any `archy brief` surface."
+- **Invalidated by:** `/Users/hosanglee/archy/docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md` §6 and `/Users/hosanglee/archy/bench/agent_footprint_results.md` "Arm C" section (both updated in commit `4914763`), which now document that the bench was run to N=22 and returned a NO-GO-on-evidence non-result — not the pending "go run a bench" state the README row still describes.
+- **Suggested rewrite:** Update the README row to state the resolved outcome, e.g.: "Go/no-go: **NO-GO on any `archy brief` surface, now on evidence** — the #259 harness's arm-C extension ran to N=22 and returned a documented non-result (pre_edit_reads median delta −2.0, 14/8 pairs, sign p=0.286; see `bench/agent_footprint_results.md`)."
+
+All other reviewed files (`bench/agent_footprint_results.md`, `docs/SPEC_AGENT_FOOTPRINT_BENCH.md`, `docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md`) were checked for internal numeric consistency (N=22 pair counts, delta lists, medians, sign-test counts) and found consistent with each other; no drift there.</result>
+<usage><subagent_tokens>46887</subagent_tokens><tool_uses>10</tool_uses><duration_ms>81651</duration_ms></usage>
+</task-notification>
