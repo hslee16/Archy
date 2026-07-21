@@ -237,6 +237,42 @@ moved even with the flat brief. The one-config caveat stands (one model, one rep
 task), but the burden now sits on a positive result to appear, not on this null to be
 explained away.
 
+## 7. Would a different brief help? (scoping the non-result)
+
+The bench sampled **one point in brief-space** (a 581-token structural brief,
+precision 0.33). A non-result on it is not "no brief can help", so this section
+scopes what the data does and does not license about brief *quality*.
+
+**The mechanism says the headroom is small for any brief on this config.** The
+load-bearing observation is `pre_edit_distinct_files` Δ = 0: arm A already opened the
+same ~3-file spine unaided (median 3-4 distinct pre-edit files against a true surface
+of 3). The agent was **not lost**, so there is little navigation for a brief to
+remove. Briefs pay off where an agent would flounder (a large unfamiliar repo, a
+surface that is not grep-discoverable); flask plus a clear teardown task is the
+opposite.
+
+**This specifically weakens the brief-quality lever (#291), not just this brief.**
+The candidate improvement was "raise precision by dropping the 6/9 off-surface files."
+But breadth did not move *with* that noise present, i.e. the agent was already
+ignoring it. Removing what the agent ignores is unlikely to change reads. The
+precision lever only helps if the off-surface pointers were *causing* extra reads,
+and the flat-brief result shows they were not.
+
+**Where a different result could plausibly appear is the setting, not the brief.** A
+harder task (non-grep-able surface), a larger/unfamiliar repo, or a weaker/cheaper
+executor that explores inefficiently (closer to prewalk's actual frontier-to-cheap
+scenario) are the conditions under which any brief has room to act. That is a
+different bench design, not a better brief.
+
+**Power vs effect size.** The observed effect is small (~-2 on a base of ~11) against
+the paper's ~2.5x per-task variance. A small true effect will not clear significance
+at N≈22 regardless of brief quality; detecting one would need a **larger effect**
+(a harder setting) or **much larger N** (order 50-100). So "improve the brief and
+rerun at N=22" is unlikely to flip the verdict; "move to a setting where agents
+actually founder" is the test that could. A cheap confirmation is available: run
+#291's focused brief and watch #290's precision metric. If precision rises but reads
+still do not move, the ceiling is the setting, not the brief.
+
 ## Relationships
 
 - **[#259](https://github.com/hslee16/Archy/issues/259)** ([`SPEC_AGENT_FOOTPRINT_BENCH.md`](../SPEC_AGENT_FOOTPRINT_BENCH.md))

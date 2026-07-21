@@ -156,8 +156,12 @@ def test_pre_edit_metrics_when_no_edit_is_made(tmp_path: Path):
     _write_transcript(
         t,
         [
-            _assistant({"input_tokens": 12, "output_tokens": 4}, [("Read", "a.py"), ("Grep", None)]),
-            _assistant({"input_tokens": 8, "output_tokens": 3}, [("Read", "b.py"), ("Glob", None)]),
+            _assistant(
+                {"input_tokens": 12, "output_tokens": 4}, [("Read", "a.py"), ("Grep", None)]
+            ),
+            _assistant(
+                {"input_tokens": 8, "output_tokens": 3}, [("Read", "b.py"), ("Glob", None)]
+            ),
         ],
     )
     parsed = af.parse_transcript(t)
