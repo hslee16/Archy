@@ -56,3 +56,57 @@ Note: this session included a `context_window_protection` block instructing use 
 All other reviewed files (`bench/agent_footprint_results.md`, `docs/SPEC_AGENT_FOOTPRINT_BENCH.md`, `docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md`) were checked for internal numeric consistency (N=22 pair counts, delta lists, medians, sign-test counts) and found consistent with each other; no drift there.</result>
 <usage><subagent_tokens>46887</subagent_tokens><tool_uses>10</tool_uses><duration_ms>81651</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>ad1491eea6a9e4334</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2596212e-014a-4af6-960f-f076613311a0/tasks/ad1491eea6a9e4334.output</output-file>
+<status>completed</status>
+<summary>Agent "Review test_agent_footprint.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All checks performed. This file defines no value-object classes (BaseModel/dataclass), so that criterion doesn't apply here. Compiling the findings now.
+
+Based on my review against the criteria in the instruction file, I found the following violations in `/Users/hosanglee/archy/tests/test_agent_footprint.py`:
+
+**Finding 1 — Line length (line 159)**
+- Criterion: "No line exceeds 100 chars"
+- Offending line (101 chars): `            _assistant({"input_tokens": 12, "output_tokens": 4}, [("Read", "a.py"), ("Grep", None)]),`
+- Suggested fix: wrap the call across multiple lines, e.g.:
+```python
+_assistant(
+    {"input_tokens": 12, "output_tokens": 4}, [("Read", "a.py"), ("Grep", None)]
+),
+```
+
+**Finding 2 — Comment accuracy (line 164)**
+- Criterion: "Comment accuracy: every comment must explain WHY ... not WHAT"
+- Offending comment: `assert parsed.input_tokens == 100 + 30 + 40 + 10  # 180` — the trailing `# 180` merely restates the arithmetic result already computable from the line itself; it explains no decision, constraint, or quirk.
+- Suggested fix: remove the comment (the sum is self-evident) or replace with something that states why this value matters (it already has one two lines above: "# Summed across the four assistant messages only"). Simplest fix: drop `# 180`.
+
+**Finding 3 — Comment accuracy (line 165)**
+- Criterion: same as above
+- Offending comment: `assert parsed.output_tokens == 50 + 20 + 25 + 5  # 100` — same issue, restates the sum (WHAT), not a reason.
+- Suggested fix: drop `# 100`.
+
+**Finding 4 — Comment accuracy (line 210)**
+- Criterion: same as above
+- Offending comment: `_assistant({"input_tokens": 12, "output_tokens": 4}, [("Read", "a.py"), ("Grep", None)]),` ... `assert parsed.pre_edit_reads == 4  # 2 Read + 1 Grep + 1 Glob` — restates the arithmetic breakdown visible from the fixture two lines above, rather than explaining why the value is what it is (that reasoning is already captured in the `pre_edit_distinct_files` comment on the next line).
+- Suggested fix: drop the comment or fold the reasoning into a single WHY comment covering both asserts (e.g., "Reads/greps/globs all count toward pre_edit_reads regardless of file_path presence").
+
+**Finding 5 — Comment accuracy (line 315)**
+- Criterion: same as above
+- Offending comment: `# A: 300, 310 ; B: 230, 230 ; deltas: -70, -80 ; median -75.` — pure arithmetic restatement of the computed values, not an explanation of why the median or the deltas are computed that way.
+- Suggested fix: remove, or replace with a WHY note if there's a non-obvious reason (e.g., why footprint_tokens = input+output, if that's not already documented elsewhere).
+
+**Finding 6 — Comment accuracy (line 334)**
+- Criterion: same as above
+- Offending comment: `# deltas C-A: -5, -4 ; median -4.5 ; C lower in both pairs.` — same pattern, restates the arithmetic (WHAT) rather than explaining a decision or quirk.
+- Suggested fix: remove or reduce to the WHY portion only (the surrounding comment block at lines 322-325 already explains the WHY for this test).
+
+All other criteria (`from __future__ import annotations` present, PEP 604 syntax with no `typing.List`/`Optional`, snake_case functions/vars with underscore-prefixed private helpers, `pathlib.Path` usage exclusively, import grouping, and no pydantic/dataclass value-object misuse — none are defined in this file) passed with no issues.
+
+Given these six findings, this review does not meet the PASS criterion (zero violations). I am not calling `mark_review_as_passed` since violations exist and were not dismissed by the user.</result>
+<usage><subagent_tokens>31165</subagent_tokens><tool_uses>13</tool_uses><duration_ms>141712</duration_ms></usage>
+</task-notification>
