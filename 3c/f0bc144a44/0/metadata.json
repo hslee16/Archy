@@ -1,0 +1,81 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "3cf0bc144a44",
+  "session_id": "2596212e-014a-4af6-960f-f076613311a0",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-21T22:05:28.84312Z",
+  "branch": "alee/armc-read-reduction-289",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "tests/test_agent_footprint.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "1f74caee4953",
+  "token_usage": {
+    "input_tokens": 273,
+    "cache_creation_tokens": 1049207,
+    "cache_read_tokens": 24006808,
+    "output_tokens": 152756,
+    "api_call_count": 137
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_013RHfZU9PR1HDm2KLJVEHCC",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "1f74caee4953",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 706,
+        "end": 707,
+        "entry_ids": [
+          "118590ae-740f-4028-9241-c9f3dbf60484"
+        ],
+        "tool_use_id": "toolu_013RHfZU9PR1HDm2KLJVEHCC"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_013RHfZU9PR1HDm2KLJVEHCC"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-21T22:05:28.809596Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 1,
+    "human_removed": 2,
+    "total_committed": 0,
+    "total_lines_changed": 3,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
