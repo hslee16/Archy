@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "940faade439c",
+  "strategy": "manual-commit",
+  "branch": "alee/founder-flounder-wording",
+  "checkpoints_count": 6,
+  "files_touched": [
+    "docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/94/0faade439c/0/metadata.json",
+      "transcript": "/94/0faade439c/0/full.jsonl",
+      "content_hash": "/94/0faade439c/0/content_hash.txt",
+      "prompt": "/94/0faade439c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 347,
+    "cache_creation_tokens": 1432956,
+    "cache_read_tokens": 36161824,
+    "output_tokens": 188796,
+    "api_call_count": 174
+  }
+}
