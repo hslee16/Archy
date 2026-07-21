@@ -33,7 +33,8 @@ import statistics
 import subprocess
 import sys
 from pathlib import Path
-from typing import NamedTuple
+
+from pydantic import BaseModel, ConfigDict
 
 # Tool names that name a single target file (their `file_path` input is the
 # touched path). Grep/Glob/Bash are excluded: they have no single unambiguous
@@ -72,7 +73,7 @@ def _normalize_touch_path(raw: str) -> str:
     return os.path.normpath(raw)
 
 
-class ParsedTranscript(NamedTuple):
+class ParsedTranscript(BaseModel):
     """Everything derivable from a session transcript alone (no run config).
 
     Token fields are summed across every assistant message: each assistant
@@ -81,6 +82,8 @@ class ParsedTranscript(NamedTuple):
     folded into the footprint headline, because cache hit/miss is a cross-run
     artifact, not agent effort (spec section 4).
     """
+
+    model_config = ConfigDict(frozen=True)
 
     input_tokens: int
     cache_read_input_tokens: int
@@ -101,8 +104,10 @@ class ParsedTranscript(NamedTuple):
         return _footprint_tokens(self.input_tokens, self.output_tokens)
 
 
-class FootprintRecord(NamedTuple):
+class FootprintRecord(BaseModel):
     """One agent run's full footprint row: parsed transcript + run context."""
+
+    model_config = ConfigDict(frozen=True)
 
     variant: str
     run_index: int
@@ -570,7 +575,7 @@ def _main(argv: list[str]) -> int:
             test_cmd=test_cmd,
         )
     summary = summarize(records)
-    (args.out / "records.json").write_text(json.dumps([r._asdict() for r in records], indent=2))
+    (args.out / "records.json").write_text(json.dumps([r.model_dump() for r in records], indent=2))
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary, indent=2))
     return 0
