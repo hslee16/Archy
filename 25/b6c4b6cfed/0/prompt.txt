@@ -1,0 +1,15 @@
+<task-notification>
+<task-id>bt6vqgowt</task-id>
+<tool-use-id>toolu_017Rfbb4kkpCr5tRFkSNhqh3</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2596212e-014a-4af6-960f-f076613311a0/tasks/bt6vqgowt.output</output-file>
+<status>failed</status>
+<summary>Background command "Launch N=20 extension (indices 10-29)" failed with exit code 1</summary>
+</task-notification>
+
+---
+
+status
+
+---
+
+status

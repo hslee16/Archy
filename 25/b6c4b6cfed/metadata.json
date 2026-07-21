@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "25b6c4b6cfed",
+  "strategy": "manual-commit",
+  "branch": "alee/armc-read-reduction-289",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "bench/agent_footprint_results.md",
+    "docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/25/b6c4b6cfed/0/metadata.json",
+      "transcript": "/25/b6c4b6cfed/0/full.jsonl",
+      "content_hash": "/25/b6c4b6cfed/0/content_hash.txt",
+      "prompt": "/25/b6c4b6cfed/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 230756,
+    "cache_read_tokens": 3172136,
+    "output_tokens": 19880,
+    "api_call_count": 15
+  }
+}

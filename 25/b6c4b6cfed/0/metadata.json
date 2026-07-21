@@ -1,0 +1,49 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "25b6c4b6cfed",
+  "session_id": "2596212e-014a-4af6-960f-f076613311a0",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-21T21:41:44.682347Z",
+  "branch": "alee/armc-read-reduction-289",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "bench/agent_footprint_results.md",
+    "docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-4-8[1m]",
+  "turn_id": "b74fa7f61952",
+  "checkpoint_transcript_start": 578,
+  "transcript_lines_at_start": 578,
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 230756,
+    "cache_read_tokens": 3172136,
+    "output_tokens": 19880,
+    "api_call_count": 15
+  },
+  "session_metrics": {
+    "turn_count": 11
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-21T21:41:44.662089Z",
+    "agent_lines": 63,
+    "agent_removed": 47,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 63,
+    "total_lines_changed": 110,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
