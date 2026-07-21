@@ -88,4 +88,50 @@ spans modules, which is where the paper's footprint effect concentrates.
   footprint outside the noise band (the paper saw ~2.5x per-task variance, hence
   `n >= 10`), that is the result and it ships as such.
 
-_No results table yet; this section fills in when the first pair runs._
+_No A-vs-B (refactor-study) results yet. The first live comparative run was the
+arm-C context-injection study below (#289), which reuses the same harness._
+
+## Arm C: context-injection (#289), first run
+
+The #289 read-reduction question (does injecting an archy pre-edit brief reduce a
+coding agent's exploratory reads before its first edit) ran first, because it needs
+no refactored variant B, only a brief prepended to the prompt. Protocol:
+[`SPEC_AGENT_FOOTPRINT_BENCH.md` §14](../docs/SPEC_AGENT_FOOTPRINT_BENCH.md);
+framing: [`docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md`](../docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md).
+
+**Config (one-config caveat):** flask @ `36e4a82`; `claude-sonnet-5` headless;
+`--allowedTools Read,Write,Edit,Bash,Grep,Glob --setting-sources local`; fresh
+`git reset --hard` per run; interleaved A (no brief) / C (581-token archy brief).
+Task: add priority ordering to Flask's app-context teardown callbacks, described by
+behavior only (names no files). Its true edit surface is 3 files
+(`sansio/app.py`, `app.py`, `ctx.py`); the brief named 9 (recall 3/3, **precision
+0.33**).
+
+**N=10 result (20 runs, 0 regressions, 0 no-edit, 20/20 completed):**
+
+| metric | A median | C median | median Δ (C−A) | C<A / C>A / tie | sign p |
+|---|---|---|---|---|---|
+| **pre_edit_reads** (record) | 13.0 | 8.5 | **−3.5** | 8 / 2 / 0 | **0.109** |
+| pre_edit_distinct_files | 4.0 | 3.0 | 0.0 | 4 / 3 / 3 | 1.000 |
+| turns (num_turns) | 44.5 | 35.0 | −8.0 | 7 / 2 / 1 | 0.180 |
+| footprint_tokens | 16,632 | 14,157 | −2,983 | 6 / 4 / 0 | 0.754 |
+| file_revisitations | 3.0 | 2.0 | 0.0 | 4 / 3 / 3 | 1.000 |
+
+`pre_edit_reads` deltas (C−A): `[−10, −9, −7, −5, −5, −2, −2, −1, +2, +9]`. The brief
+was charged 581 tokens against arm C; net of that, arm C's mean footprint (15,024)
+is still below arm A's (17,300), so the reduction is not a bookkeeping artifact.
+
+**Read (honest, under-powered):** the brief reduced pre-edit reads directionally
+(median −3.5, ~27%, 8/10 pairs) with **no correctness or regression cost**, but the
+sign test (**p=0.109**) does not clear 0.05 at N=10. Per §8 this is a trend, not a
+result. The **mechanism is not breadth substitution**: `pre_edit_distinct_files` is
+unchanged (Δ=0), so the brief did not shrink the *set* of files opened; it cut
+*redundant read-calls and turns* over the same ~3-file spine. `pre_edit_input_tokens`
+is not headlined (caching makes non-cache input tiny); footprint is output-dominated
+and noisy.
+
+**Follow-ups filed:** power the run to N≈30 for significance (#292); task-conditioned
+focus to lift the 0.33 precision (#291); brief precision/recall as a standing metric
+(#290); split the metric into reads-per-file + turns-to-first-edit, since breadth did
+not move (#293). _N≈30 extension running; this table updates to the pooled result
+when it lands._
