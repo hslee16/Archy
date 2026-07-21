@@ -88,4 +88,60 @@ spans modules, which is where the paper's footprint effect concentrates.
   footprint outside the noise band (the paper saw ~2.5x per-task variance, hence
   `n >= 10`), that is the result and it ships as such.
 
-_No results table yet; this section fills in when the first pair runs._
+_No A-vs-B (refactor-study) results yet. The first live comparative run was the
+arm-C context-injection study below (#289), which reuses the same harness._
+
+## Arm C: context-injection (#289), first run
+
+The #289 read-reduction question (does injecting an archy pre-edit brief reduce a
+coding agent's exploratory reads before its first edit) ran first, because it needs
+no refactored variant B, only a brief prepended to the prompt. Protocol:
+[`SPEC_AGENT_FOOTPRINT_BENCH.md` §14](../docs/SPEC_AGENT_FOOTPRINT_BENCH.md);
+framing: [`docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md`](../docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md).
+
+**Config (one-config caveat):** flask @ `36e4a82`; `claude-sonnet-5` headless;
+`--allowedTools Read,Write,Edit,Bash,Grep,Glob --setting-sources local`; fresh
+`git reset --hard` per run; interleaved A (no brief) / C (581-token archy brief).
+Task: add priority ordering to Flask's app-context teardown callbacks, described by
+behavior only (names no files). Its true edit surface is 3 files
+(`sansio/app.py`, `app.py`, `ctx.py`); the brief named 9 (recall 3/3, **precision
+0.33**).
+
+**Result: N=22 pooled (44 runs, 0 regressions, 0 no-edit, all completed).** The run
+targeted N≈30 (#292); a stalled headless `claude` stream at run 22 was killed and the
+22 completed pairs pooled (runs 0-9 + 10-12 + 13-21; run 22 unpaired, dropped).
+
+| metric | A median | C median | median Δ (C−A) | C<A / C>A / tie | sign p |
+|---|---|---|---|---|---|
+| **pre_edit_reads** (record) | 11.5 | 9.0 | −2.0 | 14 / 8 / 0 | **0.286** |
+| pre_edit_distinct_files | 4.0 | 3.0 | 0.0 | 9 / 6 / 7 | 0.607 |
+| turns (num_turns) | 42.0 | 35.0 | −5.0 | 15 / 5 / 2 | 0.041 |
+| footprint_tokens | 16,632 | 12,687 | −2,325 | 12 / 10 / 0 | 0.832 |
+| file_revisitations | 2.5 | 2.0 | 0.0 | 7 / 6 / 9 | 1.000 |
+
+`pre_edit_reads` deltas (C−A): `[−10,−9,−8,−7,−5,−5,−5,−4,−4,−3,−2,−2,−2,−1,+1,+1,+2,+2,+3,+4,+5,+9]`,
+mean −1.82.
+
+**Read (honest): a documented non-result for the read-reduction claim.** At N=10 the
+brief looked promising (median −3.5, 8/10, p=0.109); **doubling N pulled it back into
+the noise** (median −2.0, 14/8, **p=0.286**). So #289's central question, "does an
+archy brief reduce the reads an agent does before editing," is **not supported at this
+config.** The N=10 figure was underpowered optimism, exactly the failure mode `n>=10`
+and "publish the null" (§8-9) exist to catch. `num_turns` is nominally lower
+(p=0.041, −5 median) but with 5 metrics tested it does **not survive multiple-comparison
+correction** (~0.21), and it is not a read count, so it is not headlined as read
+reduction (that would be the relabeling §14.6 forbids). Breadth
+(`pre_edit_distinct_files`) and revisitation are flat, as at N=10: the brief never
+shrank the ~3-file spine. Zero regressions throughout, so no correctness signal either
+way.
+
+**Go/no-go:** **NO-GO** on an `archy brief` feature, now on evidence (the effect
+regressed to null on more data), not just low power. This validates the anti-theater
+gate: a feature shipped on the N=10 hint would have been theater.
+
+**Follow-up disposition:** #292 (power to N≈30) is effectively answered here (null at
+N=22); #291 (task-conditioned focus) keeps a weak prior since breadth never moved;
+#290 (brief precision metric) and #293 (metric split) remain useful measurement infra.
+One-config caveat stands: one model (`claude-sonnet-5`), one repo, one task; a
+different model or a multi-module task with a wider true surface could differ, but the
+burden is now on a positive result to appear, not on this null to be explained away.

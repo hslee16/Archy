@@ -135,6 +135,40 @@ def test_parse_transcript_file_metrics(tmp_path: Path):
     assert parsed.file_revisitations == 2
 
 
+def test_parse_transcript_pre_edit_metrics(tmp_path: Path):
+    # #289 reads-before-first-edit (spec section 14.3). First edit is m2 Edit a.py,
+    # so the prefix is m1 only: Read a.py + Grep = 2 exploratory reads, 1 distinct
+    # file (Grep has no file_path). pre_edit_input_tokens spans up to and including
+    # the turn the first edit lands in: m1 (100) + m2 (30) = 130.
+    t = tmp_path / "session.jsonl"
+    _sample_transcript(t)
+    parsed = af.parse_transcript(t)
+    assert parsed.made_edit is True
+    assert parsed.pre_edit_reads == 2
+    assert parsed.pre_edit_distinct_files == 1
+    assert parsed.pre_edit_input_tokens == 130
+
+
+def test_pre_edit_metrics_when_no_edit_is_made(tmp_path: Path):
+    # A run that explores but never edits: the whole transcript is the prefix, and
+    # made_edit is False so the run is reported separately, never in the median.
+    t = tmp_path / "session.jsonl"
+    _write_transcript(
+        t,
+        [
+            _assistant(
+                {"input_tokens": 12, "output_tokens": 4}, [("Read", "a.py"), ("Grep", None)]
+            ),
+            _assistant({"input_tokens": 8, "output_tokens": 3}, [("Read", "b.py"), ("Glob", None)]),
+        ],
+    )
+    parsed = af.parse_transcript(t)
+    assert parsed.made_edit is False
+    assert parsed.pre_edit_reads == 4  # 2 Read + 1 Grep + 1 Glob
+    assert parsed.pre_edit_distinct_files == 2  # a.py, b.py (Grep/Glob have no path)
+    assert parsed.pre_edit_input_tokens == 20  # whole run, since no edit ever lands
+
+
 def test_first_write_is_not_a_revisit(tmp_path: Path):
     # A file read once and edited once, never returned to, is zero revisitations.
     t = tmp_path / "session.jsonl"
@@ -210,6 +244,11 @@ def _record(variant: str, run_index: int, **over) -> af.FootprintRecord:
         num_turns=5,
         distinct_files_touched=4,
         file_revisitations=3,
+        pre_edit_reads=8,
+        pre_edit_distinct_files=5,
+        pre_edit_input_tokens=1200,
+        made_edit=True,
+        brief_tokens=0,
         duration_ms=1000,
         total_cost_usd=0.01,
         task_completed=True,
@@ -232,6 +271,24 @@ def test_summarize_paired_deltas(tmp_path: Path):
     fp = summary["metrics"]["footprint_tokens"]
     # A: 300, 310 ; B: 230, 230 ; deltas: -70, -80 ; median -75.
     assert fp["median_delta"] == -75
-    assert fp["b_lower_count"] == 2 and fp["b_higher_count"] == 0
+    assert fp["treatment_lower_count"] == 2 and fp["treatment_higher_count"] == 0
     assert summary["metrics"]["file_revisitations"]["median_delta"] == -3
     assert summary["regressions"] == 0
+
+
+def test_summarize_pairs_arm_c_on_pre_edit_reads(tmp_path: Path):
+    # #289 arm C (A vs C): treatment is "C", and pre_edit_reads is the metric of
+    # record. C reads less before its first edit in both pairs; one no-edit run is
+    # counted separately, never folded into a median.
+    records = [
+        _record("A", 0, pre_edit_reads=12),
+        _record("C", 0, pre_edit_reads=7, brief_tokens=300),
+        _record("A", 1, pre_edit_reads=10),
+        _record("C", 1, pre_edit_reads=6, brief_tokens=300, made_edit=False),
+    ]
+    summary = af.summarize(records)
+    per = summary["metrics"]["pre_edit_reads"]
+    # deltas C-A: -5, -4 ; median -4.5 ; C lower in both pairs.
+    assert per["median_delta"] == -4.5
+    assert per["treatment_lower_count"] == 2 and per["treatment_higher_count"] == 0
+    assert summary["no_edit_runs"] == 1

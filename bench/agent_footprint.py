@@ -41,6 +41,12 @@ from typing import NamedTuple
 _READ_TOOLS = frozenset({"Read"})
 _WRITE_TOOLS = frozenset({"Edit", "Write", "MultiEdit", "NotebookEdit"})
 _FILE_TOOLS = _READ_TOOLS | _WRITE_TOOLS
+# Exploratory-read surface for the #289 reads-before-first-edit metric: the tool
+# calls an agent makes to *find* what to look at (spec section 14.3). Grep/Glob
+# have no single file target so they are not file touches, but they ARE reads for
+# this metric. Bash is excluded: it is not unambiguously a source read.
+_SEARCH_TOOLS = frozenset({"Grep", "Glob"})
+_EXPLORE_TOOLS = _READ_TOOLS | _SEARCH_TOOLS
 
 # Default tool surface handed to the agent; pinned so the two variants see an
 # identical, reproducible tool set (spec section 10).
@@ -83,6 +89,12 @@ class ParsedTranscript(NamedTuple):
     assistant_messages: int
     distinct_files_touched: int
     file_revisitations: int
+    # #289 reads-before-first-edit (arm C metric of record, spec section 14.3),
+    # measured over the transcript prefix up to the first Edit/Write.
+    pre_edit_reads: int
+    pre_edit_distinct_files: int
+    pre_edit_input_tokens: int
+    made_edit: bool  # False -> the whole run is the prefix; report separately.
 
     @property
     def footprint_tokens(self) -> int:
@@ -102,6 +114,11 @@ class FootprintRecord(NamedTuple):
     num_turns: int
     distinct_files_touched: int
     file_revisitations: int
+    pre_edit_reads: int
+    pre_edit_distinct_files: int
+    pre_edit_input_tokens: int
+    made_edit: bool
+    brief_tokens: int  # realized archy-brief size charged to this arm (0 for A)
     duration_ms: int
     total_cost_usd: float
     task_completed: bool
@@ -175,15 +192,36 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
     touched: set[str] = set()
     written: set[str] = set()
     revisitations = 0
+    # #289 pre-edit accumulators: everything before the first Edit/Write, walked
+    # in the same causal order (spec section 14.3). `made_edit` flips at the first
+    # write block; `pre_edit_input_tokens` includes the turn that write lands in
+    # ("up to the turn containing the first edit"), so this message's input tokens
+    # must be added *before* its blocks are scanned.
+    pre_edit_reads = 0
+    pre_edit_files: set[str] = set()
+    pre_edit_input = 0
+    made_edit = False
     for mid in order:
         message = deduped[mid]
         usage = message.get("usage") or {}
-        in_toks += int(usage.get("input_tokens", 0) or 0)
+        msg_input = int(usage.get("input_tokens", 0) or 0)
+        in_toks += msg_input
         cache_read += int(usage.get("cache_read_input_tokens", 0) or 0)
         cache_create += int(usage.get("cache_creation_input_tokens", 0) or 0)
         out_toks += int(usage.get("output_tokens", 0) or 0)
+        if not made_edit:
+            pre_edit_input += msg_input
 
         for name, file_path in _iter_tool_uses(message):
+            if not made_edit:
+                if name in _WRITE_TOOLS:
+                    # The confident point: stop counting exploratory reads. The
+                    # write's own file touch is not a "read", so it is excluded.
+                    made_edit = True
+                elif name in _EXPLORE_TOOLS:
+                    pre_edit_reads += 1
+                    if name in _READ_TOOLS and file_path is not None:
+                        pre_edit_files.add(file_path)
             # file_path is non-None only for a file tool (Read/Edit/Write), so
             # any such touch of an already-written path is a revisit.
             if file_path is None:
@@ -202,6 +240,10 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
         assistant_messages=len(order),
         distinct_files_touched=len(touched),
         file_revisitations=revisitations,
+        pre_edit_reads=pre_edit_reads,
+        pre_edit_distinct_files=len(pre_edit_files),
+        pre_edit_input_tokens=pre_edit_input,
+        made_edit=made_edit,
     )
 
 
@@ -282,9 +324,18 @@ def run_variant(
     test_cmd: list[str] | None = None,
     baseline_failed: bool = False,
     allowed_tools=DEFAULT_ALLOWED_TOOLS,
+    prompt_prefix: str = "",
+    brief_tokens: int = 0,
 ) -> FootprintRecord:
-    """Run one agent task on one variant and return its footprint row."""
-    result = _run_claude(repo_dir, task_prompt, model=model, allowed_tools=allowed_tools)
+    """Run one agent task on one variant and return its footprint row.
+
+    `prompt_prefix` is the #289 arm-C injection (spec section 14.4): the archy
+    brief is prepended to the task so its tokens land inside the run's own
+    `input_tokens` (and thus `pre_edit_input_tokens`), making the net-accounting
+    guard structural rather than bolted on (spec section 14.6). Arm A passes "".
+    """
+    full_prompt = f"{prompt_prefix}\n\n{task_prompt}" if prompt_prefix else task_prompt
+    result = _run_claude(repo_dir, full_prompt, model=model, allowed_tools=allowed_tools)
     session_id = result["session_id"]
 
     transcript = _locate_transcript(repo_dir, session_id)
@@ -308,6 +359,11 @@ def run_variant(
         num_turns=int(result.get("num_turns", parsed.assistant_messages)),
         distinct_files_touched=parsed.distinct_files_touched,
         file_revisitations=parsed.file_revisitations,
+        pre_edit_reads=parsed.pre_edit_reads,
+        pre_edit_distinct_files=parsed.pre_edit_distinct_files,
+        pre_edit_input_tokens=parsed.pre_edit_input_tokens,
+        made_edit=parsed.made_edit,
+        brief_tokens=brief_tokens,
         duration_ms=int(result.get("duration_ms", 0)),
         total_cost_usd=float(result.get("total_cost_usd", 0.0)),
         task_completed=(result.get("subtype") == "success" and not result.get("is_error")),
@@ -347,15 +403,64 @@ def run_pair(
     return records
 
 
+def run_arm_c(
+    repo_dir: Path,
+    task_prompt: str,
+    brief: str,
+    *,
+    n: int,
+    model: str,
+    artifact_dir: Path,
+    brief_tokens: int = 0,
+    test_cmd: list[str] | None = None,
+) -> list[FootprintRecord]:
+    """#289 context-injection study: arm A (no brief) vs arm C (archy brief).
+
+    Both arms run the identical task on the identical `repo_dir` at HEAD (spec
+    section 14.2); they differ only by the brief prepended to arm C's prompt. A
+    and C are interleaved per run_index so slow service drift averages out (spec
+    section 8), and the brief bytes are persisted alongside the transcripts so the
+    injected context is reviewable.
+    """
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    (artifact_dir / "brief.txt").write_text(brief, encoding="utf-8")
+    records: list[FootprintRecord] = []
+    for i in range(n):
+        for variant, prefix, btoks in (("A", "", 0), ("C", brief, brief_tokens)):
+            records.append(
+                run_variant(
+                    repo_dir,
+                    task_prompt,
+                    variant=variant,
+                    run_index=i,
+                    model=model,
+                    artifact_dir=artifact_dir,
+                    test_cmd=test_cmd,
+                    prompt_prefix=prefix,
+                    brief_tokens=btoks,
+                )
+            )
+    return records
+
+
 def _paired_deltas(records: list[FootprintRecord], metric: str) -> list[float]:
-    """Per-run B-minus-A deltas for one metric, matched on run_index."""
+    """Per-run treatment-minus-A deltas for one metric, matched on run_index.
+
+    "A" is always the control; the treatment is whichever other variant is
+    present ("B" for the refactor study section 3, "C" for the #289 injection
+    study section 14). A run_index missing either side is skipped.
+    """
     by_run: dict[int, dict[str, FootprintRecord]] = {}
     for r in records:
         by_run.setdefault(r.run_index, {})[r.variant] = r
     deltas = []
     for pair in by_run.values():
-        if "A" in pair and "B" in pair:
-            deltas.append(float(getattr(pair["B"], metric)) - float(getattr(pair["A"], metric)))
+        if "A" not in pair:
+            continue
+        treatment = next((v for v in ("B", "C") if v in pair), None)
+        if treatment is None:
+            continue
+        deltas.append(float(getattr(pair[treatment], metric)) - float(getattr(pair["A"], metric)))
     return deltas
 
 
@@ -372,8 +477,12 @@ def summarize(records: list[FootprintRecord]) -> dict:
         "num_turns",
         "distinct_files_touched",
         "file_revisitations",
+        # #289 arm-C metrics; `pre_edit_reads` is the metric of record (14.3).
+        "pre_edit_reads",
+        "pre_edit_distinct_files",
+        "pre_edit_input_tokens",
     ]
-    out: dict = {"n_pairs": 0, "metrics": {}, "regressions": 0}
+    out: dict = {"n_pairs": 0, "metrics": {}, "regressions": 0, "no_edit_runs": 0}
     for m in metrics:
         deltas = _paired_deltas(records, m)
         if not deltas:
@@ -381,18 +490,35 @@ def summarize(records: list[FootprintRecord]) -> dict:
         out["n_pairs"] = len(deltas)
         out["metrics"][m] = {
             "median_delta": statistics.median(deltas),
-            "b_lower_count": sum(1 for d in deltas if d < 0),
-            "b_higher_count": sum(1 for d in deltas if d > 0),
+            # "lower" = treatment (B/C) spent less than A on this metric.
+            "treatment_lower_count": sum(1 for d in deltas if d < 0),
+            "treatment_higher_count": sum(1 for d in deltas if d > 0),
             "tie_count": sum(1 for d in deltas if d == 0),
         }
     out["regressions"] = sum(1 for r in records if r.test_regression)
+    # A run that never edited: its whole transcript is the pre-edit prefix, so it
+    # is reported separately and never folded into the median (spec section 14.3).
+    out["no_edit_runs"] = sum(1 for r in records if not r.made_edit)
     return out
 
 
 def _main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description="Agent-footprint minimal-pair bench (#259)")
+    ap.add_argument(
+        "--mode",
+        choices=("ab", "ac"),
+        default="ab",
+        help="ab = refactor study (section 3); ac = #289 context-injection (section 14)",
+    )
     ap.add_argument("--repo-a", required=True, type=Path, help="variant A checkout (as-is)")
-    ap.add_argument("--repo-b", required=True, type=Path, help="variant B checkout (refactored)")
+    ap.add_argument(
+        "--repo-b", type=Path, help="variant B checkout (refactored); required for --mode ab"
+    )
+    ap.add_argument(
+        "--brief-file",
+        type=Path,
+        help="archy brief prepended to arm C's prompt; required for --mode ac (section 14.4)",
+    )
     ap.add_argument("--task-file", required=True, type=Path, help="file with the task prompt")
     ap.add_argument("--n", type=int, default=10, help="runs per variant (>= 10; spec section 8)")
     ap.add_argument("--model", required=True, help="pinned model id, recorded on every row")
@@ -412,15 +538,37 @@ def _main(argv: list[str]) -> int:
 
     task_prompt = args.task_file.read_text(encoding="utf-8")
     test_cmd = args.test_cmd.split() if args.test_cmd else None
-    records = run_pair(
-        args.repo_a,
-        args.repo_b,
-        task_prompt,
-        n=args.n,
-        model=args.model,
-        artifact_dir=args.out,
-        test_cmd=test_cmd,
-    )
+    if args.mode == "ac":
+        if args.brief_file is None:
+            print("--mode ac requires --brief-file (spec section 14.4).", file=sys.stderr)
+            return 2
+        brief = args.brief_file.read_text(encoding="utf-8")
+        # A rough token estimate charged to arm C for the results table; the
+        # real cost is already inside pre_edit_input_tokens by construction.
+        brief_tokens = max(1, len(brief) // 4)
+        records = run_arm_c(
+            args.repo_a,
+            task_prompt,
+            brief,
+            n=args.n,
+            model=args.model,
+            artifact_dir=args.out,
+            brief_tokens=brief_tokens,
+            test_cmd=test_cmd,
+        )
+    else:
+        if args.repo_b is None:
+            print("--mode ab requires --repo-b.", file=sys.stderr)
+            return 2
+        records = run_pair(
+            args.repo_a,
+            args.repo_b,
+            task_prompt,
+            n=args.n,
+            model=args.model,
+            artifact_dir=args.out,
+            test_cmd=test_cmd,
+        )
     summary = summarize(records)
     (args.out / "records.json").write_text(json.dumps([r._asdict() for r in records], indent=2))
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))
