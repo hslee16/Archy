@@ -269,7 +269,7 @@ the paper's ~2.5x per-task variance. A small true effect will not clear signific
 at N≈22 regardless of brief quality; detecting one would need a **larger effect**
 (a harder setting) or **much larger N** (order 50-100). So "improve the brief and
 rerun at N=22" is unlikely to flip the verdict; "move to a setting where agents
-actually founder" is the test that could. A cheap confirmation is available: run
+actually flounder" is the test that could. A cheap confirmation is available: run
 #291's focused brief and watch #290's precision metric. If precision rises but reads
 still do not move, the ceiling is the setting, not the brief.
 
