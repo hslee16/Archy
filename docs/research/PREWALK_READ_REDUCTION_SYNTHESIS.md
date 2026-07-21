@@ -28,10 +28,12 @@ read 2026-07-20, indexed locally.
   distilled artifact loses the grounded understanding*. An archy brief is exactly
   such an artifact. So the null is that archy context **adds** reads (agent reads
   the brief *and* still reads the source) rather than substituting for them.
-- **Recommendation: NO-GO on any new feature or spec now; GO on a scoped bench
-  extension.** Add a context-injection arm (arm C) to the #259 harness and measure
-  *net* reads-before-first-edit with a no-regression gate, before anyone ships an
-  `archy brief` surface. Measure the substitution, do not assert it.
+- **Recommendation: NO-GO on any new feature or spec.** The scoped bench was built
+  and run (arm C on the #259 harness). **It returned a non-result** (§6): at N=22 the
+  brief did not reliably reduce reads-before-first-edit (median −2.0, 14/8, p=0.286),
+  after an N=10 hint (p=0.109) that did not survive more data. NO-GO is now on
+  evidence, not just an unproven prior. We measured the substitution rather than
+  asserting it, and it was not there.
 
 ## 1. The article in archy's terms (research task 1)
 
@@ -200,7 +202,7 @@ usually illusory).
 - **Do not pursue (B).** archy cannot transfer a warm trajectory; a tool result is
   a postcard. Do not position or build archy as a prewalk analogue.
 
-## 6. First empirical result (arm-C run, N=10, 2026-07-21)
+## 6. Empirical result (arm-C run, N=22, 2026-07-21): a non-result
 
 The bench recommended above was built and run (arm C added to the #259 harness;
 protocol [`SPEC_AGENT_FOOTPRINT_BENCH.md` §14](../SPEC_AGENT_FOOTPRINT_BENCH.md),
@@ -208,28 +210,32 @@ numbers in [`bench/agent_footprint_results.md`](../../bench/agent_footprint_resu
 One config: flask @ `36e4a82`, `claude-sonnet-5` headless, a fixed teardown-ordering
 task (true surface 3 files), a 581-token archy brief injected for arm C.
 
-**Directional support, under-powered.** The brief reduced pre-edit reads in 8 of 10
-pairs (median 13.0 → 8.5, −3.5, ~27%) with **zero regression or completion cost**
-(0/20 regressions, 20/20 completed), but the two-sided sign test is **p=0.109**, not
-significant at N=10. Per §8 this is a trend, not a result.
+**The read-reduction claim is not supported.** At N=10 the brief looked promising
+(pre_edit_reads median 13.0 → 8.5, −3.5, 8/10 pairs, p=0.109). Powering the run to
+**N=22 pulled the effect back into the noise: median −2.0, 14/8, sign p=0.286.** The
+N=10 figure was underpowered optimism, the exact failure mode the paper's ~2.5x
+variance and the spec's `n>=10` / "publish the null" discipline exist to catch. So
+#289's central question, "does an archy brief reduce the reads an agent does before
+editing," gets a **documented non-result** at this config, not a feature.
 
-**The null was not the failure mode; the mechanism was the surprise.** The feared
-`/plan` trap (brief *adds* reads) did not hold in aggregate, but neither did the (A)
-breadth-substitution the note predicted: `pre_edit_distinct_files` was **unchanged**
-(Δ=0). The brief did not shrink the *set* of files the agent opens (the irreducible
-~3-file spine stays); it cut *redundant read-calls and turns* over that set. So the
-honest claim narrows further: not "archy substitutes away navigational reads" but
-"archy tightens redundant reading on the way to the same edit." The hand-measured
-brief precision (0.33: 9 named files, 3 on-surface) explains the ceiling: the brief
-carries off-surface weight the agent correctly ignores.
+**What the data does and does not say.** The feared `/plan` trap (brief *adds* reads)
+did not hold either; the honest finding is simply *no reliable movement* on the read
+count. Breadth (`pre_edit_distinct_files`) and revisitation were flat throughout: the
+brief never shrank the ~3-file spine, consistent with the hand-measured brief
+precision of 0.33 (9 named files, 3 on-surface, 6 dead weight the agent ignores).
+`num_turns` was nominally lower (−5, p=0.041) but does not survive
+multiple-comparison correction across the 5 metrics (~0.21), and it is not a read
+count, so it cannot be relabeled as read reduction (§14.6). Zero regressions, so no
+correctness signal either way.
 
-**Refined go/no-go.** Still **NO-GO** on shipping an `archy brief` feature (not
-significant, and the effect is modest read-tightening, not substitution). **GO** on:
-(1) power the run to N≈30 (#292) to call it significant or null; (2) a
-task-conditioned, proximity-ranked brief (#291) to convert the 0.33 precision into a
-larger effect; (3) brief precision/recall as a standing metric (#290); (4) split the
-metric into reads-per-file and turns-to-first-edit (#293), since breadth did not
-move. If the powered run stays sub-threshold, this converts to a §14c non-result.
+**Go/no-go, on evidence now.** **NO-GO** on an `archy brief` feature, because the
+effect *regressed to null on more data*, not merely for want of power. This is the
+anti-theater gate doing its job: a feature shipped on the N=10 hint would have been
+theater. The measurement infra remains worthwhile (#290 brief precision, #293 metric
+split); a task-conditioned brief (#291) keeps only a weak prior, since breadth never
+moved even with the flat brief. The one-config caveat stands (one model, one repo, one
+task), but the burden now sits on a positive result to appear, not on this null to be
+explained away.
 
 ## Relationships
 
