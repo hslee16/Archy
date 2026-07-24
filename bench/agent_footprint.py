@@ -63,6 +63,33 @@ def _footprint_tokens(input_tokens: int, output_tokens: int) -> int:
     return input_tokens + output_tokens
 
 
+def load_file_map(path: str | Path | None) -> dict[str, str]:
+    """Load a variant's file-equivalence map (new path -> pre-refactor path).
+
+    A decomposition variant splits one file into several, so a raw count of
+    distinct files opened is **not variant-neutral**: reaching the same surface
+    in B necessarily touches more files than in A, by construction. The map is
+    authored with variant B, pre-registered alongside it, and reviewed as part of
+    the variant diff; A's map is empty (identity).
+    """
+    if path is None:
+        return {}
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _canonical_touch_path(normalized: str, file_map: dict[str, str]) -> str:
+    """Map a touched path back to its pre-refactor equivalent.
+
+    Keys are repo-relative and matched as path suffixes, because transcripts
+    record absolute paths inside a per-variant checkout. Longest key first, so a
+    more specific mapping wins over a shorter one that also matches.
+    """
+    for key in sorted(file_map, key=len, reverse=True):
+        if normalized.endswith(key):
+            return normalized[: -len(key)] + file_map[key]
+    return normalized
+
+
 def _normalize_touch_path(raw: str) -> str:
     """Lexically normalize a tool's file_path so equivalent paths collapse.
 
@@ -99,6 +126,11 @@ class ParsedTranscript(BaseModel):
     pre_edit_distinct_files: int
     pre_edit_input_tokens: int
     made_edit: bool  # False -> the whole run is the prefix; report separately.
+    # Breadth counted over *pre-refactor* paths, so the two arms are comparable
+    # even though B splits one file into several (spec section 5). Identical to
+    # the raw counts on variant A, whose map is empty.
+    canonical_distinct_files_touched: int
+    canonical_pre_edit_distinct_files: int
 
     @property
     def footprint_tokens(self) -> int:
@@ -124,6 +156,9 @@ class FootprintRecord(BaseModel):
     pre_edit_distinct_files: int
     pre_edit_input_tokens: int
     made_edit: bool
+    # None only on rows written before #302; new runs always populate these.
+    canonical_distinct_files_touched: int | None = None
+    canonical_pre_edit_distinct_files: int | None = None
     brief_tokens: int  # realized archy-brief size charged to this arm (0 for A)
     duration_ms: int
     total_cost_usd: float
@@ -153,7 +188,7 @@ def _iter_tool_uses(message: dict):
         yield name, file_path
 
 
-def parse_transcript(path: str | Path) -> ParsedTranscript:
+def parse_transcript(path: str | Path, file_map: dict[str, str] | None = None) -> ParsedTranscript:
     """Parse a persisted Claude Code session `.jsonl` into footprint metrics.
 
     Deterministic and agent-free: this is the unit-test boundary. Token sums
@@ -167,6 +202,7 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
     any write is not a revisit.
     """
     path = Path(path)
+    file_map = file_map or {}
 
     # Claude Code writes ONE LINE PER CONTENT BLOCK: the same `message.id` repeats
     # across consecutive lines, each carrying identical `usage` and a `content`
@@ -226,6 +262,8 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
     # must be added *before* its blocks are scanned.
     pre_edit_reads = 0
     pre_edit_files: set[str] = set()
+    canonical_touched: set[str] = set()
+    canonical_pre_edit_files: set[str] = set()
     pre_edit_input = 0
     made_edit = False
     for mid in order:
@@ -249,11 +287,13 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
                     pre_edit_reads += 1
                     if name in _READ_TOOLS and file_path is not None:
                         pre_edit_files.add(file_path)
+                        canonical_pre_edit_files.add(_canonical_touch_path(file_path, file_map))
             # file_path is non-None only for a file tool (Read/Edit/Write), so
             # any such touch of an already-written path is a revisit.
             if file_path is None:
                 continue
             touched.add(file_path)
+            canonical_touched.add(_canonical_touch_path(file_path, file_map))
             if file_path in written:
                 revisitations += 1
             if name in _WRITE_TOOLS:
@@ -269,6 +309,8 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
         file_revisitations=revisitations,
         pre_edit_reads=pre_edit_reads,
         pre_edit_distinct_files=len(pre_edit_files),
+        canonical_distinct_files_touched=len(canonical_touched),
+        canonical_pre_edit_distinct_files=len(canonical_pre_edit_files),
         pre_edit_input_tokens=pre_edit_input,
         made_edit=made_edit,
     )
@@ -762,11 +804,17 @@ def summarize(records: list[FootprintRecord]) -> dict:
         "input_tokens",
         "output_tokens",
         "num_turns",
-        "distinct_files_touched",
         "file_revisitations",
+        # Breadth, counted over pre-refactor paths so a decomposition variant is
+        # not penalized for splitting one file into several (spec section 5).
+        "canonical_distinct_files_touched",
+        "canonical_pre_edit_distinct_files",
+        # The raw counts are kept for the descriptive table but are NOT
+        # variant-neutral; section 12.7 forbids headlining them.
+        "distinct_files_touched",
+        "pre_edit_distinct_files",
         # #289 arm-C metrics; `pre_edit_reads` is the metric of record (14.3).
         "pre_edit_reads",
-        "pre_edit_distinct_files",
         "pre_edit_input_tokens",
     ]
     # Which arm is the treatment is emitted, not left implicit: rendering an
@@ -786,6 +834,8 @@ def summarize(records: list[FootprintRecord]) -> dict:
         "no_edit_runs": 0,
     }
     for m in metrics:
+        if m.startswith("canonical_") and any(getattr(r, m) is None for r in records):
+            continue  # rows predating #302 carry no canonical counts
         deltas = _paired_deltas(records, m)
         if not deltas:
             continue
@@ -887,6 +937,10 @@ def results_table(summary: dict, *, treatment: str | None = None) -> str:
         f" Primary metric: {primary} ({primary_ref})."
         " `input_tokens` is non-cache input only (spec section 5) and is ~2 tokens"
         " per turn under prompt caching, so it is a turn proxy, not a token measure."
+        " Breadth: use the `canonical_*` rows, which count pre-refactor paths;"
+        " the raw `distinct_files_touched` / `pre_edit_distinct_files` rows are"
+        " descriptive only and are biased against a decomposition variant by"
+        " construction (spec section 12.7)."
     )
     drift = {k: v for k, v in summary.get("drift_pre_edit_reads", {}).items() if v is not None}
     if drift:

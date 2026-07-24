@@ -90,7 +90,21 @@ comparison to the paper says so.
 ## 5. Metric definitions (so two implementers agree)
 
 - **`distinct_files_touched`**: the size of the set of resolved file paths
-  appearing in any `Read`/`Edit`/`Write` tool input over the run.
+  appearing in any `Read`/`Edit`/`Write` tool input over the run. **Descriptive
+  only, never headlined** (see canonical breadth below).
+- **Canonical breadth (`canonical_distinct_files_touched`,
+  `canonical_pre_edit_distinct_files`)**: the same counts, taken over
+  **pre-refactor** paths. Each variant ships a **file-equivalence map** (new path
+  -> the path it was split out of), authored with the variant, pre-registered
+  with it, and reviewed as part of the variant diff; variant A's map is empty, so
+  its canonical counts equal its raw counts. **These are the breadth metrics that
+  may be headlined.**
+
+  Rationale, measured rather than assumed: on #282, raw `pre_edit_distinct_files`
+  was 0/10 at p=0.002, and canonical counting cut it to 0/6/4 at p=0.031 while
+  reversing the sign of total breadth. So roughly half that "effect" was the
+  refactor being counted as its own result. A raw breadth number in a
+  decomposition study measures the variant, not the agent.
 - **`file_revisitations`**: iterate tool calls in order; maintain the set
   `edited` of paths seen in a prior `Edit`/`Write`. Increment the counter each
   time **any** file tool (`Read`/`Edit`/`Write`) targets a path already in
@@ -233,9 +247,12 @@ source, and it is overwritten by later sessions).
    `pre_edit_distinct_files` and `distinct_files_touched` by construction: the
    same surface now lives in more files, so reaching it opens more of them even
    when it takes fewer reads. The #282 run hit exactly this (reads down, files
-   up, and the files delta was the only nominally significant cell). Either
-   normalize breadth by the variant's file count or drop the metric from the
-   headline; never read a raw breadth regression as B being worse to navigate.
+   up, and the raw files delta was the only significant cell).
+   **Resolved (#302): headline the `canonical_*` breadth metrics, which count
+   pre-refactor paths via the variant's file-equivalence map (§5); the raw counts
+   stay in the table as descriptive only.** The map is part of variant B and is
+   pre-registered with it, so it cannot be tuned after seeing the result. Never
+   read a raw breadth regression as B being worse to navigate.
 8. **Fix N and the stopping rule before looking.** Section 8 permits raising N
    when the interval still crosses zero, which is optional stopping if it is
    decided after seeing the direction. Record the intended N, the power it buys,

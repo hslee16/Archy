@@ -765,3 +765,72 @@ def test_published_282_table_is_exactly_what_the_harness_renders():
     assert rendered in published
     assert published.count(rendered) == 1
     assert published.count("| metric | A median | B median |") == 1
+
+
+def test_canonical_breadth_collapses_a_variants_split_files(tmp_path: Path):
+    """B's split modules must count as the one file they came from.
+
+    Without this the same surface costs B more distinct files than A purely
+    because the refactor divided it, which is the refactor being counted as its
+    own result (spec section 12.7).
+    """
+    file_map = {
+        "src/pkg/app_routing.py": "src/pkg/app.py",
+        "src/pkg/app_errors.py": "src/pkg/app.py",
+    }
+    lines = _real_shape_lines(
+        "msg_1",
+        {"input_tokens": 2, "output_tokens": 10},
+        [
+            _tool_block("Read", "/repo/src/pkg/app_routing.py"),
+            _tool_block("Read", "/repo/src/pkg/app_errors.py"),
+            _tool_block("Read", "/repo/src/pkg/other.py"),
+        ],
+    ) + _real_shape_lines(
+        "msg_2",
+        {"input_tokens": 2, "output_tokens": 5},
+        [_tool_block("Edit", "/repo/src/pkg/app_routing.py")],
+    )
+    t = tmp_path / "s.jsonl"
+    _write_transcript(t, lines)
+
+    parsed = af.parse_transcript(t, file_map)
+    assert parsed.pre_edit_distinct_files == 3  # raw: three separate files
+    assert parsed.canonical_pre_edit_distinct_files == 2  # app.py + other.py
+    assert parsed.distinct_files_touched == 3
+    assert parsed.canonical_distinct_files_touched == 2
+
+
+def test_canonical_breadth_equals_raw_without_a_map(tmp_path: Path):
+    """Variant A's map is empty, so its canonical counts must be its raw counts."""
+    t = tmp_path / "s.jsonl"
+    _write_transcript(
+        t,
+        _real_shape_lines(
+            "msg_1",
+            {"input_tokens": 2, "output_tokens": 10},
+            [_tool_block("Read", "/repo/a.py"), _tool_block("Read", "/repo/b.py")],
+        ),
+    )
+    parsed = af.parse_transcript(t)
+    assert parsed.canonical_distinct_files_touched == parsed.distinct_files_touched == 2
+    assert parsed.canonical_pre_edit_distinct_files == parsed.pre_edit_distinct_files == 2
+
+
+def test_file_map_matches_the_longest_key_first(tmp_path: Path):
+    """A more specific mapping must win over a shorter suffix that also matches."""
+    file_map = {"pkg/app_routing.py": "pkg/wrong.py", "src/pkg/app_routing.py": "src/pkg/app.py"}
+    assert (
+        af._canonical_touch_path("/repo/src/pkg/app_routing.py", file_map) == "/repo/src/pkg/app.py"
+    )
+    # Unmapped paths pass through untouched.
+    assert af._canonical_touch_path("/repo/src/pkg/other.py", file_map) == "/repo/src/pkg/other.py"
+
+
+def test_summarize_skips_canonical_metrics_on_legacy_rows():
+    """Rows written before #302 carry no canonical counts and must not be faked."""
+    legacy = [_record("A", 0), _record("B", 0)]
+    assert legacy[0].canonical_distinct_files_touched is None
+    metrics = af.summarize(legacy)["metrics"]
+    assert "canonical_distinct_files_touched" not in metrics
+    assert "distinct_files_touched" in metrics
