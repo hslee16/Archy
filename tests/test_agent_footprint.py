@@ -665,3 +665,80 @@ def test_results_table_refuses_to_look_finished_when_there_are_no_pairs():
     table = af.results_table(af.summarize([_record("A", 0)]))
     assert "No paired runs" in table
     assert "metrics tested" not in table
+
+
+def _real_shape_lines(msg_id: str, usage: dict, blocks: list[dict]) -> list[dict]:
+    """Transcript lines in the shape Claude Code actually writes.
+
+    One line per content block, all sharing `message.id` and carrying an
+    identical `usage`. Verified against a live #282 run transcript. The older
+    `_assistant` helper emits one line holding N blocks, which the tool never
+    produces, and that is why three review rounds could not see the last-wins
+    dedupe bug: both parsers agree on the synthetic shape.
+    """
+    return [
+        {
+            "type": "assistant",
+            "message": {"role": "assistant", "id": msg_id, "usage": usage, "content": [b]},
+        }
+        for b in blocks
+    ]
+
+
+def _tool_block(name: str, file_path: str | None = None) -> dict:
+    block: dict = {"type": "tool_use", "id": f"toolu_{name}", "name": name, "input": {}}
+    if file_path is not None:
+        block["input"]["file_path"] = file_path
+    return block
+
+
+def test_parse_transcript_keeps_every_block_of_a_multi_block_message(tmp_path: Path):
+    """Blocks of one message id must be concatenated, not last-wins.
+
+    Regression test for the round-4 bug: keeping the last line per id discarded
+    every earlier block, undercounting tool calls whenever a message batched
+    several. Reads before the first edit here are Read a.py, Grep, Read b.py.
+    """
+    usage = {"input_tokens": 2, "output_tokens": 40}
+    lines = _real_shape_lines(
+        "msg_1",
+        usage,
+        [
+            {"type": "thinking", "thinking": "..."},
+            _tool_block("Read", "a.py"),
+            _tool_block("Grep"),
+            _tool_block("Read", "b.py"),
+        ],
+    ) + _real_shape_lines(
+        "msg_2", {"input_tokens": 2, "output_tokens": 10}, [_tool_block("Edit", "a.py")]
+    )
+    t = tmp_path / "s.jsonl"
+    _write_transcript(t, lines)
+
+    parsed = af.parse_transcript(t)
+    assert parsed.assistant_messages == 2  # two ids, not five lines
+    assert parsed.input_tokens == 4  # usage counted once per id, not per line
+    assert parsed.output_tokens == 50
+    # Last-wins would see only the Edit and report 0 reads across 1 file.
+    assert parsed.pre_edit_reads == 3
+    assert parsed.pre_edit_distinct_files == 2
+    assert parsed.distinct_files_touched == 2
+
+
+def test_parse_transcript_ignores_subagent_sidechain_entries(tmp_path: Path):
+    """A subagent's tool calls must not be attributed to the parent run."""
+    t = tmp_path / "s.jsonl"
+    main = _real_shape_lines(
+        "msg_1", {"input_tokens": 2, "output_tokens": 5}, [_tool_block("Read", "a.py")]
+    )
+    side = _real_shape_lines(
+        "msg_2", {"input_tokens": 999, "output_tokens": 999}, [_tool_block("Read", "z.py")]
+    )
+    for entry in side:
+        entry["isSidechain"] = True
+    _write_transcript(t, [*main, *side])
+
+    parsed = af.parse_transcript(t)
+    assert parsed.assistant_messages == 1
+    assert parsed.input_tokens == 2 and parsed.output_tokens == 5
+    assert parsed.distinct_files_touched == 1
