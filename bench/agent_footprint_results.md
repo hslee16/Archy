@@ -148,21 +148,25 @@ dispatch, redirect); `sansio/app.py` 1013 -> 611 lines. Behavior-preserving:
 **Result: N=10 pairs, all 10 admissible** (every run edited, completed, and left
 the suite green; 0 regressions, 0 no-edit runs).
 
-| metric | A median | B median | median Δ (B−A) | B<A / B>A / tie | sign p |
-|---|---|---|---|---|---|
-| **pre_edit_reads** (record) | 10.0 | 8.0 | −3.5 | 7 / 3 / 0 | 0.344 |
-| pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | 0 / 8 / 2 | 0.008 |
-| num_turns | 51.5 | 46.5 | −3.5 | 5 / 5 / 0 | 1.000 |
-| file_revisitations | 6.0 | 5.0 | −1.0 | 5 / 5 / 0 | 1.000 |
-| footprint_tokens | 32,458 | 34,875 | +4,213 | 4 / 6 / 0 | 0.754 |
-| output_tokens | 32,330 | 34,766 | +4,190 | 4 / 6 / 0 | 0.754 |
-| input_tokens (non-cache) | 109.0 | 95.0 | +10.0 | 4 / 6 / 0 | 0.754 |
-| distinct_files_touched | 5.0 | 5.5 | +0.5 | 1 / 5 / 4 | 0.219 |
-| pre_edit_input_tokens | 37.0 | 30.0 | −3.0 | 7 / 3 / 0 | 0.344 |
+<!-- generated: python bench/agent_footprint.py --table bench/agent_footprint/records_282_flask.jsonl -->
 
-All 9 metrics `summarize()` tests are listed, not a subset: the Bonferroni
-divisor below is 9, and correcting over 9 while publishing 6 would be selective
-reporting.
+| metric | A median | B median | median delta (B-A) | IQR of deltas | B<A / B>A / tie | sign p |
+|---|---|---|---|---|---|---|
+| footprint_tokens | 32,458.0 | 34,875.0 | +4,213.0 | [-7,135.5, +10,981.0] | 4 / 6 / 0 | 0.754 |
+| input_tokens | 109.0 | 95.0 | +10.0 | [-48.0, +27.5] | 4 / 6 / 0 | 0.754 |
+| output_tokens | 32,330.0 | 34,766.0 | +4,190.0 | [-7,357.2, +10,958.0] | 4 / 6 / 0 | 0.754 |
+| num_turns | 51.5 | 46.5 | -3.5 | [-20.8, +12.2] | 5 / 5 / 0 | 1.000 |
+| distinct_files_touched | 5.0 | 5.5 | +0.5 | [+0.0, +2.5] | 1 / 5 / 4 | 0.219 |
+| file_revisitations | 6.0 | 5.0 | -1.0 | [-4.8, +1.8] | 5 / 5 / 0 | 1.000 |
+| pre_edit_reads | 10.0 | 8.0 | -3.5 | [-4.8, +0.5] | 7 / 3 / 0 | 0.344 |
+| pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | [+1.0, +1.8] | 0 / 8 / 2 | 0.008 |
+| pre_edit_input_tokens | 37.0 | 30.0 | -3.0 | [-15.5, +2.5] | 7 / 3 / 0 | 0.344 |
+
+N=10 pairs; 9 metrics tested, so a nominal p must clear p x 9 to survive Bonferroni. Regressions: 0; runs with the gate disabled by a red baseline: 0; no-edit runs: 0.
+
+The delta column is the median of the per-pair deltas, not the difference of the two median columns; with a skewed spread those disagree, and the paired median is the one the sign test refers to. Metric of record: `pre_edit_reads` (spec section 14.3); `input_tokens` is non-cache input only (spec section 5).
+
+Position drift, tie-corrected Spearman of `pre_edit_reads` vs run index: A=+0.665, B=+0.117. An arm that drifts while the other does not is why section 8 requires counterbalancing.
 
 `footprint_tokens` is non-cache input + output (spec section 5), so it tracks
 `output_tokens` closely here: non-cache input was ~100 tokens per run, since
@@ -211,8 +215,9 @@ toward the B-favorable direction:**
   upstream author and date, or squash B to a root-equivalent commit).
 - **Within-pair order is fixed, and A drifts.** `run_pair` always runs A then B,
   so "interleaved" covers between-pair drift only. A's `pre_edit_reads` climbs
-  7 -> 13 across the run (Spearman rho +0.78 vs `run_index`, past the n=10
-  critical value) while B's is flat (+0.25). Variant and within-pair position are
+  7 -> 13 across the run (tie-corrected Spearman rho +0.665 vs `run_index`)
+  while B's is near-flat (+0.117). The A figure only just clears the n=10
+  two-tailed 0.05 critical value of 0.648, so it is suggestive, not decisive. Variant and within-pair position are
   therefore perfectly confounded, and the drift inflates the B-favorable
   direction of the metric of record. It does not flip the sign (first-5 median
   delta −3, last-5 −4), but "direction favors B" is partly a position artifact.
@@ -280,6 +285,15 @@ targeted N≈30 (#292); a stalled headless `claude` stream at run 22 was killed 
 
 `pre_edit_reads` deltas (C−A): `[−10,−9,−8,−7,−5,−5,−5,−4,−4,−3,−2,−2,−2,−1,+1,+1,+2,+2,+3,+4,+5,+9]`,
 mean −1.82.
+
+**Two caveats this table predates.** It is hand-built and shows **5 metrics, not
+the 9 `summarize()` computes**, which is the selective reporting §9 now forbids;
+the `num_turns` multiple-comparison figure below was therefore corrected over 5
+(~0.21), and over the full 9 it would be ~0.37, i.e. even further from
+significance. It also **cannot be regenerated**: #289 shipped no records file, so
+unlike the #282 table above it is not pinned to any artifact and no golden test
+covers it. Both are reasons the re-run noted above is worth doing, and neither
+changes the null it reports.
 
 **Read (honest): a documented non-result for the read-reduction claim.** At N=10 the
 brief looked promising (median −3.5, 8/10, p=0.109); **doubling N pulled it back into
