@@ -158,8 +158,11 @@ variance is inherent. The paper measured **~2.5x** input-token variation across
 reruns of the *same* task and warns a single per-task delta near 10% "may be
 agent noise". Therefore:
 
-- **N >= 10 runs per variant** (start at 10; raise if the paired delta's CI
-  still crosses zero). A single A/B pair is explicitly **not** a result.
+- **N >= 10 runs per variant**, with N and the stopping rule **fixed before the
+  run** (§12.8). Raising N after seeing the direction is optional stopping, so
+  the earlier "raise if the CI still crosses zero" rule is withdrawn: it also
+  named a confidence interval the harness never computed (#303). A single A/B
+  pair is explicitly **not** a result.
 - Fresh checkout per run; run A and B **interleaved and counterbalanced**
   (A-then-B on even pairs, B-then-A on odd). Interleaving alone leaves variant
   confounded with within-pair position: in #282, A ran first every pair and its
@@ -173,9 +176,12 @@ agent noise". Therefore:
 
 ## 9. Analysis and reporting
 
-- Headline per metric: **median paired delta** (B-A) with an interval (IQR or
-  bootstrap CI) and a paired sign test on the per-run deltas. Direction and
-  spread, not a single point.
+- Headline per metric: **median paired delta** (B-A) with the **quartile
+  interval of the per-pair deltas** (`iqr_bounds`, the q1/q3 pair that
+  `results_table()` renders) and a paired sign test. Direction and spread, not a
+  single point. This is a description of the observed spread, **not** a
+  confidence interval: no CI is computed anywhere in the harness, and earlier
+  drafts of this spec wrongly implied one (#303).
 - **Tokens, never dollars** in any headline (paper §6: token->dollar mapping is
   nonlinear and config-dependent). `total_cost_usd` stays in the raw table only.
 - **One-config caveat on every result**: state the exact model + CLI flags; a
