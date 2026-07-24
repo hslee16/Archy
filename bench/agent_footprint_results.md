@@ -145,6 +145,20 @@ dispatch, redirect); `sansio/app.py` 1013 -> 611 lines. Behavior-preserving:
 491/491 green, identical to A. archy confirms its own recommendation landed:
 `flask.sansio.app` cc_sum 87 -> 27, hotspot 44196 -> 13716, rank #1 -> #2.
 
+**These numbers were recomputed on 2026-07-24 after a parser bug was found
+(round-4 adversarial review).** `parse_transcript` deduped Claude Code's
+one-line-per-content-block transcripts by keeping the *last* line per
+`message.id`, on a wrong model of the format, which silently discarded every
+block but the last whenever one assistant message carried several. 9 of the 20
+rows were affected and the loss was asymmetric (7 of the 9 were B rows), so it
+was not a constant offset. The 20 run transcripts were still on disk, so the
+records were re-derived from them rather than the study being re-run; run-level
+fields (`num_turns`, duration, cost, gate outcome) come from the original CLI
+results, which the bug never touched. What moved: `pre_edit_reads` median −3.5 ->
+−3.0 (same 7/3 split, same p), and `pre_edit_distinct_files` 8/10 p=0.0078 ->
+**10/10 p=0.002**. Both published conclusions are unchanged; the breadth cell got
+stronger, which matters only for the confound discussion below.
+
 **Result: N=10 pairs, all 10 admissible** (every run edited, completed, and left
 the suite green; 0 regressions, 0 no-edit runs).
 
@@ -158,15 +172,15 @@ the suite green; 0 regressions, 0 no-edit runs).
 | num_turns | 51.5 | 46.5 | -3.5 | [-20.8, +12.2] | 5 / 5 / 0 | 1.000 |
 | distinct_files_touched | 5.0 | 5.5 | +0.5 | [+0.0, +2.5] | 1 / 5 / 4 | 0.219 |
 | file_revisitations | 6.0 | 5.0 | -1.0 | [-4.8, +1.8] | 5 / 5 / 0 | 1.000 |
-| pre_edit_reads | 10.0 | 8.0 | -3.5 | [-4.8, +0.5] | 7 / 3 / 0 | 0.344 |
-| pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | [+1.0, +1.8] | 0 / 8 / 2 | 0.008 |
+| pre_edit_reads | 10.0 | 9.0 | -3.0 | [-3.8, +1.2] | 7 / 3 / 0 | 0.344 |
+| pre_edit_distinct_files | 3.0 | 5.0 | +1.5 | [+1.0, +2.0] | 0 / 10 / 0 | 0.002 |
 | pre_edit_input_tokens | 37.0 | 30.0 | -3.0 | [-15.5, +2.5] | 7 / 3 / 0 | 0.344 |
 
 N=10 pairs; 9 metrics tested, so a nominal p must clear p x 9 to survive Bonferroni. Regressions: 0; runs with the gate disabled by a red baseline: 0; no-edit runs: 0.
 
-The delta column is the median of the per-pair deltas, not the difference of the two median columns; with a skewed spread those disagree, and the paired median is the one the sign test refers to. Metric of record: `pre_edit_reads` (spec section 14.3); `input_tokens` is non-cache input only (spec section 5).
+The delta column is the median of the per-pair deltas, not the difference of the two median columns; with a skewed spread those disagree, and the paired median is the one the sign test refers to. Primary metric: `file_revisitations` (spec section 4). `input_tokens` is non-cache input only (spec section 5) and is ~2 tokens per turn under prompt caching, so it is a turn proxy, not a token measure.
 
-Position drift, tie-corrected Spearman of `pre_edit_reads` vs run index: A=+0.665, B=+0.117. An arm that drifts while the other does not is why section 8 requires counterbalancing.
+Position drift, tie-corrected Spearman of `pre_edit_reads` vs run index: A=+0.615, B=+0.346. An arm that drifts while the other does not is why section 8 requires counterbalancing.
 
 `footprint_tokens` is non-cache input + output (spec section 5), so it tracks
 `output_tokens` closely here: non-cache input was ~100 tokens per run, since
@@ -175,22 +189,40 @@ cache-read totals are reported for contamination visibility (spec section 8) and
 are deliberately **not** in the headline: they are dominated by prompt-cache
 behavior, not by how much of the repo the agent actually pulled in.
 
-`pre_edit_reads` deltas (B−A): `[+2,+1,−3,−5,−6,−4,−1,+2,−9,−4]`.
+`pre_edit_reads` deltas (B−A): `[+2,+2,−3,−3,−4,−4,−1,+3,−8,−3]`.
 `footprint_tokens` deltas (B−A):
 `[+9124,+2222,+11600,−20824,−8578,+27125,−2808,+6204,−28565,+25852]`.
+`pre_edit_distinct_files` deltas (B−A): `[+1,+3,+1,+1,+2,+1,+4,+2,+1,+2]`.
 
 **Read (honest): a documented non-result for the footprint claim.** Applying
 archy's #1 recommendation did not move agent footprint outside the noise band on
-this config. The metric of record leans B's way in direction (median −3.5 reads,
+this config.
+
+**On which metric is primary, stated plainly because it cuts against the
+reading below.** Spec section 4 designates `file_revisitations` the primary
+metric for this A/B study (`pre_edit_reads` is arm C's, section 14.3). That
+pre-registered primary is **dead flat: median −1.0, 5/5, p=1.000.** The
+`pre_edit_reads` framing used below postdates the data, and the reporting code
+briefly hardcoded it for every study, which would have let the table nominate
+whichever metric read better after the fact. Both metrics are null, so nothing
+turns on it here, but the honest headline for #282 is the flat primary, not the
+suggestive secondary.
+
+`pre_edit_reads` leans B's way in direction (median −3.0 reads,
 7 of 10 pairs) but nowhere near significance (p=0.344), and the token headline
 leans the *other* way (B +4,213, 6 of 10 pairs higher, p=0.754). The token
 spread is the story: per-pair deltas run from −28,565 to +27,125, so a median of
 +4,213 sits well inside the noise. This is the ~2.5x per-task variance the paper
 warned about (spec section 8), reproduced.
 
-**The one significant cell is in the wrong direction and does not survive
-correction.** `pre_edit_distinct_files` is higher for B in 8 of 10 pairs
-(p=0.0078), but 9 metrics were tested; Bonferroni puts it at 0.070. It is also
+**The one significant cell is in the wrong direction, and it now survives
+correction.** `pre_edit_distinct_files` is higher for B in **all 10** pairs
+(p=0.002); at 9 metrics Bonferroni puts it at 0.018, so unlike the first
+(parser-bugged) version of this table it clears 0.05 rather than failing it. The
+divisor is itself generous: `footprint_tokens`, `output_tokens` and `input_tokens`
+return identical sign results here (4/6, p=0.754) because non-cache input is ~2
+tokens per turn, so they are one test and not three, and the effective divisor is
+nearer 6 (giving 0.012). Correcting harder would not rescue this cell. It is also
 **mechanically confounded by the refactor itself**: B split one file into four, so
 reaching the same surface necessarily opens more distinct files even when it takes
 fewer reads. Read together with `pre_edit_reads` (fewer reads, more files), the
@@ -215,13 +247,34 @@ toward the B-favorable direction:**
   upstream author and date, or squash B to a root-equivalent commit).
 - **Within-pair order is fixed, and A drifts.** `run_pair` always runs A then B,
   so "interleaved" covers between-pair drift only. A's `pre_edit_reads` climbs
-  7 -> 13 across the run (tie-corrected Spearman rho +0.665 vs `run_index`)
-  while B's is near-flat (+0.117). The A figure only just clears the n=10
-  two-tailed 0.05 critical value of 0.648, so it is suggestive, not decisive. Variant and within-pair position are
+  7 -> 13 across the run (tie-corrected Spearman rho +0.615 vs `run_index`)
+  against B's +0.346. Neither clears the n=10 two-tailed 0.05 critical value of
+  0.648, and the gap between the arms is narrower than the pre-parser-fix figures
+  suggested, so this is a weak signal. Counterbalancing remains the right design
+  (position and variant must not be confounded), but the evidence that it mattered
+  *here* is thinner than first reported. Variant and within-pair position are
   therefore perfectly confounded, and the drift inflates the B-favorable
   direction of the metric of record. It does not flip the sign (first-5 median
   delta −3, last-5 −4), but "direction favors B" is partly a position artifact.
   Counterbalancing order (A/B on even pairs, B/A on odd) is the one-line fix.
+
+- **The task's edit surface is exactly variant B's new file.** The task asks for
+  endpoint-origin mapping plus a duplicate-endpoint check on URL-rule
+  registration. In B that whole surface sits in one 190-line
+  `sansio/app_routing.py` whose own docstring says "a routing or
+  blueprint-registration change is one file"; in A it is inside the 1013-line
+  `app.py`. The prompt names no files (the paper's rule is satisfied literally),
+  but its wording was fixed with variant B already in hand, so the task was
+  chosen against a known B boundary. This pushes toward B like the other two.
+  Note it does not rescue the result in B's favour: B still lost the token
+  headline and tied on the pre-registered primary, so the confound makes the null
+  *more* credible, not less. It would make any future positive result on this
+  task/variant pair uninterpretable.
+- **`baseline_failed` is a default in this artifact, not a measurement.** The
+  field was added after these rows were written, so all 20 carry the `False`
+  default and the reported "gate disabled by a red baseline: 0" is not evidence.
+  The pristine suites were verified green by hand before the run (491/491 on
+  both), which is what actually backs the claim here.
 
 **Go/no-go:** this bench does not gate a feature (unlike #289, which gated
 `archy brief`). What it rules out is a **claim**: archy must not say its

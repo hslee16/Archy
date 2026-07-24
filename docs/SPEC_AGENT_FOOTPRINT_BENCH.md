@@ -74,7 +74,7 @@ every `tool_use` block).
 | `output_tokens` | int | `usage.output_tokens` | |
 | `num_turns` | int | `num_turns` | proxy for "conversation messages" |
 | `distinct_files_touched` | int | transcript | count of unique file paths across all `Read`/`Edit`/`Write` `tool_use` blocks |
-| `file_revisitations` | int | transcript | **primary metric.** Count of `Read`/`Edit` `tool_use` blocks on a path that was already `Edit`/`Write`-touched earlier in the same transcript (definition in §5) |
+| `file_revisitations` | int | transcript | **primary metric for the A/B refactor study** (arm C's is `pre_edit_reads`, §14.3). Count of file-tool `tool_use` blocks on a path that was already `Edit`/`Write`-touched earlier in the same transcript (definition in §5) |
 | `duration_ms` | int | `duration_ms` | secondary; wall-clock is noisy |
 | `total_cost_usd` | float | `total_cost_usd` | recorded for reference only, never headlined (§9) |
 | `test_regression` | bool | harness | true if the pre-existing suite has a new failure vs the variant's own baseline (§7) |
@@ -93,7 +93,10 @@ comparison to the paper says so.
   appearing in any `Read`/`Edit`/`Write` tool input over the run.
 - **`file_revisitations`**: iterate tool calls in order; maintain the set
   `edited` of paths seen in a prior `Edit`/`Write`. Increment the counter each
-  time a `Read`/`Edit` targets a path already in `edited`. This operationalizes
+  time **any** file tool (`Read`/`Edit`/`Write`) targets a path already in
+  `edited`. (A second `Write` to an already-written file is a return to that
+  file, so it counts; this text previously said `Read`/`Edit` while the code
+  counted all three, and the code is right.) This operationalizes
   the paper's "returns to files it has already edited". `Grep`/`Glob`/`Bash` do
   not count as file touches (no single unambiguous target path).
 - **Token footprint headline** = `input_tokens + output_tokens` (cache fields
@@ -290,12 +293,33 @@ article terminates the frontier model at):
 - **`pre_edit_reads`** (**primary**): count of `Read`/`Grep`/`Glob` tool_use blocks
   before the first `Edit`/`Write`. This is the breadth of exploration archy is
   positioned to shrink.
-- **`pre_edit_distinct_files`**: distinct file paths appearing in `Read`/`Grep`
-  (`Glob` has no single path) before the first edit.
+- **`pre_edit_distinct_files`**: distinct file paths appearing in `Read` before
+  the first edit. (`Grep`'s `path` input is deliberately not read: it names a
+  search root, not a file the agent ingested. The implementation counts `Read`
+  only; this text previously said `Read`/`Grep` and the code never did.)
 - **`pre_edit_input_tokens`**: cumulative non-cache `input_tokens` on assistant
-  messages up to the turn containing the first edit. Because the brief is *in* the
-  prompt, its tokens are already inside this sum: **net accounting is automatic**,
-  which is the §14.6 guard made structural rather than bolted on.
+  messages up to the turn containing the first edit.
+
+  > **RETRACTED CLAIM (round-4 review, 2026-07-24).** This spec previously said
+  > "because the brief is *in* the prompt, its tokens are already inside this sum:
+  > net accounting is automatic, which is the §14.6 guard made structural". **That
+  > is false.** Under prompt caching, `usage.input_tokens` is a literal `2` on
+  > every assistant message after the first: prompt text, including an injected
+  > brief, lands in `cache_creation_input_tokens`, which every headline excludes.
+  > Measured on the #282 run, `input_tokens` is 0.0025% of total input and
+  > `pre_edit_input_tokens` has a median of 37 across 30-66 turns, i.e. it is a
+  > **turn counter at ~2 tokens/turn, not a token measure**. A 581-token brief
+  > contributes **zero** to it.
+  >
+  > Consequences: §14.6 guardrail 7 ("net, not gross") has **no** structural
+  > enforcement and must be applied by hand until the metric is fixed; a future
+  > arm-C read-reduction result quoted off `pre_edit_input_tokens` would be an
+  > artifact. `footprint_tokens` is likewise ~identical to `output_tokens`
+  > (correlation 0.99998 on the #282 deltas), so the "token footprint" headline is
+  > effectively an output-token headline. The field that actually tracks repo
+  > ingestion is `cache_creation_input_tokens` (new content entering the context),
+  > which no metric currently uses. Fixing this is a prerequisite for any further
+  > arm-C run.
 - If a run makes **no** edit (`task_completed` false with zero `Edit`/`Write`), the
   whole transcript is the prefix and the run is flagged `no_edit=true`; such runs are
   reported separately, never folded into the median (a brief that suppresses editing

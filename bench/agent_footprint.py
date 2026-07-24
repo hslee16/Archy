@@ -168,13 +168,20 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
     """
     path = Path(path)
 
-    # Claude Code writes streaming partials of the same assistant message: the
-    # same `message.id` appears on several lines with identical usage, and the
-    # tool_use blocks land on the final, most-complete copy. Dedupe by id
-    # (last-wins), preserving first-seen order, so usage is counted once and
-    # tool calls are read once. Verified against a live transcript where summing
-    # raw lines triple-counted tokens (7 lines for 3 real turns).
-    deduped: dict[str, dict] = {}
+    # Claude Code writes ONE LINE PER CONTENT BLOCK: the same `message.id` repeats
+    # across consecutive lines, each carrying identical `usage` and a `content`
+    # list holding exactly one block (a `thinking` block, then one `tool_use`, and
+    # so on). So usage must be counted once per id, but blocks must be
+    # CONCATENATED across the lines.
+    #
+    # An earlier version kept the last line per id, on the theory that the final
+    # copy was a complete streaming partial. It is not: last-wins silently dropped
+    # every block but the last, undercounting tool calls whenever a message
+    # carried more than one (1.9% of blocks in the #282 run transcripts, ~12% in
+    # sessions that batch parallel tool calls). That is a data-dependent
+    # undercount of every file metric, so it is not even a constant offset.
+    blocks_by_id: dict[str, list[dict]] = {}
+    usage_by_id: dict[str, dict] = {}
     order: list[str] = []
     unkeyed = 0
     with path.open(encoding="utf-8") as fh:
@@ -188,15 +195,25 @@ def parse_transcript(path: str | Path) -> ParsedTranscript:
                 continue
             if entry.get("type") != "assistant":
                 continue
+            # Sidechain entries are a subagent's own transcript interleaved into
+            # this file; folding them in would attribute a subagent's tool calls
+            # to the parent run.
+            if entry.get("isSidechain"):
+                continue
             message = entry.get("message", {})
             mid = message.get("id")
             if not mid:
-                # No id to dedupe on: treat each occurrence as its own message.
+                # No id to group on: treat each occurrence as its own message.
                 mid = f"_noid_{unkeyed}"
                 unkeyed += 1
-            if mid not in deduped:
+            if mid not in blocks_by_id:
                 order.append(mid)
-            deduped[mid] = message  # last copy wins (most complete)
+                blocks_by_id[mid] = []
+                usage_by_id[mid] = message.get("usage") or {}
+            blocks_by_id[mid].extend(
+                b for b in (message.get("content") or []) if isinstance(b, dict)
+            )
+    deduped = {mid: {"usage": usage_by_id[mid], "content": blocks_by_id[mid]} for mid in order}
 
     in_toks = cache_read = cache_create = out_toks = 0
     touched: set[str] = set()
@@ -825,6 +842,15 @@ def results_table(summary: dict, *, treatment: str | None = None) -> str:
     underneath is the count of what was tested (spec section 9).
     """
     t = treatment or summary.get("treatment", "B")
+    # The pre-registered primary differs by study: the A/B refactor study's is
+    # `file_revisitations` (spec section 4), arm C's is `pre_edit_reads` (section
+    # 14.3). Hardcoding one would let the table nominate whichever metric read
+    # better after the fact.
+    primary, primary_ref = (
+        ("`pre_edit_reads`", "spec section 14.3")
+        if t == "C"
+        else ("`file_revisitations`", "spec section 4")
+    )
     if not summary["metrics"]:
         # Otherwise a truncated or empty run renders an empty-but-publishable
         # table footed by "0 metrics tested", which reads like a finished study.
@@ -858,8 +884,9 @@ def results_table(summary: dict, *, treatment: str | None = None) -> str:
         "The delta column is the median of the per-pair deltas, not the difference of"
         " the two median columns; with a skewed spread those disagree, and the paired"
         " median is the one the sign test refers to."
-        " Metric of record: `pre_edit_reads` (spec section 14.3);"
-        " `input_tokens` is non-cache input only (spec section 5)."
+        f" Primary metric: {primary} ({primary_ref})."
+        " `input_tokens` is non-cache input only (spec section 5) and is ~2 tokens"
+        " per turn under prompt caching, so it is a turn proxy, not a token measure."
     )
     drift = {k: v for k, v in summary.get("drift_pre_edit_reads", {}).items() if v is not None}
     if drift:
