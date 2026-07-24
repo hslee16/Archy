@@ -148,21 +148,23 @@ dispatch, redirect); `sansio/app.py` 1013 -> 611 lines. Behavior-preserving:
 **Result: N=10 pairs, all 10 admissible** (every run edited, completed, and left
 the suite green; 0 regressions, 0 no-edit runs).
 
-| metric | A median | B median | median Δ (B−A) | B<A / B>A / tie | sign p |
-|---|---|---|---|---|---|
-| **pre_edit_reads** (record) | 10.0 | 8.0 | −3.5 | 7 / 3 / 0 | 0.344 |
-| pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | 0 / 8 / 2 | 0.008 |
-| num_turns | 51.5 | 46.5 | −3.5 | 5 / 5 / 0 | 1.000 |
-| file_revisitations | 6.0 | 5.0 | −1.0 | 5 / 5 / 0 | 1.000 |
-| footprint_tokens | 32,458 | 34,875 | +4,213 | 4 / 6 / 0 | 0.754 |
-| output_tokens | 32,330 | 34,766 | +4,190 | 4 / 6 / 0 | 0.754 |
-| input_tokens (non-cache) | 109.0 | 95.0 | +10.0 | 4 / 6 / 0 | 0.754 |
-| distinct_files_touched | 5.0 | 5.5 | +0.5 | 1 / 5 / 4 | 0.219 |
-| pre_edit_input_tokens | 37.0 | 30.0 | −3.0 | 7 / 3 / 0 | 0.344 |
+<!-- generated: python bench/agent_footprint.py --table bench/agent_footprint/records_282_flask.jsonl -->
 
-All 9 metrics `summarize()` tests are listed, not a subset: the Bonferroni
-divisor below is 9, and correcting over 9 while publishing 6 would be selective
-reporting.
+| metric | A median | B median | median delta (B-A) | IQR of deltas | B<A / B>A / tie | sign p |
+|---|---|---|---|---|---|---|
+| footprint_tokens | 32,458.0 | 34,875.0 | +4,213.0 | [-7,135.5, +10,981.0] | 4 / 6 / 0 | 0.754 |
+| input_tokens | 109.0 | 95.0 | +10.0 | [-48.0, +27.5] | 4 / 6 / 0 | 0.754 |
+| output_tokens | 32,330.0 | 34,766.0 | +4,190.0 | [-7,357.2, +10,958.0] | 4 / 6 / 0 | 0.754 |
+| num_turns | 51.5 | 46.5 | -3.5 | [-20.8, +12.2] | 5 / 5 / 0 | 1.000 |
+| distinct_files_touched | 5.0 | 5.5 | +0.5 | [+0.0, +2.5] | 1 / 5 / 4 | 0.219 |
+| file_revisitations | 6.0 | 5.0 | -1.0 | [-4.8, +1.8] | 5 / 5 / 0 | 1.000 |
+| pre_edit_reads | 10.0 | 8.0 | -3.5 | [-4.8, +0.5] | 7 / 3 / 0 | 0.344 |
+| pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | [+1.0, +1.8] | 0 / 8 / 2 | 0.008 |
+| pre_edit_input_tokens | 37.0 | 30.0 | -3.0 | [-15.5, +2.5] | 7 / 3 / 0 | 0.344 |
+
+N=10 pairs; 9 metrics tested, so a nominal p must clear p x 9 to survive Bonferroni. Regressions: 0; runs with the gate disabled by a red baseline: 0; no-edit runs: 0.
+
+The delta column is the median of the per-pair deltas, not the difference of the two median columns; with a skewed spread those disagree, and the paired median is the one the sign test refers to.
 
 `footprint_tokens` is non-cache input + output (spec section 5), so it tracks
 `output_tokens` closely here: non-cache input was ~100 tokens per run, since

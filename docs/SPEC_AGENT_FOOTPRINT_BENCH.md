@@ -111,6 +111,15 @@ comparison to the paper says so.
   agent pipeline; its top HN critic attacked exactly that plus the missing
   regression control. Our variants are real refactors gated by tests, recorded
   as a reviewable diff in the bench artifacts.
+- **provenance-neutral**: B's git history must not advertise that the repo is
+  instrumented. The agent has `Bash`, so `git log -1`, `git show --stat HEAD`
+  and `git blame` are all reachable, and in #282 B's HEAD carried a
+  bench-looking author line while A's history was plain upstream. Commit B with
+  the upstream author identity (`git commit --amend --reset-author` is required;
+  `--amend` alone keeps the original author, which is how #282 leaked despite a
+  rewritten message) and an upstream-style message, or squash B so its HEAD is
+  root-equivalent to A's. `_warn_on_provenance_leak` checks author parity at run
+  start.
 
 ## 7. The regression gate the paper lacks
 
@@ -129,7 +138,11 @@ agent noise". Therefore:
 
 - **N >= 10 runs per variant** (start at 10; raise if the paired delta's CI
   still crosses zero). A single A/B pair is explicitly **not** a result.
-- Fresh checkout per run; run A and B **interleaved** to average out drift.
+- Fresh checkout per run; run A and B **interleaved and counterbalanced**
+  (A-then-B on even pairs, B-then-A on odd). Interleaving alone leaves variant
+  confounded with within-pair position: in #282, A ran first every pair and its
+  `pre_edit_reads` drifted upward across the run (Spearman +0.78 vs run index)
+  while B's stayed flat, which flattered B on the metric of record.
 - Cold session per run to limit prompt-cache contamination; cache fields are
   reported so contamination is visible.
 - Report the **paired** distribution (per-run B-A), not two independent means.
@@ -147,6 +160,17 @@ agent noise". Therefore:
 - **Publish the null.** If applying archy's recommendation does not move
   footprint outside the noise band, that is the result and it ships as such
   (the #260 discipline: we do not manufacture a win).
+- **Published tables come from `summarize()` / `results_table()`, never from an
+  ad-hoc script.** #282 shipped a wrong `footprint_tokens` headline because the
+  writeup was assembled by a separate analysis script whose definition had
+  silently diverged from the harness property (it folded in cache reads, which
+  §4 excludes precisely because cache hit/miss is a cross-run artifact). A
+  parallel implementation of a metric is a second definition waiting to drift;
+  the harness owns the numbers, the writeup pastes them.
+- **Every tested metric is published.** The Bonferroni divisor is the count of
+  metrics tested, so publishing a subset while correcting over the full set is
+  selective reporting. `results_table()` renders all of them and states the
+  divisor underneath.
 
 ## 10. Reproducibility config (pinned)
 
