@@ -145,6 +145,13 @@ dispatch, redirect); `sansio/app.py` 1013 -> 611 lines. Behavior-preserving:
 491/491 green, identical to A. archy confirms its own recommendation landed:
 `flask.sansio.app` cc_sum 87 -> 27, hotspot 44196 -> 13716, rank #1 -> #2.
 
+**Raw source.** The 20 session transcripts these records derive from are kept at
+`bench/agent_footprint_transcripts/` (gitignored, ~9MB). They are **not
+regenerable** short of 20 fresh live agent runs, and they were needed twice when
+a metric definition changed, so they are retained deliberately: without them
+#282 would be recomputable only at the record level, which is the position #289
+is in and the reason its table carries a provenance caveat.
+
 **These numbers were recomputed on 2026-07-24 after a parser bug was found
 (round-4 adversarial review).** `parse_transcript` deduped Claude Code's
 one-line-per-content-block transcripts by keeping the *last* line per
