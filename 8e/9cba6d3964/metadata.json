@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "8e9cba6d3964",
+  "strategy": "manual-commit",
+  "branch": "alee/302-variant-neutral-breadth",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "bench/agent_footprint.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/8e/9cba6d3964/0/metadata.json",
+      "transcript": "/8e/9cba6d3964/0/full.jsonl",
+      "content_hash": "/8e/9cba6d3964/0/content_hash.txt",
+      "prompt": "/8e/9cba6d3964/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 672,
+    "cache_creation_tokens": 831023,
+    "cache_read_tokens": 86002838,
+    "output_tokens": 221574,
+    "api_call_count": 332
+  }
+}
