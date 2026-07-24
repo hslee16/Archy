@@ -304,6 +304,32 @@ def _run_claude(repo_dir: Path, task_prompt: str, *, model: str, allowed_tools) 
     return json.loads(proc.stdout)
 
 
+def _reset_repo(repo_dir: Path) -> None:
+    """Restore `repo_dir` to its pinned commit, discarding the last run's edits.
+
+    Spec section 8 asks for a fresh checkout per run. The variants are real git
+    clones pinned to their own HEAD (variant B's refactor is a commit on top of
+    the pinned upstream commit), so hard-reset plus clean is that fresh checkout
+    without re-cloning: run i+1 must not start from run i's edits, or every run
+    after the first measures a different repo than the one under test.
+    """
+    subprocess.run(["git", "reset", "--hard", "-q"], cwd=repo_dir, check=True)
+    subprocess.run(["git", "clean", "-fdxq"], cwd=repo_dir, check=True)
+
+
+def _baseline_failed(repo_dir: Path, test_cmd: list[str] | None) -> bool:
+    """Whether the variant's own pristine suite is already red (spec section 7).
+
+    A variant with a red baseline cannot be used to detect regressions, so this
+    is measured once per variant before any agent runs and threaded into the
+    per-run gate.
+    """
+    if test_cmd is None:
+        return False
+    _reset_repo(repo_dir)
+    return subprocess.run(test_cmd, cwd=repo_dir, capture_output=True).returncode != 0
+
+
 def _run_test_gate(repo_dir: Path, test_cmd: list[str], baseline_failed: bool) -> bool:
     """Return True if the agent's output regressed the pre-existing suite.
 
@@ -331,6 +357,7 @@ def run_variant(
     allowed_tools=DEFAULT_ALLOWED_TOOLS,
     prompt_prefix: str = "",
     brief_tokens: int = 0,
+    reset_repo: bool = True,
 ) -> FootprintRecord:
     """Run one agent task on one variant and return its footprint row.
 
@@ -339,6 +366,9 @@ def run_variant(
     `input_tokens` (and thus `pre_edit_input_tokens`), making the net-accounting
     guard structural rather than bolted on (spec section 14.6). Arm A passes "".
     """
+    if reset_repo:
+        _reset_repo(repo_dir)
+
     full_prompt = f"{prompt_prefix}\n\n{task_prompt}" if prompt_prefix else task_prompt
     result = _run_claude(repo_dir, full_prompt, model=model, allowed_tools=allowed_tools)
     session_id = result["session_id"]
@@ -353,7 +383,7 @@ def run_variant(
         _run_test_gate(repo_dir, test_cmd, baseline_failed) if test_cmd is not None else False
     )
 
-    return FootprintRecord(
+    record = FootprintRecord(
         variant=variant,
         run_index=run_index,
         model=model,
@@ -375,6 +405,14 @@ def run_variant(
         test_regression=regression,
     )
 
+    # Append as we go: a full pair run is hours of live agent time, and a single
+    # failed `claude` invocation raises out of the loop. Rows already paid for
+    # survive in this file even when the process never reaches its final write.
+    with (artifact_dir / "records.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record.model_dump()) + "\n")
+
+    return record
+
 
 def run_pair(
     variant_a_dir: Path,
@@ -391,6 +429,10 @@ def run_pair(
     Interleaving averages out any slow drift in the service across the run
     (spec section 8). A single pair is not a result; n >= 10 is the floor.
     """
+    baseline = {
+        "A": _baseline_failed(variant_a_dir, test_cmd),
+        "B": _baseline_failed(variant_b_dir, test_cmd),
+    }
     records: list[FootprintRecord] = []
     for i in range(n):
         for variant, repo_dir in (("A", variant_a_dir), ("B", variant_b_dir)):
@@ -403,6 +445,7 @@ def run_pair(
                     model=model,
                     artifact_dir=artifact_dir,
                     test_cmd=test_cmd,
+                    baseline_failed=baseline[variant],
                 )
             )
     return records
@@ -429,6 +472,7 @@ def run_arm_c(
     """
     artifact_dir.mkdir(parents=True, exist_ok=True)
     (artifact_dir / "brief.txt").write_text(brief, encoding="utf-8")
+    baseline_red = _baseline_failed(repo_dir, test_cmd)
     records: list[FootprintRecord] = []
     for i in range(n):
         for variant, prefix, btoks in (("A", "", 0), ("C", brief, brief_tokens)):
@@ -443,6 +487,7 @@ def run_arm_c(
                     test_cmd=test_cmd,
                     prompt_prefix=prefix,
                     brief_tokens=btoks,
+                    baseline_failed=baseline_red,
                 )
             )
     return records

@@ -70,6 +70,29 @@ archy recommendation rather than an arbitrary cleanup.
 - **Runs:** `n >= 10` per variant, interleaved; report the paired B-minus-A
   distribution (median delta + sign counts), never a single pair.
 
+### Pre-registered analysis plan (fixed at 5/10 pairs, before the result)
+
+Recorded while the run was still in flight and before any n=10 numbers existed,
+so the stopping rule cannot be chosen to suit the answer:
+
+- **N=10, no extension.** Spec section 8 allows raising N when the interval still
+  crosses zero; that option is declined here in advance. Whatever the 10 pairs
+  say is the reported result.
+- **Stated power limit, not a hidden one.** A two-sided sign test at N=10 needs
+  9-of-10 in one direction to reach p<0.05 (9-1 -> 0.021; 8-2 -> 0.109). If the
+  true per-pair win rate were 0.8, this run would return significance only ~37%
+  of the time. So N=10 can rule out a *large and consistent* footprint effect on
+  this config; it cannot separate "no effect" from "moderate effect", and the
+  writeup says so either way.
+- **A borderline result does not buy more pairs of the same cell.** If the metric
+  of record lands near the line, the follow-up is a second task or a second repo
+  (generalizability), not more runs of one repo/task/model until something
+  crosses 0.05. The arm-C study below is the precedent: N=10 looked promising
+  (p=0.109) and doubling N pulled it back to null (p=0.286).
+- **Admissibility** (fixed in advance): a pair counts only if both sides made an
+  edit, completed, and left the pre-existing suite green; excluded pairs are
+  reported with the reason, not silently dropped.
+
 Why flask: a dominant, unambiguous archy recommendation on a real god-object; a
 fast, green, well-known test suite for the gate; and an app-centric task that
 spans modules, which is where the paper's footprint effect concentrates.
