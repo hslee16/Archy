@@ -6,7 +6,11 @@ Harness: [`bench/agent_footprint.py`](agent_footprint.py). Parser unit tests:
 
 ## Status
 
-**Harness landed and validated end-to-end; no comparative numbers yet.** The
+**Both studies have now run: arm C (#289, N=22) and the A-vs-B refactor study
+(#282, N=10). Both are documented non-results.** See the two result sections
+below. The rest of this section is the harness-validation history.
+
+**Harness landed and validated end-to-end.** The
 deterministic core (`parse_transcript`, `summarize`) is CI-tested against a
 synthetic transcript fixture. The live runner (`run_variant` / `run_pair`)
 invokes `claude` headless and needs real agent time, so it runs out of band,
@@ -29,10 +33,22 @@ synthetic fixture could not have caught surfaced and were fixed:
   `--setting-sources local` is the working isolation substitute. See the spec
   section 10.
 
-The first *comparative* minimal-pair (below) is the next step; this file will
-carry its A-vs-B numbers when it runs.
+Two further bugs surfaced when the first *comparative* run was wired up, both of
+which would have invalidated an A-vs-B result had they shipped:
 
-## First live-pair target (chosen, not yet run)
+- **No reset between runs.** `run_pair` reused the same checkout for all runs, so
+  run i+1 started from run i's edits and measured a repo that no longer matched
+  the variant under test. `_reset_repo` (hard reset + clean) now runs before every
+  run, which is spec section 8's "fresh checkout per run".
+- **Baseline never measured.** `baseline_failed` was hardcoded `False`, so the
+  section 7 regression gate could not distinguish "the agent broke the suite" from
+  "the suite was already red". It is now measured once per variant on the pristine
+  tree and threaded into the per-run gate.
+- Durability: each row is appended to `records.jsonl` as it completes. A pair run
+  is hours of paid agent time and one failed `claude` invocation raises out of the
+  loop; rows already paid for now survive it.
+
+## First live-pair target (as run)
 
 Selected by running archy on the candidate, so variant B applies a *real*
 archy recommendation rather than an arbitrary cleanup.
@@ -111,8 +127,76 @@ spans modules, which is where the paper's footprint effect concentrates.
   footprint outside the noise band (the paper saw ~2.5x per-task variance, hence
   `n >= 10`), that is the result and it ships as such.
 
-_No A-vs-B (refactor-study) results yet. The first live comparative run was the
-arm-C context-injection study below (#289), which reuses the same harness._
+## A-vs-B refactor study (#282), first run
+
+**Config (one-config caveat):** flask @ `36e4a82`; `claude-sonnet-5` headless;
+`--allowedTools Read,Write,Edit,Bash,Grep,Glob --setting-sources local`;
+`git reset --hard` + `git clean -fdx` before every run; A and B interleaved.
+Test gate: flask's own suite (491 tests), green on both pristine variants.
+Variant B diff: [`agent_footprint/variant_b_flask_sansio_app.patch`](agent_footprint/variant_b_flask_sansio_app.patch).
+Task, verbatim: [`agent_footprint/task_flask_endpoint_origins.md`](agent_footprint/task_flask_endpoint_origins.md)
+(add `endpoint_origins()` plus an `ENDPOINT_ORIGIN_STRICT` config key; described by
+behavior, names no files). 20 runs, 145 minutes of agent wall clock.
+
+**Variant B, as admitted:** the `App` god-class split into three mixins,
+`app_templating.py` (Jinja filter/test/global registration), `app_routing.py`
+(blueprint + URL-rule registration, URL-build hooks) and `app_errors.py` (error
+dispatch, redirect); `sansio/app.py` 1013 -> 611 lines. Behavior-preserving:
+491/491 green, identical to A. archy confirms its own recommendation landed:
+`flask.sansio.app` cc_sum 87 -> 27, hotspot 44196 -> 13716, rank #1 -> #2.
+
+**Result: N=10 pairs, all 10 admissible** (every run edited, completed, and left
+the suite green; 0 regressions, 0 no-edit runs).
+
+| metric | A median | B median | median Δ (B−A) | B<A / B>A / tie | sign p |
+|---|---|---|---|---|---|
+| **pre_edit_reads** (record) | 10.0 | 8.0 | −3.5 | 7 / 3 / 0 | 0.344 |
+| pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | 0 / 8 / 2 | 0.008 |
+| num_turns | 51.5 | 46.5 | −3.5 | 5 / 5 / 0 | 1.000 |
+| file_revisitations | 6.0 | 5.0 | −1.0 | 5 / 5 / 0 | 1.000 |
+| footprint_tokens | 4,326,198 | 3,708,174 | +592,832 | 3 / 7 / 0 | 0.344 |
+| output_tokens | 32,330 | 34,766 | +4,190 | 4 / 6 / 0 | 0.754 |
+
+`pre_edit_reads` deltas (B−A): `[+2,+1,−3,−5,−6,−4,−1,+2,−9,−4]`.
+
+**Read (honest): a documented non-result for the footprint claim.** Applying
+archy's #1 recommendation did not move agent footprint outside the noise band on
+this config. The metric of record leans B's way in direction (median −3.5 reads,
+7 of 10 pairs) but nowhere near significance (p=0.344), and the token headline
+leans the *other* way (B higher in 7 of 10). Note the per-variant medians and the
+paired median disagree in sign on `footprint_tokens`: with an IQR spanning roughly
+±1.8M tokens, that is the spread talking, and it is why the paired test, not the
+medians, is the result.
+
+**The one significant cell is in the wrong direction and does not survive
+correction.** `pre_edit_distinct_files` is higher for B in 8 of 10 pairs
+(p=0.008), but 9 metrics were tested; Bonferroni puts it at ~0.072. It is also
+**mechanically confounded by the refactor itself**: B split one file into four, so
+reaching the same surface necessarily opens more distinct files even when it takes
+fewer reads. Read together with `pre_edit_reads` (fewer reads, more files), the
+plausible story is that decomposition made the agent's exploration *shallower but
+wider*, which is what a decomposition should do, and which this metric penalizes by
+construction. That is a measurement finding, not a result about archy: **breadth
+metrics are not variant-neutral when variant B changes the file count**, and any
+future decomposition study needs a file-count-normalized breadth metric or must
+drop the metric.
+
+**Go/no-go:** this bench does not gate a feature (unlike #289, which gated
+`archy brief`). What it rules out is a **claim**: archy must not say its
+recommendations cut an agent's token footprint. `what_to_refactor_next` continues
+to stand on human maintainability and edit risk, which this bench does not measure
+and does not challenge.
+
+**Two nulls now, and that is the pattern worth carrying.** #289 (context injection,
+N=22) and #282 (refactor, N=10) both land null at archy's layer on this model. The
+"cleaner code measurably helps the agent" thesis is not reproducing here, and
+roadmap items premised on footprint reduction should be priced accordingly.
+
+**Power, as pre-registered above:** N=10 needed 9-of-10 to reach p<0.05, and the
+run was arithmetically out of reach of significance on `pre_edit_reads` by pair 7.
+This rules out a large, consistent effect; it cannot separate "no effect" from
+"moderate effect". Per the pre-registration, the follow-up is a second task or a
+second repo, not more pairs of this cell.
 
 ## Arm C: context-injection (#289), first run
 
