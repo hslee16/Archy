@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "fc1053a60794",
+  "strategy": "manual-commit",
+  "branch": "alee/282-footprint-flask-pair",
+  "checkpoints_count": 4,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/fc/1053a60794/0/metadata.json",
+      "transcript": "/fc/1053a60794/0/full.jsonl",
+      "content_hash": "/fc/1053a60794/0/content_hash.txt",
+      "prompt": "/fc/1053a60794/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 367,
+    "cache_creation_tokens": 360278,
+    "cache_read_tokens": 27949646,
+    "output_tokens": 97027,
+    "api_call_count": 168
+  }
+}
