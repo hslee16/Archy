@@ -1,0 +1,5 @@
+{
+  "rich/console_export.py": "rich/console.py",
+  "rich/console_options.py": "rich/console.py",
+  "rich/console_screen.py": "rich/console.py"
+}
