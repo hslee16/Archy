@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "3bdaee4301cb",
+  "strategy": "manual-commit",
+  "branch": "alee/round4-parser-and-telemetry",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "bench/agent_footprint_results.md",
+    "docs/SPEC_AGENT_FOOTPRINT_BENCH.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3b/daee4301cb/0/metadata.json",
+      "transcript": "/3b/daee4301cb/0/full.jsonl",
+      "content_hash": "/3b/daee4301cb/0/content_hash.txt",
+      "prompt": "/3b/daee4301cb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 623,
+    "cache_creation_tokens": 802688,
+    "cache_read_tokens": 74306208,
+    "output_tokens": 196563,
+    "api_call_count": 306
+  }
+}
