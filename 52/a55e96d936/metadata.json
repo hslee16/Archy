@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "52a55e96d936",
+  "strategy": "manual-commit",
+  "branch": "alee/300-bench-carryovers",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "bench/agent_footprint.py",
+    "bench/agent_footprint_results.md",
+    "docs/SPEC_AGENT_FOOTPRINT_BENCH.md",
+    "tests/test_agent_footprint.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/52/a55e96d936/0/metadata.json",
+      "transcript": "/52/a55e96d936/0/full.jsonl",
+      "content_hash": "/52/a55e96d936/0/content_hash.txt",
+      "prompt": "/52/a55e96d936/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 481,
+    "cache_creation_tokens": 686305,
+    "cache_read_tokens": 45231069,
+    "output_tokens": 133093,
+    "api_call_count": 229
+  }
+}
