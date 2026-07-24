@@ -249,3 +249,11 @@ bench/replay_cache/
 
 # Benchmark project clones cached across runs; regenerable via bench/run.py
 bench/repo_cache/
+
+# Raw Claude Code session transcripts from the #282 agent-footprint run (~9MB).
+# NOT regenerable: re-running would be 20 fresh live agent runs, and these are
+# the source the committed records_282_flask.jsonl was derived from (twice, when
+# a metric definition changed). Kept locally so #282 stays recomputable rather
+# than sharing #289's fate of being unverifiable; not committed, since they carry
+# full prompts and file contents and would bloat the repo.
+bench/agent_footprint_transcripts/
