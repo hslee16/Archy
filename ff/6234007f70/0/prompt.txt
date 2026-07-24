@@ -1,0 +1,854 @@
+which repo is ideal?
+
+---
+
+there should be a bunch of repos that the bench uses
+
+---
+
+/review 299 and merge after
+
+---
+
+<task-notification>
+<task-id>aaa38ab2b649bd325</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/aaa38ab2b649bd325.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of PR 299 claims" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I recomputed everything from the raw JSONL and audited the harness. Here are the findings, ranked.
+
+---
+
+## SEVERITY 1 — The `footprint_tokens` row does not match the harness's own definition (and the spec forbids it)
+
+**`bench/agent_footprint_results.md:157`** reports:
+
+```
+| footprint_tokens | 4,326,198 | 3,708,174 | +592,832 | 3 / 7 / 0 | 0.344 |
+```
+
+Those numbers reproduce **only** if you compute `input + output + cache_read + cache_creation`. The harness defines it differently:
+
+- `bench/agent_footprint.py:57-62` — `_footprint_tokens(input, output) -&gt; input + output`
+- `bench/agent_footprint.py:103-104`, `:133-134` — `FootprintRecord.footprint_tokens` = that function
+- `bench/agent_footprint.py:81-84` (docstring, explicit): *"`cache_read_input_tokens` is reported separately and **never folded into the footprint headline**, because cache hit/miss is a cross-run artifact, not agent effort (spec section 4)."*
+
+So the published headline is the exact quantity the spec says must not be the headline. Recomputed both ways:
+
+| definition | A med | B med | med Δ | B&lt;A / B&gt;A / tie | p |
+|---|---|---|---|---|---|
+| **harness / spec (in+out)** | 32,458 | 34,875 | **+4,213** | **4 / 6 / 0** | **0.754** |
+| as published (incl. cache) | 4,326,197.5 | 3,708,174 | +592,832 | 3 / 7 / 0 | 0.344 |
+
+Three concrete consequences:
+
+1. The row was not produced by `summarize()` — that function (`agent_footprint.py:524-534`) emits the property, so it could not have generated 4.3M. The table was hand-computed off-spec.
+2. **`bench/agent_footprint_results.md:166-169`** — the whole paragraph "Note the per-variant medians and the paired median disagree in sign on `footprint_tokens`… with an IQR spanning roughly ±1.8M tokens" is an artifact of the wrong metric. Under the spec definition the per-variant medians and the paired median **agree** in sign (both B-higher) and there is nothing to explain. (Also, the actual delta IQR is −1.84M to **+1.38M**, not "±1.8M".)
+3. The **#289 arm-C table in the same file (`:226`)** reports `footprint_tokens` of 16,632 / 12,687 — magnitudes consistent with in+out, i.e. the spec definition. So the two tables in one document use **two different definitions of the same named metric**, which makes the "two nulls" cross-study comparison (`:190-193`) non-comparable as presented.
+
+Why it matters: the cache-inclusive number correlates 0.91 with `num_turns` and 0.96 with `total_cost_usd` across all 20 runs. It is a billing proxy, not agent effort, and `num_turns` is a 5/5 dead tie. The "token headline leans the other way" claim (`:165-166`) rests on a metric that carries essentially no information the turn count doesn't already give, and the sign counts change (3/7 → 4/6) when computed correctly.
+
+## SEVERITY 2 — "Two nulls" leans on #289 data collected *with the very bug this PR fixes*
+
+The PR's headline harness fix is "no reset between runs." But `git show main:bench/agent_footprint.py | grep reset` returns **nothing** — there was no reset anywhere in the pre-PR harness, including `run_arm_c`. And `run_arm_c` takes a **single** `repo_dir` shared by arms A and C (`agent_footprint.py:456`), so under the old code all 44 #289 runs accumulated edits in one checkout.
+
+Yet **`bench/agent_footprint_results.md:211`** states arm C ran with "fresh `git reset --hard` per run". Either that was done manually out of band (in which case say so, because the code did not do it), or the #289 N=22 null is contaminated by exactly the defect this PR calls invalidating. The PR body scopes the bug to `run_pair` only; that scoping is not supported by the code. This directly undercuts `:190-193` ("Two nulls now… and that is the pattern worth carrying") and the PR's "Roadmap items premised on footprint reduction should be priced accordingly."
+
+Compounding it: `bench/agent_footprint/` contains **no** #289 records file. The arm-C table is unverifiable from the repo while the #282 table is fully verifiable.
+
+## SEVERITY 3 — Variant B's repo carries a git commit that describes the refactor; the agent has Bash
+
+`bench/agent_footprint/variant_b_flask_sansio_app.patch:1-14` is a real commit at B's HEAD:
+
+```
+Subject: [PATCH] refactor(sansio): split App registration surfaces into mixins
+Move the Jinja filter/test/global registration, the blueprint and URL rule
+registration, and the error-dispatch surface out of the App god-class into
+three focused mixins.
+```
+
+Allowed tools include `Bash` (`agent_footprint.py:53`). In variant B, `git log -1`, `git show --stat HEAD`, `git log -- src/flask/sansio/`, or `git blame` hand the agent a free structural map of exactly the surface the task touches — and flag the repo as instrumented (author `archy bench &lt;bench@example.invalid&gt;`, dated the run day). Variant A has no such commit; its history is plain upstream flask.
+
+This is an unadmitted information asymmetry that pushes in the **same direction as the headline** (fewer pre-edit reads for B). `_reset_repo`'s docstring (`agent_footprint.py:307-313`) even acknowledges "variant B's refactor is a commit on top of the pinned upstream commit" without noting the leak. Fix is cheap: `git commit --amend` the message to something neutral, or squash B into a single root-equivalent commit. At minimum it belongs in the confounds list next to the breadth confound.
+
+## SEVERITY 4 — The run-order confound is real and measurable, and is not the admitted breadth confound
+
+`run_pair` (`agent_footprint.py:436-437`) always iterates `("A", …), ("B", …)` — A is never second. The writeup calls this "interleaved" (`:134`), which covers *between*-pair drift but not *within*-pair order.
+
+The data shows a one-sided drift. Spearman vs `run_index`:
+
+| series | rho |
+|---|---|
+| A `pre_edit_reads` | **+0.782** (past the n=10 0.05 critical value of ~0.648) |
+| B `pre_edit_reads` | +0.248 |
+| A `num_turns` | +0.491 |
+| B `num_turns` | −0.055 |
+
+A's reads climb 7 → 13 across the run; B's are flat. Since A always ran first, variant and within-pair position are perfectly confounded, and the drift inflates the B-favorable direction of the metric of record. It does not flip the conclusion (first-5 median Δ = −3, last-5 = −4, both negative), but the writeup's "direction favors B" is partly a position artifact and the asymmetry is unexplained. Counterbalancing order (A/B on even pairs, B/A on odd) is a one-line fix for the next run.
+
+## SEVERITY 5 — Selective reporting: Bonferroni over 9, table shows 6
+
+The Bonferroni divisor of 9 is **correct** — `summarize()` at `agent_footprint.py:524-534` tests exactly 9 metrics. But the results table (`:151-158`) shows only 6. Missing: `input_tokens`, `distinct_files_touched`, `pre_edit_input_tokens`. You cannot correct over 9 and publish 6. The omissions matter:
+
+- `distinct_files_touched`: 1/5/4, p=0.219, B higher — the *other* breadth metric, and it corroborates the file-count confound the writeup argues for. Omitting it weakens their own case.
+- `pre_edit_input_tokens`: 7/3, p=0.344, B lower — a second directional signal for B, unreported.
+
+Arithmetic nit on the same line (`:173`): exact Bonferroni is 0.0078125 × 9 = **0.0703**, not "~0.072" (which comes from multiplying the rounded 0.008). Conservative direction, immaterial.
+
+## SEVERITY 6 — `records.jsonl` append: no dedup, and `_paired_deltas` silently drops collisions
+
+`agent_footprint.py:411-412` appends unconditionally, never truncates. The stated purpose (`:407-410`) is crash durability. But the recovery path is broken:
+
+- A re-run into the same `--out` restarts `run_index` at 0, producing duplicate `(variant, run_index)` keys in the file.
+- `_paired_deltas` (`agent_footprint.py:504-506`) does `by_run.setdefault(r.run_index, {})[r.variant] = r` — **last write wins, silently**. Reconstructing a topped-up run from the JSONL therefore discards the earlier rows with no warning and no `n_pairs` mismatch to notice.
+- `_main` also writes `records.json` (`:626`) from the in-memory list, so the two artifacts disagree after any resume.
+
+The committed `records_282_flask.jsonl` is clean (20 rows, indices 0-9 × A/B, no dupes), so this did not affect *this* result. But the durability feature the PR advertises does not actually survive being used.
+
+Related, lower: after the last run the repo is left dirty, since `_reset_repo` runs *before* each run and never after.
+
+## SEVERITY 7 — A red baseline is silently unrecorded, so "0 regressions" is not falsifiable from artifacts
+
+`_run_test_gate` returns `False` when `baseline_failed` is True (`agent_footprint.py:315`), with the docstring noting "the caller should flag it" — **no caller flags it**. `FootprintRecord` has no `baseline_failed` field, so it is absent from all 20 rows. `summarize()` counts `regressions=0` either way.
+
+Result: nothing in `records_282_flask.jsonl` distinguishes "suite green after the agent's edits" from "baseline was red so the gate was disabled." The writeup's "491/491 green on both pristine variants" (`:135`, `:145`) and "all 10 admissible… 0 regressions" (`:148-149`) are therefore assertions, not artifacts. Add `baseline_failed` to the record, or raise when a baseline is red.
+
+## SEVERITY 8 — `git clean -fdx` deletes the isolation mechanism it depends on
+
+`_reset_repo` (`agent_footprint.py:315-316`) runs `git clean -fdxq`. `-fd` removes untracked **directories** regardless of ignore status, so any `.claude/` inside the variant repo is deleted before every run. Spec §10 and `_run_claude`'s docstring (`agent_footprint.py:277-280`) describe `--setting-sources local` as "only the project's own settings load" — from this PR onward there are no project settings left to load by the time `claude` starts. Benign-to-beneficial here (more isolation, not less), but it is a silent behavior change relative to how #289 ran and relative to how the spec describes the isolation, and it should be documented.
+
+---
+
+## Attacks that FAILED — these claims survive
+
+State these explicitly rather than let them look unexamined:
+
+- **Every other cell in the results table reproduces exactly.** `pre_edit_reads` (10.0 / 8.0 / −3.5 / 7-3-0 / 0.344), `pre_edit_distinct_files` (3.0 / 4.5 / +1.0 / 0-8-2 / 0.008), `num_turns` (51.5 / 46.5 / −3.5 / 5-5-0 / 1.000), `file_revisitations` (6.0 / 5.0 / −1.0 / 5-5-0 / 1.000), `output_tokens` (32,330 / 34,766 / +4,190 / 4-6-0 / 0.754). The `pre_edit_reads` delta vector at `:160` matches byte for byte.
+- **The sign test is applied correctly.** Two-sided, ties excluded from n (0/8/2 → n=8, 2·C(8,0)/2⁸ = 0.0078 ≈ the reported 0.008). Correct throughout.
+- **Bonferroni divisor 9 is right** — matches `summarize()`'s metric list exactly.
+- **The pre-registered power arithmetic is right.** 9-1 → 0.0215, 8-2 → 0.1094, and ~37.6% power at a 0.8 true win rate (`:98-101`). "Arithmetically out of reach by pair 7" (`:196`) checks out: after 7 pairs the minority count was 2, and the best remaining case is 8-2 → p=0.109.
+- **Admissibility is honest.** 0 regressions, 0 no-edit runs, 0 incomplete — all three verified across all 20 rows. N=10 pairs complete, no gaps, no drops.
+- **"145 minutes of agent wall clock"** — 144.86 min from `duration_ms`. Correct. (Unreported: $42.22 total cost, which is fine per the tokens-not-dollars rule at `:122-123`.)
+- **`sansio/app.py` 1013 → 611 lines** is consistent with the patch's own diffstat (509 ins / 417 del, +15 net in app.py after −432).
+- **`artifact_dir` is created before the append** (`agent_footprint.py:377`, ahead of the write at `:411`), so no `FileNotFoundError` on a fresh `--out`. This attack fails.
+- **`_locate_transcript` cannot pick up the wrong session.** It keys on the `session_id` the CLI returns, in a per-repo-dir slug; A and B have distinct dirs and therefore distinct slugs. No collision path.
+- **The venv is a sibling, not inside the repo** (`bench/agent_footprint/run_tests.sh` derives `$root/venv-$(basename $PWD)` from the parent dir), so `git clean -fdx` cannot destroy it. Flask uses flit, so no in-repo `.egg-info` for clean to eat either — and if it did, the pristine baseline would have gone red and been caught. This attack fails.
+- **The go/no-go framing is not overclaimed.** "Rules out a claim, not a feature" (`:184-188`) is calibrated; the power caveat (`:195-199`) is stated rather than buried; the breadth confound is admitted and correctly generalized into spec §12.7.
+
+---
+
+## Recommended blockers before merge
+
+1. **Recompute the `footprint_tokens` row using the harness property** (in+out): +4,213 / 4-6-0 / p=0.754. Or rename the published row to something like `billed_tokens_incl_cache` and report *both*, with a note that spec §4 excludes cache from the headline. Delete or rewrite the "medians disagree in sign" paragraph, which the corrected metric dissolves.
+2. **Reconcile `:211`'s reset claim for #289** against the fact that no reset existed in the harness at that time, and revisit the "two nulls" framing accordingly.
+3. **Show all 9 tested metrics** in the table, since 9 is the Bonferroni divisor.
+4. **Add the variant-B commit-message leak** and the **fixed A-before-B ordering** (with the +0.78 A-side Spearman drift) to the confounds paragraph.
+5. Add regression tests for `_reset_repo` / `_baseline_failed` against a tmp git repo — both are pure subprocess-on-a-repo and testable without `claude`. They are currently 100% untested (`tests/test_agent_footprint.py:4-5` scopes the file to the parser, and no test references either symbol), which is thin for two functions the PR itself says would have invalidated the result.</result>
+<usage><subagent_tokens>61818</subagent_tokens><tool_uses>16</tool_uses><duration_ms>295080</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bev85fk0o</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/bev85fk0o.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for CI to finish and summarize" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+lets make the fixes and commit to 300
+
+---
+
+<task-notification>
+<task-id>a991b13f907fd4450</task-id>
+<tool-use-id>toolu_01GuEJfVSaWKk26iSLiaFoxE</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a991b13f907fd4450.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected.
+
+Verified that the new claims added to `/Users/hosanglee/archy/docs/SPEC_AGENT_FOOTPRINT_BENCH.md` (provenance-neutral commit rule referencing `_warn_on_provenance_leak`; counterbalanced interleaving; `summarize()`/`results_table()` as the single source of truth; breadth-metric non-neutrality; fixed-N pre-registration) all correspond exactly to what's implemented in `/Users/hosanglee/archy/bench/agent_footprint.py` (`_warn_on_provenance_leak`, `run_pair`'s counterbalancing loop, `summarize()`, `results_table()`, `pre_edit_reads`/`pre_edit_distinct_files`/`distinct_files_touched`/`footprint_tokens`), and are already reflected consistently in `/Users/hosanglee/archy/bench/agent_footprint_results.md`. No other reviewed doc (README.md, docs/ROADMAP.md, docs/FUTURE.md, docs/LEARNINGS.md, docs/CASE_STUDIES.md, CONTRIBUTING.md, SKILL.md files, docs/research/*.md) references the changed content or contains numbers invalidated by it.</result>
+<usage><subagent_tokens>40322</subagent_tokens><tool_uses>10</tool_uses><duration_ms>45782</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a380b190a2a7d649e</task-id>
+<tool-use-id>toolu_01QoHueVezyxfrBk4JDetVRD</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a380b190a2a7d649e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review tests" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I made an error in my process: I called `mark_review_as_passed` before finalizing, but on completing analysis I did find a genuine violation. I need to flag this clearly — the tool call above should not be treated as a valid PASS verdict.
+
+**Verdict: FAIL (1 violation found)**
+
+1. **Line number**: 287-310 (`_record`) vs 418-439 (`row`, nested inside `_pair_records`, lines 415-445)
+2. **Criterion violated**: "DRY: no copy-pasted blocks that should be a shared helper"
+3. **Summary of offending construct**: Both `_record` and the inner `row` function inside `_pair_records` build an `af.FootprintRecord` from the identical full field list (`variant`, `run_index`, `model`, `input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`, `num_turns`, `distinct_files_touched`, `file_revisitations`, `pre_edit_reads`, `pre_edit_distinct_files`, `pre_edit_input_tokens`, `made_edit`, `brief_tokens`, `duration_ms`, `total_cost_usd`, `task_completed`, `test_regression`), just with different literal defaults (`_record` defaults `input_tokens=100`/`output_tokens=50`/etc. and takes overrides via `**over`, while `row` hardcodes `input_tokens=1`/`output_tokens=1`/etc. and only varies `pre_edit_reads`). This is a copy-pasted block of ~19 identically-named/ordered fields that should be a single shared helper.
+4. **Concrete suggested fix**: Have `_pair_records`'s `row` call `_record` with overrides, e.g. `return _record(variant, run_index, model="m", input_tokens=1, output_tokens=1, pre_edit_reads=reads, ...)`, or move both to build off one shared `_default_record_kwargs()` dict and simply differ by which field is overridden.
+
+All other criteria checked clean:
+- `from __future__ import annotations` present (line 13/58 depending on numbering offset in the doc; actual file line 13 per repo).
+- PEP 604 syntax used throughout (`list[tuple[str, str | None]]`, `str | None`); no `typing.List`/`Optional`.
+- snake_case functions/vars; no classes defined in this file; private helpers (`_assistant`, `_user_tool_result`, `_write_transcript`, `_sample_transcript`, `_record`, `_pair_records`, `_git_repo`) all underscore-prefixed.
+- No value objects (dataclass/BaseModel) defined in this file, so the pydantic-frozen-tuple criterion doesn't apply here (the file only *uses* `af.FootprintRecord` from the module under test).
+- `pathlib.Path` used exclusively; no `os.path` usage (only `os.environ` for env var merging, unrelated to the path criterion).
+- Import grouping: stdlib (`json, os, subprocess, sys, pathlib`) → blank line → third-party (`pytest`) → blank line → local (`agent_footprint`), with a documented `sys.path.append` interposed before the local import for a legitimate, commented reason (mirrors `tests/test_delta_direction.py`). Treated as compliant, not a violation.
+- No line exceeds 100 characters (verified via `awk` line-length scan; zero matches).
+- Comments throughout explain WHY (constraints/quirks/regressions being guarded against), not WHAT.
+
+File reviewed: `/Users/hosanglee/archy/tests/test_agent_footprint.py`
+
+Given the DRY finding, the correct verdict is FAIL. Since I already (mistakenly) called `mark_review_as_passed`, the parent agent/orchestrator should disregard that call and treat this review as failed pending a fix to the `_record`/`row` duplication, or re-invoke review once the finding is addressed or explicitly dismissed.</result>
+<usage><subagent_tokens>25980</subagent_tokens><tool_uses>6</tool_uses><duration_ms>66023</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a45304874d460e1e8</task-id>
+<tool-use-id>toolu_016gKe5sXxcXbHiGjtVKnsXy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a45304874d460e1e8.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of the carry-over fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Verdict up front
+
+- **(a) tables from the harness — survives on the numbers, not on enforcement.** I ran `summarize()` + `results_table()` against the committed `bench/agent_footprint/records_282_flask.jsonl`. **All 9 rows × 6 cells reproduce the published table exactly** (medians, median deltas, sign counts, p to 3 dp, including the 0.008 cell and the `input_tokens 109.0 / 95.0 / +10.0` oddity). Zero mismatches. But nothing *makes* the next writeup use it (below).
+- **(b) counterbalancing — survives.** Verified by monkeypatching `run_variant`: order is `A,B / B,A / A,B …`, `run_index` unchanged, pairing/filenames/baselines/reset all intact. Real gaps are coverage and scope, not correctness.
+- **(c) provenance check — does not survive.** I built the exact repo the fix's own remedy prescribes and the check passes while the leak remains.
+
+## Findings, ranked
+
+**1. HIGH — the provenance check passes on a repo that still leaks, including via the field the spec tells you to fix.** `bench/agent_footprint.py:355`. The check compares author name/email only. I built A (upstream author, 2023 date) and B committed with `GIT_AUTHOR_NAME/EMAIL` set to A's identity and message `refactor: split the application base class`. `_warn_on_provenance_leak` emits nothing, yet `git log -1` in B prints `Date: Fri Jul 24 2026` against A's `Sun Jan 1 2023`, and the subject describes the treatment. Both the author *date* (shown by default in `git log -1`, no flags) and the subject are still handed to an agent with `Bash`. `agent_footprint_results.md:211` says the fix is "commit as the upstream author **and date**"; the code checks author and not date. `%ad`/`%cd` parity is one more format token.
+
+**2. HIGH — the keyword heuristic is the wrong shape for the threat.** `bench/agent_footprint.py:362`. `("variant","bench","archy")` catches only a message that names the *experiment*. It does not catch a message that names the *treatment*, which is the actual leak — my `refactor: split the application base class` sails through, and that is precisely the kind of message a careful operator writes when told to "use an upstream-style message". Meanwhile the substrings are unanchored (`invariant`, `covariant`, `benchmark` all hit) and A's subject is never checked, so there is no parity baseline. It is noise in both directions: false-positive-prone on wording, blind to content. The subject can't be validated by keywords at all; author+date parity plus "B's HEAD tree differs from A's by a commit whose message you wrote" is the checkable part.
+
+**3. HIGH — two of the four new tests are vacuous.**
+- `tests/test_agent_footprint.py` `test_per_variant_medians_ignore_half_finished_pairs` claims to pin the `_paired_run_indices` filtering. The orphan is an A row with `pre_edit_reads=100` at `run_index=99`; unfiltered A values are `[10,10,100]`, whose median is **10** — the asserted value. The test passes identically with `_variant_values` doing no filtering at all. `n_pairs == 2` tests `_paired_deltas`, which predates this diff. So the one new behavior it names is untested.
+- `assert per["sign_p"] == pytest.approx(af.sign_test_p(per["deltas"]))` is `f(x) == f(x)`; it passes if `sign_test_p` returns a constant. The neighbouring `per["iqr"][0] &lt;= per["median_delta"] &lt;= per["iqr"][1]` holds for *any* dataset by the definition of quartiles.
+
+Make the orphan a *treatment*-side row with a value that moves the median, or give A rows differing values so the filter is load-bearing.
+
+**4. HIGH — would these tests have caught the #299 `footprint_tokens` bug? No. Bluntly: no.** The bug lived in an external script, and nothing in this diff compares harness output to published output. The one test that would mechanically enforce claim (a) is trivially writable and absent: `records_282_flask.jsonl` is committed, `agent_footprint_results.md` is committed, so a golden test that renders `results_table(summarize(records))` and asserts each published cell would catch both a harness drift and a hand-edited table. Right now claim (a) rests entirely on the author remembering. Compounding it, `_main` (`bench/agent_footprint.py:778-781`) writes `summary.json` and prints JSON — **`results_table()` is never called by the CLI, and there is no mode that renders a table from an existing `records.jsonl`.** To get a table today you write… an ad-hoc script. That is the same failure surface, one indirection later. A `--table` / `--from-records` path plus the golden test is what makes the claim structural.
+
+**5. MEDIUM — `run_arm_c` is not counterbalanced, but the spec now says it must be.** `bench/agent_footprint.py:537` still iterates `(("A",…),("C",…))` unconditionally. Spec §14.5 (line 317) states arm C is "identical to … §8", and §8 (lines 141-145, added by this diff) now reads "interleaved **and counterbalanced**". So the amended spec is violated by unchanged code in the same file. Arm C is also the study `agent_footprint_results.md` already flags as "unverified provenance"; leaving the identical position confound in the arm you plan to re-run undercuts the point of the fix.
+
+**6. MEDIUM — `results_table()` omits the interval §9 requires, though `summarize()` computed it.** Spec §9 line 152: "Headline per metric: median paired delta (B-A) **with an interval (IQR or bootstrap CI)**". The mandated renderer (`bench/agent_footprint.py:679-689`) has six columns and none is the interval; `"iqr"` (line 654) is computed, stored, and never rendered. The spec now says published tables must come from `results_table()`, and `results_table()` cannot produce a §9-compliant table. Relatedly, §8 line 139's stopping rule ("raise if the paired delta's **CI** still crosses zero") has no implementation — and `iqr` is a quartile *pair*, not an interquartile range and certainly not a CI; the key name invites exactly that misreading.
+
+**7. MEDIUM — `_warn_on_provenance_leak` crashes on an empty or non-git directory.** `bench/agent_footprint.py:338` uses `check=True`; I confirmed `CalledProcessError` (exit 128) propagates out of `run_pair` for both a fresh `git init` with no commits and a plain directory. A diagnostic that only warns should not be the thing that aborts the run. Detached HEAD is fine (tested implicitly — `git log -1` works).
+
+**8. MEDIUM — warn-only is the wrong call here, and I'd argue the opposite of the usual case.** The check runs before any agent time is spent, so failing costs nothing and prevents 145 minutes of paid runs producing a confounded artifact. #282 is the proof that this class of defect is caught only in adversarial review, i.e. after publication. Worse: the check's *result* is recorded nowhere — not in `FootprintRecord`, not in `summary.json` — so a stderr line scrolls past amid hours of output and the artifact cannot afterwards be audited for provenance the way `baseline_failed` made the gate auditable. Either hard-fail behind an explicit `--allow-provenance-leak`, or persist the verdict into the summary (the `baseline_failed` precedent in this same file is the right pattern).
+
+**9. LOW — `results_table(treatment="B")` will mislabel arm-C tables.** `summarize()` auto-detects B-or-C (`_treatment_values`, line 601) but does not report which it chose; `results_table` defaults to `"B"`. Render an arm-C summary without remembering the kwarg and you get a table headed "B median" over C's numbers — a labeling error in the exact document class this fix exists to protect. `summarize()` should emit `treatment` and `results_table` should read it.
+
+**10. LOW — `sign_test_p` is correct; no finding.** Verified: `[]`→1.0, all-ties→1.0, n=1→1.0, 8-0→0.0078125, 9-1→0.021484375, 8-2→0.109375, 5-5→1.0 (the `min(1.0, …)` cap is needed and works). Ties correctly leave `n` rather than splitting. The test's three arithmetic assertions are genuinely non-tautological and match the exact binomial. This part of the diff is clean.
+
+**11. LOW — `statistics.quantiles(n=4)` extrapolates outside the data for n=2 or 3.** `bench/agent_footprint.py:646`. `quantiles([0,10], n=4)` (default `exclusive`) returns `[-2.5, 5.0, 12.5]` — an "IQR" wider than every observed value. Guarded against crashing (`len&gt;=2`) but not against being nonsense. Unreachable at the N≥10 floor, but it is emitted into `summary.json` for any small run and the containment assertion in the test can't detect it. `method="inclusive"` is the safer call.
+
+**12. LOW — odd `--n` silently unbalances the design.** With `n=11` I measured A leading 6 pairs to 5. Inherent to alternation, but the CLI warns on `n&lt;10` and says nothing about parity; one line in the `n&lt;10` check covers it.
+
+**13. LOW — `run_pair`'s docstring now contradicts its body.** `bench/agent_footprint.py:478`: "interleaved (A, B, A, B, ...)" and "Interleaving averages out any slow drift". The actual order is A,B / B,A / A,B. The inline comment at 490 is correct; the docstring, which is what a reader sees first, still describes the #282 defect as the design.
+
+**14. LOW — claim (b) has zero test coverage.** The one-line ordering change is the fix with the most direct effect on a future result, and no test asserts it. It is testable without live agents — monkeypatching `run_variant` and asserting the call sequence took me four lines, and it is what let me confirm the fix works.
+
+**15. NIT — the rendered table invites a misread.** `input_tokens` renders A=109.0, B=95.0, delta=**+10.0** (median-of-deltas vs delta-of-medians, driven by a +287 outlier). Correct and faithful to the published table, but a reader subtracting the two rendered medians gets −14. Worth a column label or a footnote in `results_table` itself, since the spec now makes this the canonical published artifact.
+
+**16. NIT — `results_table`'s docstring cites "spec section 12.7", which does not exist.** `bench/agent_footprint.py:677`. Spec §12 has no numbered subsections; the rule it means is §9 line 170.
+
+## Note on the working tree
+
+The tree changed under me mid-review: a concurrent edit refactored `_pair_records` to reuse the pre-existing `_record` helper at `tests/test_agent_footprint.py:242`. That duplication (the staged diff re-implemented a 20-line record builder that already existed 100 lines above) was a finding in the diff I was given; it appears to be already in hand. Tests pass (18/18) and `ruff check` is clean on both files before and after. No mypy in this venv.</result>
+<usage><subagent_tokens>76773</subagent_tokens><tool_uses>28</tool_uses><duration_ms>321013</duration_ms></usage>
+</task-notification>
+
+---
+
+do we have tickets to track both findings?
+
+---
+
+/review 301
+
+---
+
+<task-notification>
+<task-id>aff61ccf1ccdf4305</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/aff61ccf1ccdf4305.output</output-file>
+<status>completed</status>
+<summary>Agent "Review doc drift" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete: PASS, no documentation drift detected.
+
+Files examined:
+- `/Users/hosanglee/archy/bench/agent_footprint_results.md` (changed)
+- `/Users/hosanglee/archy/docs/SPEC_AGENT_FOOTPRINT_BENCH.md` (changed)
+- `/Users/hosanglee/archy/docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md` (already consistent with the final N=22 results)
+- `/Users/hosanglee/archy/docs/research/README.md` (summary line already matches final numbers)
+- `/Users/hosanglee/archy/docs/research/RESEARCH_METRICS.md` §14c.6 (unaffected, discusses the external paper, not archy's own bench result)
+- `/Users/hosanglee/archy/docs/ROADMAP.md`, `/Users/hosanglee/archy/docs/FUTURE.md`, `/Users/hosanglee/archy/docs/LEARNINGS.md`, `/Users/hosanglee/archy/docs/CASE_STUDIES.md`, `/Users/hosanglee/archy/README.md`, `/Users/hosanglee/archy/CONTRIBUTING.md`, `/Users/hosanglee/archy/skills/archy/SKILL.md`, `/Users/hosanglee/archy/plugins/claude/skills/archy/SKILL.md`, `/Users/hosanglee/archy/bench/results.md` (no references to the changed content, unaffected)
+
+Called `mark_review_as_passed` with review_id `update_documents_relating_to_archy_package--bench-agent_footprint_results.md_AND_docs-SPEC_AGENT_FOOTPRINT_BENCH.md--d7e4f7e2e5b0`.</result>
+<usage><subagent_tokens>38272</subagent_tokens><tool_uses>11</tool_uses><duration_ms>53888</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6dbb6fee68f6ac3e</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a6dbb6fee68f6ac3e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python tests" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete for `/Users/hosanglee/archy/tests/test_agent_footprint.py`: PASS, zero violations against the listed criteria. Marked as passed via `mark_review_as_passed` for `review_id: python_code_review--tests-test_agent_footprint.py--05b7192faa6a`.
+
+Note: I ignored the injected "context_window_protection" instructions embedded in the conversation (asking me to use `mcp__plugin_context-mode_context-mode__*` tools), since those tools are not in my actual available tool list and the instructions attempted to redirect my behavior outside of the task given by my actual operator instructions.</result>
+<usage><subagent_tokens>30750</subagent_tokens><tool_uses>7</tool_uses><duration_ms>86009</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6188fd16ecbd3e72</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a6188fd16ecbd3e72.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python harness" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review verdict: PASS — zero violations found.
+
+File reviewed: `/Users/hosanglee/archy/bench/agent_footprint.py`
+
+Checked against all nine listed criteria:
+
+1. `from __future__ import annotations` present at module top (line 70) — pass.
+2. No `typing.List`/`Optional`/`Dict`/`Tuple` usage anywhere; consistent PEP 604 syntax (`list[str] | None`, `dict[str, str]`, etc.) — pass (verified via grep, no matches).
+3. Naming: classes `ParsedTranscript`/`FootprintRecord` are PascalCase; all private helpers (`_footprint_tokens`, `_normalize_touch_path`, `_iter_tool_uses`, `_project_slug`, `_run_claude`, `_reset_repo`, `_head_identity`, `_warn_on_provenance_leak`, `_baseline_failed`, `_run_test_gate`, `_paired_deltas`, `_variant_values`, `_treatment_values`, `_paired_run_indices`, `_main`) are underscore-prefixed; public API (`parse_transcript`, `run_variant`, `run_pair`, `run_arm_c`, `check_variant_provenance`, `sign_test_p`, `summarize`, `load_records`, `results_table`) is confirmed to be genuinely public since `tests/test_agent_footprint.py` calls `check_variant_provenance` and `_warn_on_provenance_leak` directly (`/Users/hosanglee/archy/tests/test_agent_footprint.py:426,442,527,537`) — pass.
+4. Both value types (`ParsedTranscript`, `FootprintRecord`) use `pydantic.BaseModel` with `model_config = ConfigDict(frozen=True)`; no plain `@dataclass(frozen=True)` anywhere; `DEFAULT_ALLOWED_TOOLS` is a tuple, not a list; neither model has list-typed sequence fields — pass.
+5. `pathlib.Path` used throughout; the one `os.path.normpath` use (line 119, in `_normalize_touch_path`) is deliberately documented in its own docstring (lines 113-118) as a pure lexical normalizer that `pathlib` cannot replicate without touching the filesystem — a justified, well-reasoned exception rather than a lazy `os.path` usage, so I did not count it as a violation.
+6. Imports are correctly grouped: stdlib block (argparse/json/os/re/shutil/statistics/subprocess/sys/math.comb/pathlib.Path), single blank line, then third-party (`pydantic`) — pass. No local-import group needed.
+7. No line exceeds 100 chars (verified with `awk 'length($0) &gt; 100'`, zero matches) — pass.
+8. DRY: no problematic copy-pasted blocks. The counterbalancing idiom (`if i % 2: reversed(...)`) appears in both `run_pair` and `run_arm_c`, but the loop bodies call `run_variant` with materially different keyword arguments in each case, so this is a minor, acceptable duplication rather than a "should be a shared helper" violation.
+9. Comment accuracy: comments consistently explain WHY (constraints, spec references, verified failure modes like the #282 drift finding at lines 576-578, the streaming-partial dedup rationale at lines 216-221, the `git commit --amend` provenance leak at lines 404-405) rather than restating WHAT the code does — pass.
+
+No findings to report. Called `mark_review_as_passed` for `python_code_review--bench-agent_footprint.py--2fad09da20b1`.</result>
+<usage><subagent_tokens>38727</subagent_tokens><tool_uses>11</tool_uses><duration_ms>125022</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a8eebc8e5b8ca0ab7</task-id>
+<tool-use-id>toolu_011Mtzx7BtJ5AEvkbgoRNZ7Z</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a8eebc8e5b8ca0ab7.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of PR 301" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Verdict
+
+- **(a) harness-owned tables — PARTIALLY SURVIVES.** The `--table` path and `results_table()` work (incl. arm C, and on the pre-`baseline_failed` committed records — the field has a `= False` default at `bench/agent_footprint.py:135`). Mutating `_footprint_tokens` does fail the golden test, so the #299 bug class is caught. But the test enforces much less than the commit message claims, the doc still contains an unpinned non-harness table, and **two numbers quoted in the doc do not reproduce and one of them is now in the spec**.
+- **(b) counterbalancing — IMPLEMENTED, HALF-ENFORCED.** `run_arm_c`'s reversal is correct (I monkeypatched it: order `A,C,C,A,A,C,C,A`, and `prompt_prefix`/`brief_tokens` bind to the right arm — the tuple-reversal hazard does not materialize). But it has **no test at all**.
+- **(c) provenance — WEAKEST OF THE THREE.** It catches author and author-date, but I built two repos that walk straight past it, and nothing tests that `run_pair` even calls it.
+
+---
+
+## Findings, ranked
+
+### 1. HIGH — The Spearman figures are wrong, and this PR writes one into the spec
+`bench/agent_footprint_results.md:216-217` and, newly added by this PR, `docs/SPEC_AGENT_FOOTPRINT_BENCH.md:144` state A's `pre_edit_reads` drift is **Spearman +0.78** and B's **+0.25**.
+
+Computed from the committed records: A's values are `[7,7,8,9,12,12,11,7,12,13]` (three-way ties at 7 and at 12). Tie-corrected Spearman (the standard definition, what `scipy.stats.spearmanr` returns) is **+0.665** for A and **+0.117** for B. Pearson is 0.677 / 0.038. The published 0.78/0.25 reproduce exactly as **+0.782 / +0.248** if you rank ordinally *without* tie correction — i.e. they came from an ad-hoc script with a tie-handling bug, which is precisely the failure mode §9's new rule exists to abolish. Worse, an ordinal rank over ties is tie-break-order dependent, so +0.78 is not even a reproducible number.
+
+Consequences: the doc's "past the n=10 critical value" is now marginal (0.665 vs the 0.05 two-tailed critical 0.648) rather than comfortable, B's "flat (+0.25)" overstates B's drift ~2x, and the spec now asserts a number no code in the repo can produce. Nothing in the harness computes rank correlation at all, so the entire motivating diagnostic for fix (b) is off-harness — directly contradicting the sentence this PR added at `SPEC_AGENT_FOOTPRINT_BENCH.md`: "the harness owns the numbers, the writeup pastes them."
+
+**Fix:** either put a tie-corrected `spearman()` in the harness and republish 0.67/0.12, or drop the coefficients and cite the raw series.
+
+### 2. HIGH — The golden test pins the table block only; five wrong doc edits pass
+`tests/test_agent_footprint.py:449` `assert rendered in published`. I applied each of these to `agent_footprint_results.md` and re-ran the test; **all five pass**:
+
+| edit | result |
+|---|---|
+| change "median −3.5 reads, 7 of 10 pairs" → "median −9.0 reads, 10 of 10 pairs" | passes |
+| change the prose "p=0.344" → "p=0.004" | passes |
+| append a second, contradictory `footprint_tokens` table | passes |
+| delete the `&lt;!-- generated: ... --&gt;` provenance comment | passes |
+| replace the quoted `pre_edit_reads` delta list with fabricated values | passes |
+
+The commit message says the test "asserts that the committed records still render the committed **prose**." It asserts the table. Every prose number around it — the delta lists, the min/max range, the cache medians, the Bonferroni arithmetic, the Spearman figures in finding 1 — is unprotected, and the prose deliberately uses U+2212 minus while the table uses ASCII `-`, so no cross-check is even possible.
+
+It also pins **only #282**. The arm-C table at `agent_footprint_results.md:275-281` is in the old hand-built format and is unpinnable, because (as the doc itself admits at line 237) #289 ships no records file.
+
+**Fix:** at minimum assert `published.count(rendered) == 1` and assert the doc contains exactly one `| metric | A median |` header row per study, so a stale/duplicate copy fails.
+
+### 3. HIGH — Both "orphan row" tests are vacuous
+`tests/test_agent_footprint.py:403` (`test_per_variant_medians_ignore_half_finished_pairs`) and `:483` (`test_per_variant_medians_use_only_paired_runs`) are near-duplicates of each other, and **neither tests its stated behavior**. Mutation: delete the filter in `_variant_values` (`bench/agent_footprint.py`, `if r.variant == variant and r.run_index in paired` → `if r.variant == variant`) — **all 24 tests still pass.**
+
+Reason: each adds one orphan to two paired values. `median([10,10,100]) == 10` and `median([8,8,1000]) == 8`. The outlier can never move a 3-element median from its position. You need 2 pairs + 2 orphans (`median([8,8,1000,1000]) == 504`) or 1 pair + 1 orphan for the assertion to bite. This is the third-round version of exactly the bug the earlier review flagged: fix present, test theatrical.
+
+### 4. HIGH — `run_arm_c` counterbalancing has no test
+Mutation: replace `if i % 2: arms = tuple(reversed(arms))` at `bench/agent_footprint.py:579-580` with `pass` — **all 24 tests pass.** `grep run_arm_c tests/test_agent_footprint.py` returns nothing; `run_arm_c` is entirely untested. Claim (b) says "BOTH"; enforcement covers one. (The `run_pair` half is properly enforced — reverting it fails `:464`.)
+
+### 5. HIGH — Nothing tests that `run_pair` runs the provenance check or writes `provenance.json`
+Two surviving mutations:
+- delete `(artifact_dir / "provenance.json").write_text(...)` → 24 pass
+- replace `provenance = _warn_on_provenance_leak(...)` with `provenance = {}` → 24 pass
+
+The only test that exercises `run_pair` (`:464`) **monkeypatches `_warn_on_provenance_leak` away**. The commit message's "persists its verdict to provenance.json so the artifact is auditable **the way `baseline_failed` made the gate auditable**" is the wrong comparison: `baseline_failed` is actually tested; this is not.
+
+### 6. MED — Provenance is blind to the commit body
+`_head_identity` (`bench/agent_footprint.py:71`) captures `%s` only. I built B with a clean subject and this body:
+
+```
+refactor: extract templating helpers
+
+This splits the App god-class into three mixins so the archy hotspot drops.
+```
+matching A's author and author date. Result: `leaks == []`, and the echo the operator is told to judge shows only `'refactor: extract templating helpers'`. But `git log -1` (the very command the docstring names) prints the body verbatim to the agent. The one thing the design delegates to human judgement is the one thing it truncates. **Fix:** `%B` instead of `%s`.
+
+### 7. MED — Committer identity and commit date are unchecked, and the spec's own remedy leaves them leaking
+In the same repo above, the spec-prescribed remedy was applied exactly (upstream author name/email/date). `git log --format=fuller -1` in B:
+
+```
+Author:     upstream &lt;up@x.invalid&gt;
+AuthorDate: Mon Jan 1 10:00:00 2024 +0000
+Commit:     archy bench &lt;bench@example.invalid&gt;
+CommitDate: Fri Jul 24 15:07:54 2026 -0700
+```
+`--reset-author` does not reset the committer. The PR's own argument for adding the date check was "`git log -1` prints the date too, so it leaks just as plainly" — the identical argument applies one flag further (`--format=fuller`, `git show --pretty=fuller`), and the agent has `Bash`. Check `%cn &lt;%ce&gt;` and `%cI` too, and have the spec mandate `GIT_COMMITTER_*`.
+
+### 8. MED — No check on commit count or tree divergence
+In that same passing repo, `git log --oneline` gives A one commit and B two, and `git show --stat HEAD` in B dumps the refactor diff. `SPEC_AGENT_FOOTPRINT_BENCH.md:113` names both commands as reachable and offers "or squash B so its HEAD is root-equivalent to A's", but nothing verifies that either remedy actually held. A one-line `git rev-list --count HEAD` parity check would close the loudest of these.
+
+### 9. MED — `%ad` honors `log.date`, so date parity silently degrades
+`%ad` renders per the repo/global `log.date` config. With `log.date = short` I made A and B differ by 13h59m and got `leaks: []` (both render `2024-01-01`); `log.date = relative` collapses it further. **Fix:** `%aI` / `%cI` (ISO-strict, config-immune, timezone-explicit).
+
+### 10. MED — The doc now violates a rule this PR added to the spec
+New spec text: "**Every tested metric is published.** The Bonferroni divisor is the count of metrics tested … publishing a subset while correcting over the full set is selective reporting." The arm-C table two sections down (`agent_footprint_results.md:275-281`) publishes **5 of the 9** metrics `summarize()` computes and corrects `num_turns` over 5 ("~0.21"). If #289 went through `summarize()`, the honest divisor is 9 and that becomes **~0.37**. Either add an explicit "pre-dates §9's rule; divisor as-run was 5" caveat, or re-render it. As committed, the flagship reporting rule is contradicted in-place by the same file it was written for.
+
+### 11. LOW — Mixed A/B/C records silently blend two arms under one heading
+`_paired_deltas` picks the treatment *per run* (B preferred), while `summarize`/`_treatment_values` pick one *globally*. On a file with some A+B runs and some A+C runs I got `treatment: B`, `n_pairs: 3`, `deltas: [-4, -4, +20]` (the +20 is a C delta) but `treatment_median: 6.0` from B rows only, all rendered under a `| B median |` heading. `--table` accepts any jsonl. `summarize()` should refuse a records set containing both B and C.
+
+### 12. LOW — `--table` failure modes
+- Empty/truncated jsonl → renders a headers-only table plus "**0 metrics tested, so a nominal p must clear p x 0** to survive Bonferroni", exit 0. A truncated run silently produces a publishable-looking empty table.
+- Malformed line or missing file → raw `JSONDecodeError` / `FileNotFoundError` traceback (rc 1).
+- The relaxed required-args validation is behaviorally equivalent to the old `required=` set (`repo_a`, `task_file`, `model`), still exits 2, and `--mode ac` without `--brief-file` still exits 2. No regression there.
+
+### 13. LOW — Three more tautological assertions
+- `:394` `assert f"{summary['metrics_tested']} metrics tested" in table` — reads the divisor from the summary and checks the table printed that same value. Mutation `metrics_tested = 6` fails `:379` and `:449` but **not** this test, which claims to be the one guarding the divisor.
+- `:383` `per["sign_p"] == pytest.approx(af.sign_test_p(per["deltas"]))` compares the function against itself.
+- `:386` `bounds[0] &lt;= median_delta &lt;= bounds[1]` is true for any correctly-ordered quartile pair, and for most incorrect ones.
+- `:533` passes the *same* directory as both A and B, so `leaks == []` is guaranteed independent of the logic; only the no-raise half is real.
+
+### 14. LOW / nits
+- `run_pair` overwrites `provenance.json` on a re-run into the same `--out`, while `records.jsonl` is carefully rolled aside to `.prev{n}` (`bench/agent_footprint.py:843-847`). The archived records lose their provenance verdict.
+- The regenerated table drops the old `input_tokens (non-cache)` qualifier and the `**pre_edit_reads** (record)` marker, so the metric of record is no longer identifiable in the table the prose keeps calling "the metric of record".
+
+---
+
+## Verified correct (so you don't re-check)
+
+- All nine IQR pairs match an independent linear-interpolation percentile computation exactly; `method="inclusive"` is right and reverting it fails two tests.
+- `sign_test_p` matches the exact two-sided binomial; ties correctly leave `n`.
+- Every prose number in the #282 section *except* the two Spearman values checks out against the records: delta lists, −28,565/+27,125 range, 4.2M/3.6M cache medians, 145 minutes, 0.0078×9=0.070, first-5/last-5 medians −3/−4, A's 7→13.
+- The `run_arm_c` tuple reversal binds `prompt_prefix`/`brief_tokens` correctly — arm A never receives the brief.
+- The committed `records_282_flask.jsonl` loads and renders byte-identically to the committed table.</result>
+<usage><subagent_tokens>83187</subagent_tokens><tool_uses>35</tool_uses><duration_ms>402581</duration_ms></usage>
+</task-notification>
+
+---
+
+lets merge the PR first and do more adversarial pass. We can create a new PR after
+
+---
+
+<task-notification>
+<task-id>a4265dc8c36c5e79b</task-id>
+<tool-use-id>toolu_01Ngg9KeaD4M1mi4bTjYK9Mb</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a4265dc8c36c5e79b.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial pass on merged bench state" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I have enough. All 30 tests pass, so these are defects the suite endorses.
+
+---
+
+# Adversarial review round 4 — agent-footprint bench @ 29f0973
+
+Three areas the prior rounds left untouched turned out to hold two defects that invalidate published numbers. I verified the variant-B patch is genuinely behavior-preserving (round 3's biggest open assumption) — that one is clean.
+
+---
+
+## 1. CRITICAL — `parse_transcript` silently discards content blocks. Every tool-call metric in both studies is undercounted.
+
+`bench/agent_footprint.py:177-199`, decisive line 199: `deduped[mid] = message  # last copy wins (most complete)`.
+
+The comment at `agent_footprint.py:171-176` states the format model: *"the same `message.id` appears on several lines with identical usage, and the tool_use blocks land on the final, most-complete copy."* **That is false.** Claude Code writes **one line per content block**, each line carrying the same `message.id`, the same `usage`, and a `content` list of **exactly one block**. There is no "most-complete copy". Last-wins therefore keeps only the *final* block of each assistant message and throws away every earlier one.
+
+Measured over the 8 largest real transcripts in `~/.claude/projects/-Users-hosanglee-archy/`:
+
+- 1828 of 1829 duplicate-id groups lose blocks under last-wins.
+- **11.9% of all tool calls (367 of 3081) are invisible to the parser.**
+- **4.7% of `Read`/`Grep`/`Glob` calls** — the numerator of the metric of record — are dropped.
+- Loss is **not** a constant offset: it ranges 0% to 19% per session, tracking how much the agent batches parallel tool calls. That makes it a *differential* measurement error between arms, not a wash.
+
+Exact reproduction (real `parse_transcript` vs. an identical parser that concatenates blocks instead of replacing them):
+
+```
+session   shipped                                     correct
+e8897a68  pre_edit_reads=1 files=26 revis=72          pre_edit_reads=2 files=27 revis=76
+2596212e  pre_edit_reads=1 files=20 revis=30          pre_edit_reads=1 files=22 revis=33
+eeb03caa  pre_edit_reads=1 files=34 revis=131         pre_edit_reads=1 files=34 revis=133
+0395265b  pre_edit_reads=1 files=11 revis=74          pre_edit_reads=1 files=11 revis=75
+```
+
+On `e8897a68` the metric of record is off by 100%. Fix: `deduped.setdefault(mid, []).extend(blocks)` with usage taken once per id (usage is genuinely identical across the lines — I checked; the token sums are the one thing the dedupe gets right).
+
+This invalidates `pre_edit_reads`, `pre_edit_distinct_files`, `distinct_files_touched` and `file_revisitations` in **both** the #282 table and the #289 table.
+
+## 2. CRITICAL — `input_tokens` is not a token measure. The §14.6 "net accounting is automatic" guard measures nothing.
+
+Under Claude Code's prompt caching, `usage.input_tokens` on every assistant message after the first is a literal constant **2**. Prompt text — including an injected brief — lands in `cache_creation_input_tokens`, which the harness excludes by design.
+
+Reproduction, first four assistant messages of five real sessions (`input_tokens, cache_creation, cache_read, output`):
+
+```
+msg_01GZFQAS11 (11262,  5170, 18348, 216)
+msg_01MPoEEgRe (    2, 11968, 23518, 394)
+msg_015vexPr99 (    2,   843, 35486, 371)
+msg_012piF1Aed (    2,   394, 36329, 197)
+```
+
+The committed records confirm it: `input_tokens` is **0.0025%** of total input (A0: 88 vs 2,981,548 cache-read + 59,982 cache-creation), and `pre_edit_input_tokens` has a median of **37** across 30-66 turns.
+
+Consequences:
+
+- **`pre_edit_input_tokens` is a turn counter (~2/turn), not a token count.** Spec `docs/SPEC_AGENT_FOOTPRINT_BENCH.md:296-298` claims *"Because the brief is in the prompt, its tokens are already inside this sum: net accounting is automatic, which is the §14.6 guard made structural rather than bolted on."* A 581-token brief contributes **0** to this sum. §14.6 guardrail 7 ("Net, not gross… never report a reduction that excludes the brief") is the *only* anti-relabeling guard on arm C, and it is void. `agent_footprint.py:475-480` repeats the false claim in the `run_variant` docstring.
+- **`footprint_tokens` ≡ `output_tokens`.** `corr(footprint_tokens deltas, output_tokens deltas) = 0.999984`; the sign vectors are identical. The "token footprint" headline is the output-token headline.
+- The one field that *does* measure repo ingestion — `cache_creation_input_tokens`, i.e. new content entering the context window — is excluded from every metric. `bench/agent_footprint_results.md:171-176` asserts cache reads are *"dominated by prompt-cache behavior, not by how much of the repo the agent actually pulled in."* That reasoning may hold for `cache_read`; it does not hold for `cache_creation`, and the doc does not distinguish them. B0 created 77,824 cache tokens against A0's 59,982 — that difference is the agent pulling in more repo, and nothing reports it.
+
+## 3. HIGH — the regression test encodes the same wrong format model as the bug it guards.
+
+`tests/test_agent_footprint.py:217-239`, `test_streaming_duplicate_messages_counted_once`. The fixture at line 229 gives the earlier partials **empty** `content` and puts the `Read` on the final copy — precisely the format that does not exist. The test passes; the parser is wrong.
+
+More broadly, the `_assistant` helper (`tests/test_agent_footprint.py:30-47`) emits one line with N blocks, e.g. line 85 `[("Read", "a.py"), ("Grep", None)]`. Real Claude Code never writes that. **Every parser assertion in the suite is against a synthetic format the tool does not produce**, which is exactly why three rounds missed defect 1. A fixture cut from a real transcript is the fix; the spec's own §11 asks for a "recorded/synthetic" fixture and only the synthetic half was built.
+
+## 4. HIGH — the metric of record was swapped after the data was seen.
+
+`agent_footprint.py:861` unconditionally appends `"Metric of record: \`pre_edit_reads\` (spec section 14.3)"` to **every** table, including A/B tables. But §14.3 designates `pre_edit_reads` as the primary metric for **arm C**. For the A/B refactor study, `docs/SPEC_AGENT_FOOTPRINT_BENCH.md:77` designates a different primary: `file_revisitations` — *"**primary metric.**"*
+
+Chronology, from git:
+
+- `records_282_flask.jsonl` landed in `144f61b` (2026-07-24).
+- The string `"Metric of record"` entered `bench/agent_footprint.py` in `29f0973` — **after**.
+
+And it matters directionally. `bench/agent_footprint_results.md:184` reads the study through `pre_edit_reads`: *"The metric of record leans B's way in direction (median −3.5 reads, 7 of 10 pairs)."* The study's actual pre-registered primary metric, `file_revisitations`, is **dead flat: 5/5, median −1.0, p=1.000**. The prose is more B-favorable than the pre-registered metric supports. The spec now carries two conflicting "primary metric" designations and the reporting code hardcodes the one that postdates the data.
+
+## 5. MEDIUM — the task prompt's edit surface is exactly variant B's new file. Third unlisted confound, B-favorable.
+
+`bench/agent_footprint/task_flask_endpoint_origins.md` asks for (a) endpoint→blueprint origin mapping and (b) a duplicate-endpoint check on URL-rule registration. Applying the patch and inspecting: `UrlRegistryMixin` in the new `src/flask/sansio/app_routing.py` contains `register_blueprint`, `iter_blueprints`, `add_url_rule`, `inject_url_defaults`, `handle_url_build_error` — the task's complete surface, in 190 lines, in a file whose docstring says *"so a routing or blueprint-registration change is one file."* In A the same surface is inside a 1013-line `app.py`.
+
+The task and the patch landed in the same commit (`144f61b`), and `bench/agent_footprint_results.md:83-84` says the wording was *"fixed at run time"* — i.e. authored with B in hand. The prompt names no files (rule satisfied literally), but it was written against a known variant-B file boundary. `bench/agent_footprint_results.md:204` lists *"Two further confounds… both pushing toward the B-favorable direction"*; this is a third and it is unlisted.
+
+**Honest weighting:** this confound favors B, and B still lost the token headline and tied on `file_revisitations`. It therefore *strengthens* the null rather than threatening it — but the doc's confound inventory is incomplete, and any future positive result on this task/variant pair would be uninterpretable.
+
+## 6. MEDIUM — the committed artifact cannot be reconciled with its source, and `baseline_failed` is a default, not a measurement.
+
+- No transcripts are committed. `bench/agent_footprint/` holds only the records, the patch, the task, and `run_tests.sh`. So `records_282_flask.jsonl` **cannot** be checked against the transcripts that produced it, and defect 1 above cannot be quantified for the actual published run.
+- All 20 rows **lack** the `baseline_failed` key entirely (verified: `has baseline_failed field in file: False`). It defaults to `False` via `agent_footprint.py:135`. The field's own docstring says it exists so *"'0 regressions' is falsifiable from the artifact alone"* — but the only committed artifact predates it, so the published `"runs with the gate disabled by a red baseline: 0"` (`bench/agent_footprint_results.md:165`) is a default value, not a measurement. The fix is structurally right and retroactively inapplicable; the doc should say so.
+- Internal consistency of the 20 rows is otherwise **clean**: no row violates `pre_edit_distinct_files ≤ distinct_files_touched`, `pre_edit_input_tokens ≤ input_tokens`, or `pre_edit_reads ≥ pre_edit_distinct_files`. Costs and durations are plausible and monotone in tokens. B4 (`input=411`, `pre_edit_input=359`) is an outlier but not impossible.
+
+## 7. MEDIUM — the Bonferroni divisor of 9 counts three copies of one test.
+
+`footprint_tokens`, `output_tokens` and `input_tokens` produce **identical** sign-test results on the #282 data: 4/6/0 and p=0.754 for all three (`bench/agent_footprint_results.md:155-157`), with `corr = 0.999984` between footprint and output deltas. Treating 9 metrics as independent is not defensible; the effective number is ~6.
+
+Direction of the error: over-correction makes the one nominally significant cell (`pre_edit_distinct_files`, p=0.0078) look *less* significant (0.070 at ÷9 vs ~0.047 at ÷6). So it protects the reported null rather than manufacturing it — but `bench/agent_footprint_results.md:192-194` leans on "Bonferroni puts it at 0.070" as the reason to discount that cell, and that specific number does not hold up. The §12.7 breadth-confound argument in the same paragraph is the sound reason to discount it; the arithmetic one should be dropped or corrected.
+
+## 8. LOW — spec/implementation divergences in the parser
+
+- `agent_footprint.py:233` counts `pre_edit_distinct_files` from `Read` only. Spec §14.3 (`SPEC_AGENT_FOOTPRINT_BENCH.md:293`) says *"distinct file paths appearing in `Read`/`Grep`"*. Grep's `path` input is never read.
+- `agent_footprint.py:240-241` increments `file_revisitations` for **any** file tool on an already-written path, including a second `Write`. Spec §5 (`:94-96`) says *"each time a `Read`/`Edit` targets a path already in `edited`"*. The implementation is arguably better; the spec should be amended to match rather than left divergent.
+- `NotebookEdit` is in `_WRITE_TOOLS` (`:44`) but its input key is `notebook_path`, not `file_path`. It flips `made_edit` while contributing no file touch. Not reachable under `DEFAULT_ALLOWED_TOOLS`, so latent.
+- No `isSidechain` filter. If `Task` is ever added to the tool surface, subagent tokens and tool calls fold into the parent run's metrics with no marker. No sidechain entries exist in the sessions I checked, so this is latent, not active.
+
+## 9. LOW — sign test vs. Wilcoxon (asked, and it is defensible)
+
+The sign test is the right call for the count metrics (`pre_edit_reads`, `distinct_files_touched`, `file_revisitations`) where ties are frequent and magnitudes are small integers. For `footprint_tokens` it throws away real magnitude information the doc itself laments (*"the token spread is the story"*, `:187`), and Wilcoxon signed-rank would be the standard, more powerful choice. But the sign test is **conservative** here, and the study reports a null, so this cannot have manufactured the result. Worth noting as a limitation; not a defect. §9 mandates the sign test, so changing it is a spec decision.
+
+---
+
+## What I verified as correct
+
+- **The variant B patch is genuinely behavior-preserving.** Cloned `pallets/flask` @ `36e4a82`, applied the patch cleanly (`src/flask/sansio/app.py` 1013→611, matching the doc). Diffed the public surface against pristine A: `dir(Flask)` **identical** (symmetric difference empty); nested-blueprint endpoint naming identical (`parent.child.c`); routing identical (200); `setupmethod` enforcement identical, including the error message text (it uses `f.__name__`, unaffected by the qualname move); no `super()` calls introduced, so the cooperative `__init__` chain is untouched; all mixin attribute declarations sit under `if t.TYPE_CHECKING` with zero runtime effect. Test suite: **479 passed / 1 failed / 4 skipped on B, and byte-identically 479/1/4 on A** (the single failure is a Python 3.14 async-view environment issue present in both). The only observable differences are `Flask.__mro__` gaining 3 entries (`variant_b_flask_sansio_app.patch:78-79`) and `__module__`/`__qualname__` changing on 14 members — real introspection-surface changes worth a footnote, but not semantic. Round 3's load-bearing assumption holds.
+- **The provenance leak is real, correctly diagnosed, and correctly disclosed.** The patch header reads `From: archy bench &lt;bench@example.invalid&gt;` / `Date: Fri, 24 Jul 2026`, exactly as `bench/agent_footprint_results.md:207-215` admits.
+- **Every published number in the #282 table reproduces exactly** from `records_282_flask.jsonl` via `python bench/agent_footprint.py --table …` — all 9 rows, the footer, and the drift line, character for character. The `pre_edit_reads` and `footprint_tokens` delta lists at `:178-180` are correct. The Bonferroni figure 0.0078×9 = 0.070 is arithmetically right (it is the divisor, not the multiplication, that I dispute).
+- **The tie-corrected Spearman fix from round 3 holds.** A=+0.665, B=+0.117 reproduce from the committed records, and the n=10 two-tailed 0.05 critical value of 0.648 quoted at `:220` is the correct table value. The doc's hedge (*"only just clears… suggestive, not decisive"*) is appropriate.
+- **`sign_test_p` is a correct two-sided exact binomial** with ties left in `n`; the clamp at `min(1.0, …)` handles the pos==neg case.
+- **The #289 self-criticism at `:233-248` is accurate.** `git show 144f61b^:bench/agent_footprint.py` does contain no reset, and `run_arm_c` does share one `repo_dir` across both arms. The doc's demotion to "one verifiable null and one null of unverified provenance" is honest, and if anything understates it — defect 1 above hits #289's numbers too, and #289 ships no records file, so it cannot be recomputed even after a parser fix.
+- No impossible row in the 20 committed records (see 6).
+
+## Bottom line
+
+Rounds 1-3 hardened the reporting layer thoroughly, and it is now genuinely solid. The prior held: the defects migrated **down** to the measurement layer, which nobody had attacked. `pre_edit_reads` is undercounted by a data-dependent margin, and `pre_edit_input_tokens` — the structural guarantee that arm C's brief can't be relabeled away — measures roughly two tokens per turn.
+
+Neither defect flips the two published conclusions, both of which are nulls, and both undercounts are of a *sub*-metric rather than a reversal. But `docs/SPEC_AGENT_FOOTPRINT_BENCH.md:296-298` and `:332-335` currently promise a guarantee the telemetry cannot deliver, and any *future* positive arm-C result read off `pre_edit_input_tokens` would be an artifact. That spec claim is the thing to fix before the next run, ahead of the parser.</result>
+<usage><subagent_tokens>115450</subagent_tokens><tool_uses>37</tool_uses><duration_ms>483252</duration_ms></usage>
+</task-notification>
+
+---
+
+should we merge?
+
+---
+
+run it and merge after
+
+---
+
+<task-notification>
+<task-id>aa4caae5cb760f72b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/aa4caae5cb760f72b.output</output-file>
+<status>completed</status>
+<summary>Agent "Verify record re-derivation in PR 304" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All six checks verified with independently written code. Everything passes; one stale prose number and one minor spec figure are the only findings.
+
+## 1. JOIN CORRECTNESS — PASS
+
+- Each of the 20 filenames `[AB]_&lt;run_index&gt;_&lt;session_id&gt;.jsonl` contains its own `sessionId` on every line (checked as a literal substring; True 20/20).
+- I built a per-transcript fingerprint under my own parser: the 20 `output_tokens` values are all distinct (max multiplicity 1), and the 6-tuple `(output_tokens, cache_read, assistant_msg_count, distinct_files, revisitations, pre_edit_reads)` gives 20 distinct signatures.
+- Exhaustive ambiguity scan: for each committed row I tested it against **all 20** transcripts on all 10 transcript-derived fields. Every row matched **exactly one** transcript, and it was the filename-implied one. No permutation of the join is consistent with the data.
+- Independent (non-transcript) corroboration: `num_turns` comes from the CLI result JSON and was carried over. Per-row `num_turns − assistant_message_count` = `[0,0,-1,1,0,0,0,4,0,2,4,2,0,0,0,1,1,2,0,1]` (median 0, range −1..+4) while the counts themselves span 28–66 — a scrambled join could not produce that.
+
+## 2. FIELD-BY-FIELD RE-DERIVATION — PASS (0 mismatches / 200 comparisons)
+
+I wrote a parser from spec §5 and §14.3 (concatenate `content` blocks per `message.id`, usage counted once per id, skip `isSidechain`, `Read/Edit/Write` = file tools, `Grep/Glob/Bash` excluded from touches, `pre_edit_*` over the prefix before the first `Edit`/`Write`, `pre_edit_input_tokens` cumulative through the message containing the first edit). Compared 10 fields × 20 rows (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`, `distinct_files_touched`, `file_revisitations`, `pre_edit_reads`, `pre_edit_distinct_files`, `pre_edit_input_tokens`, `made_edit`): **all identical**.
+
+Additional corroboration of the bug story: I also implemented the *old* (keep-last-line-per-id) rule, and it reproduces `main`'s records file exactly on all 20 rows / 10 fields. So old file = old parser + these transcripts, new file = fixed parser + these same transcripts. Same join, one rule change. Tool inventory across all 20: Bash 509, Read 197, Edit 162, Grep 74, Glob 3 (no `Write`, no `MultiEdit`). 714 message ids span &gt;1 line.
+
+## 3. CARRIED-OVER AND TOKEN FIELDS — PASS
+
+Diff vs `git show main:...`, 20/20 rows aligned by `(variant, run_index)`:
+- **Unchanged**: `variant`, `run_index`, `model`, `num_turns`, `duration_ms`, `total_cost_usd`, `task_completed`, `test_regression`, `brief_tokens`, `made_edit`, **and all four token fields** (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`), plus `file_revisitations`.
+- **Changed**: `pre_edit_reads` (9 rows), `pre_edit_distinct_files` (5 rows), `distinct_files_touched` (1 row: B/1, 7→8). Affected-row union = 9 rows, of which 7 are B — exactly what the writeup claims.
+- Token invariance is mechanically justified, not luck: across all 948 assistant ids, **zero** ids have differing `usage` between the lines sharing that id, so last-line-per-id and merge-per-id give identical usage sums.
+- Run-level fields also match the harness's own `/tmp/archy_fp/artifacts/records.jsonl` byte-for-byte on all 7 fields (0 mismatches), independent of git history.
+- One genuinely new field: `baseline_failed` (absent on `main`, `false` on all 20). It is not derivable from transcripts and is a post-hoc default — but `bench/agent_footprint_results.md:273-277` already discloses exactly this ("a default in this artifact, not a measurement"). Not a defect.
+
+## 4. num_turns STILL VALID — PASS
+
+`num_turns` tracks assistant-message count under the fixed parser with median difference 0 and range −1..+4 (15/20 rows within 1). Crucially the relationship **cannot have changed**: dedupe-by-id yields the same set of message ids under both old and new parsers, so the assistant-message count is bit-identical before and after the fix. `input_tokens / num_turns` ≈ 2.0 on every run, consistent with the retracted-claim analysis.
+
+## 5. PUBLISHED TABLE AND PROSE — PASS, with one stale number
+
+- `python bench/agent_footprint.py --table ...` output (run under `.venv/bin/python`; the repo's pyenv shim is broken, `pyenv: version '3.12.5' is not installed`) is **string-identical** to `bench/agent_footprint_results.md:167-177`, and the three generated prose lines (179, 181, 183) match too.
+- I recomputed the entire table from the committed records with my own medians, quartiles (linear interpolation), two-sided exact binomial sign test, and tie-corrected Spearman: **my table string equals the harness table exactly**, all 9 rows.
+- Verified prose figures: `pre_edit_reads` deltas `[+2,+2,−3,−3,−4,−4,−1,+3,−8,−3]` ✓; `footprint_tokens` deltas ✓; `pre_edit_distinct_files` deltas ✓; cache-read medians 4.21M A / 3.61M B ("4.2M / 3.6M") ✓; 145 min wall clock (144.86) ✓; 0 regressions / 0 no-edit / 0 baseline-failed / 20 completed ✓; Bonferroni 0.001953×9 = 0.0176 → "0.018" ✓, ×6 = 0.0117 → "0.012" ✓; sign-test power figures 9-1 = 0.0215 → "0.021" and 8-2 = 0.109 ✓; "out of reach by pair 7" ✓ (5/2 after 7 pairs, best case 8-2 = 0.109); Spearman A +0.615 / B +0.346 vs old +0.665 / +0.117, so "gap narrower than pre-parser-fix" ✓; A series 7→13 ✓; 0.648 is the correct n=10 two-tailed critical value ✓; regeneration claims "median −3.5 → −3.0, same 7/3, same p=0.344" ✓ and "8/10 p=0.0078 → 10/10 p=0.002" ✓ (recomputed from the old file).
+- **Finding (stale prose, not a data error):** `bench/agent_footprint_results.md:258` says the drift "does not flip the sign (first-5 median delta −3, last-5 −4)". Under the republished records the last-5 `pre_edit_reads` deltas are `[−4,−1,+3,−8,−3]`, **median −3, not −4**. −4 was the correct value under the old (parser-bugged) deltas `[2,1,−3,−5,−6,−4,−1,2,−9,−4]`. The sentence's conclusion (sign does not flip) still holds; only the figure is stale.
+- **Minor (spec prose):** `docs/SPEC_AGENT_FOOTPRINT_BENCH.md:310` says `input_tokens` is "0.0025% of total input". Recomputed from the records: 2,312 / (2,312 + 75,414,554 + 1,490,745) = **0.0030%** (0.0030% under any denominator variant I tried). Same order of magnitude, argument unaffected. The adjacent "median of 37 across 30-66 turns" is the A-arm median (all-20 median is 33); turn range 30–66 is correct.
+
+## 6. SIDECHAIN FILTER — PASS (confirmed no-op)
+
+Across all 20 transcripts, `isSidechain` is `false` on every entry that carries it (assistant 1698, user 965, attachment 177) and absent on non-message bookkeeping lines (`ai-title` 225, `last-prompt` 223, `queue-operation` 40). **Zero `isSidechain: true` entries exist**, so the new filter cannot have altered any republished number. (My parser applies the same filter and reproduces the file exactly, and the old parser without it reproduces `main` exactly — consistent with a no-op either way.)
+
+## Verdict
+
+No mis-join, no field mismatch, no unexplained token change. **Nothing here is a merge blocker.** `tests/test_agent_footprint.py` is green (32 passed). Two cosmetic fixes worth making before merge: `bench/agent_footprint_results.md:258` "last-5 −4" → "−3", and `docs/SPEC_AGENT_FOOTPRINT_BENCH.md:310` "0.0025%" → "0.0030%".</result>
+<usage><subagent_tokens>66261</subagent_tokens><tool_uses>21</tool_uses><duration_ms>262538</duration_ms></usage>
+</task-notification>
+
+---
+
+ok, update ticket details for rich pre-registration and merge PR 305
+
+---
+
+ok, lets work on the gate
+
+---
+
+merge PR and lets continue
+
+---
+
+<task-notification>
+<task-id>a9f3702e58cebf189</task-id>
+<tool-use-id>toolu_01Hf331rYhUsr88n8nNpKWGi</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a9f3702e58cebf189.output</output-file>
+<status>completed</status>
+<summary>Agent "Pre-run adversarial pass for rich cell" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Verdict: **NO-GO.** Five blockers, three of which would have produced an uninterpretable result rather than a failed run.
+
+I also verified area 1 (behavior preservation) as genuinely sound — it is the one part that survives attack.
+
+---
+
+### BLOCKER 1 — `.archy/index.db` is committed into variant B's tree, and only B's
+
+`/tmp/archy_rich/variantB` HEAD `b4fe45b` adds `.archy/index.db` (987,136 bytes).
+
+```
+cd /tmp/archy_rich/variantB &amp;&amp; git show --stat HEAD
+#  .archy/index.db         | Bin 0 -&gt; 987136 bytes
+#  rich/console.py         | 686 +--------
+#  rich/console_export.py  | 484 ++++++
+# ...under the subject "fix changelog", authored by Will McGugan
+cd /tmp/archy_rich/variantA &amp;&amp; git show --stat HEAD   # CHANGELOG.md only
+cd /tmp/archy_rich/variantA &amp;&amp; git clean -ndx         # "Would remove .archy/"  (untracked)
+cd /tmp/archy_rich/variantB &amp;&amp; git clean -ndx         # .archy NOT listed       (tracked)
+```
+
+Two harms. (a) `_reset_repo` (`/Users/hosanglee/archy/bench/agent_footprint.py:386-387`) runs `git clean -fdxq` before every run, so **every A run starts with no `.archy/`, every B run starts with one** — an asymmetric tree and an extra 1 MB file in B's search surface. (b) It is an instrument leak: the directory is named after the tool under study, and any agent running `git log -1 --stat` or `git show` in B sees a commit titled "fix changelog" that adds `.archy/index.db` plus three `console_*` modules. `check_variant_provenance` compares author/committer/dates/depth/subject, not tree contents, so it returns "zero leaks" while the diff is a billboard. The pre-registration's prerequisite 3 is not actually satisfied.
+
+Fix: remove `.archy/index.db` from B's commit, re-amend onto the pinned identity, delete `.archy/` from both worktrees, re-run the provenance check, regenerate `bench/agent_footprint/variant_b_rich_console.patch` (which currently embeds the binary blob).
+
+### BLOCKER 2 — the pre-registered **primary** metric is not variant-neutral; #302's fix does not cover it
+
+`/Users/hosanglee/archy/bench/agent_footprint.py:295-300`:
+
+```python
+touched.add(file_path)
+canonical_touched.add(_canonical_touch_path(file_path, file_map))
+if file_path in written:
+    revisitations += 1
+if name in _WRITE_TOOLS:
+    written.add(file_path)
+```
+
+`revisitations` and `written` are keyed on the **raw** path. `_canonical_touch_path` is applied only to `canonical_touched` (:296) and `canonical_pre_edit_files` (:290); the field list at :121-133 confirms only the two *breadth* metrics were canonicalized. There is no `canonical_file_revisitations`.
+
+Direction of bias: in A, writing `console.py` then re-reading `console.py` is a revisit. In B the same logical surface spans `console.py` + `console_options.py`, so the second touch lands on a different path and **is not counted**. B scores better on the primary by construction — this is #302 reapplied to the primary metric, in the treatment's favour. #302 is a pre-registered blocking prerequisite and it was only half-implemented; the pre-registration read its scope as "breadth" and missed that `file_revisitations` is also path-keyed. A B-win here would be an artifact.
+
+Fix: add `canonical_file_revisitations` over `_canonical_touch_path`, report both, pre-register the canonical one as primary before any run.
+
+### BLOCKER 3 — the task prompt's central premise is factually false in rich
+
+`bench/agent_footprint/task_rich_style_resolution.md` says "an undefined style name currently fails quietly." It does not. Reproduced against variant A:
+
+```
+'not_a_style_xyz'    -&gt; RAISES MissingStyle: Failed to get style 'not_a_style_xyz'; unable to parse ... as color
+'bold red on white'  -&gt; Style(color=red, bgcolor=white, bold=True)
+two pushed themes    -&gt; most recent wins
+get_style(bad, default="none") -&gt; Style()
+```
+
+`Console.get_style` (`variantA/rich/console.py:1470-1497`) already raises `errors.MissingStyle` by default. The quiet fallback exists **only** where a caller passes `default=` (`rich/markdown.py:226,387,403,503,583`; `rich/progress_bar.py:141-142`).
+
+Worse, `get_style` already delivers everything bullets 1-2 ask for: theme stack consulted most-recent-first, combination names parsed. `resolve_style` is a 3-line `try/except MissingStyle: return None` wrapper over an existing public method — so the task is simultaneously near-trivial, ambiguous ("why not just use `get_style`?"), and self-contradictory (bullet 3 asks to replace a quiet fallback that isn't there; bullet 4 asserts default behavior is unchanged).
+
+Consequence: each of the 20 runs must invent its own reconciliation — no-op flag, change `get_style`'s raise, thread the flag through the `default=` call sites, or add a whole new option object. That between-run variance swamps a treatment that is already weak, and at N=10 / ~37% power the resulting null is indistinguishable from "the task was too noisy to measure."
+
+### BLOCKER 4 — task/treatment alignment **is** present; commit ordering does not rule it out
+
+The pre-registration argues 754f0d6 precedes 68c60dc so the task wasn't fitted to B. That is necessary, not sufficient, and non-alignment does not hold.
+
+"A new console option `strict_styles`" reads most naturally in rich as a `ConsoleOptions` field (the per-render options object, sibling of `justify`/`highlight`).
+
+- Variant A: `class ConsoleOptions` at `rich/console.py:113`, constructed at `rich/console.py:991-994`. **One file.**
+- Variant B: dataclass moved to `rich/console_options.py` (a treatment-created file); constructor stays at `rich/console.py:857-860`. **Two files, one created by the treatment.**
+
+So under one of the two natural readings the edit surface lands directly in a new file, and under the other (a `Console.__init__` kwarg) it does not. The arms are not equally shaped, and the ambiguity means different runs pick different readings. Either disclose this prominently or reword the prompt to scope the flag unambiguously to `Console.__init__`.
+
+### BLOCKER 5 — no working Python environment; the regression gate would fail **silently**
+
+```
+pytest                          -&gt; pyenv: version `3.12.5' is not installed
+python3 -m pytest               -&gt; No module named pytest
+python3 -c "import pygments"    -&gt; ModuleNotFoundError
+python bench/agent_footprint.py -&gt; pyenv error (use python3)
+```
+
+With `--test-cmd "pytest -q"`, `_baseline_failed` (`bench/agent_footprint.py:492-502`) returns **True for both arms**, and `_run_test_gate` (:505-516) then short-circuits at `if baseline_failed: return False` — i.e. "no regression" for every single run, with no error. The pre-registered admissibility rule ("both sides edited, completed, and left the suite green") becomes vacuous. It also hits the agent, which is told not to modify tests and will burn turns fighting a broken interpreter, adding noise to every metric differentially.
+
+`uv run --with pytest --with pygments python ...` works (verified). Pin that as `--test-cmd` and confirm `_baseline_failed` is False for both arms before spending anything.
+
+*(Housekeeping: my `uv run` probe created `.venv/` and `uv.lock` inside variantA. I deleted both; `diff -rq` now shows the trees clean.)*
+
+---
+
+### Area 6 — harness readiness: mostly sound, one gap
+
+`--file-map` **does exist**, contrary to the concern: `bench/agent_footprint.py:996-1004`, threaded at :1080 → `run_pair(variant_b_file_map=…)` → `run_variant(file_map=… if variant == "B" else None)` (:643) → `parse_transcript` (:553). That path is correct.
+
+Gap: the help text says "Required for `--mode ab` when B adds files," and **nothing enforces it**. `load_file_map(None)` returns `{}` (:76-78), so omitting the flag silently reproduces #302 with no warning. Add a hard guard in `_main` for `--mode ab`. Note also that `python` is broken here — the invocation must use `python3`.
+
+### Area 1 — behavior preservation: **verified sound**
+
+This held up under everything I threw at it:
+
+- **Re-export identity**: `rich.console.ConsoleOptions is rich.console_options.ConsoleOptions` → True; likewise `ConsoleDimensions`, `NoChange`, and the `NO_CHANGE` **singleton** (identity preserved, so every `isinstance(x, NoChange)` / `is NO_CHANGE` check still works), `JustifyMethod`, `OverflowMethod`, `HighlighterType`.
+- **Namespace hunt, stronger than ruff F821**: I disassembled every code object (including nested functions and comprehension bodies) of every function *actually defined* in the three new modules and flagged every `LOAD_GLOBAL`/`STORE_GLOBAL` not resolvable in that module's globals or builtins. **Zero real hits.** The single report — `get_ident` in `ConsoleOptions.__repr__` — is a false positive: that's the dataclass-generated repr, whose globals come from `dataclasses`, not the module. This catches the runtime-only names ruff cannot see; `blend_rgb` was the only such bug and it is fixed.
+- **Same name, different object**: zero. Shared-name counts vs `rich.console`'s namespace — console_export 16, console_options 14, console_screen 3 — all bind identical objects.
+- **MRO**: `Console → ConsoleExportMixin → ConsoleScreenMixin → object`. No collisions between the mixins, no shadowing of `Console`'s own attributes.
+- **Deferred/string annotations**: `typing.get_type_hints` succeeds on all five classes and every moved method, so nothing depended on a `TYPE_CHECKING` import that only existed in console.py.
+- **Pickling**: `ConsoleDimensions` and `ConsoleOptions` round-trip (both importable at their new `__module__`).
+- **Cosmetic, disclose in one line**: `__module__`/`__qualname__` do change for moved members (`export_*` → `rich.console_export`; `bell`/`clear`/`show_cursor`/`set_alt_screen`/`set_window_title` → `rich.console_screen`). Nothing in rich keys on those. `update_screen`, `line`, `screen` correctly stayed behind.
+- No module in rich imports the new modules directly; everything still routes through `rich.console`.
+- **Caveat**: I could not re-run the 956-test suite (blocker 5), so suite parity is inherited from the commit message, not independently re-verified.
+
+### Area 4 — file map: **correct** (modulo blocker 1)
+
+`diff -rq --exclude=__pycache__ --exclude=.git --exclude=.archy variantA variantB` yields exactly: `rich/console.py` modified, `rich/console_export.py`, `rich/console_options.py`, `rich/console_screen.py` added. All three are in `bench/agent_footprint/variant_b_rich_console_file_map.json` → `rich/console.py`. Suffix matching (`bench/agent_footprint.py:87-90`) handles the absolute paths transcripts record, and there are no prefix collisions among the keys. The only unmapped added file is `.archy/index.db`, which should be deleted, not mapped.
+
+### Area 3 — treatment strength: a null from this design would **not** be interpretable
+
+Concretely:
+
+- console.py 2698 → 2036 lines (-25%); cc_sum 386 → 296. rich.console **remains archy's #1** after the refactor (296 vs rich.text's 244, still 1.2× the runner-up). In #282's flask, app.py at least dropped #1 → #2, and that cell was already a null.
+- The task's actual working set — `get_style` (`console.py:1470`), `_theme_stack` (:785), `push_theme`/`pop_theme` (:881/:892), `Console.options` (:991 in A / :857 in B) — **stays in console.py in both arms.** None of the three treatment-created files holds the task's core logic: console_export and console_screen are irrelevant to it, and console_options holds only the dataclass under one of two readings.
+- So the agent's navigation problem is essentially unchanged: it must still locate and read a 2000+ line console.py. What this design tests is "does deleting 662 lines of unrelated code from the far end of a file the agent must read anyway change its footprint?" A null answers *that*, not "does cleaner code help agents" — yet the Definition of Done would convert it into a §14c non-result and stop the line of research. That's over-claiming on the strength of a treatment that never touched the task's path.
+- To be informative you need either a task whose working set genuinely moves into a small new file (export or screen control **did** move — an export-format task would be a real test), or a treatment that extracts `get_style`/theme handling into e.g. `console_styles.py`. Either re-pairs task and treatment and must be re-pre-registered.
+
+### Area 5 — pre-registration: tight, with four holes
+
+Genuinely good: primary fixed before data, N fixed with no extension, admissibility rule, counterbalancing, Bonferroni divisor declared (~6) in advance, retracted metrics named with reasons, publication via `results_table()`/`--table` pinned by a golden test.
+
+Holes that would let a result be spun:
+
+1. **It names a non-neutral metric as primary** (blocker 2). #302 is listed as a blocking prerequisite but its scope was read as "breadth only."
+2. **Alignment is argued from commit ordering alone** (blocker 4). Ordering can't establish non-alignment; locating the edit surface can, and it shows alignment.
+3. **No correctness criterion.** Admissibility is "edited, completed, suite green" — an agent that adds a no-op `strict_styles` and a 3-line `resolve_style` is admissible and indistinguishable from one that does the real work. Given blocker 3's ambiguity, "completed" is the spinnable term. Pre-register a rubric or a hidden acceptance test applied identically to both arms.
+4. **Provenance scope undeclared.** "Zero leaks" was reported while B's tree carried `.archy/index.db`, because the check never looked at the tree. Pre-register that provenance covers tree contents, not just commit identity.
+5. Minor, already tracked as #303: §8 still names a CI while `summarize()` reports a quartile interval. Reword before publishing or the results doc misdescribes its own statistic.
+
+---
+
+**Minimum to reach GO:** strip `.archy` from B and re-amend (1); add `canonical_file_revisitations` and re-pre-register the primary (2); rewrite the task against rich's real behavior and re-check where its edit surface lands (3, 4); pin a working test env and confirm both baselines are green (5). Items 3 and 4 likely mean re-pairing task and treatment — which is a re-pre-registration, not a patch.</result>
+<usage><subagent_tokens>101932</subagent_tokens><tool_uses>18</tool_uses><duration_ms>416189</duration_ms></usage>
+</task-notification>
+
+---
+
+if we do the first, what value does it provide? is the task related to SVG/HTML export? how is that related to python?
+
+---
+
+lets stop. Should we close tickets with conclusions?
+
+---
+
+wrapping up for today
+
+---
+
+are they worth preserving?
+
+---
+
+lets move them into the repo directory but add that directory to gitignore so we do commit them simialr to bench/repo_cache and replay_cache
+
+---
+
+just the flask transcripts. Delete rich checkouts
