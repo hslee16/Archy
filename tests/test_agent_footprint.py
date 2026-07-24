@@ -866,3 +866,29 @@ def test_run_pair_applies_the_file_map_to_variant_b_only(monkeypatch, tmp_path: 
     )
 
     assert {v: m for v, m in seen} == {"A": None, "B": file_map}
+
+
+def test_canonical_revisitations_survive_a_split_surface(tmp_path: Path):
+    """Revisiting a split-out module must count as revisiting its origin file.
+
+    The pre-registered A/B primary is path-keyed, so without canonicalization a
+    write to `app.py` followed by a read of `app_routing.py` is invisible in B
+    while the equivalent pair in A counts as a revisit. That scores the treatment
+    better by construction, in the same way raw breadth did (#302).
+    """
+    file_map = {"pkg/app_routing.py": "pkg/app.py"}
+    t = tmp_path / "s.jsonl"
+    _write_transcript(
+        t,
+        _real_shape_lines(
+            "msg_1",
+            {"input_tokens": 2, "output_tokens": 10},
+            [
+                _tool_block("Edit", "/repo/pkg/app.py"),
+                _tool_block("Read", "/repo/pkg/app_routing.py"),
+            ],
+        ),
+    )
+    parsed = af.parse_transcript(t, file_map)
+    assert parsed.file_revisitations == 0  # raw: two different paths
+    assert parsed.canonical_file_revisitations == 1  # same pre-refactor file

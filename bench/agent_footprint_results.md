@@ -323,6 +323,67 @@ This rules out a large, consistent effect; it cannot separate "no effect" from
 "moderate effect". Per the pre-registration, the follow-up is a second task or a
 second repo, not more pairs of this cell.
 
+## Third cell (#300, rich): cancelled by pre-run review, not run
+
+The planned rich cell was **stopped before any agent time was spent**. No runs,
+no numbers, and that is the result worth recording.
+
+**What was built and verified.** Variant A pinned at `Textualize/rich` @
+`46cebbb` (956 passed / 25 skipped, 3.6s). Variant B decomposed `rich.console`,
+archy's #1 recommendation (cc_sum 386, churn 467, fan_in 119, edit_risk 0.46),
+into `console_export.py`, `console_options.py` and `console_screen.py`;
+`console.py` 2698 -> 2036 lines, cc_sum 386 -> 296. Behavior preservation was
+checked well past the suite: `dir(Console)` identical, rendered output identical
+by hash, re-export identity preserved (`rich.console.ConsoleOptions is
+rich.console_options.ConsoleOptions`, and the `NO_CHANGE` singleton), every
+moved function's `LOAD_GLOBAL` resolved against its new module namespace, type
+hints resolvable, pickling intact. The diff is
+[`agent_footprint/variant_b_rich_console.patch`](agent_footprint/variant_b_rich_console.patch);
+the task is
+[`agent_footprint/task_rich_style_resolution.md`](agent_footprint/task_rich_style_resolution.md).
+
+**Why it was cancelled.** A pre-run adversarial pass (a blocking prerequisite in
+the #300 pre-registration) returned NO-GO on five findings. Three were fixed and
+are in the harness now: `.archy/index.db` had been committed into variant B's
+tree only (an instrument leak the provenance check missed, because it compares
+commit identity and not tree contents); the pre-registered primary metric
+`file_revisitations` was path-keyed and therefore not variant-neutral, scoring a
+split variant better by construction, so `canonical_file_revisitations` was
+added; and the #302 file map was never wired from the CLI into the runner, so
+canonical breadth would silently have equalled raw breadth.
+
+The two that ended the cell could not be patched:
+
+1. **The task's premise was factually false.** It assumed an undefined style name
+   "fails quietly"; `Console.get_style` already raises `MissingStyle` and already
+   performs the theme-stack and combination resolution the task asked for. The
+   task was therefore near-trivial and ambiguous, and 20 runs would each have
+   invented a different reconciliation.
+2. **The treatment never touched the task's working set.** `get_style`,
+   `_theme_stack` and `push_theme` stay in `console.py` in both arms, so the
+   design actually tested "does deleting 662 lines of unrelated code from the far
+   end of a file the agent must read anyway change its footprint" -- and a null
+   there would have been written up as evidence about cleaner code helping
+   agents, which it is not.
+
+**Why it was not re-paired instead.** The obvious repair is a task aimed at the
+surface that *did* move (SVG/HTML export, now a 484-line file in B against 2698
+lines in A). That was rejected as **near-tautological**: it measures whether an
+agent finds code faster in a small file than a large one, which needs no agent
+study, and a positive result would be indefensible relocation. By this project's
+own anti-theater standard (§12) that is worse than the confound it replaces,
+because it would be deliberate.
+
+**The conclusion, which is about the method rather than about archy.** This
+minimal-pair design appears **structurally unable to produce an interpretable
+positive result** at this scale. Any positive is attackable as relocation of the
+answer; any null on a dose weak enough to avoid that charge is attackable as
+insufficient treatment. One repo, one task, N=10, one model does not escape that
+squeeze. Two nulls (#289 N=22, #282 N=10) plus this cancellation close the line:
+**further cells are not funded**, and any future attempt needs a different design
+(many repos and tasks, or a naturally-occurring before/after corpus), not another
+pair.
+
 ## Arm C: context-injection (#289), first run
 
 The #289 read-reduction question (does injecting an archy pre-edit brief reduce a

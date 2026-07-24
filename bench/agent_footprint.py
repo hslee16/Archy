@@ -131,6 +131,7 @@ class ParsedTranscript(BaseModel):
     # the raw counts on variant A, whose map is empty.
     canonical_distinct_files_touched: int
     canonical_pre_edit_distinct_files: int
+    canonical_file_revisitations: int
 
     @property
     def footprint_tokens(self) -> int:
@@ -159,6 +160,7 @@ class FootprintRecord(BaseModel):
     # None only on rows written before #302; new runs always populate these.
     canonical_distinct_files_touched: int | None = None
     canonical_pre_edit_distinct_files: int | None = None
+    canonical_file_revisitations: int | None = None
     brief_tokens: int  # realized archy-brief size charged to this arm (0 for A)
     duration_ms: int
     total_cost_usd: float
@@ -264,6 +266,8 @@ def parse_transcript(path: str | Path, file_map: dict[str, str] | None = None) -
     pre_edit_files: set[str] = set()
     canonical_touched: set[str] = set()
     canonical_pre_edit_files: set[str] = set()
+    canonical_written: set[str] = set()
+    canonical_revisitations = 0
     pre_edit_input = 0
     made_edit = False
     for mid in order:
@@ -293,11 +297,20 @@ def parse_transcript(path: str | Path, file_map: dict[str, str] | None = None) -
             if file_path is None:
                 continue
             touched.add(file_path)
-            canonical_touched.add(_canonical_touch_path(file_path, file_map))
+            canonical_path = _canonical_touch_path(file_path, file_map)
+            canonical_touched.add(canonical_path)
             if file_path in written:
                 revisitations += 1
+            # Revisitation is path-keyed too, so it has the same variant-neutrality
+            # problem as breadth (#302): in A, writing then re-reading console.py is
+            # one revisit, while in B the same logical surface spans two files and
+            # the second touch lands on a different path, silently scoring B better.
+            # Counting over pre-refactor paths makes the arms comparable.
+            if canonical_path in canonical_written:
+                canonical_revisitations += 1
             if name in _WRITE_TOOLS:
                 written.add(file_path)
+                canonical_written.add(canonical_path)
 
     return ParsedTranscript(
         input_tokens=in_toks,
@@ -311,6 +324,7 @@ def parse_transcript(path: str | Path, file_map: dict[str, str] | None = None) -
         pre_edit_distinct_files=len(pre_edit_files),
         canonical_distinct_files_touched=len(canonical_touched),
         canonical_pre_edit_distinct_files=len(canonical_pre_edit_files),
+        canonical_file_revisitations=canonical_revisitations,
         pre_edit_input_tokens=pre_edit_input,
         made_edit=made_edit,
     )
@@ -573,6 +587,7 @@ def run_variant(
         made_edit=parsed.made_edit,
         canonical_distinct_files_touched=parsed.canonical_distinct_files_touched,
         canonical_pre_edit_distinct_files=parsed.canonical_pre_edit_distinct_files,
+        canonical_file_revisitations=parsed.canonical_file_revisitations,
         brief_tokens=brief_tokens,
         duration_ms=int(result.get("duration_ms", 0)),
         total_cost_usd=float(result.get("total_cost_usd", 0.0)),
@@ -811,6 +826,9 @@ def summarize(records: list[FootprintRecord]) -> dict:
         "input_tokens",
         "output_tokens",
         "num_turns",
+        # The A/B primary (spec section 4), counted over pre-refactor paths for
+        # the same reason breadth is: raw path keys favour the split variant.
+        "canonical_file_revisitations",
         "file_revisitations",
         # Breadth, counted over pre-refactor paths so a decomposition variant is
         # not penalized for splitting one file into several (spec section 5).
