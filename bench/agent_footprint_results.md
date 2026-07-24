@@ -255,7 +255,7 @@ toward the B-favorable direction:**
   *here* is thinner than first reported. Variant and within-pair position are
   therefore perfectly confounded, and the drift inflates the B-favorable
   direction of the metric of record. It does not flip the sign (first-5 median
-  delta −3, last-5 −4), but "direction favors B" is partly a position artifact.
+  delta −3, last-5 −3), but "direction favors B" is partly a position artifact.
   Counterbalancing order (A/B on even pairs, B/A on odd) is the one-line fix.
 
 - **The task's edit surface is exactly variant B's new file.** The task asks for

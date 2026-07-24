@@ -306,7 +306,7 @@ article terminates the frontier model at):
   > is false.** Under prompt caching, `usage.input_tokens` is a literal `2` on
   > every assistant message after the first: prompt text, including an injected
   > brief, lands in `cache_creation_input_tokens`, which every headline excludes.
-  > Measured on the #282 run, `input_tokens` is 0.0025% of total input and
+  > Measured on the #282 run, `input_tokens` is 0.0030% of total input and
   > `pre_edit_input_tokens` has a median of 37 across 30-66 turns, i.e. it is a
   > **turn counter at ~2 tokens/turn, not a token measure**. A 581-token brief
   > contributes **zero** to it.
