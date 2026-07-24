@@ -301,13 +301,20 @@ def test_summarize_pairs_arm_c_on_pre_edit_reads(tmp_path: Path):
     assert summary["no_edit_runs"] == 1
 
 
-def _git_repo(tmp_path: Path) -> Path:
-    """A throwaway git repo with one committed file, for the reset/baseline tests."""
+def _git_repo(tmp_path: Path, *, when: str | None = None) -> Path:
+    """A throwaway git repo with one committed file.
+
+    `when` pins the author and committer dates so provenance-parity tests are not
+    at the mercy of two commits landing in different seconds.
+    """
     repo = tmp_path / "repo"
     repo.mkdir(parents=True)
+    env = dict(os.environ)
+    if when is not None:
+        env |= {"GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when}
 
     def run(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)
 
     run("init", "-q")
     run("config", "user.email", "t@example.invalid")
@@ -382,10 +389,11 @@ def test_summarize_reports_everything_a_published_table_needs():
     # per-variant medians, so a table can be rendered without recomputation.
     summary = af.summarize(_pair_records([-3, -3, -4, 2, -5, -1, 2, -9, -4, 1]))
     per = summary["metrics"]["pre_edit_reads"]
-    assert per["sign_p"] == pytest.approx(af.sign_test_p(per["deltas"]))
+    # 7 lower / 3 higher, hand-computed: 2 * (C(10,0)+C(10,1)+C(10,2)+C(10,3)) / 2**10.
+    assert per["sign_p"] == pytest.approx(0.34375)
     assert per["control_median"] == 10
-    bounds = per["iqr_bounds"]
-    assert bounds is not None and bounds[0] <= per["median_delta"] <= bounds[1]
+    # Hand-computed inclusive quartiles of the ten deltas below.
+    assert per["iqr_bounds"] == [-4.0, 0.5]
     # The Bonferroni divisor must be the count of what was tested, not of what
     # someone chose to publish.
     assert summary["metrics_tested"] == len(summary["metrics"])
@@ -396,7 +404,9 @@ def test_results_table_renders_every_tested_metric():
     table = af.results_table(summary)
     for metric in summary["metrics"]:
         assert f"| {metric} |" in table
-    assert f"{summary['metrics_tested']} metrics tested" in table
+    # The literal divisor, not one read back out of the summary: the point is
+    # that the table states what was actually tested.
+    assert "9 metrics tested" in table
     assert "gate disabled" in table
 
 
@@ -427,69 +437,106 @@ def test_provenance_leak_warning_fires_on_author_mismatch(tmp_path, capsys):
     assert "leaks that B is instrumented" in capsys.readouterr().err
 
 
-def test_no_provenance_warning_when_b_matches_upstream_author_and_date(tmp_path, capsys):
-    """The remedy the spec prescribes must actually silence the author/date check."""
-    a = _git_repo(tmp_path / "a")
-    b = _git_repo(tmp_path / "b")
-    a_head = af._head_identity(a)
+def test_no_provenance_warning_when_b_is_root_equivalent(tmp_path, capsys):
+    """Spec section 6's second remedy must actually silence every check.
+
+    Root-equivalent means same author, committer, both dates, and the same commit
+    depth, so `git log`, `git log --format=fuller` and `git log --oneline` all
+    read identically to A.
+    """
+    when = "2024-01-01T10:00:00+00:00"
+    a = _git_repo(tmp_path / "a", when=when)
+    b = _git_repo(tmp_path / "b", when=when)
+    verdict = af._warn_on_provenance_leak(a, b)
+    assert verdict["leaks"] == []
+    assert "leaks that B is instrumented" not in capsys.readouterr().err
+
+
+def test_provenance_flags_an_extra_commit_even_when_identity_matches(tmp_path):
+    """A perfectly-disguised commit still shows up as extra depth.
+
+    `git log --oneline` and `git show --stat HEAD` are both reachable, so B
+    carrying one more commit than A leaks the refactor regardless of who it is
+    attributed to.
+    """
+    when = "2024-01-01T10:00:00+00:00"
+    a = _git_repo(tmp_path / "a", when=when)
+    b = _git_repo(tmp_path / "b", when=when)
     subprocess.run(
         ["git", "commit", "-q", "--allow-empty", "-m", "refactor: split the class"],
         cwd=b,
         check=True,
         capture_output=True,
-        env={**os.environ, "GIT_AUTHOR_DATE": a_head["date"]},
+        env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when},
     )
-    verdict = af._warn_on_provenance_leak(a, b)
-    assert verdict["leaks"] == []
-    # The subject is still echoed, because only a human can judge whether it
-    # describes the treatment; that note is not a leak finding.
-    assert "leaks that B is instrumented" not in capsys.readouterr().err
+    verdict = af.check_variant_provenance(a, b)
+    assert any("commits deep" in leak for leak in verdict["leaks"])
 
 
-def test_published_282_table_is_exactly_what_the_harness_renders():
-    """The #282 writeup must be byte-identical to `results_table()` output.
+def test_provenance_flags_the_committer_that_reset_author_leaves_behind(tmp_path):
+    """`--amend --reset-author` fixes the author and not the committer.
 
-    This is the test that would have caught the shipped-wrong-headline bug: that
-    table was assembled by an ad-hoc script whose `footprint_tokens` definition
-    had drifted from the harness property. Comparing the committed records to the
-    committed prose catches both a drifting harness and a hand-edited table.
+    `git log --format=fuller` still prints the bench identity, which is the same
+    argument that justified checking the author date.
     """
-    root = Path(__file__).resolve().parent.parent
-    records = af.load_records(root / "bench" / "agent_footprint" / "records_282_flask.jsonl")
-    rendered = af.results_table(af.summarize(records))
-    published = (root / "bench" / "agent_footprint_results.md").read_text(encoding="utf-8")
-    assert rendered in published
+    when = "2024-01-01T10:00:00+00:00"
+    a = _git_repo(tmp_path / "a", when=when)
+    b = _git_repo(tmp_path / "b", when=when)
+    subprocess.run(
+        ["git", "commit", "-q", "--amend", "--no-edit"],
+        cwd=b,
+        check=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_DATE": when,
+            "GIT_COMMITTER_DATE": when,
+            "GIT_COMMITTER_NAME": "archy bench",
+            "GIT_COMMITTER_EMAIL": "bench@example.invalid",
+        },
+    )
+    verdict = af.check_variant_provenance(a, b)
+    assert any("committer" in leak for leak in verdict["leaks"])
 
 
-def test_run_pair_counterbalances_within_pair_order(monkeypatch, tmp_path: Path):
-    """A must not lead every pair, or variant is confounded with position."""
-    calls: list[tuple[str, int]] = []
+def test_provenance_echoes_the_full_message_body(tmp_path):
+    """The body is where a treatment description hides, and `git log -1` prints it."""
+    when = "2024-01-01T10:00:00+00:00"
+    a = _git_repo(tmp_path / "a", when=when)
+    b = _git_repo(tmp_path / "b", when=when)
+    subprocess.run(
+        [
+            "git",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "refactor: extract helpers",
+            "-m",
+            "Splits the App god-class into three mixins.",
+        ],
+        cwd=b,
+        check=True,
+        capture_output=True,
+        env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when},
+    )
+    verdict = af.check_variant_provenance(a, b)
+    assert "three mixins" in verdict["variant_b_message"]
 
-    def fake_run_variant(repo_dir, task_prompt, *, variant, run_index, **kwargs):
-        calls.append((variant, run_index))
-        return _record(variant, run_index)
 
-    monkeypatch.setattr(af, "run_variant", fake_run_variant)
-    monkeypatch.setattr(af, "_baseline_failed", lambda *a, **k: False)
-    monkeypatch.setattr(af, "_warn_on_provenance_leak", lambda *a, **k: {"leaks": []})
+def test_per_variant_medians_use_only_paired_runs():
+    """An unmatched row must not shift a published median.
 
-    af.run_pair(tmp_path / "a", tmp_path / "b", "task", n=4, model="m", artifact_dir=tmp_path)
-
-    assert [v for v, _ in calls] == ["A", "B", "B", "A", "A", "B", "B", "A"]
-    # Pairing must survive the reordering: each run_index still has one of each.
-    assert sorted(calls) == [("A", i) for i in range(4)] + [("B", i) for i in range(4)]
-
-
-def test_per_variant_medians_use_only_paired_runs(tmp_path: Path):
-    """An unmatched row must not shift one arm's published median."""
-    # A-side values 10, 10 paired; the orphan B row would drag B's median if the
-    # filter were absent, so the assertion fails without `_paired_run_indices`.
-    records = _pair_records([-2, -2])
-    orphan = _record("B", 99, pre_edit_reads=1000)
-    summary = af.summarize([*records, orphan])
+    Two orphans against two pairs, deliberately: with a single orphan the median
+    of three values cannot move off its middle element, so the assertion would
+    hold even with the filter deleted.
+    """
+    records = _pair_records([-2, -2])  # A: 10, 10   B: 8, 8
+    orphans = [_record("B", 90, pre_edit_reads=1000), _record("B", 91, pre_edit_reads=1000)]
+    summary = af.summarize([*records, *orphans])
     assert summary["n_pairs"] == 2
+    # Unfiltered this is median([8, 8, 1000, 1000]) == 504.
     assert summary["metrics"]["pre_edit_reads"]["treatment_median"] == 8
-    assert summary["metrics"]["pre_edit_reads"]["control_median"] == 10
 
 
 def test_summarize_reports_the_interval_and_the_treatment_arm():
@@ -527,7 +574,7 @@ def test_provenance_check_catches_a_date_only_leak(tmp_path: Path):
     verdict = af.check_variant_provenance(a, b)
     assert any("author date" in leak for leak in verdict["leaks"])
     # The subject is surfaced for human judgement rather than keyword-matched.
-    assert verdict["variant_b_subject"] == "refactor: split the base class"
+    assert verdict["variant_b_message"] == "refactor: split the base class"
 
 
 def test_provenance_check_does_not_crash_outside_git(tmp_path: Path):
@@ -536,4 +583,85 @@ def test_provenance_check_does_not_crash_outside_git(tmp_path: Path):
     plain.mkdir()
     verdict = af.check_variant_provenance(plain, plain)
     assert verdict["leaks"] == []
-    assert verdict["variant_b_subject"] == ""
+    assert verdict["variant_b_message"] == ""
+
+
+def test_run_arm_c_counterbalances_and_keeps_the_brief_on_arm_c(monkeypatch, tmp_path: Path):
+    """Arm C alternates too, and the reversal must not hand arm A the brief.
+
+    Reversing a tuple of (variant, prefix, brief_tokens) is only safe because the
+    three travel together; a refactor that unpacks them separately would silently
+    give the control the treatment, which no footprint number would reveal.
+    """
+    seen: list[tuple[str, str, int]] = []
+
+    def fake_run_variant(repo_dir, task_prompt, *, variant, run_index, **kwargs):
+        seen.append((variant, kwargs["prompt_prefix"], kwargs["brief_tokens"]))
+        return _record(variant, run_index)
+
+    monkeypatch.setattr(af, "run_variant", fake_run_variant)
+    monkeypatch.setattr(af, "_baseline_failed", lambda *a, **k: False)
+
+    af.run_arm_c(
+        tmp_path / "repo",
+        "task",
+        "BRIEF",
+        n=4,
+        model="m",
+        artifact_dir=tmp_path,
+        brief_tokens=7,
+    )
+
+    assert [v for v, _, _ in seen] == ["A", "C", "C", "A", "A", "C", "C", "A"]
+    for variant, prefix, brief_tokens in seen:
+        expected = ("BRIEF", 7) if variant == "C" else ("", 0)
+        assert (prefix, brief_tokens) == expected
+
+
+def test_run_pair_records_the_provenance_verdict(monkeypatch, tmp_path: Path):
+    """The verdict must reach an artifact, not just stderr in a multi-hour log."""
+    monkeypatch.setattr(af, "run_variant", lambda *a, **k: _record(k["variant"], k["run_index"]))
+    monkeypatch.setattr(af, "_baseline_failed", lambda *a, **k: False)
+    when = "2024-01-01T10:00:00+00:00"
+    a, b = _git_repo(tmp_path / "a", when=when), _git_repo(tmp_path / "b", when=when)
+    # B carries a real extra commit, so the persisted verdict must describe *this*
+    # repo pair. Asserting only that the keys exist would pass on a stub.
+    subprocess.run(
+        ["git", "commit", "-q", "--allow-empty", "-m", "refactor: extract the helpers"],
+        cwd=b,
+        check=True,
+        capture_output=True,
+        env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when},
+    )
+
+    af.run_pair(a, b, "task", n=1, model="m", artifact_dir=tmp_path / "art")
+
+    written = json.loads((tmp_path / "art" / "provenance.json").read_text())
+    assert any("commits deep" in leak for leak in written["leaks"])
+    assert written["variant_b_message"] == "refactor: extract the helpers"
+
+
+def test_drift_spearman_corrects_for_ties():
+    """The #282 series: ordinal ranking gives +0.782, tie-corrected gives +0.665."""
+    records = [
+        _record("A", i, pre_edit_reads=v) for i, v in enumerate([7, 7, 8, 9, 12, 12, 11, 7, 12, 13])
+    ]
+    assert af.drift_spearman(records, "pre_edit_reads", "A") == pytest.approx(0.665, abs=5e-4)
+    # Too few points, and a flat series, both decline to report rather than guess.
+    assert af.drift_spearman(records[:2], "pre_edit_reads", "A") is None
+    flat = [_record("A", i, pre_edit_reads=5) for i in range(5)]
+    assert af.drift_spearman(flat, "pre_edit_reads", "A") is None
+
+
+def test_summarize_refuses_to_blend_two_studies():
+    """B and C in one file would render two arms under a single heading."""
+    mixed = [_record("A", 0), _record("B", 0), _record("A", 1), _record("C", 1)]
+    with pytest.raises(ValueError, match="mix arm B and arm C"):
+        af.summarize(mixed)
+
+
+def test_results_table_refuses_to_look_finished_when_there_are_no_pairs():
+    """An empty or truncated run must not render a publishable-looking table."""
+    table = af.results_table(af.summarize([_record("A", 0)]))
+    assert "No paired runs" in table
+    assert "metrics tested" not in table

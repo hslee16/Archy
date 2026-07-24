@@ -335,18 +335,34 @@ def _head_identity(repo_dir: Path) -> dict[str, str]:
     that aborts a run (an empty repo or a non-git dir would otherwise propagate a
     CalledProcessError out of `run_pair`).
     """
+    # %aI/%cI, not %ad/%cd: the latter render per the repo's `log.date` config, so
+    # `log.date = short` collapses a 14-hour gap to an identical string and date
+    # parity silently stops detecting anything. ISO-strict is config-immune.
+    # %B (full body), not %s: `git log -1` prints the body to the agent too, and
+    # the body is where a description of the treatment actually hides.
+    fmt = "%an <%ae>%n%aI%n%cn <%ce>%n%cI%n%B"
     proc = subprocess.run(
-        ["git", "log", "-1", "--format=%an <%ae>%n%ad%n%s"],
+        ["git", "log", "-1", f"--format={fmt}"],
         cwd=repo_dir,
         capture_output=True,
         text=True,
         check=False,
     )
     lines = proc.stdout.splitlines() if proc.returncode == 0 else []
+    count = subprocess.run(
+        ["git", "rev-list", "--count", "HEAD"],
+        cwd=repo_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     return {
         "author": lines[0] if lines else "",
-        "date": lines[1] if len(lines) > 1 else "",
-        "subject": lines[2] if len(lines) > 2 else "",
+        "author_date": lines[1] if len(lines) > 1 else "",
+        "committer": lines[2] if len(lines) > 2 else "",
+        "commit_date": lines[3] if len(lines) > 3 else "",
+        "message": "\n".join(lines[4:]).strip(),
+        "commit_count": count.stdout.strip() if count.returncode == 0 else "",
     }
 
 
@@ -369,13 +385,26 @@ def check_variant_provenance(variant_a_dir: Path, variant_b_dir: Path) -> dict:
     """
     a, b = _head_identity(variant_a_dir), _head_identity(variant_b_dir)
     leaks = []
-    if b["author"] != a["author"]:
-        leaks.append(f"author {b['author']!r} differs from A's {a['author']!r}")
-    if b["date"] != a["date"]:
-        leaks.append(f"author date {b['date']!r} differs from A's {a['date']!r}")
+    # Committer is checked as well as author because `--reset-author`, the remedy
+    # the spec prescribes, does NOT reset the committer: `git log --format=fuller`
+    # (or `git show --pretty=fuller`) still prints `archy bench` and the run day.
+    # The argument for adding the author-date check applies one flag further.
+    for field, label in (
+        ("author", "author"),
+        ("author_date", "author date"),
+        ("committer", "committer"),
+        ("commit_date", "commit date"),
+    ):
+        if b[field] != a[field]:
+            leaks.append(f"{label} {b[field]!r} differs from A's {a[field]!r}")
+    if b["commit_count"] != a["commit_count"]:
+        leaks.append(
+            f"HEAD is {b['commit_count']} commits deep against A's {a['commit_count']};"
+            " `git log --oneline` and `git show --stat HEAD` expose the refactor"
+        )
     return {
         "leaks": leaks,
-        "variant_b_subject": b["subject"],
+        "variant_b_message": b["message"],
         "variant_a_head": a,
         "variant_b_head": b,
     }
@@ -391,10 +420,11 @@ def _warn_on_provenance_leak(variant_a_dir: Path, variant_b_dir: Path) -> dict:
             " author identity and date (spec section 6).",
             file=sys.stderr,
         )
-    if verdict["variant_b_subject"]:
+    if verdict["variant_b_message"]:
         print(
-            f"note: the agent can read variant B's HEAD subject: "
-            f"{verdict['variant_b_subject']!r}. It must not describe the treatment.",
+            "note: the agent can read variant B's HEAD message in full"
+            f" (`git log -1` prints the body too):\n{verdict['variant_b_message']}\n"
+            "It must not describe the treatment.",
             file=sys.stderr,
         )
     return verdict
@@ -658,6 +688,47 @@ def _paired_run_indices(records: list[FootprintRecord]) -> set[int]:
     return {i for i, vs in by_run.items() if "A" in vs and ("B" in vs or "C" in vs)}
 
 
+def _tied_ranks(values: list[float]) -> list[float]:
+    """Ranks with ties averaged, the standard definition Spearman assumes.
+
+    Ranking tied values ordinally instead (1,2,3 for three equal values) inflates
+    the coefficient and makes it depend on tie-break order, so the same data can
+    yield different answers. #282 published +0.78 from an ad-hoc ordinal ranking
+    where the correct figure is +0.67.
+    """
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    ranks = [0.0] * len(values)
+    i = 0
+    while i < len(values):
+        j = i
+        while j + 1 < len(values) and values[order[j + 1]] == values[order[i]]:
+            j += 1
+        average = (i + j) / 2 + 1
+        for k in range(i, j + 1):
+            ranks[order[k]] = average
+        i = j + 1
+    return ranks
+
+
+def drift_spearman(records: list[FootprintRecord], metric: str, variant: str) -> float | None:
+    """Tie-corrected Spearman of one variant's metric against `run_index`.
+
+    Position drift is why §8 requires counterbalancing: if one arm's metric trends
+    across the run and the other's does not, whichever arm holds a fixed position
+    absorbs the trend. Lives here so the diagnostic is reproducible from the
+    committed records rather than from a script (§9).
+    """
+    rows = sorted((r for r in records if r.variant == variant), key=lambda r: r.run_index)
+    if len(rows) < 3:
+        return None
+    values = [float(getattr(r, metric)) for r in rows]
+    if len(set(values)) == 1:
+        return None  # a flat series has no rank order to correlate
+    return statistics.correlation(
+        _tied_ranks(values), _tied_ranks([float(r.run_index) for r in rows])
+    )
+
+
 def summarize(records: list[FootprintRecord]) -> dict:
     """Median paired delta, IQR, sign counts and sign-test p per metric (spec 9).
 
@@ -684,7 +755,12 @@ def summarize(records: list[FootprintRecord]) -> dict:
     # Which arm is the treatment is emitted, not left implicit: rendering an
     # arm-C summary under a hard-coded "B" heading would mislabel the exact
     # document class this reporting path exists to protect.
-    treatment = next((v for v in ("B", "C") if any(r.variant == v for r in records)), "B")
+    arms = {r.variant for r in records}
+    if "B" in arms and "C" in arms:
+        # `_paired_deltas` picks the treatment per run while the medians pick one
+        # globally, so a mixed file would blend two studies under one heading.
+        raise ValueError("records mix arm B and arm C; summarize one study at a time")
+    treatment = next((v for v in ("B", "C") if v in arms), "B")
     out: dict = {
         "n_pairs": 0,
         "treatment": treatment,
@@ -728,6 +804,9 @@ def summarize(records: list[FootprintRecord]) -> dict:
     # A run that never edited: its whole transcript is the pre-edit prefix, so it
     # is reported separately and never folded into the median (spec section 14.3).
     out["no_edit_runs"] = sum(1 for r in records if not r.made_edit)
+    out["drift_pre_edit_reads"] = {
+        arm: drift_spearman(records, "pre_edit_reads", arm) for arm in ("A", treatment)
+    }
     return out
 
 
@@ -746,6 +825,13 @@ def results_table(summary: dict, *, treatment: str | None = None) -> str:
     underneath is the count of what was tested (spec section 9).
     """
     t = treatment or summary.get("treatment", "B")
+    if not summary["metrics"]:
+        # Otherwise a truncated or empty run renders an empty-but-publishable
+        # table footed by "0 metrics tested", which reads like a finished study.
+        return (
+            "No paired runs in this record set: nothing to report."
+            " (A run that produced no complete A/B pair is not a null result.)"
+        )
     lines = [
         f"| metric | A median | {t} median | median delta ({t}-A) | IQR of deltas |"
         f" {t}<A / {t}>A / tie | sign p |",
@@ -772,7 +858,18 @@ def results_table(summary: dict, *, treatment: str | None = None) -> str:
         "The delta column is the median of the per-pair deltas, not the difference of"
         " the two median columns; with a skewed spread those disagree, and the paired"
         " median is the one the sign test refers to."
+        " Metric of record: `pre_edit_reads` (spec section 14.3);"
+        " `input_tokens` is non-cache input only (spec section 5)."
     )
+    drift = {k: v for k, v in summary.get("drift_pre_edit_reads", {}).items() if v is not None}
+    if drift:
+        rendered = ", ".join(f"{arm}={value:+.3f}" for arm, value in drift.items())
+        lines.append("")
+        lines.append(
+            "Position drift, tie-corrected Spearman of `pre_edit_reads` vs run index:"
+            f" {rendered}. An arm that drifts while the other does not is why"
+            " section 8 requires counterbalancing."
+        )
     return "\n".join(lines)
 
 
@@ -842,9 +939,14 @@ def _main(argv: list[str]) -> int:
     # durability the append buys is worthless if a resume corrupts the analysis.
     existing = args.out / "records.jsonl"
     if existing.exists():
-        rolled = existing.with_suffix(f".jsonl.prev{sum(1 for _ in args.out.glob('*.prev*')) + 1}")
-        existing.rename(rolled)
-        print(f"note: moved a pre-existing records.jsonl aside to {rolled.name}")
+        nth = sum(1 for _ in args.out.glob("records.jsonl.prev*")) + 1
+        existing.rename(existing.with_suffix(f".jsonl.prev{nth}"))
+        # The provenance verdict belongs to those rows, so it moves with them
+        # rather than being overwritten by the new run's.
+        verdict = args.out / "provenance.json"
+        if verdict.exists():
+            verdict.rename(verdict.with_suffix(f".json.prev{nth}"))
+        print(f"note: moved a pre-existing records.jsonl (and provenance) aside to .prev{nth}")
 
     task_prompt = args.task_file.read_text(encoding="utf-8")
     test_cmd = args.test_cmd.split() if args.test_cmd else None

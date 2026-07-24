@@ -118,8 +118,13 @@ comparison to the paper says so.
   the upstream author identity (`git commit --amend --reset-author` is required;
   `--amend` alone keeps the original author, which is how #282 leaked despite a
   rewritten message) and an upstream-style message, or squash B so its HEAD is
-  root-equivalent to A's. `_warn_on_provenance_leak` checks author parity at run
-  start.
+  root-equivalent to A's. **`--reset-author` does not reset the *committer*:**
+  set `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` / `GIT_COMMITTER_DATE` too, or
+  `git log --format=fuller` still prints the bench identity and the run day.
+  `check_variant_provenance` checks author, committer, both dates and commit-count
+  parity at run start, and echoes B's full HEAD message (body included, since
+  `git log -1` prints it) for a human to judge: a message that describes the
+  treatment without naming the experiment cannot be detected automatically.
 
 ## 7. The regression gate the paper lacks
 
@@ -141,8 +146,10 @@ agent noise". Therefore:
 - Fresh checkout per run; run A and B **interleaved and counterbalanced**
   (A-then-B on even pairs, B-then-A on odd). Interleaving alone leaves variant
   confounded with within-pair position: in #282, A ran first every pair and its
-  `pre_edit_reads` drifted upward across the run (Spearman +0.78 vs run index)
-  while B's stayed flat, which flattered B on the metric of record.
+  `pre_edit_reads` drifted upward across the run (tie-corrected Spearman +0.665
+  vs run index, against B's +0.117), which flattered B on the metric of record.
+  `drift_spearman()` computes this, so the diagnostic is reproducible from the
+  committed records.
 - Cold session per run to limit prompt-cache contamination; cache fields are
   reported so contamination is visible.
 - Report the **paired** distribution (per-run B-A), not two independent means.
