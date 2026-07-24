@@ -834,3 +834,35 @@ def test_summarize_skips_canonical_metrics_on_legacy_rows():
     metrics = af.summarize(legacy)["metrics"]
     assert "canonical_distinct_files_touched" not in metrics
     assert "distinct_files_touched" in metrics
+
+
+def test_run_pair_applies_the_file_map_to_variant_b_only(monkeypatch, tmp_path: Path):
+    """The map must reach the parser, and only for B.
+
+    `parse_transcript` accepting a map is not enough: if the runner never passes
+    one, canonical breadth silently equals raw breadth and #302's fix does not
+    apply to the run that needs it. A's map must stay identity so both arms are
+    counted over the same pre-refactor surface.
+    """
+    seen: list[tuple[str, dict | None]] = []
+
+    def fake_run_variant(repo_dir, task_prompt, *, variant, run_index, **kwargs):
+        seen.append((variant, kwargs.get("file_map")))
+        return _record(variant, run_index)
+
+    monkeypatch.setattr(af, "run_variant", fake_run_variant)
+    monkeypatch.setattr(af, "_baseline_failed", lambda *a, **k: False)
+    monkeypatch.setattr(af, "_warn_on_provenance_leak", lambda *a, **k: {"leaks": []})
+
+    file_map = {"pkg/new.py": "pkg/old.py"}
+    af.run_pair(
+        tmp_path / "a",
+        tmp_path / "b",
+        "task",
+        n=2,
+        model="m",
+        artifact_dir=tmp_path,
+        variant_b_file_map=file_map,
+    )
+
+    assert {v: m for v, m in seen} == {"A": None, "B": file_map}

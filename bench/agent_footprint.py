@@ -530,6 +530,7 @@ def run_variant(
     prompt_prefix: str = "",
     brief_tokens: int = 0,
     reset_repo: bool = True,
+    file_map: dict[str, str] | None = None,
 ) -> FootprintRecord:
     """Run one agent task on one variant and return its footprint row.
 
@@ -549,7 +550,7 @@ def run_variant(
     artifact_dir.mkdir(parents=True, exist_ok=True)
     saved = artifact_dir / f"{variant}_{run_index}_{session_id}.jsonl"
     shutil.copy(transcript, saved)
-    parsed = parse_transcript(saved)
+    parsed = parse_transcript(saved, file_map)
 
     regression = (
         _run_test_gate(repo_dir, test_cmd, baseline_failed) if test_cmd is not None else False
@@ -570,6 +571,8 @@ def run_variant(
         pre_edit_distinct_files=parsed.pre_edit_distinct_files,
         pre_edit_input_tokens=parsed.pre_edit_input_tokens,
         made_edit=parsed.made_edit,
+        canonical_distinct_files_touched=parsed.canonical_distinct_files_touched,
+        canonical_pre_edit_distinct_files=parsed.canonical_pre_edit_distinct_files,
         brief_tokens=brief_tokens,
         duration_ms=int(result.get("duration_ms", 0)),
         total_cost_usd=float(result.get("total_cost_usd", 0.0)),
@@ -596,6 +599,7 @@ def run_pair(
     model: str,
     artifact_dir: Path,
     test_cmd: list[str] | None = None,
+    variant_b_file_map: dict[str, str] | None = None,
 ) -> list[FootprintRecord]:
     """Run the task n times on each variant, counterbalanced (A,B / B,A / A,B ...).
 
@@ -634,6 +638,9 @@ def run_pair(
                     artifact_dir=artifact_dir,
                     test_cmd=test_cmd,
                     baseline_failed=baseline[variant],
+                    # Only B's paths need mapping back; A's map is identity, so
+                    # both arms end up counted over the same pre-refactor surface.
+                    file_map=variant_b_file_map if variant == "B" else None,
                 )
             )
     return records
@@ -986,6 +993,15 @@ def _main(argv: list[str]) -> int:
     ap.add_argument("--model", help="pinned model id, recorded on every row")
     ap.add_argument("--out", type=Path, default=Path("/tmp/archy_footprint"))
     ap.add_argument("--test-cmd", default=None, help="test command for the regression gate")
+    ap.add_argument(
+        "--file-map",
+        type=Path,
+        help=(
+            "variant B's file-equivalence map (new path -> pre-refactor path), so"
+            " breadth is counted over a common surface. Required for --mode ab"
+            " when B adds files, or breadth silently reproduces the #302 confound"
+        ),
+    )
     args = ap.parse_args(argv)
 
     if args.table is not None:
@@ -1061,6 +1077,7 @@ def _main(argv: list[str]) -> int:
             model=args.model,
             artifact_dir=args.out,
             test_cmd=test_cmd,
+            variant_b_file_map=load_file_map(args.file_map),
         )
     summary = summarize(records)
     (args.out / "records.json").write_text(json.dumps([r.model_dump() for r in records], indent=2))
