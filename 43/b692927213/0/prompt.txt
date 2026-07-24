@@ -832,3 +832,7 @@ Holes that would let a result be spun:
 ---
 
 if we do the first, what value does it provide? is the task related to SVG/HTML export? how is that related to python?
+
+---
+
+lets stop. Should we close tickets with conclusions?
