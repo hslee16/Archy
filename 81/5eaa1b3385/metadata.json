@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "815eaa1b3385",
+  "strategy": "manual-commit",
+  "branch": "alee/300-rich-cell",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/81/5eaa1b3385/0/metadata.json",
+      "transcript": "/81/5eaa1b3385/0/full.jsonl",
+      "content_hash": "/81/5eaa1b3385/0/content_hash.txt",
+      "prompt": "/81/5eaa1b3385/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 773,
+    "cache_creation_tokens": 878147,
+    "cache_read_tokens": 111028383,
+    "output_tokens": 256030,
+    "api_call_count": 383
+  }
+}
