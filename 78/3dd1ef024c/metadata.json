@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "783dd1ef024c",
+  "strategy": "manual-commit",
+  "branch": "alee/restore-golden-table-test",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "tests/test_agent_footprint.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/78/3dd1ef024c/0/metadata.json",
+      "transcript": "/78/3dd1ef024c/0/full.jsonl",
+      "content_hash": "/78/3dd1ef024c/0/content_hash.txt",
+      "prompt": "/78/3dd1ef024c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 638,
+    "cache_creation_tokens": 808455,
+    "cache_read_tokens": 77830735,
+    "output_tokens": 201684,
+    "api_call_count": 314
+  }
+}
