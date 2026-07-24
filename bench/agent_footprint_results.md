@@ -154,23 +154,39 @@ the suite green; 0 regressions, 0 no-edit runs).
 | pre_edit_distinct_files | 3.0 | 4.5 | +1.0 | 0 / 8 / 2 | 0.008 |
 | num_turns | 51.5 | 46.5 | −3.5 | 5 / 5 / 0 | 1.000 |
 | file_revisitations | 6.0 | 5.0 | −1.0 | 5 / 5 / 0 | 1.000 |
-| footprint_tokens | 4,326,198 | 3,708,174 | +592,832 | 3 / 7 / 0 | 0.344 |
+| footprint_tokens | 32,458 | 34,875 | +4,213 | 4 / 6 / 0 | 0.754 |
 | output_tokens | 32,330 | 34,766 | +4,190 | 4 / 6 / 0 | 0.754 |
+| input_tokens (non-cache) | 109.0 | 95.0 | +10.0 | 4 / 6 / 0 | 0.754 |
+| distinct_files_touched | 5.0 | 5.5 | +0.5 | 1 / 5 / 4 | 0.219 |
+| pre_edit_input_tokens | 37.0 | 30.0 | −3.0 | 7 / 3 / 0 | 0.344 |
+
+All 9 metrics `summarize()` tests are listed, not a subset: the Bonferroni
+divisor below is 9, and correcting over 9 while publishing 6 would be selective
+reporting.
+
+`footprint_tokens` is non-cache input + output (spec section 5), so it tracks
+`output_tokens` closely here: non-cache input was ~100 tokens per run, since
+almost all input arrived as cache reads (median 4.2M for A, 3.6M for B). Those
+cache-read totals are reported for contamination visibility (spec section 8) and
+are deliberately **not** in the headline: they are dominated by prompt-cache
+behavior, not by how much of the repo the agent actually pulled in.
 
 `pre_edit_reads` deltas (B−A): `[+2,+1,−3,−5,−6,−4,−1,+2,−9,−4]`.
+`footprint_tokens` deltas (B−A):
+`[+9124,+2222,+11600,−20824,−8578,+27125,−2808,+6204,−28565,+25852]`.
 
 **Read (honest): a documented non-result for the footprint claim.** Applying
 archy's #1 recommendation did not move agent footprint outside the noise band on
 this config. The metric of record leans B's way in direction (median −3.5 reads,
 7 of 10 pairs) but nowhere near significance (p=0.344), and the token headline
-leans the *other* way (B higher in 7 of 10). Note the per-variant medians and the
-paired median disagree in sign on `footprint_tokens`: with an IQR spanning roughly
-±1.8M tokens, that is the spread talking, and it is why the paired test, not the
-medians, is the result.
+leans the *other* way (B +4,213, 6 of 10 pairs higher, p=0.754). The token
+spread is the story: per-pair deltas run from −28,565 to +27,125, so a median of
++4,213 sits well inside the noise. This is the ~2.5x per-task variance the paper
+warned about (spec section 8), reproduced.
 
 **The one significant cell is in the wrong direction and does not survive
 correction.** `pre_edit_distinct_files` is higher for B in 8 of 10 pairs
-(p=0.008), but 9 metrics were tested; Bonferroni puts it at ~0.072. It is also
+(p=0.0078), but 9 metrics were tested; Bonferroni puts it at 0.070. It is also
 **mechanically confounded by the refactor itself**: B split one file into four, so
 reaching the same surface necessarily opens more distinct files even when it takes
 fewer reads. Read together with `pre_edit_reads` (fewer reads, more files), the
@@ -181,16 +197,50 @@ metrics are not variant-neutral when variant B changes the file count**, and any
 future decomposition study needs a file-count-normalized breadth metric or must
 drop the metric.
 
+**Two further confounds, both unadmitted until adversarial review, both pushing
+toward the B-favorable direction:**
+
+- **Variant B's history leaks the treatment.** B is a commit on top of the pinned
+  SHA, so `git log -1` / `git show --stat HEAD` / `git blame` (the agent has
+  `Bash`) describe the exact refactor and flag the repo as instrumented: the
+  commit is authored `archy bench <bench@example.invalid>` and dated the run day,
+  while A's history is plain upstream flask. A neutral *message* was written but
+  `git commit --amend` preserves the original author without `--reset-author`, so
+  the author line leaked anyway. The artifact is left as-is because it is the
+  record of what actually ran; the fix belongs to the next run (commit as the
+  upstream author and date, or squash B to a root-equivalent commit).
+- **Within-pair order is fixed, and A drifts.** `run_pair` always runs A then B,
+  so "interleaved" covers between-pair drift only. A's `pre_edit_reads` climbs
+  7 -> 13 across the run (Spearman rho +0.78 vs `run_index`, past the n=10
+  critical value) while B's is flat (+0.25). Variant and within-pair position are
+  therefore perfectly confounded, and the drift inflates the B-favorable
+  direction of the metric of record. It does not flip the sign (first-5 median
+  delta −3, last-5 −4), but "direction favors B" is partly a position artifact.
+  Counterbalancing order (A/B on even pairs, B/A on odd) is the one-line fix.
+
 **Go/no-go:** this bench does not gate a feature (unlike #289, which gated
 `archy brief`). What it rules out is a **claim**: archy must not say its
 recommendations cut an agent's token footprint. `what_to_refactor_next` continues
 to stand on human maintainability and edit risk, which this bench does not measure
 and does not challenge.
 
-**Two nulls now, and that is the pattern worth carrying.** #289 (context injection,
-N=22) and #282 (refactor, N=10) both land null at archy's layer on this model. The
-"cleaner code measurably helps the agent" thesis is not reproducing here, and
-roadmap items premised on footprint reduction should be priced accordingly.
+**Two nulls now, with one of them weaker than it looks.** #289 (context injection,
+N=22) and #282 (refactor, N=10) both land null at archy's layer on this model. But
+the arm-C section below claims "fresh `git reset --hard` per run", and **no reset
+existed anywhere in the harness at that time** (the `_reset_repo` added by this
+change is the first): `git show main:bench/agent_footprint.py` contains no reset
+or clean. `run_arm_c` also shares a single `repo_dir` across both arms. So either
+#289's resets were done manually out of band and were never recorded as such, or
+its 44 runs accumulated edits in one checkout, which is exactly the defect this
+change calls invalidating. #289 also ships no records file, so unlike #282 its
+table cannot be recomputed from the repo.
+
+Treat the pair as **one verifiable null (#282) and one null of unverified
+provenance (#289)**, not two independent confirmations. The "cleaner code
+measurably helps the agent" thesis still is not reproducing, and roadmap items
+premised on footprint reduction should be priced accordingly, but the evidence is
+thinner than a bare "two nulls" implies. Re-running arm C on the fixed harness
+would settle it and is the cheaper of the two follow-ups.
 
 **Power, as pre-registered above:** N=10 needed 9-of-10 to reach p<0.05, and the
 run was arithmetically out of reach of significance on `pre_edit_reads` by pair 7.
@@ -208,7 +258,9 @@ framing: [`docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md`](../docs/research/
 
 **Config (one-config caveat):** flask @ `36e4a82`; `claude-sonnet-5` headless;
 `--allowedTools Read,Write,Edit,Bash,Grep,Glob --setting-sources local`; fresh
-`git reset --hard` per run; interleaved A (no brief) / C (581-token archy brief).
+`git reset --hard` per run (**note: not code-enforced at the time; see the
+provenance caveat in the #282 section above**); interleaved A (no brief) / C
+(581-token archy brief).
 Task: add priority ordering to Flask's app-context teardown callbacks, described by
 behavior only (names no files). Its true edit surface is 3 files
 (`sansio/app.py`, `app.py`, `ctx.py`); the brief named 9 (recall 3/3, **precision

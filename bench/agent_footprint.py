@@ -128,6 +128,10 @@ class FootprintRecord(BaseModel):
     total_cost_usd: float
     task_completed: bool
     test_regression: bool
+    # Recorded per row so "0 regressions" is falsifiable from the artifact alone:
+    # `test_regression` is forced False when the variant's own baseline was red,
+    # so without this field a disabled gate is indistinguishable from a passing one.
+    baseline_failed: bool = False
 
     @property
     def footprint_tokens(self) -> int:
@@ -312,6 +316,12 @@ def _reset_repo(repo_dir: Path) -> None:
     the pinned upstream commit), so hard-reset plus clean is that fresh checkout
     without re-cloning: run i+1 must not start from run i's edits, or every run
     after the first measures a different repo than the one under test.
+
+    Note `-fdx` also removes an in-repo `.claude/`, so from here on a variant has
+    no project-local settings for `--setting-sources local` to load. That is more
+    isolation than spec section 10 describes, not less, but it is a real change in
+    how the runs are configured and the variants must not rely on committed
+    project settings.
     """
     subprocess.run(["git", "reset", "--hard", "-q"], cwd=repo_dir, check=True)
     subprocess.run(["git", "clean", "-fdxq"], cwd=repo_dir, check=True)
@@ -403,6 +413,7 @@ def run_variant(
         total_cost_usd=float(result.get("total_cost_usd", 0.0)),
         task_completed=(result.get("subtype") == "success" and not result.get("is_error")),
         test_regression=regression,
+        baseline_failed=baseline_failed,
     )
 
     # Append as we go: a full pair run is hours of live agent time, and a single
@@ -546,6 +557,9 @@ def summarize(records: list[FootprintRecord]) -> dict:
             "tie_count": sum(1 for d in deltas if d == 0),
         }
     out["regressions"] = sum(1 for r in records if r.test_regression)
+    # A red baseline silently disables that run's gate, so "regressions: 0" would
+    # otherwise read as "nothing broke" when it means "we could not tell".
+    out["gate_disabled_runs"] = sum(1 for r in records if r.baseline_failed)
     # A run that never edited: its whole transcript is the pre-edit prefix, so it
     # is reported separately and never folded into the median (spec section 14.3).
     out["no_edit_runs"] = sum(1 for r in records if not r.made_edit)
@@ -585,6 +599,16 @@ def _main(argv: list[str]) -> int:
         return 2
     if args.n < 10:
         print(f"warning: n={args.n} < 10; a single pair is not a result (spec section 8).")
+
+    # A re-run into the same --out restarts run_index at 0, so appending would put
+    # duplicate (variant, run_index) keys in one file and `_paired_deltas` would
+    # silently keep only the last of each. Roll the old file aside instead: the
+    # durability the append buys is worthless if a resume corrupts the analysis.
+    existing = args.out / "records.jsonl"
+    if existing.exists():
+        rolled = existing.with_suffix(f".jsonl.prev{sum(1 for _ in args.out.glob('*.prev*')) + 1}")
+        existing.rename(rolled)
+        print(f"note: moved a pre-existing records.jsonl aside to {rolled.name}")
 
     task_prompt = args.task_file.read_text(encoding="utf-8")
     test_cmd = args.test_cmd.split() if args.test_cmd else None
