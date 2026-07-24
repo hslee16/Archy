@@ -211,3 +211,62 @@ File reviewed: `/Users/hosanglee/archy/tests/test_agent_footprint.py`
 Given the DRY finding, the correct verdict is FAIL. Since I already (mistakenly) called `mark_review_as_passed`, the parent agent/orchestrator should disregard that call and treat this review as failed pending a fix to the `_record`/`row` duplication, or re-invoke review once the finding is addressed or explicitly dismissed.</result>
 <usage><subagent_tokens>25980</subagent_tokens><tool_uses>6</tool_uses><duration_ms>66023</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>a45304874d460e1e8</task-id>
+<tool-use-id>toolu_016gKe5sXxcXbHiGjtVKnsXy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/0395265b-149f-4d9e-992d-803fa7f8be9e/tasks/a45304874d460e1e8.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of the carry-over fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Verdict up front
+
+- **(a) tables from the harness — survives on the numbers, not on enforcement.** I ran `summarize()` + `results_table()` against the committed `bench/agent_footprint/records_282_flask.jsonl`. **All 9 rows × 6 cells reproduce the published table exactly** (medians, median deltas, sign counts, p to 3 dp, including the 0.008 cell and the `input_tokens 109.0 / 95.0 / +10.0` oddity). Zero mismatches. But nothing *makes* the next writeup use it (below).
+- **(b) counterbalancing — survives.** Verified by monkeypatching `run_variant`: order is `A,B / B,A / A,B …`, `run_index` unchanged, pairing/filenames/baselines/reset all intact. Real gaps are coverage and scope, not correctness.
+- **(c) provenance check — does not survive.** I built the exact repo the fix's own remedy prescribes and the check passes while the leak remains.
+
+## Findings, ranked
+
+**1. HIGH — the provenance check passes on a repo that still leaks, including via the field the spec tells you to fix.** `bench/agent_footprint.py:355`. The check compares author name/email only. I built A (upstream author, 2023 date) and B committed with `GIT_AUTHOR_NAME/EMAIL` set to A's identity and message `refactor: split the application base class`. `_warn_on_provenance_leak` emits nothing, yet `git log -1` in B prints `Date: Fri Jul 24 2026` against A's `Sun Jan 1 2023`, and the subject describes the treatment. Both the author *date* (shown by default in `git log -1`, no flags) and the subject are still handed to an agent with `Bash`. `agent_footprint_results.md:211` says the fix is "commit as the upstream author **and date**"; the code checks author and not date. `%ad`/`%cd` parity is one more format token.
+
+**2. HIGH — the keyword heuristic is the wrong shape for the threat.** `bench/agent_footprint.py:362`. `("variant","bench","archy")` catches only a message that names the *experiment*. It does not catch a message that names the *treatment*, which is the actual leak — my `refactor: split the application base class` sails through, and that is precisely the kind of message a careful operator writes when told to "use an upstream-style message". Meanwhile the substrings are unanchored (`invariant`, `covariant`, `benchmark` all hit) and A's subject is never checked, so there is no parity baseline. It is noise in both directions: false-positive-prone on wording, blind to content. The subject can't be validated by keywords at all; author+date parity plus "B's HEAD tree differs from A's by a commit whose message you wrote" is the checkable part.
+
+**3. HIGH — two of the four new tests are vacuous.**
+- `tests/test_agent_footprint.py` `test_per_variant_medians_ignore_half_finished_pairs` claims to pin the `_paired_run_indices` filtering. The orphan is an A row with `pre_edit_reads=100` at `run_index=99`; unfiltered A values are `[10,10,100]`, whose median is **10** — the asserted value. The test passes identically with `_variant_values` doing no filtering at all. `n_pairs == 2` tests `_paired_deltas`, which predates this diff. So the one new behavior it names is untested.
+- `assert per["sign_p"] == pytest.approx(af.sign_test_p(per["deltas"]))` is `f(x) == f(x)`; it passes if `sign_test_p` returns a constant. The neighbouring `per["iqr"][0] &lt;= per["median_delta"] &lt;= per["iqr"][1]` holds for *any* dataset by the definition of quartiles.
+
+Make the orphan a *treatment*-side row with a value that moves the median, or give A rows differing values so the filter is load-bearing.
+
+**4. HIGH — would these tests have caught the #299 `footprint_tokens` bug? No. Bluntly: no.** The bug lived in an external script, and nothing in this diff compares harness output to published output. The one test that would mechanically enforce claim (a) is trivially writable and absent: `records_282_flask.jsonl` is committed, `agent_footprint_results.md` is committed, so a golden test that renders `results_table(summarize(records))` and asserts each published cell would catch both a harness drift and a hand-edited table. Right now claim (a) rests entirely on the author remembering. Compounding it, `_main` (`bench/agent_footprint.py:778-781`) writes `summary.json` and prints JSON — **`results_table()` is never called by the CLI, and there is no mode that renders a table from an existing `records.jsonl`.** To get a table today you write… an ad-hoc script. That is the same failure surface, one indirection later. A `--table` / `--from-records` path plus the golden test is what makes the claim structural.
+
+**5. MEDIUM — `run_arm_c` is not counterbalanced, but the spec now says it must be.** `bench/agent_footprint.py:537` still iterates `(("A",…),("C",…))` unconditionally. Spec §14.5 (line 317) states arm C is "identical to … §8", and §8 (lines 141-145, added by this diff) now reads "interleaved **and counterbalanced**". So the amended spec is violated by unchanged code in the same file. Arm C is also the study `agent_footprint_results.md` already flags as "unverified provenance"; leaving the identical position confound in the arm you plan to re-run undercuts the point of the fix.
+
+**6. MEDIUM — `results_table()` omits the interval §9 requires, though `summarize()` computed it.** Spec §9 line 152: "Headline per metric: median paired delta (B-A) **with an interval (IQR or bootstrap CI)**". The mandated renderer (`bench/agent_footprint.py:679-689`) has six columns and none is the interval; `"iqr"` (line 654) is computed, stored, and never rendered. The spec now says published tables must come from `results_table()`, and `results_table()` cannot produce a §9-compliant table. Relatedly, §8 line 139's stopping rule ("raise if the paired delta's **CI** still crosses zero") has no implementation — and `iqr` is a quartile *pair*, not an interquartile range and certainly not a CI; the key name invites exactly that misreading.
+
+**7. MEDIUM — `_warn_on_provenance_leak` crashes on an empty or non-git directory.** `bench/agent_footprint.py:338` uses `check=True`; I confirmed `CalledProcessError` (exit 128) propagates out of `run_pair` for both a fresh `git init` with no commits and a plain directory. A diagnostic that only warns should not be the thing that aborts the run. Detached HEAD is fine (tested implicitly — `git log -1` works).
+
+**8. MEDIUM — warn-only is the wrong call here, and I'd argue the opposite of the usual case.** The check runs before any agent time is spent, so failing costs nothing and prevents 145 minutes of paid runs producing a confounded artifact. #282 is the proof that this class of defect is caught only in adversarial review, i.e. after publication. Worse: the check's *result* is recorded nowhere — not in `FootprintRecord`, not in `summary.json` — so a stderr line scrolls past amid hours of output and the artifact cannot afterwards be audited for provenance the way `baseline_failed` made the gate auditable. Either hard-fail behind an explicit `--allow-provenance-leak`, or persist the verdict into the summary (the `baseline_failed` precedent in this same file is the right pattern).
+
+**9. LOW — `results_table(treatment="B")` will mislabel arm-C tables.** `summarize()` auto-detects B-or-C (`_treatment_values`, line 601) but does not report which it chose; `results_table` defaults to `"B"`. Render an arm-C summary without remembering the kwarg and you get a table headed "B median" over C's numbers — a labeling error in the exact document class this fix exists to protect. `summarize()` should emit `treatment` and `results_table` should read it.
+
+**10. LOW — `sign_test_p` is correct; no finding.** Verified: `[]`→1.0, all-ties→1.0, n=1→1.0, 8-0→0.0078125, 9-1→0.021484375, 8-2→0.109375, 5-5→1.0 (the `min(1.0, …)` cap is needed and works). Ties correctly leave `n` rather than splitting. The test's three arithmetic assertions are genuinely non-tautological and match the exact binomial. This part of the diff is clean.
+
+**11. LOW — `statistics.quantiles(n=4)` extrapolates outside the data for n=2 or 3.** `bench/agent_footprint.py:646`. `quantiles([0,10], n=4)` (default `exclusive`) returns `[-2.5, 5.0, 12.5]` — an "IQR" wider than every observed value. Guarded against crashing (`len&gt;=2`) but not against being nonsense. Unreachable at the N≥10 floor, but it is emitted into `summary.json` for any small run and the containment assertion in the test can't detect it. `method="inclusive"` is the safer call.
+
+**12. LOW — odd `--n` silently unbalances the design.** With `n=11` I measured A leading 6 pairs to 5. Inherent to alternation, but the CLI warns on `n&lt;10` and says nothing about parity; one line in the `n&lt;10` check covers it.
+
+**13. LOW — `run_pair`'s docstring now contradicts its body.** `bench/agent_footprint.py:478`: "interleaved (A, B, A, B, ...)" and "Interleaving averages out any slow drift". The actual order is A,B / B,A / A,B. The inline comment at 490 is correct; the docstring, which is what a reader sees first, still describes the #282 defect as the design.
+
+**14. LOW — claim (b) has zero test coverage.** The one-line ordering change is the fix with the most direct effect on a future result, and no test asserts it. It is testable without live agents — monkeypatching `run_variant` and asserting the call sequence took me four lines, and it is what let me confirm the fix works.
+
+**15. NIT — the rendered table invites a misread.** `input_tokens` renders A=109.0, B=95.0, delta=**+10.0** (median-of-deltas vs delta-of-medians, driven by a +287 outlier). Correct and faithful to the published table, but a reader subtracting the two rendered medians gets −14. Worth a column label or a footnote in `results_table` itself, since the spec now makes this the canonical published artifact.
+
+**16. NIT — `results_table`'s docstring cites "spec section 12.7", which does not exist.** `bench/agent_footprint.py:677`. Spec §12 has no numbered subsections; the rule it means is §9 line 170.
+
+## Note on the working tree
+
+The tree changed under me mid-review: a concurrent edit refactored `_pair_records` to reuse the pre-existing `_record` helper at `tests/test_agent_footprint.py:242`. That duplication (the staged diff re-implemented a 20-line record builder that already existed 100 lines above) was a finding in the diff I was given; it appears to be already in hand. Tests pass (18/18) and `ruff check` is clean on both files before and after. No mypy in this venv.</result>
+<usage><subagent_tokens>76773</subagent_tokens><tool_uses>28</tool_uses><duration_ms>321013</duration_ms></usage>
+</task-notification>
