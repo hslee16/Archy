@@ -1,0 +1,93 @@
+lets continue
+
+---
+
+<task-notification>
+<task-id>b3n0o22hj</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit)"</summary>
+<event>run A0: reads=7 turns=44 in=88 out=24767 edit=True regress=False</event>
+</task-notification>
+
+---
+
+status
+
+---
+
+<task-notification>
+<task-id>b3n0o22hj</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit)"</summary>
+<event>run A1: reads=7 turns=50 in=100 out=33449 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b3n0o22hj</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit)"</summary>
+<event>run B1: reads=8 turns=65 in=128 out=35643 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b3n0o22hj</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit)"</summary>
+<event>run A2: reads=8 turns=34 in=68 out=24223 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b3n0o22hj</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit)"</summary>
+<event>run B2: reads=5 turns=49 in=98 out=35793 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b3n0o22hj</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit)"</summary>
+<event>[Monitor timed out — re-arm if needed.]</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>brl8wrwny</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit), rearmed"</summary>
+<event>run A3: reads=9 turns=56 out=43512 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>brl8wrwny</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit), rearmed"</summary>
+<event>run B3: reads=4 turns=34 out=22740 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>brl8wrwny</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit), rearmed"</summary>
+<event>run A4: reads=12 turns=62 out=32744 edit=True regress=False</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>brl8wrwny</task-id>
+<summary>Monitor event: "footprint bench run progress (per-row + exit), rearmed"</summary>
+<event>run B4: reads=6 turns=35 out=23879 edit=True regress=False</event>
+</task-notification>
+
+---
+
+is there a point to doing the rest of the pairs?
+
+---
+
+what would N=20 max benefit? isn't n=10 sufficient?
