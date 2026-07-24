@@ -341,8 +341,12 @@ def test_baseline_failed_reflects_the_suite_and_resets_first(tmp_path: Path) -> 
     # guards against, so the helper must reset before it runs the command.
     (repo / "kept.txt").write_text("leftover\n")
 
-    assert af._baseline_failed(repo, ["true"]) is False
+    # `true`/`false` are not executables on Windows, and this suite runs there.
+    ok = [sys.executable, "-c", "raise SystemExit(0)"]
+    red = [sys.executable, "-c", "raise SystemExit(1)"]
+
+    assert af._baseline_failed(repo, ok) is False
     assert (repo / "kept.txt").read_text() == "pristine\n"
-    assert af._baseline_failed(repo, ["false"]) is True
+    assert af._baseline_failed(repo, red) is True
     # No test command means no gate, and nothing to report as red.
     assert af._baseline_failed(repo, None) is False
