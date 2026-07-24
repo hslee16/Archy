@@ -1,15 +1,19 @@
 """Unit tests for the deterministic core of the agent-footprint bench (#259).
 
-Only `parse_transcript` and `summarize` are exercised here: they are pure over
-a session `.jsonl` and need no live agent. The runner (`run_variant` /
-`run_pair`) invokes `claude` and is intentionally left to the live bench, never
-CI. See docs/SPEC_AGENT_FOOTPRINT_BENCH.md sections 4-5 for the metric
-definitions these assertions pin.
+`parse_transcript` and `summarize` are pure over a session `.jsonl` and need no
+live agent. `_reset_repo` and `_baseline_failed` need only a throwaway git repo,
+and are covered here because a silent failure in either invalidates a whole run
+(a repo that does not reset means run i+1 measures run i's edits; a baseline
+measured on the wrong tree state disables the regression gate). Only the parts
+that shell out to `claude` (`run_variant` / `run_pair`) are left to the live
+bench, never CI. See docs/SPEC_AGENT_FOOTPRINT_BENCH.md sections 4-5 for the
+metric definitions these assertions pin.
 """
 
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -292,3 +296,57 @@ def test_summarize_pairs_arm_c_on_pre_edit_reads(tmp_path: Path):
     assert per["median_delta"] == -4.5
     assert per["treatment_lower_count"] == 2 and per["treatment_higher_count"] == 0
     assert summary["no_edit_runs"] == 1
+
+
+def _git_repo(tmp_path: Path) -> Path:
+    """A throwaway git repo with one committed file, for the reset/baseline tests."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def run(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+
+    run("init", "-q")
+    run("config", "user.email", "t@example.invalid")
+    run("config", "user.name", "t")
+    (repo / "kept.txt").write_text("pristine\n")
+    run("add", "-A")
+    run("commit", "-qm", "init")
+    return repo
+
+
+def test_reset_repo_restores_pristine_state(tmp_path: Path) -> None:
+    """Spec section 8's fresh checkout: run i's edits must not survive into run i+1."""
+    repo = _git_repo(tmp_path)
+    (repo / "kept.txt").write_text("edited by the agent\n")
+    (repo / "new_file.py").write_text("# agent-created\n")
+    (repo / "subdir").mkdir()
+    (repo / "subdir" / "nested.txt").write_text("also new\n")
+
+    af._reset_repo(repo)
+
+    assert (repo / "kept.txt").read_text() == "pristine\n"
+    assert not (repo / "new_file.py").exists()
+    assert not (repo / "subdir").exists()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True
+    )
+    assert status.stdout.strip() == ""
+
+
+def test_baseline_failed_reflects_the_suite_and_resets_first(tmp_path: Path) -> None:
+    """A red pristine suite must be detected, and measured on the reset tree."""
+    repo = _git_repo(tmp_path)
+    # Dirty the tree first: a baseline measured on leftover edits is the bug this
+    # guards against, so the helper must reset before it runs the command.
+    (repo / "kept.txt").write_text("leftover\n")
+
+    # `true`/`false` are not executables on Windows, and this suite runs there.
+    ok = [sys.executable, "-c", "raise SystemExit(0)"]
+    red = [sys.executable, "-c", "raise SystemExit(1)"]
+
+    assert af._baseline_failed(repo, ok) is False
+    assert (repo / "kept.txt").read_text() == "pristine\n"
+    assert af._baseline_failed(repo, red) is True
+    # No test command means no gate, and nothing to report as red.
+    assert af._baseline_failed(repo, None) is False

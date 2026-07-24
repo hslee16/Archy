@@ -194,6 +194,19 @@ source, and it is overwritten by later sessions).
 5. Publish the null. A metric only ships if the effect clears the noise band.
 6. Do not restate the "module layer targets the effect layer" inference as a
    finding; it is the hypothesis under test.
+7. **Breadth metrics are not variant-neutral in a decomposition study.** A
+   variant B that splits one file into several raises
+   `pre_edit_distinct_files` and `distinct_files_touched` by construction: the
+   same surface now lives in more files, so reaching it opens more of them even
+   when it takes fewer reads. The #282 run hit exactly this (reads down, files
+   up, and the files delta was the only nominally significant cell). Either
+   normalize breadth by the variant's file count or drop the metric from the
+   headline; never read a raw breadth regression as B being worse to navigate.
+8. **Fix N and the stopping rule before looking.** Section 8 permits raising N
+   when the interval still crosses zero, which is optional stopping if it is
+   decided after seeing the direction. Record the intended N, the power it buys,
+   and what a borderline result triggers (another task or repo, not more pairs of
+   the same cell) before the run's numbers exist.
 
 ## 13. Open decisions (resolve at implementation time)
 
