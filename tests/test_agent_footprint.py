@@ -742,3 +742,26 @@ def test_parse_transcript_ignores_subagent_sidechain_entries(tmp_path: Path):
     assert parsed.assistant_messages == 1
     assert parsed.input_tokens == 2 and parsed.output_tokens == 5
     assert parsed.distinct_files_touched == 1
+
+
+def test_published_282_table_is_exactly_what_the_harness_renders():
+    """The #282 writeup must be byte-identical to `results_table()` output.
+
+    This is the enforcement behind spec section 9's "the harness owns the
+    numbers, the writeup pastes them": the committed records must still render
+    the committed prose, so neither a drifting harness nor a hand-edited table
+    can pass unnoticed. It is the test that would have caught the wrong
+    `footprint_tokens` headline shipped in #299.
+
+    It was written during #301, then lost to a botched duplicate-removal edit in
+    the same PR and reported as landed. Restored here with the strengthening
+    that #301's review asked for: containment alone would let a stale copy sit
+    beside the regenerated one.
+    """
+    root = Path(__file__).resolve().parent.parent
+    records = af.load_records(root / "bench" / "agent_footprint" / "records_282_flask.jsonl")
+    rendered = af.results_table(af.summarize(records))
+    published = (root / "bench" / "agent_footprint_results.md").read_text(encoding="utf-8")
+    assert rendered in published
+    assert published.count(rendered) == 1
+    assert published.count("| metric | A median | B median |") == 1
