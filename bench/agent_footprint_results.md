@@ -170,15 +170,17 @@ the suite green; 0 regressions, 0 no-edit runs).
 | input_tokens | 109.0 | 95.0 | +10.0 | [-48.0, +27.5] | 4 / 6 / 0 | 0.754 |
 | output_tokens | 32,330.0 | 34,766.0 | +4,190.0 | [-7,357.2, +10,958.0] | 4 / 6 / 0 | 0.754 |
 | num_turns | 51.5 | 46.5 | -3.5 | [-20.8, +12.2] | 5 / 5 / 0 | 1.000 |
-| distinct_files_touched | 5.0 | 5.5 | +0.5 | [+0.0, +2.5] | 1 / 5 / 4 | 0.219 |
 | file_revisitations | 6.0 | 5.0 | -1.0 | [-4.8, +1.8] | 5 / 5 / 0 | 1.000 |
-| pre_edit_reads | 10.0 | 9.0 | -3.0 | [-3.8, +1.2] | 7 / 3 / 0 | 0.344 |
+| canonical_distinct_files_touched | 5.0 | 4.5 | -0.5 | [-1.0, +1.5] | 5 / 3 / 2 | 0.727 |
+| canonical_pre_edit_distinct_files | 3.0 | 4.0 | +1.0 | [+0.0, +1.0] | 0 / 6 / 4 | 0.031 |
+| distinct_files_touched | 5.0 | 5.5 | +0.5 | [+0.0, +2.5] | 1 / 5 / 4 | 0.219 |
 | pre_edit_distinct_files | 3.0 | 5.0 | +1.5 | [+1.0, +2.0] | 0 / 10 / 0 | 0.002 |
+| pre_edit_reads | 10.0 | 9.0 | -3.0 | [-3.8, +1.2] | 7 / 3 / 0 | 0.344 |
 | pre_edit_input_tokens | 37.0 | 30.0 | -3.0 | [-15.5, +2.5] | 7 / 3 / 0 | 0.344 |
 
-N=10 pairs; 9 metrics tested, so a nominal p must clear p x 9 to survive Bonferroni. Regressions: 0; runs with the gate disabled by a red baseline: 0; no-edit runs: 0.
+N=10 pairs; 11 metrics tested, so a nominal p must clear p x 11 to survive Bonferroni. Regressions: 0; runs with the gate disabled by a red baseline: 0; no-edit runs: 0.
 
-The delta column is the median of the per-pair deltas, not the difference of the two median columns; with a skewed spread those disagree, and the paired median is the one the sign test refers to. Primary metric: `file_revisitations` (spec section 4). `input_tokens` is non-cache input only (spec section 5) and is ~2 tokens per turn under prompt caching, so it is a turn proxy, not a token measure.
+The delta column is the median of the per-pair deltas, not the difference of the two median columns; with a skewed spread those disagree, and the paired median is the one the sign test refers to. Primary metric: `file_revisitations` (spec section 4). `input_tokens` is non-cache input only (spec section 5) and is ~2 tokens per turn under prompt caching, so it is a turn proxy, not a token measure. Breadth: use the `canonical_*` rows, which count pre-refactor paths; the raw `distinct_files_touched` / `pre_edit_distinct_files` rows are descriptive only and are biased against a decomposition variant by construction (spec section 12.7).
 
 Position drift, tie-corrected Spearman of `pre_edit_reads` vs run index: A=+0.615, B=+0.346. An arm that drifts while the other does not is why section 8 requires counterbalancing.
 
@@ -215,14 +217,29 @@ spread is the story: per-pair deltas run from −28,565 to +27,125, so a median 
 +4,213 sits well inside the noise. This is the ~2.5x per-task variance the paper
 warned about (spec section 8), reproduced.
 
-**The one significant cell is in the wrong direction, and it now survives
-correction.** `pre_edit_distinct_files` is higher for B in **all 10** pairs
-(p=0.002); at 9 metrics Bonferroni puts it at 0.018, so unlike the first
-(parser-bugged) version of this table it clears 0.05 rather than failing it. The
-divisor is itself generous: `footprint_tokens`, `output_tokens` and `input_tokens`
-return identical sign results here (4/6, p=0.754) because non-cache input is ~2
-tokens per turn, so they are one test and not three, and the effective divisor is
-nearer 6 (giving 0.012). Correcting harder would not rescue this cell. It is also
+**The breadth cell: about half of it was an artifact, and the rest does not
+survive correction.** The raw `pre_edit_distinct_files` is higher for B in **all
+10** pairs (p=0.002). But raw file counts are not variant-neutral here: B splits
+one file into four, so reaching the same surface opens more files *by
+construction*. Counting the same touches over **pre-refactor** paths (#302, the
+`canonical_*` rows above, using the reviewable map in
+[`agent_footprint/variant_b_flask_file_map.json`](agent_footprint/variant_b_flask_file_map.json))
+cuts it to 0/6/4 ties, **p=0.031 nominal**, which clears no multiple-comparison
+threshold (11 metrics tested; even the generous effective divisor below leaves it
+far outside 0.05). Total breadth actually reverses sign under canonical counting
+(`canonical_distinct_files_touched` −0.5, p=0.727).
+
+The residual is worth stating rather than explaining away: even counting only
+original-surface files, B's agents opened more distinct files before their first
+edit in 6 of 10 pairs and fewer in none. That is a real, small, unconfirmed
+tendency, not a null and not a finding.
+
+On the divisor: 11 metrics are tested but several are not independent.
+`footprint_tokens`, `output_tokens` and `input_tokens` return identical sign
+results (4/6, p=0.754) because non-cache input is ~2 tokens per turn, and each
+raw breadth metric duplicates its canonical twin. The effective number of
+independent tests is nearer 6. Correcting at 6 rather than 11 still leaves the
+canonical breadth cell (0.031 x 6 = 0.19) nowhere near significance. It is also
 **mechanically confounded by the refactor itself**: B split one file into four, so
 reaching the same surface necessarily opens more distinct files even when it takes
 fewer reads. Read together with `pre_edit_reads` (fewer reads, more files), the

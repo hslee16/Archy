@@ -1,0 +1,5 @@
+{
+  "src/flask/sansio/app_templating.py": "src/flask/sansio/app.py",
+  "src/flask/sansio/app_routing.py": "src/flask/sansio/app.py",
+  "src/flask/sansio/app_errors.py": "src/flask/sansio/app.py"
+}
