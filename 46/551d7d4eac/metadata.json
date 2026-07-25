@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "46551d7d4eac",
+  "strategy": "manual-commit",
+  "branch": "alee/render-static-export",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/FUTURE.md",
+    "docs/ROADMAP.md",
+    "docs/SPEC_VISUALIZATION.md",
+    "src/archy/cli.py",
+    "src/archy/render.py",
+    "tests/test_cli.py",
+    "tests/test_render.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/46/551d7d4eac/0/metadata.json",
+      "transcript": "/46/551d7d4eac/0/full.jsonl",
+      "content_hash": "/46/551d7d4eac/0/content_hash.txt",
+      "prompt": "/46/551d7d4eac/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 128,
+    "cache_creation_tokens": 166587,
+    "cache_read_tokens": 7910040,
+    "output_tokens": 46986,
+    "api_call_count": 68
+  }
+}
