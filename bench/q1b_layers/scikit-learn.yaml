@@ -1,0 +1,76 @@
+# Authored layer rules for scikit-learn/scikit-learn, for the Q1b A/B (#348).
+#
+# Same procedure as django.yaml: candidates from the project's OWN documented
+# conventions, then validated against pristine upstream code, then failures
+# dropped and recorded. Authored blind to the task set.
+#
+# WHAT SKLEARN TAUGHT THAT DJANGO DID NOT
+#
+# The "a utilities package is a leaf" prior is FLATLY WRONG here. `sklearn.utils`
+# imports estimator families heavily on pristine code:
+#
+#   utils -> linear_model      29 edges
+#   utils -> datasets          15
+#   utils -> decomposition     15
+#   utils -> cluster           14
+#   utils -> ensemble          13
+#   utils -> model_selection   10
+#   utils -> neighbors          8
+#   utils -> tree               5
+#   utils -> svm                5
+#
+# That is not rot. `sklearn/utils/estimator_checks.py` exists to exercise
+# estimators, so it imports them on purpose. Carrying the Django-shaped prior
+# across would have produced nine always-firing rules.
+#
+# Peer-family rules were also mostly dropped: tree -> ensemble (1),
+# svm -> linear_model (3), metrics -> linear_model (10), preprocessing ->
+# ensemble (1) all exist upstream.
+#
+# WHAT IS DELIBERATELY *NOT* HERE
+#
+# Several peer-family pairs do hold on pristine code (cluster -> ensemble,
+# linear_model -> ensemble, metrics -> ensemble, datasets -> ensemble). They are
+# excluded anyway, because scikit-learn does not document estimator families as
+# a layered hierarchy, so keeping them would mean selecting rules *because they
+# are currently zero*. That is the tautology this whole exercise is built to
+# avoid (see #288 `D_purity`: 0 flags across 40 repos because the definition
+# made the violation impossible).
+#
+# Only rules with real documented backing survive, so this ruleset is smaller
+# and weaker than Django's, which is the honest outcome rather than a problem to
+# engineer around.
+#
+# Validated against scikit-learn @ 8fac97f31b: `archy check` exits 0.
+
+layers:
+  externals:
+    modules: ["sklearn.externals"]
+  loss:
+    modules: ["sklearn._loss"]
+  utils:
+    modules: ["sklearn.utils"]
+  linear_model:
+    modules: ["sklearn.linear_model"]
+  ensemble:
+    modules: ["sklearn.ensemble"]
+  datasets:
+    modules: ["sklearn.datasets"]
+  metrics:
+    modules: ["sklearn.metrics"]
+
+forbid:
+  # `sklearn/externals` is VENDORED third-party code. Vendored code importing
+  # its host is the clearest architectural error available in this codebase,
+  # and the one scikit-learn most obviously intends to prevent.
+  - {from: externals, to: utils}
+  - {from: externals, to: linear_model}
+  - {from: externals, to: ensemble}
+  - {from: externals, to: datasets}
+  - {from: externals, to: metrics}
+
+  # `sklearn/_loss` is a private, low-level numeric kernel (underscore-prefixed,
+  # Cython-backed). Estimator families consume it; it must not reach back up.
+  # Note `_loss -> utils` is NOT forbidden: 11 such edges exist upstream.
+  - {from: loss, to: linear_model}
+  - {from: loss, to: ensemble}

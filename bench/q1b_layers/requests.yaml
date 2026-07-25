@@ -1,0 +1,82 @@
+# Authored layer rules for psf/requests, for the Q1b A/B (#348).
+#
+# Same procedure as django.yaml and scikit-learn.yaml: candidates from the
+# project's own structure and documented role of each module, validated against
+# pristine upstream code, failures dropped and recorded. Authored blind to the
+# task set.
+#
+# NOTE ON PACKAGE PATH: modern requests lives at `src/requests`, but the Q1b
+# task's base commit predates that move and uses `requests/`. These rules name
+# MODULES (`requests.compat`), not paths, so they are unaffected either way. The
+# runner still has to resolve the package directory per base commit.
+#
+# WHAT IS DELIBERATELY NOT RULED
+#
+# requests' core is genuinely interconnected on pristine code, and none of it is
+# rot to be flagged here:
+#
+#   models   <-> utils        (both directions)
+#   models   <-> adapters     (both directions)
+#   models   <-> cookies      (both directions)
+#
+# Any "layer" rule across those pairs would fire immediately. So the rules stay
+# at the edges of the package, where the roles are unambiguous.
+#
+# Validated against requests @ d64b9ad4: `archy check` exits 0.
+
+layers:
+  api:
+    modules: ["requests.api"]
+  sessions:
+    modules: ["requests.sessions"]
+  models:
+    modules: ["requests.models"]
+  adapters:
+    modules: ["requests.adapters"]
+  auth:
+    modules: ["requests.auth"]
+  utils:
+    modules: ["requests.utils"]
+  compat:
+    modules: ["requests.compat"]
+  structures:
+    modules: ["requests.structures"]
+  internal_utils:
+    modules: ["requests._internal_utils"]
+  status_codes:
+    modules: ["requests.status_codes"]
+
+forbid:
+  # `requests.api` is the public facade (get/post/...). It is imported by the
+  # package root and nothing else; an internal module reaching for it would be
+  # calling the library through its own front door.
+  - {from: models, to: api}
+  - {from: sessions, to: api}
+  - {from: adapters, to: api}
+  - {from: auth, to: api}
+  - {from: utils, to: api}
+
+  # `requests.compat` is the Python-version/vendored-import shim. It sits below
+  # everything and imports only stdlib and vendored packages on pristine code.
+  - {from: compat, to: models}
+  - {from: compat, to: sessions}
+  - {from: compat, to: adapters}
+  - {from: compat, to: auth}
+  - {from: compat, to: utils}
+
+  # `requests.structures` is data containers (CaseInsensitiveDict), and
+  # `_internal_utils` is string helpers. Both are leaves by role.
+  - {from: structures, to: models}
+  - {from: structures, to: sessions}
+  - {from: structures, to: adapters}
+  - {from: structures, to: utils}
+  - {from: internal_utils, to: models}
+  - {from: internal_utils, to: sessions}
+  - {from: internal_utils, to: adapters}
+  - {from: internal_utils, to: utils}
+
+  # `status_codes` is a lookup table built on `structures`, nothing more.
+  - {from: status_codes, to: models}
+  - {from: status_codes, to: sessions}
+  - {from: status_codes, to: adapters}
+  - {from: status_codes, to: utils}
