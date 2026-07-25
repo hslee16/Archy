@@ -1,6 +1,7 @@
 # Spec: visualization surface (static export + terminal-native live)
 
-Status: design (no rendering code yet). Tracking: [#283]; branches
+Status: Branch A shipped in scoped form (`dsm` + `trend`); Branch B still
+design. Tracking: [#283]; branches
 [#284] (static export, first) and [#285] (terminal-native live). This spec fixes the scope, the
 anti-theater gate, and the two-branch plan before any UI code lands. It is the
 first archy feature whose primary user is the **human governor**, not the
@@ -46,30 +47,58 @@ encode at least one:
 This gate is the acceptance test for every view proposed below and any added
 later.
 
-## 3. Branch A - static export (ship first)
+## 3. Branch A - static export (shipped, scoped to two views)
 
-`archy render` produces a **self-contained HTML file** (Cytoscape.js/d3
-vendored inline; offline, no CDN, no server), fed by the existing
-`graph_to_dict` JSON. Attach to a PR, drop in docs, paste in an issue.
+`archy render` produces a **self-contained HTML file** (offline, no CDN, no
+server). Attach to a PR, drop in docs, paste in an issue.
 
 Views (`--view`):
-- `graph` (default): nodes colored by edit-risk, cycle members ringed, DSM
-  back-edges / layer violations flagged. Not a bare import graph - it is the
-  edit-risk + cycle overlay on the graph.
-- `dsm`: the DSM as a colored matrix, back-edges in red. Highest signal-per-pixel.
-- `trend`: the five axes over `history.jsonl` as an inline SVG sparkline set.
+- `dsm` (default): the DSM as a colored matrix in inline SVG. Highest
+  signal-per-pixel. **Shipped.**
+- `trend`: the five axes over `history.jsonl` as inline SVG sparklines, each
+  with its numeric range and window delta. **Shipped.**
+- `graph`: nodes colored by edit-risk, cycle members ringed, back-edges /
+  layer violations flagged. **Deferred behind a usage signal**, see §3a.
 
-Constraints:
-- **No heavy runtime dep.** Vendor the JS in-repo (keeps offline + self-contained;
-  a CDN link would break air-gapped use). Optionally shell out to a `dot` binary
-  when present, but never require it.
-- Deterministic output (byte-stable for a fixed graph) so it diffs cleanly and
-  snapshot-tests. Reuse the greedy (order-stable) grouping, never Louvain
-  (parse-order-dependent; see LEARNINGS.md).
+Constraints (as built):
+- **Zero runtime dep, not just no heavy one.** Both shipped views are static,
+  so they need no layout engine and vendor no JavaScript at all: inline SVG and
+  inline CSS, no `<script>`, no external request. That is stronger than the
+  original "vendor the JS" constraint and cost nothing to reach.
+- Deterministic output (byte-stable for a fixed input) so it diffs cleanly and
+  snapshot-tests. No wall-clock time is embedded. Reuse the greedy
+  (order-stable) grouping, never Louvain (parse-order-dependent; see
+  LEARNINGS.md).
 - Reads the same cached graph the MCP server builds; no re-parse cost.
 
-Prior art proving the shape: `tldr-skill` generates a self-contained
-Cytoscape.js dependency graph from a Python builder with zero LLM tokens.
+**What red means is grouping-dependent, and the renderer enforces it.** The
+gate credits the DSM view with "back-edges" (signal 3), but `row > col` only
+means *back-edge* under a topological ordering. Under community or layer
+grouping the block order is not a dependency order, so flagging `row > col`
+there is noise: on archy itself it painted 168 of 243 cells red. The shipped
+renderer therefore flags back-edges under `--group=topological` and
+block-crossing edges under `--group=community|layer`, and says which in the
+legend. A view that colors cells by a property its ordering does not encode is
+theater even when the underlying number is real.
+
+### 3a. Why the `graph` view is deferred
+
+It is the only view that forces a vendored force-layout engine (Cytoscape.js /
+d3) into the wheel, and it is the weakest of the three against §2: a node-link
+diagram is present in every tool, whereas a DSM's cell positions and a score
+trajectory are things text conveys poorly. Deferring it holds Branch A to the
+same **usage-signal** bar that §6.3 already applies to the `archy_render` MCP
+tool, and that `PATTERN_DETECTION_EMPIRICS.md`, `CONSTRAINT_AWARE_ORCHESTRATION_SYNTHESIS.md`,
+and `INLOOP_PREVALENCE_EMPIRICS.md` apply to their own candidates. The human
+governor is a hypothesized user archy has never observed, and unlike the
+agent-facing surface there is no benchmark that can falsify a rendering's
+value, so cost discipline is the only available check.
+
+Exit condition, so the deferral does not silently become a wontfix: an outside
+request for it, or evidence of `archy render` output being used in public.
+Prior art for the shape when it is built: `tldr-skill` generates a
+self-contained Cytoscape.js dependency graph from a Python builder with zero
+LLM tokens.
 
 ## 4. Branch B - terminal-native live view (second)
 
@@ -104,8 +133,8 @@ Open design points:
 
 ## 6. Phasing
 
-1. Branch A `archy render` (`graph` + `dsm` + `trend`), vendored JS, snapshot
-   tests. Slots next to `archy graph`.
+1. Branch A `archy render` (`dsm` + `trend`), zero vendored JS, snapshot tests.
+   Slots next to `archy graph`. **Done.** The `graph` view is deferred per §3a.
 2. Branch B `archy watch` (Textual, optional extra), reusing the watcher stream.
 3. Revisit an MCP `archy_render` tool only if agents (not humans) turn out to
    want a rendered artifact to hand back to a user - deferred until there is a

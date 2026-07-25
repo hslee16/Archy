@@ -74,6 +74,8 @@ from archy.refactor import (
     RefactorPriority,
     compute_refactor_priorities,
 )
+from archy.render import DEFAULT_MAX_NODES as RENDER_MAX_NODES
+from archy.render import render_dsm_html, render_trend_html
 from archy.score import Score, compute_score
 from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend
@@ -1150,6 +1152,130 @@ def dsm(
         click.echo(json.dumps(render_json(current), indent=2, sort_keys=True))
     else:
         click.echo(render_ascii(current, max_nodes=max_nodes))
+
+
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--view",
+    type=click.Choice(["dsm", "trend"]),
+    default="dsm",
+    show_default=True,
+    help="Which view to render.",
+)
+@click.option(
+    "--out",
+    "out_path",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Write the HTML here. Defaults to stdout.",
+)
+@click.option(
+    "--group",
+    "group_by",
+    type=click.Choice(["community", "layer", "topological"]),
+    default="community",
+    help="dsm view: how to order rows/columns.",
+)
+@click.option(
+    "--weight",
+    type=click.Choice(["imports", "calls"]),
+    default="imports",
+    help="dsm view: cell value, edge presence (imports) or call_count (calls).",
+)
+@click.option(
+    "--focus",
+    type=str,
+    default=None,
+    help="dsm view: qualname to focus on; keeps focus + its N-hop neighborhood.",
+)
+@click.option(
+    "--focus-depth",
+    type=int,
+    default=1,
+    help="dsm view: hop count for --focus.",
+)
+@click.option(
+    "--package",
+    type=str,
+    default=None,
+    help="dsm view: keep only modules whose qualname starts with this prefix.",
+)
+@click.option(
+    "--max-nodes",
+    type=int,
+    default=RENDER_MAX_NODES,
+    show_default=True,
+    help="dsm view: refuse to render matrices larger than this.",
+)
+@click.option(
+    "--last",
+    "last_n",
+    type=int,
+    default=10,
+    show_default=True,
+    help="trend view: number of most-recent records to plot.",
+)
+def render(
+    path: Path,
+    view: str,
+    out_path: Path | None,
+    group_by: str,
+    weight: str,
+    focus: str | None,
+    focus_depth: int,
+    package: str | None,
+    max_nodes: int,
+    last_n: int,
+) -> None:
+    """Render a view as a self-contained HTML file (offline, no JS, no CDN).
+
+    `--view=dsm` draws the Design Structure Matrix, back-edges in red;
+    `--view=trend` plots the five axes over .archy/history.jsonl. Output is
+    byte-stable for a fixed input, so two exports diff cleanly.
+
+    Options are per-view (see the `dsm view:` / `trend view:` help text) and
+    ignored by the other view. There is no `graph` view: a node-link diagram
+    needs a vendored layout engine and carries the least signal of the three,
+    so it stays deferred (docs/SPEC_VISUALIZATION.md).
+    """
+    if view == "trend":
+        if last_n < 1:
+            raise click.ClickException(f"--last must be >= 1; got {last_n}")
+        rows = read_history(path / ".archy" / "history.jsonl")
+        html = render_trend_html(rows, last_n=last_n)
+    else:
+        if focus_depth < 0:
+            raise click.ClickException(f"--focus-depth must be >= 0; got {focus_depth}")
+        if max_nodes < 1:
+            raise click.ClickException(f"--max-nodes must be >= 1; got {max_nodes}")
+
+        from archy.dsm import GroupBy, Weight, build_dsm
+
+        g = _load_graph(path, internal_only=False)
+        matrix = build_dsm(
+            g,
+            group_by=cast(GroupBy, group_by),
+            weight=cast(Weight, weight),
+            focus=focus,
+            focus_depth=focus_depth,
+            package=package,
+        )
+        try:
+            html = render_dsm_html(matrix, max_nodes=max_nodes)
+        except ValueError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    if out_path is None:
+        click.echo(html, nl=False)
+        return
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(html, encoding="utf-8")
+    click.echo(f"Wrote {out_path}", err=True)
 
 
 @main.command()

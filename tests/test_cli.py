@@ -975,3 +975,54 @@ def test_index_sync_errors_on_oversized_scan(tmp_path: Path):
     result = CliRunner().invoke(main, ["index", "sync", str(project)])
     assert result.exit_code != 0
     assert "max_modules" in result.output
+
+
+def test_render_dsm_writes_a_self_contained_file(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    out = tmp_path / "out" / "dsm.html"
+    result = CliRunner().invoke(main, ["render", str(project), "--out", str(out)])
+    assert result.exit_code == 0
+    html = out.read_text(encoding="utf-8")
+    assert html.startswith("<!DOCTYPE html>")
+    assert "pkg.a" in html
+    assert "<script" not in html
+
+
+def test_render_defaults_to_stdout(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["render", str(project)])
+    assert result.exit_code == 0
+    assert result.output.startswith("<!DOCTYPE html>")
+
+
+def test_render_trend_reads_history(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    CliRunner().invoke(main, ["score", str(project), "--record"])
+    result = CliRunner().invoke(main, ["render", str(project), "--view", "trend"])
+    assert result.exit_code == 0
+    assert "<h2>overall</h2>" in result.output
+
+
+def test_render_trend_without_history_still_succeeds(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["render", str(project), "--view", "trend"])
+    assert result.exit_code == 0
+    assert "archy score --record" in result.output
+
+
+def test_render_errors_instead_of_writing_an_oversized_matrix(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    out = tmp_path / "dsm.html"
+    result = CliRunner().invoke(
+        main, ["render", str(project), "--max-nodes", "1", "--out", str(out)]
+    )
+    assert result.exit_code != 0
+    assert "max_nodes" in result.output
+    assert not out.exists()
+
+
+def test_render_rejects_invalid_last(tmp_path: Path):
+    project = _make_three_module_project(tmp_path)
+    result = CliRunner().invoke(main, ["render", str(project), "--view", "trend", "--last", "0"])
+    assert result.exit_code != 0
+    assert "--last" in result.output

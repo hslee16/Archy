@@ -35,6 +35,7 @@ archy mcp             # expose 11 tools to Claude Code, Cursor, any MCP client
 | Duplicate detection | `archy duplicates` (two-tier: likely duplicates vs demoted variants - same-class/boilerplate/test/vendored; advisory, not a score axis) |
 | Change coupling | `archy coupling` (module pairs that co-change in git history but share no import/call edge - hidden dependencies; source-only, advisory) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
+| Human-facing export | `archy render --view dsm\|trend` (one self-contained HTML file: no JS, no CDN, offline, byte-stable) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
 | Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue; wire in or cleanly remove the MCP server) |
@@ -224,6 +225,21 @@ archy dsm path/to/project --group topological --diff .archy/dsm-before.json
 ```
 
 `archy dsm` refuses ASCII rendering for projects larger than `--max-nodes` (default 80) with an actionable error pointing at `--focus`, `--package`, or `--format json`.
+
+### Static HTML export (`archy render`)
+
+Every other archy surface targets the agent. `archy render` targets the human reviewing what the agent did: a single self-contained HTML file to attach to a PR, drop in docs, or open offline. No JavaScript, no CDN, no vendored bundle, no server, and byte-stable for a fixed input, so two exports diff cleanly.
+
+```bash
+archy render path/to/project --view dsm --out dsm.html     # the matrix, flagged cells in red
+archy render path/to/project --view dsm --group topological --out cycles.html
+archy render path/to/project --view trend --out trend.html # five axes over .archy/history.jsonl
+archy render path/to/project --view dsm                    # HTML to stdout
+```
+
+What red means follows the ordering you asked for, because only one ordering encodes it: under `--group=topological` red is a back-edge (a cycle seed), and under `--group=community` or `--group=layer`, where block order is not a dependency order, red is an edge crossing a block boundary. The DSM view refuses matrices larger than `--max-nodes` (default 300) rather than writing an unreadable file.
+
+There is no `graph` view. A node-link diagram is the one view that needs a vendored layout engine, and it is also the lowest-signal of the three; it stays deferred behind a usage signal (see [`docs/SPEC_VISUALIZATION.md`](docs/SPEC_VISUALIZATION.md)).
 
 ### Snapshot and diff (agent feedback loop)
 
@@ -473,12 +489,14 @@ Shipped:
 - **v0.21, call-weighted Newman Q** as a *parallel diagnostic* on `archy score` (not an axis replacement): the gap between unweighted and weighted Q flags mismatch between import-graph and call-graph community structure ([`docs/research/CALL_WEIGHTED_Q_EMPIRICS.md`](docs/research/CALL_WEIGHTED_Q_EMPIRICS.md)).
 - **v0.22, `archy dsm`** (Design Structure Matrix): CLI + `archy_dsm` MCP tool with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package`, and `--diff` for back-edge regression detection. Visualization-only per [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md): no DSM-derived score axis or diagnostic scalar.
 
+- **v0.42, `archy render`** ([#284](https://github.com/hslee16/archy/issues/284)): static HTML export for the human governor, `--view dsm|trend`. Self-contained (inline SVG + CSS, no JS, no CDN, no server) and byte-stable for a fixed input. CLI-only by design: no MCP tool, and the `graph` view stays deferred behind a usage signal ([`docs/SPEC_VISUALIZATION.md`](docs/SPEC_VISUALIZATION.md) §3a, §6.3).
+
 **Install / distribution**
 
 - **v0.25, Claude Code plugin** (`plugins/claude/`): bundles the MCP server registration and the canonical `archy` skill into an installable unit.
 - **v0.26, agent-detecting installer** (`archy install` / `archy uninstall`): auto-detects which clients (Claude Code, Cursor, Codex CLI, opencode, Continue) are present, writes each one's MCP stanza and rules file, and seeds Claude's `permissions.allow`. Adapter registry in `src/archy/install/`; user docs in [`docs/INSTALL.md`](docs/INSTALL.md).
 
-Empirically rejected (kept here so they don't get re-proposed): type-hint coverage in any form, `calls_per_edge` as a 6th axis, HTML output formats, dead-function detection, multi-language analysis. See [`docs/ROADMAP.md`](docs/ROADMAP.md#rejected-explicitly-will-not-ship) for the evidence behind each.
+Empirically rejected (kept here so they don't get re-proposed): type-hint coverage in any form, `calls_per_edge` as a 6th axis, HTML output on agent-facing commands, dead-function detection, multi-language analysis. See [`docs/ROADMAP.md`](docs/ROADMAP.md#rejected-explicitly-will-not-ship) for the evidence behind each.
 
 See [`docs/FUTURE.md`](docs/FUTURE.md) for the longer list and [`docs/LEARNINGS.md`](docs/LEARNINGS.md) for design notes.
 
