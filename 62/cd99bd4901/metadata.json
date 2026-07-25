@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "62cd99bd4901",
+  "strategy": "manual-commit",
+  "branch": "alee/288-pattern-detection-research",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "bench/fixtures/flask_realworld.importlinter",
+    "bench/pattern_detection.py",
+    "bench/pattern_detection_results.md",
+    "docs/research/PATTERN_DETECTION_EMPIRICS.md",
+    "docs/research/README.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/62/cd99bd4901/0/metadata.json",
+      "transcript": "/62/cd99bd4901/0/full.jsonl",
+      "content_hash": "/62/cd99bd4901/0/content_hash.txt",
+      "prompt": "/62/cd99bd4901/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 67,
+    "cache_creation_tokens": 314405,
+    "cache_read_tokens": 9239303,
+    "output_tokens": 40762,
+    "api_call_count": 36
+  }
+}
