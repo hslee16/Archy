@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "0ab2506509bd",
+  "strategy": "manual-commit",
+  "branch": "alee/298-constraint-aware-orchestration-research",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "docs/research/CONSTRAINT_AWARE_ORCHESTRATION_SYNTHESIS.md",
+    "docs/research/README.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0a/b2506509bd/0/metadata.json",
+      "transcript": "/0a/b2506509bd/0/full.jsonl",
+      "content_hash": "/0a/b2506509bd/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 154,
+    "cache_creation_tokens": 54041,
+    "cache_read_tokens": 4705043,
+    "output_tokens": 25834,
+    "api_call_count": 36
+  }
+}
