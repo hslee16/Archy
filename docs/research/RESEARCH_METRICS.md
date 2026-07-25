@@ -1515,9 +1515,14 @@ ran twice and landed null twice.
 
 A third cell (a harder-to-navigate repo) was **cancelled by pre-run adversarial
 review before any agent time was spent**, on two defects that could not be
-patched: a variant tree that leaked `.archy/index.db` into the treatment only,
-and a path-keyed primary metric that scored the treatment better by
-construction. Two nulls plus that cancellation closed the line (#300, #303,
+patched: the task's premise was **factually false** (it assumed a failure mode
+`Console.get_style` does not have), and **the treatment never touched the
+task's working set**, so the design actually tested whether deleting 662 lines
+of unrelated code from a file the agent must read anyway changes its footprint.
+A null there would have been written up as evidence about cleaner code helping
+agents, which it is not. (Three further defects were found and patched,
+including a variant tree leaking `.archy/index.db` into the treatment only and
+a path-keyed primary metric that scored the treatment better by construction.) Two nulls plus that cancellation closed the line (#300, #303,
 #307): the minimal-pair design cannot yield an interpretable positive at
 archy's layer with this power budget.
 

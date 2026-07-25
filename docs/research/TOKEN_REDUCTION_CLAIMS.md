@@ -149,10 +149,10 @@ reports a **cost**, not a free win.
 
 | claim | source | baseline it is measured against | what kind of evidence |
 | --- | --- | --- | --- |
-| **"99.9% fewer input tokens"** | Cloudflare Code Mode (Feb 2026) | The Cloudflare API's **2,500+ endpoints exposed as individual MCP tools**, estimated at **1.17M tokens**, replaced by `search()` + `execute()` + a typed SDK at ~1,000 tokens | Arithmetic against a configuration **no one would ever ship**. 1.17M tokens exceeds every production context window; the "before" case is impossible, not merely bad. |
-| **"98.7% saving, 150,000 to 2,000 tokens"** | Anthropic, code execution with MCP (Nov 2025) | **One constructed worked example** (a meeting transcript passing through the model twice on its way from Google Drive to Salesforce) | A single illustrative example in an engineering blog post. No task set, no N, no model named for the measurement. |
-| **"85% reduction in token usage"** | Anthropic Tool Search Tool (Nov 2025) | Full tool library loaded upfront vs loaded on demand | Vendor benchmark; the mechanism is real and now ships in Claude Code (Tool Search auto-activates when MCP tool descriptions exceed **10% of the context budget**). |
-| **"~95%+ on code-reading tasks"** | jCodeMunch MCP (`TOKEN_SAVINGS.md`) | Its own table: "Explore repo structure: **~200,000 tokens** raw vs ~2k" | The raw column is **reading the entire repository**, which is not what an agent does. Self-published, 15 task-runs across 3 repos. |
+| **"99.9% fewer input tokens"** | Cloudflare, [Code Mode for MCP](https://blog.cloudflare.com/code-mode-mcp/) (Feb 20, 2026) | The Cloudflare API's **2,500+ endpoints exposed as individual MCP tools**, estimated at **1.17M tokens**, replaced by `search()` + `execute()` + a typed SDK at ~1,000 tokens | Arithmetic against a configuration **no one would ever ship**. 1.17M tokens exceeds every production context window; the "before" case is impossible, not merely bad. |
+| **"98.7% saving, 150,000 to 2,000 tokens"** | Anthropic, code execution with MCP (Nov 2025) | An **unsourced 150k tool-definition load** reduced to on-demand discovery. (The Drive-to-Salesforce transcript is a *separate* example in the same post, worth "an additional 50,000 tokens".) | A single illustrative figure in an engineering blog post. No task set, no N, no model named. |
+| **"85% reduction in token usage"** | Anthropic Tool Search Tool (Nov 2025) | Full tool library loaded upfront vs loaded on demand | Vendor benchmark; the mechanism is real and now ships in Claude Code (see §7 for how the modes actually work). |
+| **"~95%+ on code-reading tasks"**, table rows to **~99%** | jCodeMunch MCP (`TOKEN_SAVINGS.md`) | Its own table: "Explore repo structure: **~200,000 tokens** raw vs ~2k" | The raw column is **reading the entire repository**, which is not what an agent does. **No stated N or methodology** for the headline; the one third-party A/B it cites (50 iterations, one Vue 3 codebase) reports a far smaller **15-25%** tool-layer saving. |
 | **Repo map** | aider | **None published.** | See below. |
 | **"faster, more efficiently and more reliably"** | serena | **None published.** | Qualitative vendor assertion, no numbers in the README. |
 | **42% fewer input tokens, −12pp resolution rate** | Hrubec & Cito, arXiv 2606.01326 (May 2026) | **SWE-bench Verified, full benchmark, GPT-5-mini**, independent re-implementation | **The only rigorous entry in the table**, and the only one that reports what the reduction costs. |
@@ -166,13 +166,15 @@ influential implementations of the mechanism archy would build are both
 - **aider's repo map** is the canonical code-map implementation (tree-sitter
   symbol extraction, graph ranking over a file-dependency graph, truncated to
   `--map-tokens`, default 1k). Neither the docs page nor the 2023 design
-  writeup publishes a token measurement. Aider's *published benchmark* is a
-  different thing entirely: **133 Exercism practice exercises**, scored on
-  **pass rate**, where each task is a single self-contained stub file. That is
-  the setting in which a whole-repo map is least relevant. So the most-cited
-  repo map in the ecosystem has **no published evidence that it reduces
-  tokens**, because its benchmark measures edit-format success on
-  single-file problems.
+  writeup publishes a token measurement. Stated carefully, because aider
+  publishes *several* benchmarks and some run on real multi-file repos (a
+  225-exercise polyglot set, an 89-method refactoring benchmark over 9 real
+  Python repos, SWE-bench Lite and full SWE-bench): **none of them isolates the
+  repo map.** They score pass rate with the map always on, and the leaderboards
+  report per-run token totals that cannot be decomposed into with-map vs
+  without-map. So the most-cited repo map in the ecosystem has **no published
+  evidence that it reduces tokens**, not because its benchmarks are trivial but
+  because none is an ablation.
 - **serena** asserts efficiency in prose and publishes no numbers.
 
 **What is measured is tool-definition bloat**, and there the problem is real
@@ -194,6 +196,15 @@ minification. Result:
 
 > minification reduces average input token usage by **42%** with a **12
 > percentage-point drop in resolution rate**.
+
+**Quote the frontier, not just the corner.** That headline is the
+*maximum-compression* configuration. The paper's own ablation is much kinder:
+removing docstrings costs **-22% tokens for -3pp**, removing comments **-11%
+for -1pp**, and it reports most single transformations costing "typically below
+5% relative". The headline run even drops one transformation (dedent) because
+it "significantly impairs" resolution. Citing only -12pp while indicting
+CodeScene for "up to" framing would be the same device in the other direction,
+so both ends are recorded here.
 
 Two things to take from it:
 
@@ -283,11 +294,15 @@ most of the marketing ignores.
 
 **Consequence 1: "input tokens" is not a cost unit.** After the first turn, a
 token sitting in a stable prefix costs **one tenth** of list price on every
-subsequent turn. So a tool that removes 100k "input tokens" from a cached
-prefix saves the equivalent of 10k uncached tokens, not 100k. Every headline
-percentage in §2 is computed on uncached list-price arithmetic, which
-**overstates the real cost saving by up to 10x** for anything that would have
-been cached.
+subsequent turn, so headline percentages computed on uncached list price
+overstate the real saving for anything cached.
+
+**By how much, honestly.** The true ratio over N turns is
+`N / (1.25 + 0.1(N-1))`: **1.5x at N=2, 4.65x at N=10, 6.35x at N=20**,
+reaching 10x only asymptotically and only if the cache never expires against a
+5-minute default TTL. So the defensible statement is **roughly 3-6x over a
+realistic session**, not "up to 10x". Writing the asymptote would be the same
+best-case framing this file criticises elsewhere.
 
 **Consequence 2: two objectives are being conflated under one word.**
 
@@ -302,11 +317,12 @@ untouched by caching and is not measured by any of the vendor numbers.
 
 **Consequence 3, and the one that specifically indicts an archy brief.** A
 precomputed brief is paid on **every task, unconditionally**, whether or not
-it helps. The reads it hopes to displace are paid **only when the agent
-chooses to make them**, and from the second turn onward they are cache reads at
-0.1x. So the brief's break-even is far worse than the naive "brief tokens vs
-read tokens" arithmetic suggests, and it must clear that bar on *every* run
-including the ones where the agent would have found the answer immediately.
+it helps. The reads it hopes to displace are paid **only when the agent chooses
+to make them**. That is a conditionality asymmetry, not a price one: both the
+brief and a file read land in the same prefix and are billed the same way. But
+it means the brief must clear its bar on *every* run, including the ones where
+the agent would have found the answer immediately, which is exactly the
+population #289 turned out to be sampling.
 
 This is not hindsight. It is exactly what the #289 spec pre-registered as the
 trap:
@@ -364,17 +380,22 @@ breadth never moved even with a noisy brief.
    **six distractors injected into the context**, with a measured cost to
    retrieval performance. Improving brief precision is not tuning; it is
    necessary just to stop the artifact doing harm.
-2. **The one rigorous compression study reports a capability cost.** 42% fewer
-   input tokens for **−12pp resolution rate**. A brief is a compression of the
-   codebase into the prompt. The prior from the best-measured neighbour is that
-   this trades capability for tokens.
+2. **The one rigorous compression study reports a capability cost**, though it
+   is **adjacent evidence, not a prior on briefs**. Minification compresses
+   *the source the agent must read and edit*; the paper scopes that at "more
+   than 90% of all tokens", puts ranking and natural-language instructions
+   under 10%, and never minifies its own directory view. So it does not test a
+   brief. What it establishes is that compressing the code channel trades
+   capability for tokens at the aggressive end (-12pp at 42%) while gentler
+   transformations are near-free (-3pp at -22%).
 3. **The strongest precedent has no evidence behind it.** Aider ships the repo
-   map as a default and publishes **no token measurement**; its benchmark is
-   133 single-file Exercism exercises scored on pass rate. So "aider does it"
-   is not evidence that it works, and archy's null is not contradicted by
-   anyone's published number. archy is, as far as this survey found, **the
-   only party in this category that actually measured the mechanism and
-   reported the result.**
+   map as a default and publishes **no ablation of it** across any of its four
+   benchmarks (§2). So "aider does it" is not evidence that it works, and
+   archy's null is not contradicted by anyone's published number. archy is, as
+   far as this survey found, **the only party that measured a structural
+   artifact's effect on an editing task and reported the result.** (codegraph
+   measured a graph tool on question answering, §8; the minification paper
+   measured code compression, §2. Neither is the editing case.)
 4. **Caching makes the arithmetic worse** (§4): the brief is paid on every run
    at full price, while the reads it hopes to displace are cache reads at 0.1x
    from the second turn.
@@ -407,20 +428,45 @@ costs fewer always-in-context tokens and improves tool-selection accuracy".
 | `outputSchema` | 14,427 | **client-side only, see caveat** |
 | full MCP payload | 18,345 | 9.17% of a 200k window |
 
-**The caveat that decides how to read this, and it matters.** The Anthropic
-Messages API tool definition carries `name`, `description`, and `input_schema`.
-There is **no output-schema field**. So MCP `outputSchema` (adopted in #228 for
-`structuredContent`) does not map into the model-visible tool spec: a client
-bridging MCP to the API consumes it for validation rather than forwarding it to
-the model. An earlier draft of this section reported the 18,345 figure as
-archy's context cost and called archy a major bloat contributor. **That was
-wrong**, and the corrected number is 5x smaller.
+**The caveat that decides how to read this, and it matters.** MCP
+`outputSchema` (adopted in #228 for `structuredContent`) is **consumed
+client-side rather than forwarded to the model** in every Anthropic-targeting
+and OpenAI-targeting client examined. Claude Code is the decisive case: its
+serializer builds the tool payload from an allowlist of `name`, `description`,
+`input_schema`, `cache_control`, and never reads `outputSchema` at all, using
+it only to compile a validator for `structuredContent`. On the dominant client,
+`outputSchema` costs archy **zero** context.
 
-Residual uncertainty, stated rather than hidden: this is an inference from the
-API surface, not an observation of every client's behaviour. A client is free
-to inline `outputSchema` into the description. Confirming archy's real resident
-cost per client would need the `count_tokens` endpoint with the server's
-`tools/list` attached, which needs an API key and has not been run.
+An earlier draft of this section reported the 18,345 figure as archy's context
+cost and called archy a major bloat contributor. **That was wrong**, and the
+corrected number is 5x smaller.
+
+**But do not derive this from the API shape, which an earlier draft also did.**
+"The Anthropic tool spec has no output-schema field, therefore MCP
+`outputSchema` never reaches a model" is a provider-specific premise doing
+protocol-wide work, and it is false in general. **Gemini's
+`FunctionDeclaration` has a per-tool output-schema field**
+(`responseJsonSchema`), and **google/adk-python populates it directly from MCP
+`outputSchema`**, behind a feature gate that is default-on. So on a
+Gemini-plus-ADK client, archy's 14,427 `outputSchema` tokens **do** enter the
+tool declaration. The correct statement is an **observed property of client
+implementations**, not a consequence of the spec. The MCP spec itself is
+ambiguous in archy's favour but not decisively: its normative language is
+validation-only ("Clients **SHOULD** validate structured results against this
+schema"), while its rationale says an output schema helps guide "clients and
+LLMs" to parse returned data.
+
+Two related notes, since #228 ships `outputSchema` on all 11 tools:
+
+- **A historical compatibility hazard, now closed.** Some clients silently
+  dropped *every* tool from a server that sent `outputSchema`
+  (anthropics/claude-code#25081, zed-industries/zed#55642). **Both are closed**,
+  and archy's tools register correctly on current Claude Code, so this is not a
+  live risk. It is worth knowing the failure mode is silent-total rather than
+  degraded, because that is how it would present if it recurred.
+- **A widely-circulated claim that VS Code Copilot counts `outputSchema`
+  toward its per-tool budget is unverified** and contradicted by the VS Code
+  source (only `inputSchema` reaches its tool data). Do not cite it.
 
 **Two further facts that close the category.**
 
@@ -430,8 +476,14 @@ cost per client would need the `count_tokens` endpoint with the server's
   loads upfront when tools fit within **10% of the context window**. So on the
   dominant client, archy's surface is deferred, and even under the threshold
   mode its 1.96% loads comfortably.
-- **archy's per-tool cost is already lean**: ~356 model-visible tokens per
-  tool against GitHub MCP's ~18,000 tokens for 27 tools (~667/tool).
+- **archy's per-tool cost looks lean, with the same caveat attached.** ~356
+  model-visible tokens per tool against GitHub MCP's ~18,000 for 27 tools
+  (~667/tool). These are **not like-for-like**: archy's figure is cl100k over
+  description plus `inputSchema`, while #11364's is Claude Code's own
+  `/context` accounting of the full serialized block. A client counting the
+  whole MCP payload would put archy at ~1,668/tool and reverse the comparison.
+  The favourable reading depends on the same client behaviour flagged as
+  unverified above.
 
 **The honest position: archy already did the only thing in this category with
 real evidence behind it, and it did it two releases ago without calling it
@@ -474,8 +526,17 @@ It is also **honest about its own weak spots** in a way vendor benchmarks
 rarely are: it flags a small-repo floor effect where a strong model's grep loop
 wins wall-clock while spending 5-10x the tokens, notes that OkHttp's
 without-arm "got lucky in 5 calls", and calls time the noisiest metric. It
-publishes measured cross-file coverage per language (86.7% to 100%) rather
-than asserting it.
+publishes measured cross-file coverage per language rather than asserting it,
+though the honest span is **73.8% (Liquid) to 100%**, not the 86.7% floor that
+holds only across the seven benchmark languages.
+
+**Its largest weakness goes unstated in its own writeup**, so record it here:
+**no correctness control.** No accuracy, diff, or build gate appears anywhere in
+the 7-repo table, so "answered in 2 tool calls" is scored without verifying the
+answer was right, and its own wider matrix shows cost roughly flat or slightly
+worse with the index in places ($15.4 vs $13.8). That is precisely the gate
+§9's reopen path insists on, and it is why this is called the best available
+benchmark rather than a settled one.
 
 **So why did archy measure null?** Because of the task class, and this is the
 most useful finding in the section:
@@ -521,7 +582,7 @@ each half is already settled:
 | --- | --- | --- | --- | --- | --- |
 | `archy brief` / repo map (redo) | Fails. Measured null already; the strongest precedent (aider) publishes no token evidence | No | None | **No.** Nothing addresses the measured zero headroom | **Wontfix** |
 | Compress archy's tool descriptions further | Passes (deterministic, in-repo measurable) | Marginal | None | n/a | **Not worth it.** 1.96% is already lean; effort better spent elsewhere |
-| Trim `outputSchema` | **Fails on premise.** It is client-side payload, not model context (§7) | No | None | n/a | **Wontfix** |
+| Trim `outputSchema` | **Fails on premise for token cost**: client-side on Claude Code, zero context (§7). Not zero everywhere: Gemini + ADK forwards it | No | None | n/a | **Wontfix for tokens.** Revisit only if archy targets a Gemini-class client, where its 14,427 tokens do land in the tool declaration |
 | Token-savings marketing claim | Fails hard. We have two nulls of our own | No | None | No | **Forbidden.** See §14c.7 |
 | Structural-Q&A footprint bench | Passes (falsifiable, real headroom per §8) | Yes | **None** | **Yes**, different task class | **Recorded as reopen path, not scheduled** |
 
@@ -536,7 +597,7 @@ each half is already settled:
    1.17M-token configuration nobody ships; 98.7% is arithmetic on one
    constructed example; 95% is against reading an entire repo. And caching
    already took most of the cost win those numbers describe, overstating real
-   savings by up to 10x for cached prefixes (§4).
+   savings by roughly 3-6x over a realistic session for cached prefixes (§4).
 3. **Zero usage signal.** `ADOPTERS.md` is empty, every issue is
    maintainer-authored, and nobody has asked archy to reduce their token bill.
    This is hype-motivated, which is precisely the case gate 3 exists to catch.
@@ -558,7 +619,10 @@ the null?"): **task class**. Every archy footprint study to date used an
 **editing** task, where the graph is a hint and the measured headroom was zero.
 codegraph's benchmark shows a large effect on **structural question answering**,
 where the graph *is* the answer, and archy already ships the tools that would
-serve it (`archy_impact`, `archy_graph(focus=)`, `archy_cycles`).
+serve it (`archy_impact`, `archy_graph(focus=)`, `archy_cycles`). Precise
+claim: codegraph **publishes no editing results**. It does market editing
+benefits and ships an unpublished editing harness, so this is a gap in its
+published evidence, not proof it never considered the case.
 
 If this is ever revisited, the design is:
 
@@ -568,7 +632,9 @@ If this is ever revisited, the design is:
 > archy MCP server available vs with only grep/read. Measure tool calls, file
 > reads, and tokens to a *correct* answer, scoring correctness explicitly so a
 > fast wrong answer cannot win. Use a large, tangled repo, since §8 reports the
-> effect scales with repo size and vanishes on ~100-file projects.
+> effect scales with repo size and becomes **modest, not absent**, at ~100
+> files (Alamofire at ~110 files still posts 90% fewer tokens); the genuine
+> tie zone is far smaller.
 
 Three conditions before running it, and they are not close to met today:
 
@@ -581,6 +647,37 @@ Three conditions before running it, and they are not close to met today:
 
 Absent those, running it would be measuring for marketing, which is the
 definition of the theater this repo keeps declining to build.
+
+## 10. Corrections applied after adversarial review
+
+The first draft of this file was reviewed adversarially and 16 findings were
+returned. The **NO-GO verdict survived unchanged**; a number of its supporting
+claims did not. Logged rather than silently folded in, because a survey whose
+whole thesis is "check the denominator" has to show its own.
+
+| # | first-draft claim | what was wrong | where |
+| --- | --- | --- | --- |
+| 1 | jCodeMunch "self-published, 15 task-runs across 3 repos" | **Fabricated N.** That figure appears nowhere in the source; it came from a search summary I failed to verify. The doc states no N, and the third-party A/B it cites (50 iterations, one repo) reports 15-25%, not 95% | §2 |
+| 2 | The cancelled bench cell died on the `.archy/index.db` leak and the path-keyed metric | Both were **patched**. The two that ended it were the false task premise and the treatment not touching the working set | `RESEARCH_METRICS.md` §14c.7 |
+| 3 | aider benchmarks on "133 single-file Exercism exercises" | **Retired in 2024.** aider publishes four benchmarks including real multi-file repos. The conclusion (no ablation of the map) survives; this support did not | §2, §6 |
+| 4 | codegraph's effect "vanishes on ~100-file projects" | **Reverses the source**, which says modest, not absent; Alamofire at ~110 files still posts 90% fewer tokens | §9 |
+| 5-6 | Cloudflare and Anthropic citations | Wrong post (`/code-mode/` vs `/code-mode-mcp/`); the 98.7% attributed to the wrong mechanism | §2 |
+| 7 | Tool search "auto-activates when descriptions exceed 10%" | **Backwards**, and contradicted §7. Default is unconditional deferral; the 10% threshold is opt-in `auto` | §2, §7 |
+| 8 | codegraph coverage "86.7% to 100%" | Published span starts at **73.8%** | §8 |
+| 9 | "The Anthropic API has no output-schema field, therefore MCP `outputSchema` never reaches a model" | **Invalid inference** (one vendor generalized to the protocol). Gemini's `FunctionDeclaration` has `responseJsonSchema` and Google's ADK populates it from MCP `outputSchema` by default. Conclusion holds on Claude Code; derivation replaced | §7 |
+| 10 | A brief's displaced reads are "cache reads at 0.1x" while the brief is not | **No such price asymmetry.** Both sit in the same prefix. The real asymmetry is conditionality, which the same passage already said | §4 |
+| 11 | "42% fewer tokens for -12pp" as the representative tradeoff | That is the **maximum-compression corner**. The paper's ablation gives -22% for -3pp and calls most transformations "below 5% relative". Quoting only the worst point was the same "up to" device this file indicts elsewhere | §2, §3, §6 |
+| 12 | Minification generalizes to briefs | The paper scopes source code at >90% of tokens and instructions under 10%, and never minifies its own directory view. **Adjacent evidence, not a prior on briefs** | §6 |
+| 13 | Caching "overstates by up to 10x" | 10x is the asymptote. Real ratio is 1.5x at N=2, **4.65x at N=10**, against a 5-minute default TTL. Same best-case framing this file criticises | §4, §9, README |
+| 14 | codegraph praised as honest about its weak spots | Its **largest** one went unmentioned: no correctness control anywhere in the benchmark | §8 |
+| 15 | "archy is the only party that measured the mechanism" | Contradicted §2 and §8 of this same file. Scoped to **editing tasks** | §6 |
+| 16 | archy 356 tokens/tool vs GitHub MCP 667/tool | **Not like-for-like.** Different tokenizer and different payload boundary; a client counting the full payload puts archy at ~1,668/tool and reverses it | §7 |
+
+What survived intact: the 3,918 / 1.96% self-measurement (reproduced
+digit-for-digit, and tokenizer choice moves it under 8%), the aider
+no-ablation conclusion, the codegraph task-class argument, the §14c.7 #282/#289
+figures and SWE-Effi citation, and the prefix-bloat baseline from issue #11364.
+
 
 ## Sources
 
@@ -631,8 +728,9 @@ whole file: most of the category's famous numbers sit in the bottom tier.
 - [aider repo map](https://aider.chat/docs/repomap.html) and the
   [tree-sitter writeup](https://aider.chat/2023/10/22/repomap.html). Mechanism
   documented, **no token measurement published**; the
-  [benchmark](https://aider.chat/docs/benchmarks.html) is 133 single-file
-  Exercism exercises scored on pass rate.
+  [benchmarks](https://aider.chat/docs/benchmarks.html) (polyglot, refactoring,
+  SWE-bench) score pass rate with the map always on; **none is an ablation of
+  the map**.
 - [repomix](https://repomix.com/guide/). Counts tokens, does not reduce them.
 
 ### Platform mechanics (primary documentation)
@@ -650,8 +748,19 @@ whole file: most of the category's famous numbers sit in the bottom tier.
 - [MCP specification, Tools](https://modelcontextprotocol.io/specification/2025-06-18/server/tools).
   `outputSchema` semantics.
 - Anthropic [tool use overview](https://docs.claude.com/en/docs/agents-and-tools/tool-use/overview).
-  Tool definitions carry `name`, `description`, `input_schema`; **no
-  output-schema field**, which is what makes §7's correction necessary.
+  Tool definitions carry `name`, `description`, `input_schema`; no
+  output-schema field. Necessary but **not sufficient** for §7's conclusion,
+  see the next two entries.
+- Claude Code's MCP serializer allowlists `name` / `description` /
+  `input_schema` / `cache_control` and uses `outputSchema` only to build a
+  `structuredContent` validator. This is the actual basis for §7.
+- Google [`FunctionDeclaration.responseJsonSchema`](https://ai.google.dev/api/caching#FunctionDeclaration)
+  and [google/adk-python](https://github.com/google/adk-python), which
+  populates it from MCP `outputSchema` by default. The counter-example that
+  makes §7 a client-implementation claim rather than a protocol one.
+- [anthropics/claude-code#25081](https://github.com/anthropics/claude-code/issues/25081),
+  [zed-industries/zed#55642](https://github.com/zed-industries/zed/issues/55642).
+  `outputSchema` causing silent total tool-drop. Both closed.
 
 ### archy's own evidence
 
