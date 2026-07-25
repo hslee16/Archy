@@ -35,6 +35,7 @@ archy mcp             # expose 11 tools to Claude Code, Cursor, any MCP client
 | Duplicate detection | `archy duplicates` (two-tier: likely duplicates vs demoted variants - same-class/boilerplate/test/vendored; advisory, not a score axis) |
 | Change coupling | `archy coupling` (module pairs that co-change in git history but share no import/call edge - hidden dependencies; source-only, advisory) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
+| Human-facing export | `archy render --view dsm\|trend` (one self-contained HTML file: no JS, no CDN, offline, byte-stable) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
 | Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue; wire in or cleanly remove the MCP server) |
@@ -224,6 +225,21 @@ archy dsm path/to/project --group topological --diff .archy/dsm-before.json
 ```
 
 `archy dsm` refuses ASCII rendering for projects larger than `--max-nodes` (default 80) with an actionable error pointing at `--focus`, `--package`, or `--format json`.
+
+### Static HTML export (`archy render`)
+
+Every other archy surface targets the agent. `archy render` targets the human reviewing what the agent did: a single self-contained HTML file to attach to a PR, drop in docs, or open offline. No JavaScript, no CDN, no vendored bundle, no server, and byte-stable for a fixed input, so two exports diff cleanly.
+
+```bash
+archy render path/to/project --view dsm --out dsm.html     # the matrix, flagged cells in red
+archy render path/to/project --view dsm --group topological --out cycles.html
+archy render path/to/project --view trend --out trend.html # five axes over .archy/history.jsonl
+archy render path/to/project --view dsm                    # HTML to stdout
+```
+
+What red means follows the ordering you asked for, because only one ordering encodes it: under `--group=topological` red is a back-edge (a cycle seed), and under `--group=community` or `--group=layer`, where block order is not a dependency order, red is an edge crossing a block boundary. The DSM view refuses matrices larger than `--max-nodes` (default 300) rather than writing an unreadable file.
+
+There is no `graph` view. A node-link diagram is the one view that needs a vendored layout engine, and it is also the lowest-signal of the three; it stays deferred behind a usage signal (see [`docs/SPEC_VISUALIZATION.md`](docs/SPEC_VISUALIZATION.md)).
 
 ### Snapshot and diff (agent feedback loop)
 
