@@ -152,7 +152,7 @@ reports a **cost**, not a free win.
 | **"99.9% fewer input tokens"** | Cloudflare, [Code Mode for MCP](https://blog.cloudflare.com/code-mode-mcp/) (Feb 20, 2026) | The Cloudflare API's **2,500+ endpoints exposed as individual MCP tools**, estimated at **1.17M tokens**, replaced by `search()` + `execute()` + a typed SDK at ~1,000 tokens | Arithmetic against a configuration **no one would ever ship**. 1.17M tokens exceeds every production context window; the "before" case is impossible, not merely bad. |
 | **"98.7% saving, 150,000 to 2,000 tokens"** | Anthropic, code execution with MCP (Nov 2025) | An **unsourced 150k tool-definition load** reduced to on-demand discovery. (The Drive-to-Salesforce transcript is a *separate* example in the same post, worth "an additional 50,000 tokens".) | A single illustrative figure in an engineering blog post. No task set, no N, no model named. |
 | **"85% reduction in token usage"** | Anthropic Tool Search Tool (Nov 2025) | Full tool library loaded upfront vs loaded on demand | Vendor benchmark; the mechanism is real and now ships in Claude Code (see §7 for how the modes actually work). |
-| **"~95%+ on code-reading tasks"**, table rows to **~99%** | jCodeMunch MCP (`TOKEN_SAVINGS.md`) | Its own table: "Explore repo structure: **~200,000 tokens** raw vs ~2k" | The raw column is **reading the entire repository**, which is not what an agent does. **No stated N or methodology** for the headline; the one third-party A/B it cites (50 iterations, one Vue 3 codebase) reports a far smaller **15-25%** tool-layer saving. |
+| **"typically 95%+ on code-reading tasks"**, table rows to **~99.5%** | jCodeMunch MCP (`TOKEN_SAVINGS.md`) | Its own table: "Explore repo structure: **~200,000 tokens** raw vs ~2k" | The raw column is **reading the entire repository**, which is not what an agent does. **No stated N or methodology** for the headline; the one third-party A/B it cites (50 iterations, one Vue 3 codebase) reports a far smaller **15-25%** tool-layer saving. |
 | **Repo map** | aider | **None published.** | See below. |
 | **"faster, more efficiently and more reliably"** | serena | **None published.** | Qualitative vendor assertion, no numbers in the README. |
 | **42% fewer input tokens, −12pp resolution rate** | Hrubec & Cito, arXiv 2606.01326 (May 2026) | **SWE-bench Verified, full benchmark, GPT-5-mini**, independent re-implementation | **The only rigorous entry in the table**, and the only one that reports what the reduction costs. |
@@ -166,15 +166,16 @@ influential implementations of the mechanism archy would build are both
 - **aider's repo map** is the canonical code-map implementation (tree-sitter
   symbol extraction, graph ranking over a file-dependency graph, truncated to
   `--map-tokens`, default 1k). Neither the docs page nor the 2023 design
-  writeup publishes a token measurement. Stated carefully, because aider
-  publishes *several* benchmarks and some run on real multi-file repos (a
-  225-exercise polyglot set, an 89-method refactoring benchmark over 9 real
-  Python repos, SWE-bench Lite and full SWE-bench): **none of them isolates the
-  repo map.** They score pass rate with the map always on, and the leaderboards
-  report per-run token totals that cannot be decomposed into with-map vs
-  without-map. So the most-cited repo map in the ecosystem has **no published
-  evidence that it reduces tokens**, not because its benchmarks are trivial but
-  because none is an ablation.
+  writeup publishes a token measurement. Stated carefully, because aider publishes
+  *four* benchmarks: a 225-exercise polyglot set (Exercism again, so
+  single-file), an 89-method refactoring benchmark (methods sourced from 9 real
+  Python repos, but each task is one source file), and SWE-bench Lite plus full
+  SWE-bench, which are the only genuinely multi-file ones. **None of them
+  isolates the repo map.** All score pass rate with the map always on, and the
+  leaderboards report per-run token totals that cannot be decomposed into
+  with-map vs without-map. So the most-cited repo map in the ecosystem has **no
+  published evidence that it reduces tokens**, because none of its benchmarks
+  is an ablation of it.
 - **serena** asserts efficiency in prose and publishes no numbers.
 
 **What is measured is tool-definition bloat**, and there the problem is real
@@ -264,9 +265,14 @@ files, 3 of them on the true surface). Under the context-rot result, six
 irrelevant files in a pre-task brief are not neutral padding; they are
 distractors with a measured cost.
 
-**Compressing context also degrades.** The minification replication (§2)
-is the direct test: 42% fewer input tokens, **−12 percentage points of
-resolution rate** on SWE-bench Verified. You can buy tokens with capability.
+**Compressing context also degrades, at the aggressive end.** The minification
+replication (§2) is the direct test: 42% fewer input tokens for **−12
+percentage points of resolution rate** on SWE-bench Verified. Quote the whole
+curve, not the corner: the same paper's gentler transformations are nearly free
+(**−22% tokens for −3pp** removing docstrings, −11% for −1pp removing
+comments), and it reports most single transformations costing "typically below
+5% relative". You can buy tokens with capability, and the exchange rate gets
+much worse the harder you compress.
 
 **Anthropic's own framing agrees with the tradeoff.** Their context-engineering
 guidance treats context as "a critical but finite resource" subject to
@@ -396,9 +402,10 @@ breadth never moved even with a noisy brief.
    artifact's effect on an editing task and reported the result.** (codegraph
    measured a graph tool on question answering, §8; the minification paper
    measured code compression, §2. Neither is the editing case.)
-4. **Caching makes the arithmetic worse** (§4): the brief is paid on every run
-   at full price, while the reads it hopes to displace are cache reads at 0.1x
-   from the second turn.
+4. **Caching makes the economics worse** (§4), though by conditionality rather
+   than by price: the brief is paid on **every** run whether it helps or not,
+   while reads are paid only when the agent chooses them. Both land in the same
+   prefix and are billed identically.
 
 **Conclusion for C2.** Nothing in the landscape supplies a mechanism that
 addresses the specific reason #289 failed. The honest reopen condition remains
@@ -533,8 +540,9 @@ holds only across the seven benchmark languages.
 **Its largest weakness goes unstated in its own writeup**, so record it here:
 **no correctness control.** No accuracy, diff, or build gate appears anywhere in
 the 7-repo table, so "answered in 2 tool calls" is scored without verifying the
-answer was right, and its own wider matrix shows cost roughly flat or slightly
-worse with the index in places ($15.4 vs $13.8). That is precisely the gate
+answer was right, and its own table shows cost roughly flat or slightly worse
+with the index in places (OkHttp: **$0.23 with vs $0.20 without**, which its
+footnote concedes is "~$0.03 more"). That is precisely the gate
 §9's reopen path insists on, and it is why this is called the best available
 benchmark rather than a settled one.
 
@@ -573,7 +581,7 @@ each half is already settled:
   default. Nothing to build.
 - **Comprehension context** (briefs, maps, retrieval). Unmeasured by its own
   vendors, and the one rigorous compression study reports **42% fewer tokens
-  for −12pp resolution rate**. archy tested its version twice and got null.
+  for −12pp resolution rate** at maximum compression. archy tested its version twice and got null.
   Nothing to build that we have reason to believe would work.
 
 ### D1. The gates, applied to every candidate
@@ -665,8 +673,9 @@ whole thesis is "check the denominator" has to show its own.
 | 7 | Tool search "auto-activates when descriptions exceed 10%" | **Backwards**, and contradicted §7. Default is unconditional deferral; the 10% threshold is opt-in `auto` | §2, §7 |
 | 8 | codegraph coverage "86.7% to 100%" | Published span starts at **73.8%** | §8 |
 | 9 | "The Anthropic API has no output-schema field, therefore MCP `outputSchema` never reaches a model" | **Invalid inference** (one vendor generalized to the protocol). Gemini's `FunctionDeclaration` has `responseJsonSchema` and Google's ADK populates it from MCP `outputSchema` by default. Conclusion holds on Claude Code; derivation replaced | §7 |
-| 10 | A brief's displaced reads are "cache reads at 0.1x" while the brief is not | **No such price asymmetry.** Both sit in the same prefix. The real asymmetry is conditionality, which the same passage already said | §4 |
+| 10 | A brief's displaced reads are "cache reads at 0.1x" while the brief is not | **No such price asymmetry.** Both sit in the same prefix. The real asymmetry is conditionality, which the same passage already said | §4, §6 |
 | 11 | "42% fewer tokens for -12pp" as the representative tradeoff | That is the **maximum-compression corner**. The paper's ablation gives -22% for -3pp and calls most transformations "below 5% relative". Quoting only the worst point was the same "up to" device this file indicts elsewhere | §2, §3, §6 |
+| 3b | aider replacement said "some run on real multi-file repos" | Overstated in the same direction as the error it replaced: polyglot is Exercism (single-file) and each refactoring task is one file. **Only SWE-bench is multi-file** | §2 |
 | 12 | Minification generalizes to briefs | The paper scopes source code at >90% of tokens and instructions under 10%, and never minifies its own directory view. **Adjacent evidence, not a prior on briefs** | §6 |
 | 13 | Caching "overstates by up to 10x" | 10x is the asymptote. Real ratio is 1.5x at N=2, **4.65x at N=10**, against a 5-minute default TTL. Same best-case framing this file criticises | §4, §9, README |
 | 14 | codegraph praised as honest about its weak spots | Its **largest** one went unmentioned: no correctness control anywhere in the benchmark | §8 |
@@ -716,9 +725,11 @@ whole file: most of the category's famous numbers sit in the bottom tier.
 - Anthropic, [code execution with MCP](https://www.anthropic.com/engineering/code-execution-with-mcp).
   "150,000 tokens to 2,000 tokens, a saving of 98.7%", from **one constructed
   example**.
-- Cloudflare, [Code Mode](https://blog.cloudflare.com/code-mode/) and the Feb
-  2026 follow-up. "99.9%", against 2,500+ endpoints at an estimated 1.17M
-  tokens, a configuration that cannot be run.
+- Cloudflare, [Code Mode for MCP](https://blog.cloudflare.com/code-mode-mcp/)
+  (Feb 20, 2026), which is where the figures actually live. "99.9%", against
+  2,500+ endpoints at an estimated 1.17M tokens, a configuration that cannot be
+  run. (The earlier [Sept 2025 post](https://blog.cloudflare.com/code-mode/)
+  introduces the idea and contains none of the numbers.)
 - [CodeScene CodeHealth MCP](https://codescene.com/product/code-health-mcp).
   "Up to 45% fewer tokens burned." Evidence rendered as images.
 - [jCodeMunch `TOKEN_SAVINGS.md`](https://github.com/jgravelle/jcodemunch-mcp/blob/main/TOKEN_SAVINGS.md).
