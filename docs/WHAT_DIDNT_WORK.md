@@ -1,4 +1,4 @@
-# I built a tool to help AI agents write better-structured code, then measured whether it worked. It didn't, twice.
+# I tested twice whether my tool helps AI agents write better code. Both null.
 
 Here is everything I learned anyway.
 
