@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2a957c12e7b4",
+  "strategy": "manual-commit",
+  "branch": "alee/q1b-layers-sklearn-requests",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/2a/957c12e7b4/0/metadata.json",
+      "transcript": "/2a/957c12e7b4/0/full.jsonl",
+      "content_hash": "/2a/957c12e7b4/0/content_hash.txt",
+      "prompt": "/2a/957c12e7b4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 4741,
+    "cache_creation_tokens": 2358135,
+    "cache_read_tokens": 141492954,
+    "output_tokens": 346973,
+    "api_call_count": 435
+  }
+}
