@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "78d3fea319f3",
+  "strategy": "manual-commit",
+  "branch": "alee/supervised-runner-and-ledger",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/78/d3fea319f3/0/metadata.json",
+      "transcript": "/78/d3fea319f3/0/full.jsonl",
+      "content_hash": "/78/d3fea319f3/0/content_hash.txt",
+      "prompt": "/78/d3fea319f3/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3924,
+    "cache_creation_tokens": 1106592,
+    "cache_read_tokens": 86441967,
+    "output_tokens": 264869,
+    "api_call_count": 337
+  }
+}
