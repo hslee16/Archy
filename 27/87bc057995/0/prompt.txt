@@ -1,0 +1,142 @@
+merge PR
+
+---
+
+lets do the distribution work
+
+---
+
+merge PR and lets continue
+
+---
+
+what is the acceptance criterion from #325? I will review it right now
+
+---
+
+make sense to me. The placement if good. Lets mark it done and edit it after some actual external feedback. I predict that won't happen for a while
+
+---
+
+there are currently 3 external PR contributions in the github repo right now
+
+---
+
+looks green on CI
+
+---
+
+merge  #330 first. Lets create tickets for new findings
+
+---
+
+i'll wait on the response for both
+
+---
+
+lets continue the distribution work
+
+---
+
+lets build python_conventions.md right now
+
+---
+
+tell me more about #324
+
+---
+
+yep
+
+---
+
+yep, do both
+
+---
+
+merge it
+
+---
+
+lets do it
+
+---
+
+merge 343
+
+---
+
+file it
+
+---
+
+cool, whats next for distribution work?
+
+---
+
+should we also reserach on the internet for new strategies we can try for better distribution?
+
+---
+
+lets do the research for:
+   One genuine exception, because it's a decision you're actually facing rather than a survey: where WHAT_DIDNT_WORK.md 
+  should be submitted. That's bounded, decision-relevant, and I'd keep it to a specific question ("which venues actually
+  read negative-results writeups from small tools, and what are their norms") rather than a landscape review. Maybe twenty
+  minutes. Say the word and I'll do it directly.
+
+---
+
+i don't have a lobsters account. Lets create a ticket for hacker news post
+
+---
+
+change th title to fit the cap
+
+---
+
+yes do both. And lets also create tickets to create or modify new bench and tests to test the original goals of archy rather than testing whether archy helps AI agents write better code.
+
+---
+
+how big/wide should we do #347? All of the bench repos? Some of the bench repos?
+
+---
+
+yep
+
+---
+
+never use GraphQL for github moving forward. Always use the REST API
+
+---
+
+merge #325
+
+---
+
+lets do the central questions measurement. That seems to be the most important things to do before we do anything else
+
+---
+
+yes lets also make sure that the harness uses/creates checkpoints so we can continue on failed runs. We should also determine what "stalled on I/O" is so we can cancel/retry within the harness rahter than manual interventions
+
+---
+
+run the review. Can we do a smoke test run in local before merging?
+
+---
+
+merge it and continue
+
+---
+
+continue
+
+---
+
+merge and continue
+
+---
+
+1. report the claim
+2. let's just author archy.yaml per repo. Better than nothing
