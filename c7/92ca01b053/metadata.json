@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c792ca01b053",
+  "strategy": "manual-commit",
+  "branch": "alee/codegraph-competitive-316",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/c7/92ca01b053/0/metadata.json",
+      "transcript": "/c7/92ca01b053/0/full.jsonl",
+      "content_hash": "/c7/92ca01b053/0/content_hash.txt",
+      "prompt": "/c7/92ca01b053/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 270,
+    "cache_creation_tokens": 429787,
+    "cache_read_tokens": 23853108,
+    "output_tokens": 86143,
+    "api_call_count": 144
+  }
+}
