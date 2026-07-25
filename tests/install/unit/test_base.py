@@ -92,6 +92,20 @@ def test_remove_instructions_idempotent_on_clean_file():
     assert remove_instructions("# just mine\n") == "# just mine\n"
 
 
+def test_remove_recovers_from_truncated_block():
+    # No END marker: treat EOF as the block boundary.
+    # With no user content before the marker, nothing remains → delete signal.
+    existing = f"{INSTRUCTIONS_BEGIN}\nhalf written"
+    assert remove_instructions(existing) is None
+
+    # Preceding user content must be preserved.
+    existing_with_prefix = f"# mine\n{INSTRUCTIONS_BEGIN}\nhalf written"
+    out = remove_instructions(existing_with_prefix)
+    assert out is not None
+    assert INSTRUCTIONS_BEGIN not in out
+    assert "mine" in out
+
+
 def test_apply_uninstall_strips_existing_and_deletes_owned(tmp_path):
     shared = tmp_path / "shared.txt"
     owned = tmp_path / "owned.txt"
