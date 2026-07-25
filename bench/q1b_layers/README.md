@@ -35,11 +35,41 @@ produced by tooling rather than by finding.
 matrix. It has no capability to propose rules, which is the cheapest way to keep
 that line from being crossed under time pressure.
 
+## Every repository is authored independently
+
+**Do not carry a rule, or a rule *shape*, from one repository to another.** The
+safe assumption is that each codebase has its own architecture and shares
+nothing with the last one you looked at.
+
+This is not hypothetical caution. Writing scikit-learn's candidate list, I
+generated `utils -> linear_model` and eight siblings *by analogy to Django*,
+where `utils` really is close to a leaf. In scikit-learn that is simply false:
+`sklearn/utils/estimator_checks.py` exists to exercise estimators, so it imports
+them on purpose, and `utils -> linear_model` alone is 29 edges.
+
+Validation caught all nine, and none reached the shipped config. But the
+analogy should never have produced candidates in the first place, because of
+what it does to the selection:
+
+> candidates from analogy, filtered by "does it fire upstream", leaves
+> **{my guesses} intersected with {pairs that happen to be zero}** — and the
+> zero-filter is then doing the real work.
+
+That is the `D_purity` tautology in a slower form. The whole point of sourcing
+candidates from documented intent is that the rule is justified *before* the
+graph is consulted.
+
+**The validation step is a safety net, not a candidate generator. If a
+candidate's only justification is that it survives validation, it is not a
+rule.**
+
 ## The procedure
 
-1. **Derive candidates from the project's own documented conventions**, never
-   from the import graph. Django documents `contrib` as optional add-ons;
-   scikit-learn documents `externals` as vendored. Those are the sources.
+1. **Derive candidates from THIS project's own documented conventions**, never
+   from the import graph and never from another repository. Django documents
+   `contrib` as optional add-ons; scikit-learn's README documents `externals` as
+   vendored third-party code. Those are the sources, and each was read for that
+   project alone.
 2. **Validate every candidate against pristine upstream code** (`q1b_layers.py`
    for the matrix, then `archy check`).
 3. **Drop what already fires**, and record it in the config with edge counts
@@ -58,15 +88,16 @@ It has caught a wrong prior on every repo attempted so far, and the failure mode
 is **silent**: a wrong rule does not error, it fires on every run, makes p_B look
 like 100%, and quietly corrupts the result.
 
-| repo | candidates | dropped | kept | what the prior got wrong |
+| repo | candidates | dropped | kept | what was wrong |
 | --- | --- | --- | --- | --- |
-| django | 19 | 4 | 15 | `utils` reaches `db`, `forms`, `template`; `core` reaches `views` (1 edge each) |
-| scikit-learn | 25 | 14 | 7 | "utils is a leaf" is flatly wrong: `utils -> linear_model` alone is 29 edges |
-| requests | ~30 | most | 24 | core is bidirectionally tangled (`models <-> utils <-> adapters <-> cookies`) |
+| django | 19 | 4 | 15 | my reading of Django's docs was too strict: `utils` reaches `db`, `forms`, `template`, and `core` reaches `views` (1 edge each) |
+| scikit-learn | 25 | 14 | 7 | nine candidates were cross-repo analogy and should never have been generated; the rest were genuinely too strict |
+| requests | ~30 | most | 24 | core is bidirectionally tangled upstream (`models <-> utils <-> adapters <-> cookies`) |
 
-scikit-learn is the cautionary one. `sklearn/utils/estimator_checks.py` exists to
-exercise estimators, so it imports them on purpose. Carrying django's prior
-across would have added nine always-firing rules.
+Read the django row carefully: those four are cases where the *project* departs
+from its own documented convention, which is a legitimate reason to drop a rule.
+The scikit-learn row is different and worse: most of its drops were my own
+method error, not a discovery about scikit-learn.
 
 ## Do not pad the rulesets
 
