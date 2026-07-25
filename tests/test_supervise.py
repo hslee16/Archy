@@ -15,9 +15,11 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bench"))
+# bench/ is not a package; append it (not insert(0)) so its generic module
+# names cannot shadow stdlib/installed imports, mirroring tests/test_agent_footprint.py.
+sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 
-from _supervise import (
+from _supervise import (  # ty: ignore[unresolved-import]  (added to sys.path above)
     Ledger,
     StallTimeout,
     WallTimeout,
