@@ -1,0 +1,3366 @@
+{
+  "dataset": "princeton-nlp/SWE-bench",
+  "filter": {
+    "min_dirs": 2,
+    "min_files": 3
+  },
+  "of": 2294,
+  "selected": 211,
+  "tasks": [
+    {
+      "base_commit": "cfd428afc5b6e25bbbe4bc92067f857fa9658442",
+      "environment_setup_commit": "1e8a5b833d1b58f3ab84099c4582239af854b23a",
+      "gold_dir_count": 16,
+      "gold_py_file_count": 31,
+      "gold_py_files": [
+        "benchmarks/bench_saga.py",
+        "sklearn/calibration.py",
+        "sklearn/cluster/_mean_shift.py",
+        "sklearn/compose/_column_transformer.py",
+        "sklearn/covariance/_graph_lasso.py",
+        "sklearn/decomposition/_dict_learning.py",
+        "sklearn/decomposition/_lda.py",
+        "sklearn/ensemble/_bagging.py",
+        "sklearn/ensemble/_forest.py",
+        "sklearn/ensemble/_stacking.py",
+        "sklearn/ensemble/_voting.py",
+        "sklearn/feature_selection/_rfe.py",
+        "sklearn/inspection/_permutation_importance.py",
+        "sklearn/inspection/_plot/partial_dependence.py",
+        "sklearn/linear_model/_base.py",
+        "sklearn/linear_model/_coordinate_descent.py",
+        "sklearn/linear_model/_least_angle.py",
+        "sklearn/linear_model/_logistic.py",
+        "sklearn/linear_model/_omp.py",
+        "sklearn/linear_model/_stochastic_gradient.py",
+        "sklearn/linear_model/_theil_sen.py",
+        "sklearn/manifold/_mds.py",
+        "sklearn/metrics/pairwise.py",
+        "sklearn/model_selection/_search.py",
+        "sklearn/model_selection/_validation.py",
+        "sklearn/multiclass.py",
+        "sklearn/multioutput.py",
+        "sklearn/neighbors/_base.py",
+        "sklearn/pipeline.py",
+        "sklearn/utils/fixes.py",
+        "sklearn/utils/parallel.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-25363",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "076bd8e15f04878d7b97100fb29177697018138f",
+      "environment_setup_commit": "087ebbb78668bdf5d2d41c3b2553e3f29ce75be1",
+      "gold_dir_count": 6,
+      "gold_py_file_count": 23,
+      "gold_py_files": [
+        "asv_bench/benchmarks/import.py",
+        "xarray/backends/cfgrib_.py",
+        "xarray/backends/common.py",
+        "xarray/backends/h5netcdf_.py",
+        "xarray/backends/netCDF4_.py",
+        "xarray/backends/pseudonetcdf_.py",
+        "xarray/backends/pydap_.py",
+        "xarray/backends/pynio_.py",
+        "xarray/backends/scipy_.py",
+        "xarray/backends/zarr.py",
+        "xarray/convert.py",
+        "xarray/core/_aggregations.py",
+        "xarray/core/dataset.py",
+        "xarray/core/duck_array_ops.py",
+        "xarray/core/formatting.py",
+        "xarray/core/indexing.py",
+        "xarray/core/missing.py",
+        "xarray/core/parallel.py",
+        "xarray/core/pycompat.py",
+        "xarray/core/utils.py",
+        "xarray/core/variable.py",
+        "xarray/plot/utils.py",
+        "xarray/util/generate_aggregations.py"
+      ],
+      "instance_id": "pydata__xarray-7179",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "964d350a80fe21d4babf939c108986d5fd90a2cf",
+      "environment_setup_commit": "50ea159bfd0872635ebf4281e741f3c87f0bef6b",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 23,
+      "gold_py_files": [
+        "xarray/backends/api.py",
+        "xarray/backends/common.py",
+        "xarray/backends/plugins.py",
+        "xarray/backends/zarr.py",
+        "xarray/coding/strings.py",
+        "xarray/coding/variables.py",
+        "xarray/core/common.py",
+        "xarray/core/computation.py",
+        "xarray/core/dask_array_ops.py",
+        "xarray/core/daskmanager.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py",
+        "xarray/core/duck_array_ops.py",
+        "xarray/core/indexing.py",
+        "xarray/core/missing.py",
+        "xarray/core/nanops.py",
+        "xarray/core/parallelcompat.py",
+        "xarray/core/pycompat.py",
+        "xarray/core/rolling.py",
+        "xarray/core/types.py",
+        "xarray/core/utils.py",
+        "xarray/core/variable.py",
+        "xarray/core/weighted.py"
+      ],
+      "instance_id": "pydata__xarray-7019",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "2b03e8e9e8205ae3a3aa128764277e70b7c30803",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 16,
+      "gold_py_file_count": 22,
+      "gold_py_files": [
+        "django/contrib/admin/models.py",
+        "django/contrib/admin/options.py",
+        "django/contrib/auth/forms.py",
+        "django/contrib/auth/password_validation.py",
+        "django/contrib/contenttypes/views.py",
+        "django/contrib/flatpages/forms.py",
+        "django/contrib/flatpages/migrations/0001_initial.py",
+        "django/contrib/flatpages/models.py",
+        "django/contrib/gis/db/models/fields.py",
+        "django/contrib/gis/views.py",
+        "django/contrib/postgres/fields/hstore.py",
+        "django/contrib/postgres/forms/jsonb.py",
+        "django/contrib/redirects/migrations/0001_initial.py",
+        "django/contrib/redirects/models.py",
+        "django/core/validators.py",
+        "django/db/models/fields/__init__.py",
+        "django/forms/models.py",
+        "django/forms/utils.py",
+        "django/views/csrf.py",
+        "django/views/generic/dates.py",
+        "django/views/generic/list.py",
+        "django/views/static.py"
+      ],
+      "instance_id": "django__django-11281",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d1320814eda6549996190618a21eaf212cfd4d1e",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 9,
+      "gold_py_file_count": 21,
+      "gold_py_files": [
+        "sympy/core/basic.py",
+        "sympy/core/exprtools.py",
+        "sympy/core/numbers.py",
+        "sympy/geometry/entity.py",
+        "sympy/physics/optics/medium.py",
+        "sympy/physics/vector/dyadic.py",
+        "sympy/physics/vector/frame.py",
+        "sympy/physics/vector/vector.py",
+        "sympy/polys/agca/modules.py",
+        "sympy/polys/domains/domain.py",
+        "sympy/polys/domains/expressiondomain.py",
+        "sympy/polys/domains/pythonrational.py",
+        "sympy/polys/domains/quotientring.py",
+        "sympy/polys/fields.py",
+        "sympy/polys/monomials.py",
+        "sympy/polys/polyclasses.py",
+        "sympy/polys/polytools.py",
+        "sympy/polys/rings.py",
+        "sympy/polys/rootoftools.py",
+        "sympy/tensor/array/ndim_array.py",
+        "sympy/utilities/enumerative.py"
+      ],
+      "instance_id": "sympy__sympy-13091",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "74b8046b46c70b201fe118cc36b29ce6c0d3b9ec",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 8,
+      "gold_py_file_count": 21,
+      "gold_py_files": [
+        "sympy/combinatorics/permutations.py",
+        "sympy/core/__init__.py",
+        "sympy/core/add.py",
+        "sympy/core/evaluate.py",
+        "sympy/core/function.py",
+        "sympy/core/mul.py",
+        "sympy/core/numbers.py",
+        "sympy/core/operations.py",
+        "sympy/core/parameters.py",
+        "sympy/core/power.py",
+        "sympy/core/relational.py",
+        "sympy/core/sympify.py",
+        "sympy/geometry/ellipse.py",
+        "sympy/geometry/point.py",
+        "sympy/series/sequences.py",
+        "sympy/sets/powerset.py",
+        "sympy/sets/sets.py",
+        "sympy/simplify/radsimp.py",
+        "sympy/simplify/simplify.py",
+        "sympy/stats/symbolic_probability.py",
+        "sympy/tensor/functions.py"
+      ],
+      "instance_id": "sympy__sympy-18198",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 15,
+      "gold_py_file_count": 18,
+      "gold_py_files": [
+        "build_tools/generate_authors_table.py",
+        "examples/applications/plot_stock_market.py",
+        "examples/compose/plot_transformed_target.py",
+        "examples/mixture/plot_gmm_covariances.py",
+        "examples/neighbors/plot_kde_1d.py",
+        "examples/plot_anomaly_comparison.py",
+        "examples/plot_johnson_lindenstrauss_bound.py",
+        "examples/text/plot_document_classification_20newsgroups.py",
+        "sklearn/compose/_column_transformer.py",
+        "sklearn/feature_extraction/text.py",
+        "sklearn/linear_model/logistic.py",
+        "sklearn/metrics/pairwise.py",
+        "sklearn/metrics/regression.py",
+        "sklearn/neural_network/multilayer_perceptron.py",
+        "sklearn/preprocessing/data.py",
+        "sklearn/svm/base.py",
+        "sklearn/utils/testing.py",
+        "sklearn/utils/validation.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-12784",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "7444f3252757ed4384623e5afd7dcfeef3e0c74e",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 14,
+      "gold_py_file_count": 18,
+      "gold_py_files": [
+        "django/contrib/auth/password_validation.py",
+        "django/contrib/gis/gdal/libgdal.py",
+        "django/contrib/gis/geos/libgeos.py",
+        "django/contrib/sessions/backends/file.py",
+        "django/contrib/staticfiles/storage.py",
+        "django/core/files/move.py",
+        "django/core/files/storage.py",
+        "django/core/files/temp.py",
+        "django/core/mail/backends/smtp.py",
+        "django/core/management/commands/compilemessages.py",
+        "django/core/management/commands/runserver.py",
+        "django/core/management/templates.py",
+        "django/core/servers/basehttp.py",
+        "django/http/request.py",
+        "django/http/response.py",
+        "django/middleware/csrf.py",
+        "django/utils/translation/trans_real.py",
+        "django/views/debug.py"
+      ],
+      "instance_id": "django__django-10904",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "394748d584d1cd5c361a6a4c7b70d7b8a8cd3ef0",
+      "environment_setup_commit": "73909bcb408886a22e2b84581d6b9e6d9907c813",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 18,
+      "gold_py_files": [
+        "lib/matplotlib/tri/__init__.py",
+        "lib/matplotlib/tri/_triangulation.py",
+        "lib/matplotlib/tri/_tricontour.py",
+        "lib/matplotlib/tri/_trifinder.py",
+        "lib/matplotlib/tri/_triinterpolate.py",
+        "lib/matplotlib/tri/_tripcolor.py",
+        "lib/matplotlib/tri/_triplot.py",
+        "lib/matplotlib/tri/_trirefine.py",
+        "lib/matplotlib/tri/_tritools.py",
+        "lib/matplotlib/tri/triangulation.py",
+        "lib/matplotlib/tri/tricontour.py",
+        "lib/matplotlib/tri/trifinder.py",
+        "lib/matplotlib/tri/triinterpolate.py",
+        "lib/matplotlib/tri/tripcolor.py",
+        "lib/matplotlib/tri/triplot.py",
+        "lib/matplotlib/tri/trirefine.py",
+        "lib/matplotlib/tri/tritools.py",
+        "lib/mpl_toolkits/mplot3d/axes3d.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-24013",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "5813bdbae2c5c62cb23541d082a812c070f66468",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 11,
+      "gold_py_file_count": 17,
+      "gold_py_files": [
+        "sympy/assumptions/ask_generated.py",
+        "sympy/assumptions/sathandlers.py",
+        "sympy/concrete/delta.py",
+        "sympy/core/relational.py",
+        "sympy/core/sympify.py",
+        "sympy/functions/special/bsplines.py",
+        "sympy/integrals/meijerint.py",
+        "sympy/logic/boolalg.py",
+        "sympy/logic/inference.py",
+        "sympy/logic/utilities/dimacs.py",
+        "sympy/plotting/experimental_lambdify.py",
+        "sympy/printing/precedence.py",
+        "sympy/printing/str.py",
+        "sympy/solvers/inequalities.py",
+        "sympy/solvers/solvers.py",
+        "sympy/stats/crv_types.py",
+        "sympy/stats/rv.py"
+      ],
+      "instance_id": "sympy__sympy-12108",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "8cb334cf8b0d8f9be490fecf578aca408069b671",
+      "environment_setup_commit": "f9a6f50ec0c74d935c50a6e9c9b2cb0469570d91",
+      "gold_dir_count": 10,
+      "gold_py_file_count": 17,
+      "gold_py_files": [
+        "sympy/calculus/singularities.py",
+        "sympy/calculus/util.py",
+        "sympy/categories/baseclasses.py",
+        "sympy/combinatorics/partitions.py",
+        "sympy/combinatorics/polyhedron.py",
+        "sympy/core/function.py",
+        "sympy/logic/boolalg.py",
+        "sympy/printing/str.py",
+        "sympy/sets/conditionset.py",
+        "sympy/sets/fancysets.py",
+        "sympy/sets/powerset.py",
+        "sympy/sets/sets.py",
+        "sympy/solvers/inequalities.py",
+        "sympy/solvers/solveset.py",
+        "sympy/stats/rv_interface.py",
+        "sympy/stats/stochastic_process_types.py",
+        "sympy/vector/implicitregion.py"
+      ],
+      "instance_id": "sympy__sympy-21931",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "68ef274bc505cd44f305c03cbf84cf08826200a8",
+      "environment_setup_commit": "0fbdb9784da915fce5dcc1fe82bac9b4785749e5",
+      "gold_dir_count": 9,
+      "gold_py_file_count": 17,
+      "gold_py_files": [
+        "django/core/management/commands/inspectdb.py",
+        "django/db/backends/base/features.py",
+        "django/db/backends/base/schema.py",
+        "django/db/backends/mysql/features.py",
+        "django/db/backends/mysql/introspection.py",
+        "django/db/backends/mysql/schema.py",
+        "django/db/backends/oracle/features.py",
+        "django/db/backends/oracle/introspection.py",
+        "django/db/backends/postgresql/features.py",
+        "django/db/backends/postgresql/introspection.py",
+        "django/db/migrations/autodetector.py",
+        "django/db/migrations/operations/__init__.py",
+        "django/db/migrations/operations/models.py",
+        "django/db/models/base.py",
+        "django/db/models/fields/__init__.py",
+        "django/db/models/fields/related.py",
+        "django/db/models/options.py"
+      ],
+      "instance_id": "django__django-14463",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "599f3e2cda50ab084915ffd08edb5ad6cad61415",
+      "environment_setup_commit": "4a72da71001f154ea60906a2f74898d32b7322a7",
+      "gold_dir_count": 9,
+      "gold_py_file_count": 17,
+      "gold_py_files": [
+        "django/db/backends/base/features.py",
+        "django/db/backends/base/schema.py",
+        "django/db/backends/mysql/features.py",
+        "django/db/backends/mysql/schema.py",
+        "django/db/backends/oracle/features.py",
+        "django/db/backends/oracle/introspection.py",
+        "django/db/backends/oracle/schema.py",
+        "django/db/backends/postgresql/features.py",
+        "django/db/backends/sqlite3/features.py",
+        "django/db/backends/sqlite3/schema.py",
+        "django/db/migrations/autodetector.py",
+        "django/db/models/base.py",
+        "django/db/models/expressions.py",
+        "django/db/models/fields/__init__.py",
+        "django/db/models/functions/comparison.py",
+        "django/db/models/lookups.py",
+        "django/db/models/query.py"
+      ],
+      "instance_id": "django__django-16092",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "ba6b32e5efc4c813ba4432777b3b1743d4205d14",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 7,
+      "gold_py_file_count": 16,
+      "gold_py_files": [
+        "django/core/management/commands/inspectdb.py",
+        "django/db/backends/base/features.py",
+        "django/db/backends/base/introspection.py",
+        "django/db/backends/base/schema.py",
+        "django/db/backends/mysql/features.py",
+        "django/db/backends/mysql/introspection.py",
+        "django/db/backends/mysql/schema.py",
+        "django/db/backends/oracle/features.py",
+        "django/db/backends/oracle/introspection.py",
+        "django/db/backends/oracle/schema.py",
+        "django/db/backends/postgresql/features.py",
+        "django/db/backends/postgresql/introspection.py",
+        "django/db/backends/sqlite3/features.py",
+        "django/db/backends/sqlite3/introspection.py",
+        "django/db/backends/sqlite3/schema.py",
+        "django/db/models/fields/__init__.py"
+      ],
+      "instance_id": "django__django-13207",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "a4e6030904df63b3f10aa0729b86dc6942b0458e",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 16,
+      "gold_py_files": [
+        "django/contrib/auth/management/commands/changepassword.py",
+        "django/contrib/gis/management/commands/ogrinspect.py",
+        "django/contrib/staticfiles/management/commands/collectstatic.py",
+        "django/core/management/base.py",
+        "django/core/management/commands/check.py",
+        "django/core/management/commands/compilemessages.py",
+        "django/core/management/commands/createcachetable.py",
+        "django/core/management/commands/dbshell.py",
+        "django/core/management/commands/diffsettings.py",
+        "django/core/management/commands/inspectdb.py",
+        "django/core/management/commands/makemessages.py",
+        "django/core/management/commands/migrate.py",
+        "django/core/management/commands/runserver.py",
+        "django/core/management/commands/shell.py",
+        "django/core/management/commands/testserver.py",
+        "django/core/management/templates.py"
+      ],
+      "instance_id": "django__django-12910",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "39c997ee9dc772838ec8e671e9820fb0a070e060",
+      "environment_setup_commit": "de98877e3dc45de8dd441d008f23d88738dc015d",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 16,
+      "gold_py_files": [
+        "lib/matplotlib/_constrained_layout.py",
+        "lib/matplotlib/axes/__init__.py",
+        "lib/matplotlib/axes/_base.py",
+        "lib/matplotlib/axes/_subplots.py",
+        "lib/matplotlib/colorbar.py",
+        "lib/matplotlib/figure.py",
+        "lib/matplotlib/gridspec.py",
+        "lib/matplotlib/pyplot.py",
+        "lib/mpl_toolkits/axes_grid1/axes_divider.py",
+        "lib/mpl_toolkits/axes_grid1/axes_rgb.py",
+        "lib/mpl_toolkits/axes_grid1/parasite_axes.py",
+        "lib/mpl_toolkits/axisartist/__init__.py",
+        "lib/mpl_toolkits/axisartist/axislines.py",
+        "lib/mpl_toolkits/axisartist/floating_axes.py",
+        "lib/mpl_toolkits/axisartist/parasite_axes.py",
+        "tutorials/intermediate/artists.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-23573",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "276202f51ee9967969eafc1880c4785c80d63d3b",
+      "environment_setup_commit": "bf436ea0a49513bd4e49bb2d1645bd770e470d75",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 16,
+      "gold_py_files": [
+        "requests/adapters.py",
+        "requests/auth.py",
+        "requests/packages/__init__.py",
+        "requests/packages/urllib3/__init__.py",
+        "requests/packages/urllib3/connection.py",
+        "requests/packages/urllib3/connectionpool.py",
+        "requests/packages/urllib3/contrib/appengine.py",
+        "requests/packages/urllib3/contrib/pyopenssl.py",
+        "requests/packages/urllib3/exceptions.py",
+        "requests/packages/urllib3/poolmanager.py",
+        "requests/packages/urllib3/request.py",
+        "requests/packages/urllib3/response.py",
+        "requests/packages/urllib3/util/connection.py",
+        "requests/packages/urllib3/util/response.py",
+        "requests/packages/urllib3/util/retry.py",
+        "requests/packages/urllib3/util/ssl_.py"
+      ],
+      "instance_id": "psf__requests-2678",
+      "repo": "psf/requests"
+    },
+    {
+      "base_commit": "dd53633d0f28ed8656480e25a49615258121cb5d",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 9,
+      "gold_py_file_count": 15,
+      "gold_py_files": [
+        "sympy/calculus/singularities.py",
+        "sympy/calculus/util.py",
+        "sympy/categories/baseclasses.py",
+        "sympy/combinatorics/partitions.py",
+        "sympy/combinatorics/polyhedron.py",
+        "sympy/core/function.py",
+        "sympy/logic/boolalg.py",
+        "sympy/printing/str.py",
+        "sympy/sets/conditionset.py",
+        "sympy/sets/fancysets.py",
+        "sympy/sets/powerset.py",
+        "sympy/sets/sets.py",
+        "sympy/solvers/inequalities.py",
+        "sympy/solvers/solveset.py",
+        "sympy/stats/stochastic_process_types.py"
+      ],
+      "instance_id": "sympy__sympy-17845",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "cab3c1cbfa415ced4ea4e46542ae7eb7044df6d6",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 14,
+      "gold_py_files": [
+        "sympy/codegen/array_utils.py",
+        "sympy/combinatorics/generators.py",
+        "sympy/combinatorics/homomorphisms.py",
+        "sympy/combinatorics/named_groups.py",
+        "sympy/combinatorics/perm_groups.py",
+        "sympy/combinatorics/permutations.py",
+        "sympy/combinatorics/polyhedron.py",
+        "sympy/combinatorics/tensor_can.py",
+        "sympy/combinatorics/util.py",
+        "sympy/interactive/printing.py",
+        "sympy/printing/latex.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/repr.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-18033",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "64d28fe0534f6993695d11244ea740f783958dc8",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 14,
+      "gold_py_files": [
+        "sympy/assumptions/handlers/matrices.py",
+        "sympy/matrices/expressions/blockmatrix.py",
+        "sympy/matrices/expressions/determinant.py",
+        "sympy/matrices/expressions/hadamard.py",
+        "sympy/matrices/expressions/inverse.py",
+        "sympy/matrices/expressions/kronecker.py",
+        "sympy/matrices/expressions/matadd.py",
+        "sympy/matrices/expressions/matexpr.py",
+        "sympy/matrices/expressions/matmul.py",
+        "sympy/matrices/expressions/matpow.py",
+        "sympy/matrices/expressions/trace.py",
+        "sympy/matrices/matrices.py",
+        "sympy/solvers/solvers.py",
+        "sympy/stats/stochastic_process_types.py"
+      ],
+      "instance_id": "sympy__sympy-19093",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "f63811f4813f0e0439e140a97eeba18a5017e858",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 9,
+      "gold_py_file_count": 13,
+      "gold_py_files": [
+        "django/contrib/gis/utils/layermapping.py",
+        "django/core/management/commands/loaddata.py",
+        "django/core/management/commands/migrate.py",
+        "django/core/management/commands/runserver.py",
+        "django/core/management/commands/showmigrations.py",
+        "django/core/management/commands/squashmigrations.py",
+        "django/db/backends/base/creation.py",
+        "django/db/backends/mysql/creation.py",
+        "django/db/backends/oracle/creation.py",
+        "django/db/backends/postgresql/creation.py",
+        "django/db/backends/sqlite3/creation.py",
+        "django/db/models/query.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-10989",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d1f1417caed648db2f81a1ec28c47bf958c01958",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 8,
+      "gold_py_file_count": 12,
+      "gold_py_files": [
+        "django/contrib/sessions/backends/file.py",
+        "django/contrib/sitemaps/views.py",
+        "django/contrib/syndication/views.py",
+        "django/core/cache/backends/db.py",
+        "django/core/files/storage.py",
+        "django/http/response.py",
+        "django/utils/dateformat.py",
+        "django/utils/feedgenerator.py",
+        "django/utils/http.py",
+        "django/utils/timezone.py",
+        "django/utils/version.py",
+        "django/views/decorators/http.py"
+      ],
+      "instance_id": "django__django-14374",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "9c6ba876928fd20194ac3238dc06aeae66d7bd50",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 7,
+      "gold_py_file_count": 12,
+      "gold_py_files": [
+        "django/core/management/commands/compilemessages.py",
+        "django/db/backends/postgresql/base.py",
+        "django/db/backends/sqlite3/base.py",
+        "django/db/backends/sqlite3/client.py",
+        "django/db/migrations/questioner.py",
+        "django/http/cookie.py",
+        "django/http/request.py",
+        "django/utils/autoreload.py",
+        "django/utils/http.py",
+        "django/utils/module_loading.py",
+        "django/utils/version.py",
+        "setup.py"
+      ],
+      "instance_id": "django__django-13915",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "ddccd5c538220ab7b8fdab390c64e29be97ee00b",
+      "environment_setup_commit": "50ea159bfd0872635ebf4281e741f3c87f0bef6b",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 12,
+      "gold_py_files": [
+        "xarray/core/alignment.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py",
+        "xarray/core/pycompat.py",
+        "xarray/core/types.py",
+        "xarray/plot/__init__.py",
+        "xarray/plot/accessor.py",
+        "xarray/plot/dataarray_plot.py",
+        "xarray/plot/dataset_plot.py",
+        "xarray/plot/facetgrid.py",
+        "xarray/plot/plot.py",
+        "xarray/plot/utils.py"
+      ],
+      "instance_id": "pydata__xarray-7052",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "115dd821a4b9ec94ca1bd339a8c0d63f31a12167",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 11,
+      "gold_py_files": [
+        "sympy/combinatorics/homomorphisms.py",
+        "sympy/printing/ccode.py",
+        "sympy/printing/codeprinter.py",
+        "sympy/printing/fcode.py",
+        "sympy/printing/glsl.py",
+        "sympy/printing/jscode.py",
+        "sympy/printing/julia.py",
+        "sympy/printing/mathematica.py",
+        "sympy/printing/octave.py",
+        "sympy/utilities/lambdify.py",
+        "sympy/utilities/runtests.py"
+      ],
+      "instance_id": "sympy__sympy-15198",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "67e7dffe9543aff259f63c8f12d15642fe7be100",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 10,
+      "gold_py_files": [
+        "django/contrib/messages/storage/base.py",
+        "django/contrib/postgres/constraints.py",
+        "django/core/validators.py",
+        "django/db/models/base.py",
+        "django/db/models/constraints.py",
+        "django/db/models/expressions.py",
+        "django/db/models/indexes.py",
+        "django/db/models/query.py",
+        "django/db/models/query_utils.py",
+        "django/template/context.py"
+      ],
+      "instance_id": "django__django-11808",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "28728f5c793f73f92d6c56c83b06fb001395d400",
+      "environment_setup_commit": "7e85a6d1f038bbb932b36f18d75df6be937ed00d",
+      "gold_dir_count": 7,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "sklearn/base.py",
+        "sklearn/cluster/birch.py",
+        "sklearn/decomposition/online_lda.py",
+        "sklearn/ensemble/forest.py",
+        "sklearn/exceptions.py",
+        "sklearn/gaussian_process/gpr.py",
+        "sklearn/linear_model/base.py",
+        "sklearn/linear_model/logistic.py",
+        "sklearn/utils/estimator_checks.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-13013",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "e1fa6c79be8b3928c21e312a0c0e65e1cfd9a7f7",
+      "environment_setup_commit": "60775ec4c4ea08509eee4b564cbf90f316021aff",
+      "gold_dir_count": 7,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "sphinx/application.py",
+        "sphinx/builders/html/__init__.py",
+        "sphinx/builders/latex/__init__.py",
+        "sphinx/builders/latex/util.py",
+        "sphinx/config.py",
+        "sphinx/environment/__init__.py",
+        "sphinx/environment/collectors/asset.py",
+        "sphinx/util/i18n.py",
+        "sphinx/writers/latex.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-10067",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "f997b5e6ae85e2df2342b1a7812fe8130206c957",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "django/contrib/gis/db/backends/postgis/schema.py",
+        "django/contrib/postgres/indexes.py",
+        "django/db/backends/base/features.py",
+        "django/db/backends/base/schema.py",
+        "django/db/backends/postgresql/features.py",
+        "django/db/backends/postgresql/schema.py",
+        "django/db/models/base.py",
+        "django/db/models/constraints.py",
+        "django/db/models/indexes.py"
+      ],
+      "instance_id": "django__django-11991",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "b90661d6a46aa3619d3eec94d5281f5888add501",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "sklearn/cluster/affinity_propagation_.py",
+        "sklearn/cluster/birch.py",
+        "sklearn/cross_decomposition/pls_.py",
+        "sklearn/decomposition/fastica_.py",
+        "sklearn/gaussian_process/gpc.py",
+        "sklearn/gaussian_process/gpr.py",
+        "sklearn/linear_model/logistic.py",
+        "sklearn/linear_model/ransac.py",
+        "sklearn/linear_model/ridge.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-10306",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "ded734d5f99756033218d29c32758049adbe52d2",
+      "environment_setup_commit": "a651e6bf4ad7a1dc293525d0a70e6d0d11b827db",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "sphinx/config.py",
+        "sphinx/directives/__init__.py",
+        "sphinx/domains/c.py",
+        "sphinx/domains/cpp.py",
+        "sphinx/domains/javascript.py",
+        "sphinx/domains/python.py",
+        "sphinx/domains/rst.py",
+        "sphinx/environment/collectors/toctree.py",
+        "sphinx/ext/autodoc/__init__.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-10807",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "c3bfe86b45577a9405a4680d9971efa9594a0657",
+      "environment_setup_commit": "1e8a5b833d1b58f3ab84099c4582239af854b23a",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "sklearn/calibration.py",
+        "sklearn/metrics/_base.py",
+        "sklearn/metrics/_classification.py",
+        "sklearn/metrics/_plot/det_curve.py",
+        "sklearn/metrics/_plot/precision_recall_curve.py",
+        "sklearn/metrics/_plot/roc_curve.py",
+        "sklearn/metrics/_ranking.py",
+        "sklearn/utils/_plotting.py",
+        "sklearn/utils/validation.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-25969",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "8a8dd9093d381500555bccf46fc5d46b42d132ec",
+      "environment_setup_commit": "f93c0a3dcb82feed0262d758626c90d4002685f3",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 9,
+      "gold_py_files": [
+        "lib/matplotlib/artist.py",
+        "lib/matplotlib/axes/_base.py",
+        "lib/matplotlib/axis.py",
+        "lib/matplotlib/cbook/__init__.py",
+        "lib/matplotlib/cm.py",
+        "lib/matplotlib/colors.py",
+        "lib/matplotlib/container.py",
+        "lib/matplotlib/figure.py",
+        "lib/matplotlib/widgets.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-21238",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "b9e2355eb07938829a1a31ed7b60e5f72d4b92e3",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 7,
+      "gold_py_file_count": 8,
+      "gold_py_files": [
+        "django/core/management/base.py",
+        "django/core/management/commands/dbshell.py",
+        "django/db/backends/base/client.py",
+        "django/db/backends/mysql/client.py",
+        "django/db/backends/mysql/creation.py",
+        "django/db/backends/oracle/client.py",
+        "django/db/backends/postgresql/client.py",
+        "django/db/backends/sqlite3/client.py"
+      ],
+      "instance_id": "django__django-12508",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "87148dcdab07b6e3385f76dcc96070bdd36342a1",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 6,
+      "gold_py_file_count": 8,
+      "gold_py_files": [
+        "sympy/core/basic.py",
+        "sympy/interactive/printing.py",
+        "sympy/matrices/matrices.py",
+        "sympy/physics/vector/dyadic.py",
+        "sympy/physics/vector/vector.py",
+        "sympy/printing/latex.py",
+        "sympy/printing/preview.py",
+        "sympy/tensor/array/ndim_array.py"
+      ],
+      "instance_id": "sympy__sympy-15625",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "cd3224018333211374b2fe914705825e5125a3b1",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 8,
+      "gold_py_files": [
+        "sympy/core/numbers.py",
+        "sympy/polys/constructor.py",
+        "sympy/polys/domains/fractionfield.py",
+        "sympy/polys/domains/mpelements.py",
+        "sympy/polys/domains/polynomialring.py",
+        "sympy/polys/fields.py",
+        "sympy/polys/rings.py",
+        "sympy/simplify/simplify.py"
+      ],
+      "instance_id": "sympy__sympy-12088",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "3ac1464b8840d5f8b618a654f9fbf09c452fe969",
+      "environment_setup_commit": "3ac1464b8840d5f8b618a654f9fbf09c452fe969",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 8,
+      "gold_py_files": [
+        "sympy/core/basic.py",
+        "sympy/core/numbers.py",
+        "sympy/core/singleton.py",
+        "sympy/core/symbol.py",
+        "sympy/functions/elementary/miscellaneous.py",
+        "sympy/physics/paulialgebra.py",
+        "sympy/sets/fancysets.py",
+        "sympy/sets/sets.py"
+      ],
+      "instance_id": "sympy__sympy-21260",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "14abc988525f344d1974c043f83b1e6b1247aea6",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 8,
+      "gold_py_files": [
+        "sympy/core/compatibility.py",
+        "sympy/core/containers.py",
+        "sympy/core/evalf.py",
+        "sympy/core/function.py",
+        "sympy/core/operations.py",
+        "sympy/core/sympify.py",
+        "sympy/ntheory/factor_.py",
+        "sympy/tensor/indexed.py"
+      ],
+      "instance_id": "sympy__sympy-16963",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "f8e46e9e741f253803e9b8be03287e5dd16abd4d",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 8,
+      "gold_py_files": [
+        "sympy/core/add.py",
+        "sympy/core/basic.py",
+        "sympy/core/exprtools.py",
+        "sympy/core/mul.py",
+        "sympy/core/operations.py",
+        "sympy/matrices/expressions/matexpr.py",
+        "sympy/matrices/expressions/matmul.py",
+        "sympy/matrices/expressions/trace.py"
+      ],
+      "instance_id": "sympy__sympy-15948",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "b26ec77deb7c5052163ef8514ec7db70c0a5ea2a",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 6,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "django/db/backends/base/operations.py",
+        "django/db/backends/mysql/operations.py",
+        "django/db/backends/oracle/operations.py",
+        "django/db/backends/postgresql/operations.py",
+        "django/db/backends/sqlite3/base.py",
+        "django/db/backends/sqlite3/operations.py",
+        "django/db/models/functions/datetime.py"
+      ],
+      "instance_id": "django__django-13495",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "b7b4d3e2f1a65bcb6d40431d3b61ed1d563c9dab",
+      "environment_setup_commit": "7813f7efb5b2012412888b69e73d76f2df2b50b6",
+      "gold_dir_count": 6,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "sklearn/__init__.py",
+        "sklearn/cross_decomposition/pls_.py",
+        "sklearn/experimental/enable_iterative_imputer.py",
+        "sklearn/metrics/classification.py",
+        "sklearn/metrics/pairwise.py",
+        "sklearn/preprocessing/_encoders.py",
+        "sklearn/utils/sparsefuncs.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-13915",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "8b23f6db12d9fcdb6e1ca2015ea32e3e2e1fbdb6",
+      "environment_setup_commit": "60775ec4c4ea08509eee4b564cbf90f316021aff",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "sphinx/builders/latex/transforms.py",
+        "sphinx/ext/autodoc/__init__.py",
+        "sphinx/ext/autodoc/directive.py",
+        "sphinx/ext/napoleon/docstring.py",
+        "sphinx/util/typing.py",
+        "sphinx/writers/html.py",
+        "sphinx/writers/latex.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-10207",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "4a735bb4f38f7534f11c6634ab1cc36a8d57885e",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "sympy/codegen/array_utils.py",
+        "sympy/core/decorators.py",
+        "sympy/core/expr.py",
+        "sympy/core/numbers.py",
+        "sympy/sets/sets.py",
+        "sympy/simplify/trigsimp.py",
+        "sympy/solvers/ode.py"
+      ],
+      "instance_id": "sympy__sympy-18116",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "795da6306a048b18c0158496b0d49e8e4f197a32",
+      "environment_setup_commit": "647480166bfe7532e8c471fef0146e3a17e6c0c9",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "django/db/backends/base/features.py",
+        "django/db/backends/mysql/features.py",
+        "django/db/models/expressions.py",
+        "django/db/models/query.py",
+        "django/db/models/query_utils.py",
+        "django/db/models/sql/__init__.py",
+        "django/db/models/sql/where.py"
+      ],
+      "instance_id": "django__django-14480",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "dec525f376a5b62bfc3dd361db057b44e7ebff14",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "sympy/core/mod.py",
+        "sympy/sets/contains.py",
+        "sympy/sets/fancysets.py",
+        "sympy/sets/handlers/functions.py",
+        "sympy/sets/handlers/intersection.py",
+        "sympy/sets/sets.py",
+        "sympy/solvers/solveset.py"
+      ],
+      "instance_id": "sympy__sympy-16864",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "b4c1da60fa4e8201b2b929083df2610da7a5b52f",
+      "environment_setup_commit": "f9a6f50ec0c74d935c50a6e9c9b2cb0469570d91",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "sympy/core/expr.py",
+        "sympy/core/kind.py",
+        "sympy/core/power.py",
+        "sympy/functions/elementary/exponential.py",
+        "sympy/matrices/expressions/determinant.py",
+        "sympy/matrices/expressions/matexpr.py",
+        "sympy/matrices/matrices.py"
+      ],
+      "instance_id": "sympy__sympy-20691",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "2694046c748a51125de6d460073635f1d789958e",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "xarray/__init__.py",
+        "xarray/coding/calendar_ops.py",
+        "xarray/coding/cftime_offsets.py",
+        "xarray/coding/times.py",
+        "xarray/core/accessor_dt.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py"
+      ],
+      "instance_id": "pydata__xarray-5233",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "626c33ecf8334a36d99263faa474f3cf63a03638",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "sympy/core/assumptions.py",
+        "sympy/core/exprtools.py",
+        "sympy/core/mod.py",
+        "sympy/core/mul.py",
+        "sympy/core/power.py",
+        "sympy/functions/combinatorial/factorials.py",
+        "sympy/ntheory/factor_.py"
+      ],
+      "instance_id": "sympy__sympy-13236",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "b2b0717108c8b5381f12bc4ab1c759e3705fb8a8",
+      "environment_setup_commit": "2e89d074b3b2abc2da80e437c93b1d5516a0ca57",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "astropy/io/votable/__init__.py",
+        "astropy/io/votable/connect.py",
+        "astropy/io/votable/converters.py",
+        "astropy/io/votable/exceptions.py",
+        "astropy/io/votable/table.py",
+        "astropy/io/votable/tree.py",
+        "astropy/io/votable/validator/result.py"
+      ],
+      "instance_id": "astropy__astropy-8715",
+      "repo": "astropy/astropy"
+    },
+    {
+      "base_commit": "009aa66620b3437cf0de675013fa7d1ff231963c",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 7,
+      "gold_py_files": [
+        "xarray/__init__.py",
+        "xarray/core/computation.py",
+        "xarray/core/dask_array_ops.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py",
+        "xarray/core/duck_array_ops.py",
+        "xarray/core/nputils.py"
+      ],
+      "instance_id": "pydata__xarray-3733",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "828e3b1335e2614d338a630fd5b5f88d38a6b5d2",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 6,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "django/contrib/auth/signals.py",
+        "django/core/signals.py",
+        "django/db/backends/signals.py",
+        "django/db/models/signals.py",
+        "django/dispatch/dispatcher.py",
+        "django/utils/autoreload.py"
+      ],
+      "instance_id": "django__django-12513",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "8bcca47e8356521f52f0738d9633befd53007cae",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 6,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "django/core/management/sql.py",
+        "django/db/backends/base/operations.py",
+        "django/db/backends/mysql/operations.py",
+        "django/db/backends/oracle/operations.py",
+        "django/db/backends/postgresql/operations.py",
+        "django/db/backends/sqlite3/operations.py"
+      ],
+      "instance_id": "django__django-12733",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "9cc743d0c82e019306d80eb8a83f86f8c6244610",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "django/core/checks/database.py",
+        "django/core/checks/registry.py",
+        "django/core/management/base.py",
+        "django/core/management/commands/check.py",
+        "django/core/management/commands/migrate.py",
+        "django/db/models/base.py"
+      ],
+      "instance_id": "django__django-12396",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "fde6fb28984a76d5bee794f4c0458eb25fe56fcd",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "django/contrib/postgres/aggregates/statistics.py",
+        "django/db/models/aggregates.py",
+        "django/db/models/expressions.py",
+        "django/db/models/functions/comparison.py",
+        "django/db/models/sql/compiler.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-14430",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "9466fd78420a851460c92673dad50a5737c75b12",
+      "environment_setup_commit": "647480166bfe7532e8c471fef0146e3a17e6c0c9",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "django/contrib/postgres/aggregates/statistics.py",
+        "django/db/models/aggregates.py",
+        "django/db/models/expressions.py",
+        "django/db/models/functions/comparison.py",
+        "django/db/models/sql/compiler.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-14894",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "5793ebb2201bf778f08ac1d4cd0b8dd674c96053",
+      "environment_setup_commit": "28289122be81e0bc0a6ee0c4c5b7343a46ce2e4e",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "examples/text_labels_and_annotations/figlegend_demo.py",
+        "lib/matplotlib/_constrained_layout.py",
+        "lib/matplotlib/axes/_axes.py",
+        "lib/matplotlib/figure.py",
+        "lib/matplotlib/legend.py",
+        "tutorials/intermediate/legend_guide.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-19743",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "cd7d9d985e1bbe2dbbbae17da0e9fbbba7e8c8c6",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "examples/applications/plot_prediction_latency.py",
+        "examples/ensemble/plot_ensemble_oob.py",
+        "examples/ensemble/plot_random_forest_regression_multioutput.py",
+        "examples/ensemble/plot_voting_probas.py",
+        "sklearn/ensemble/forest.py",
+        "sklearn/utils/estimator_checks.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-11542",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "21fc1d97452d4e3a6d744d0eef95ecaf7e87859c",
+      "environment_setup_commit": "7e85a6d1f038bbb932b36f18d75df6be937ed00d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "examples/model_selection/plot_roc.py",
+        "sklearn/linear_model/coordinate_descent.py",
+        "sklearn/linear_model/least_angle.py",
+        "sklearn/linear_model/ridge.py",
+        "sklearn/neighbors/regression.py",
+        "sklearn/utils/estimator_checks.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-13392",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "0410a6aaf4fdd346b12305cca6a7b0c1aa6556fa",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "sympy/core/numbers.py",
+        "sympy/printing/lambdarepr.py",
+        "sympy/solvers/solvers.py",
+        "sympy/utilities/decorator.py",
+        "sympy/utilities/lambdify.py",
+        "sympy/utilities/runtests.py"
+      ],
+      "instance_id": "sympy__sympy-11862",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "6fd65310fa3167b9626c38a5487e171ca407d988",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "sympy/assumptions/ask.py",
+        "sympy/assumptions/ask_generated.py",
+        "sympy/core/assumptions.py",
+        "sympy/core/power.py",
+        "sympy/printing/tree.py",
+        "sympy/tensor/indexed.py"
+      ],
+      "instance_id": "sympy__sympy-16597",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "d59a4996ae7d32498b2bd4c2f2a36eda4599a2e1",
+      "environment_setup_commit": "902739cfc3bbc3379e6ef99c8e250de35f52ecde",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "src/_pytest/config/__init__.py",
+        "src/_pytest/pytester.py",
+        "src/_pytest/threadexception.py",
+        "src/_pytest/unraisableexception.py",
+        "src/_pytest/warning_types.py",
+        "src/pytest/__init__.py"
+      ],
+      "instance_id": "pytest-dev__pytest-8055",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "6399a809e2683f89d74a6540fb51293f38e9923d",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "sympy/core/function.py",
+        "sympy/matrices/expressions/blockmatrix.py",
+        "sympy/matrices/expressions/matexpr.py",
+        "sympy/printing/latex.py",
+        "sympy/printing/precedence.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-15446",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "e8a83c8f12c50eb99bcf32ff83b36bc413ec2e02",
+      "environment_setup_commit": "e8a83c8f12c50eb99bcf32ff83b36bc413ec2e02",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "seaborn/_core.py",
+        "seaborn/_statistics.py",
+        "seaborn/axisgrid.py",
+        "seaborn/categorical.py",
+        "seaborn/external/version.py",
+        "seaborn/rcmod.py"
+      ],
+      "instance_id": "mwaskom__seaborn-2766",
+      "repo": "mwaskom/seaborn"
+    },
+    {
+      "base_commit": "35df3e68d57fcd62a60b2a8568b09fa3674f36a8",
+      "environment_setup_commit": "634312b14a45db8d60d72016e01294284e3a18d4",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "src/_pytest/config/__init__.py",
+        "src/_pytest/config/compat.py",
+        "src/_pytest/deprecated.py",
+        "src/_pytest/main.py",
+        "src/_pytest/python.py",
+        "src/_pytest/terminal.py"
+      ],
+      "instance_id": "pytest-dev__pytest-8463",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "0cd4f13ab5dd4ecb7700ba5d2d94672cb40fd1e3",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 6,
+      "gold_py_files": [
+        "sympy/core/add.py",
+        "sympy/core/expr.py",
+        "sympy/core/mul.py",
+        "sympy/core/power.py",
+        "sympy/simplify/hyperexpand.py",
+        "sympy/simplify/radsimp.py"
+      ],
+      "instance_id": "sympy__sympy-12472",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "4c8a8590be682e74ec91ab217c646baa4686a255",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/core/expr.py",
+        "sympy/matrices/expressions/matmul.py",
+        "sympy/printing/llvmjitcode.py",
+        "sympy/simplify/cse_main.py",
+        "sympy/solvers/ode.py"
+      ],
+      "instance_id": "sympy__sympy-11232",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "b750e609ab48eed4fccc18617d57c8e8bfda662a",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 5,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/core/exprtools.py",
+        "sympy/integrals/integrals.py",
+        "sympy/physics/continuum_mechanics/beam.py",
+        "sympy/simplify/simplify.py",
+        "sympy/solvers/ode.py"
+      ],
+      "instance_id": "sympy__sympy-16088",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "2d99bedef58144e321ec62667eea495d4391ee58",
+      "environment_setup_commit": "2e89d074b3b2abc2da80e437c93b1d5516a0ca57",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "astropy/units/function/core.py",
+        "astropy/units/quantity.py",
+        "astropy/units/quantity_helper/converters.py",
+        "astropy/units/quantity_helper/helpers.py",
+        "astropy/utils/compat/numpycompat.py"
+      ],
+      "instance_id": "astropy__astropy-8747",
+      "repo": "astropy/astropy"
+    },
+    {
+      "base_commit": "859cd7c6b43bf70e2852eda10f635c70feeb397f",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/template/__init__.py",
+        "django/template/autoreload.py",
+        "django/template/loaders/cached.py",
+        "django/utils/autoreload.py",
+        "django/utils/translation/reloader.py"
+      ],
+      "instance_id": "django__django-12928",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "bac5777bff8e8d8189193438b5af52f158a3f2a4",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/db/backends/base/features.py",
+        "django/db/backends/oracle/features.py",
+        "django/db/backends/sqlite3/base.py",
+        "django/db/backends/sqlite3/features.py",
+        "django/db/models/fields/json.py"
+      ],
+      "instance_id": "django__django-13250",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "ac6c4260074de43a978e5c6553ef89441e1d6748",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/contrib/postgres/aggregates/mixins.py",
+        "django/contrib/postgres/constraints.py",
+        "django/db/models/expressions.py",
+        "django/db/models/fields/json.py",
+        "django/db/models/lookups.py"
+      ],
+      "instance_id": "django__django-13530",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "78f163a4fb3937aca2e71786fbdd51a0ef39629e",
+      "environment_setup_commit": "0fbdb9784da915fce5dcc1fe82bac9b4785749e5",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/core/management/commands/inspectdb.py",
+        "django/db/backends/base/features.py",
+        "django/db/backends/postgresql/base.py",
+        "django/db/backends/postgresql/features.py",
+        "django/db/models/fields/__init__.py"
+      ],
+      "instance_id": "django__django-16302",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "3a5a91c0fa0761555aed2cb03270e2bb63b400fb",
+      "environment_setup_commit": "2c687133e4fcdd73ae3afa2e79be2160b150bb82",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "pylint/checkers/misc.py",
+        "pylint/lint/pylinter.py",
+        "pylint/message/__init__.py",
+        "pylint/message/message_handler_mix_in.py",
+        "pylint/typing.py"
+      ],
+      "instance_id": "pylint-dev__pylint-5136",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "f40e9ffd766bb434a0181dd9db3886115d2dfb2f",
+      "environment_setup_commit": "a0ce6e424e3a208f3aed1cbf6e16c40853bec3c0",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "pylint/interfaces.py",
+        "pylint/lint/base_options.py",
+        "pylint/reporters/__init__.py",
+        "pylint/reporters/json_reporter.py",
+        "pylint/testutils/_primer/primer_run_command.py"
+      ],
+      "instance_id": "pylint-dev__pylint-8929",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "98eb09e9206cb714da85c5a0616deff3cc85a1d5",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "examples/plot_missing_values.py",
+        "sklearn/__init__.py",
+        "sklearn/impute.py",
+        "sklearn/preprocessing/imputation.py",
+        "sklearn/utils/estimator_checks.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-10483",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "07c3ad3d2ca9f52ccb132df23b9b736d65a90ad6",
+      "environment_setup_commit": "fd40404e72921b9e52a5f9582246e4a6cd96c431",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "bin/authors_update.py",
+        "bin/mailmap_update.py",
+        "setup.py",
+        "sympy/__init__.py",
+        "sympy/core/numbers.py"
+      ],
+      "instance_id": "sympy__sympy-22383",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "a5308514fb4bc5086c9a16a8a24a945eeebb073c",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/core/mail/message.py",
+        "django/core/mail/utils.py",
+        "django/core/validators.py",
+        "django/utils/encoding.py",
+        "django/utils/html.py"
+      ],
+      "instance_id": "django__django-11532",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "f1905db6c0004a2b6c8b69c55a1f5f9da58ce2eb",
+      "environment_setup_commit": "647480166bfe7532e8c471fef0146e3a17e6c0c9",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/contrib/admin/utils.py",
+        "django/contrib/contenttypes/management/commands/remove_stale_contenttypes.py",
+        "django/db/models/base.py",
+        "django/db/models/deletion.py",
+        "django/db/models/query.py"
+      ],
+      "instance_id": "django__django-15248",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "191f6a9a4586b5e5f79f4f42f190e7ad4bbacc84",
+      "environment_setup_commit": "4a72da71001f154ea60906a2f74898d32b7322a7",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/middleware/locale.py",
+        "django/urls/resolvers.py",
+        "django/utils/translation/__init__.py",
+        "django/utils/translation/trans_null.py",
+        "django/utils/translation/trans_real.py"
+      ],
+      "instance_id": "django__django-16810",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "98cfb90182a8baa806fc4e09e294b6cfc5d09eff",
+      "environment_setup_commit": "4a72da71001f154ea60906a2f74898d32b7322a7",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/db/backends/base/features.py",
+        "django/db/backends/base/schema.py",
+        "django/db/backends/postgresql/features.py",
+        "django/db/models/base.py",
+        "django/db/models/constraints.py"
+      ],
+      "instance_id": "django__django-17058",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "4143356c3c51831300789e4fdf795d83716dbab6",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sklearn/decomposition/incremental_pca.py",
+        "sklearn/preprocessing/data.py",
+        "sklearn/utils/estimator_checks.py",
+        "sklearn/utils/extmath.py",
+        "sklearn/utils/sparsefuncs.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-11206",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "7f83b89a2e644a8762c5bb02dcd5937f2a7ebe6e",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/calculus/util.py",
+        "sympy/core/basic.py",
+        "sympy/core/expr.py",
+        "sympy/core/function.py",
+        "sympy/functions/elementary/miscellaneous.py"
+      ],
+      "instance_id": "sympy__sympy-13619",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "da4929882a0492492549f8dd5a67f262df1ff142",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/codegen/pyutils.py",
+        "sympy/polys/numberfields.py",
+        "sympy/printing/lambdarepr.py",
+        "sympy/printing/pycode.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-16901",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "5158ecf2cb5b926f0f6421aab7b0279280305554",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/matrices/expressions/hadamard.py",
+        "sympy/printing/latex.py",
+        "sympy/printing/mathml.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-16906",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "4a9bdbc72dcf35172fd2279ca995ab24353f6edf",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/codegen/array_utils.py",
+        "sympy/combinatorics/perm_groups.py",
+        "sympy/combinatorics/permutations.py",
+        "sympy/printing/pycode.py",
+        "sympy/printing/tensorflow.py"
+      ],
+      "instance_id": "sympy__sympy-17340",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "2aaabe2004e1953eb7d7057edcf2fabd37f7394d",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/db/models/aggregates.py",
+        "django/db/models/expressions.py",
+        "django/db/models/lookups.py",
+        "django/db/models/sql/query.py",
+        "django/db/models/sql/where.py"
+      ],
+      "instance_id": "django__django-11030",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "0f2885e3f6e0c73c9f455dcbc0326ac11ba4b84c",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "django/db/migrations/autodetector.py",
+        "django/db/migrations/operations/fields.py",
+        "django/db/migrations/operations/models.py",
+        "django/db/migrations/operations/utils.py",
+        "django/db/migrations/state.py"
+      ],
+      "instance_id": "django__django-12771",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "e90e8bc06cf8e7c97c7dc4c0e8ff1bf87c49faf6",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "xarray/backends/api.py",
+        "xarray/core/combine.py",
+        "xarray/core/concat.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/merge.py"
+      ],
+      "instance_id": "pydata__xarray-3239",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "c32e58b4fff72816c6b554db51509bea6a891cdc",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "xarray/coding/cftimeindex.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py",
+        "xarray/core/duck_array_ops.py",
+        "xarray/core/missing.py"
+      ],
+      "instance_id": "pydata__xarray-3631",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "69cbf7aa92b2d30a1d865de7429f6388cb94b946",
+      "environment_setup_commit": "9a2c3c4a1559e37e95fdee88c128bb116642c897",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sphinx/domains/c.py",
+        "sphinx/domains/cpp.py",
+        "sphinx/domains/javascript.py",
+        "sphinx/domains/python.py",
+        "sphinx/util/docfields.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-9155",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "31d469a5335c81ec4a437e36a861945a6b43d916",
+      "environment_setup_commit": "f9a6f50ec0c74d935c50a6e9c9b2cb0469570d91",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 5,
+      "gold_py_files": [
+        "sympy/polys/constructor.py",
+        "sympy/polys/matrices/ddm.py",
+        "sympy/polys/matrices/dense.py",
+        "sympy/polys/matrices/linsolve.py",
+        "sympy/polys/matrices/sdm.py"
+      ],
+      "instance_id": "sympy__sympy-21527",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "eefc9550fd3b8011cc12069eb700df09f25cc4d9",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/base/features.py",
+        "django/db/backends/oracle/features.py",
+        "django/db/backends/sqlite3/features.py",
+        "django/db/models/expressions.py"
+      ],
+      "instance_id": "django__django-10853",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "3dca8738cbbbb5674f795169e5ea25e2002f2d71",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/mysql/operations.py",
+        "django/db/backends/oracle/operations.py",
+        "django/db/backends/postgresql/operations.py",
+        "django/db/backends/sqlite3/base.py"
+      ],
+      "instance_id": "django__django-10910",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "ec5aa2161d8015a3fe57dcbbfe14200cd18f0a16",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/base/operations.py",
+        "django/db/backends/mysql/operations.py",
+        "django/db/backends/sqlite3/operations.py",
+        "django/db/models/expressions.py"
+      ],
+      "instance_id": "django__django-13121",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "cfe47b7686df0c4c87270a83d6d7f933323ed7e6",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/contrib/auth/password_validation.py",
+        "django/forms/renderers.py",
+        "django/utils/version.py",
+        "django/views/debug.py"
+      ],
+      "instance_id": "django__django-13841",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "4a80d0f22021bb0af842f038eba45958e9576bec",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/contrib/admindocs/utils.py",
+        "django/urls/resolvers.py",
+        "django/views/debug.py",
+        "django/views/generic/base.py"
+      ],
+      "instance_id": "django__django-14124",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "08d8bccbf1b0764a0de68325569ee47da256e206",
+      "environment_setup_commit": "647480166bfe7532e8c471fef0146e3a17e6c0c9",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/contrib/sessions/backends/base.py",
+        "django/contrib/sessions/serializers.py",
+        "django/core/cache/backends/redis.py",
+        "django/core/serializers/base.py"
+      ],
+      "instance_id": "django__django-15139",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "694cf458f16b8d340a3195244196980b2dec34fd",
+      "environment_setup_commit": "647480166bfe7532e8c471fef0146e3a17e6c0c9",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/base/schema.py",
+        "django/db/backends/oracle/features.py",
+        "django/db/backends/sqlite3/schema.py",
+        "django/db/models/fields/related.py"
+      ],
+      "instance_id": "django__django-15629",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "069bee7c1232458a0f13c2e30daa8df99dbd3680",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/base/operations.py",
+        "django/db/backends/oracle/operations.py",
+        "django/db/models/expressions.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-8119",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "4b73e81df60db3a5e3706124185a3d37a363f7e7",
+      "environment_setup_commit": "680edebc686cad664bbed934a490aeafa775f163",
+      "gold_dir_count": 4,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "pylint/checkers/base_checker.py",
+        "pylint/interfaces.py",
+        "pylint/lint/pylinter.py",
+        "pylint/reporters/base_reporter.py"
+      ],
+      "instance_id": "pylint-dev__pylint-6412",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "76dfa834e7ceeca97cd8e3cfa86651a955aa3f0c",
+      "environment_setup_commit": "4fc35a9c3efdc9154efce28cb23cb84f8834517e",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/oracle/operations.py",
+        "django/db/backends/sqlite3/base.py",
+        "django/db/models/functions/datetime.py",
+        "django/db/models/functions/text.py"
+      ],
+      "instance_id": "django__django-10301",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "c84b91b7603e488f7171fdff8f08368ef3d6b856",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/backends/mysql/operations.py",
+        "django/db/backends/oracle/operations.py",
+        "django/db/backends/sqlite3/base.py",
+        "django/db/backends/sqlite3/operations.py"
+      ],
+      "instance_id": "django__django-11138",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d08e6f55e3a986a8d4b3a58431d9615c7bc81eaa",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/contrib/gis/db/models/functions.py",
+        "django/contrib/postgres/fields/ranges.py",
+        "django/db/models/expressions.py",
+        "django/db/models/lookups.py"
+      ],
+      "instance_id": "django__django-11359",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "59942a66ceb79868cb91844df3a72a24c63e39fa",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/contrib/postgres/aggregates/general.py",
+        "django/contrib/postgres/aggregates/statistics.py",
+        "django/db/backends/mysql/features.py",
+        "django/db/models/aggregates.py"
+      ],
+      "instance_id": "django__django-14026",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "772b3dcc0b0770a843653783e5c93b4256e5ec6f",
+      "environment_setup_commit": "2c687133e4fcdd73ae3afa2e79be2160b150bb82",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "pylint/config/option.py",
+        "pylint/lint/expand_modules.py",
+        "pylint/lint/pylinter.py",
+        "pylint/utils/utils.py"
+      ],
+      "instance_id": "pylint-dev__pylint-5201",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "15040ee7c42958606ae27aa32ccbe54371b83049",
+      "environment_setup_commit": "3b2fbaec045697d53bdd4435e59dbfc2b286df4b",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "pylint/checkers/__init__.py",
+        "pylint/checkers/unsupported_version.py",
+        "pylint/constants.py",
+        "script/get_unused_message_id_category.py"
+      ],
+      "instance_id": "pylint-dev__pylint-5839",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "e0018ea04bce285f5fed31c00d6d16367a8800c1",
+      "environment_setup_commit": "80e024af5cfdc65a2b9fef1f25ff602ab4fa0f88",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "pylint/config/argument.py",
+        "pylint/config/option.py",
+        "pylint/lint/base_options.py",
+        "pylint/pyreverse/main.py"
+      ],
+      "instance_id": "pylint-dev__pylint-8281",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "d69abff2c7de8bc65b7f1ef867dec5b5b9c564bd",
+      "environment_setup_commit": "634cde9506eb1f48dec3ec77974ee8dc952207c6",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "src/_pytest/fixtures.py",
+        "src/_pytest/hookspec.py",
+        "src/_pytest/mark/__init__.py",
+        "src/pytest/collect.py"
+      ],
+      "instance_id": "pytest-dev__pytest-7637",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "4cd0fde277f657560bf5c4453d3b645094d2c747",
+      "environment_setup_commit": "902739cfc3bbc3379e6ef99c8e250de35f52ecde",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "src/_pytest/config/__init__.py",
+        "src/_pytest/deprecated.py",
+        "src/_pytest/main.py",
+        "src/_pytest/mark/structures.py"
+      ],
+      "instance_id": "pytest-dev__pytest-7985",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "61e6f502956d6e49bfab342d7a5b8d8eab45a2ad",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sklearn/grid_search.py",
+        "sklearn/model_selection/_search.py",
+        "sklearn/svm/base.py",
+        "sklearn/svm/classes.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-10331",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "4de404d46d24805ff48ad255ec3169a5155986f0",
+      "environment_setup_commit": "7e85a6d1f038bbb932b36f18d75df6be937ed00d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "examples/svm/plot_svm_tie_breaking.py",
+        "sklearn/model_selection/_search.py",
+        "sklearn/svm/base.py",
+        "sklearn/svm/classes.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-12557",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "c941b9cb14aefc132d6e3691085ce9704c1356e6",
+      "environment_setup_commit": "3f560cd67239f75840cc7a439ab54d8509c855f6",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "doc/usage/extensions/example_google.py",
+        "sphinx/ext/napoleon/__init__.py",
+        "sphinx/ext/napoleon/docstring.py",
+        "sphinx/util/typing.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-8291",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "563936b969dfc29ade7d48f1a802d5f6f6348f4c",
+      "environment_setup_commit": "6c6cc8a6f50b18331cb818160d168d7bb9c03e55",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sphinx/application.py",
+        "sphinx/builders/__init__.py",
+        "sphinx/config.py",
+        "sphinx/util/i18n.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-9828",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "17dfa811078205bd415700361e97e945112b89eb",
+      "environment_setup_commit": "0938c193ea6f56dbb930bfb323602bc4e2b7b9c6",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sphinx/domains/python.py",
+        "sphinx/ext/autodoc/__init__.py",
+        "sphinx/util/inspect.py",
+        "sphinx/util/typing.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-9931",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "57379b832b25bf22ef5e5ab6c8ee3fa0e863f48d",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sympy/printing/latex.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/str.py",
+        "sympy/sets/conditionset.py"
+      ],
+      "instance_id": "sympy__sympy-14564",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "1592318e5d7006c197f55134dd8e9b59f012af64",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sympy/matrices/expressions/inverse.py",
+        "sympy/printing/pycode.py",
+        "sympy/printing/str.py",
+        "sympy/utilities/lambdify.py"
+      ],
+      "instance_id": "sympy__sympy-15586",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "e486f1b79432c474ad29a1d1a3d11e60b1caae88",
+      "environment_setup_commit": "70381f282f2d9d039da860e391fe51649df2779d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sympy/functions/special/beta_functions.py",
+        "sympy/printing/codeprinter.py",
+        "sympy/printing/pycode.py",
+        "sympy/stats/crv_types.py"
+      ],
+      "instance_id": "sympy__sympy-17394",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "dc138bcc3af8e2696169caeee5a2010b0c934686",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sympy/matrices/expressions/slice.py",
+        "sympy/printing/latex.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-19201",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "1808affb21ee0dd5226134ad7b3bb9f1785d2e56",
+      "environment_setup_commit": "f9a6f50ec0c74d935c50a6e9c9b2cb0469570d91",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sympy/abc.py",
+        "sympy/core/assumptions.py",
+        "sympy/core/sympify.py",
+        "sympy/parsing/sympy_parser.py"
+      ],
+      "instance_id": "sympy__sympy-21586",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "556fa4bbba5ba86bc1646a86fb11ab55405d4aa4",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/models/expressions.py",
+        "django/db/models/lookups.py",
+        "django/db/models/sql/datastructures.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-13606",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "321ecb40f4da842926e1bc07e11df4aabe53ca4b",
+      "environment_setup_commit": "0fbdb9784da915fce5dcc1fe82bac9b4785749e5",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "django/db/models/expressions.py",
+        "django/db/models/query_utils.py",
+        "django/db/models/sql/query.py",
+        "django/db/models/sql/where.py"
+      ],
+      "instance_id": "django__django-16263",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "94525bbaf417476dbe9a70b98801ae04aceaebf3",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "doc/conf.py",
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py",
+        "xarray/core/missing.py"
+      ],
+      "instance_id": "pydata__xarray-3302",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "19ebec52ef93ab8a640d04eb0edb7264823f6ba8",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "doc/conf.py",
+        "xarray/core/common.py",
+        "xarray/core/duck_array_ops.py",
+        "xarray/core/variable.py"
+      ],
+      "instance_id": "pydata__xarray-4683",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "a042ae69c0444912f94bb4f29c93fa05046893ed",
+      "environment_setup_commit": "50ea159bfd0872635ebf4281e741f3c87f0bef6b",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "xarray/core/dataarray.py",
+        "xarray/core/dataset.py",
+        "xarray/core/indexes.py",
+        "xarray/indexes/__init__.py"
+      ],
+      "instance_id": "pydata__xarray-6971",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "754b487f4d892e3d4872b6fc7468a71db4e31c13",
+      "environment_setup_commit": "680edebc686cad664bbed934a490aeafa775f163",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "pylint/config/argument.py",
+        "pylint/config/arguments_manager.py",
+        "pylint/config/utils.py",
+        "pylint/lint/base_options.py"
+      ],
+      "instance_id": "pylint-dev__pylint-6386",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "0225cb37c02b6760c8b1d0efcf3728f669bbfe17",
+      "environment_setup_commit": "f36ea240fe3579f945bf5d6cc41b5e45a572249d",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "src/_pytest/config/__init__.py",
+        "src/_pytest/hookspec.py",
+        "src/_pytest/report_log.py",
+        "src/_pytest/reports.py"
+      ],
+      "instance_id": "pytest-dev__pytest-5980",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "2444c4711e9142a40dee4032bb921867c8f2b9fb",
+      "environment_setup_commit": "4f8cb861e3b29186b38248fe81e4944fd987fcce",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "sphinx/config.py",
+        "sphinx/writers/html.py",
+        "sphinx/writers/html5.py",
+        "sphinx/writers/latex.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-8674",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "e8cf4260af7461a42db9ed4edb2ab3fe442507c7",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 4,
+      "gold_py_files": [
+        "examples/advanced/grover_example.py",
+        "sympy/physics/quantum/grover.py",
+        "sympy/physics/quantum/qexpr.py",
+        "sympy/physics/quantum/qubit.py"
+      ],
+      "instance_id": "sympy__sympy-15933",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "b10d322c41f66dc7c77c36f90a3532269b25ea93",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/backends/base/operations.py",
+        "django/db/backends/oracle/operations.py",
+        "django/db/models/fields/__init__.py"
+      ],
+      "instance_id": "django__django-10680",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "5495ea3ae0a64f61ae15f44970ea91ed7ce17a38",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/conf/global_settings.py",
+        "django/core/checks/security/base.py",
+        "django/middleware/clickjacking.py"
+      ],
+      "instance_id": "django__django-11751",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "a5a28de89dabfa03302a5893102b6f1a7c7861a1",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/conf/global_settings.py",
+        "django/utils/log.py",
+        "django/views/debug.py"
+      ],
+      "instance_id": "django__django-11754",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d6505273cd889886caca57884fa79941b18c2ea6",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/auth/__init__.py",
+        "django/db/models/sql/query.py",
+        "django/template/base.py"
+      ],
+      "instance_id": "django__django-12198",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "5cc2c63f902412cdd9a8ebbabbd953aa8e2180c0",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/auth/hashers.py",
+        "django/db/backends/oracle/creation.py",
+        "django/utils/crypto.py"
+      ],
+      "instance_id": "django__django-12556",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "5fbc0e07a92f192acfa6bc4b09c3732476eeefc6",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/staticfiles/management/commands/collectstatic.py",
+        "django/core/management/base.py",
+        "django/core/management/commands/loaddata.py"
+      ],
+      "instance_id": "django__django-12671",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "01f8d19ef95af7087f9480372fc9c2a124be2842",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/staticfiles/apps.py",
+        "django/contrib/staticfiles/management/commands/collectstatic.py",
+        "django/core/checks/registry.py"
+      ],
+      "instance_id": "django__django-12869",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "156a2138db20abc89933121e4ff2ee2ce56a173a",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/messages/storage/cookie.py",
+        "django/contrib/sessions/middleware.py",
+        "django/http/response.py"
+      ],
+      "instance_id": "django__django-13195",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/messages/storage/cookie.py",
+        "django/contrib/sessions/middleware.py",
+        "django/http/response.py"
+      ],
+      "instance_id": "django__django-13199",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "ba691933cee375195c9c50f333dd4b2a3abbb726",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/conf/__init__.py",
+        "django/contrib/auth/tokens.py",
+        "django/core/checks/security/base.py"
+      ],
+      "instance_id": "django__django-13240",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d68be0494be8b82365f2a5410c9335e539d8efd6",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/admin/options.py",
+        "django/contrib/admin/views/main.py",
+        "django/db/models/sql/compiler.py"
+      ],
+      "instance_id": "django__django-14313",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "eba9a9b7f72995206af867600d6685b5405f172a",
+      "environment_setup_commit": "647480166bfe7532e8c471fef0146e3a17e6c0c9",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/core/cache/backends/db.py",
+        "django/db/backends/base/operations.py",
+        "django/db/backends/oracle/operations.py"
+      ],
+      "instance_id": "django__django-15166",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "c0a93d39411004300dfda2deb3dc093b69ac6368",
+      "environment_setup_commit": "0fbdb9784da915fce5dcc1fe82bac9b4785749e5",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/backends/base/base.py",
+        "django/db/backends/oracle/base.py",
+        "django/db/backends/utils.py"
+      ],
+      "instance_id": "django__django-16208",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "57f2b935b34d148c3c0d906fc8256765004b7b77",
+      "environment_setup_commit": "4a72da71001f154ea60906a2f74898d32b7322a7",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/admin/options.py",
+        "django/contrib/admin/views/main.py",
+        "django/contrib/auth/admin.py"
+      ],
+      "instance_id": "django__django-16759",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d65c9ca20ddf81ef91199e6d819f9d3506ef477c",
+      "environment_setup_commit": "42259bb9715bbacbbb2abc8005df836f3a7fd080",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/axes/_base.py",
+        "lib/matplotlib/ticker.py",
+        "lib/mpl_toolkits/mplot3d/axes3d.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-14623",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "aca6e9d5e98811ca37c442217914b15e78127c89",
+      "environment_setup_commit": "73909bcb408886a22e2b84581d6b9e6d9907c813",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/style/core.py",
+        "setup.py",
+        "tutorials/introductory/customizing.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-24257",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "78bf53caacbb5ce0dc7aa73f07a74c99f1ed919b",
+      "environment_setup_commit": "73909bcb408886a22e2b84581d6b9e6d9907c813",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "galleries/examples/color/set_alpha.py",
+        "galleries/users_explain/colors/colors.py",
+        "lib/matplotlib/colors.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-24691",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "1367ea5fd2420d264fcd63fbbc0521661f868cce",
+      "environment_setup_commit": "73909bcb408886a22e2b84581d6b9e6d9907c813",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "examples/event_handling/cursor_demo.py",
+        "examples/widgets/annotated_cursor.py",
+        "lib/matplotlib/widgets.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-25129",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "44ad84a4332dfb89e810106fef2616a0bc7e47e4",
+      "environment_setup_commit": "3b2fbaec045697d53bdd4435e59dbfc2b286df4b",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "doc/exts/pylint_extensions.py",
+        "pylint/extensions/check_docs.py",
+        "pylint/lint/run.py"
+      ],
+      "instance_id": "pylint-dev__pylint-5730",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "60a358fa2dc82a571c68d1be2d25703b51351538",
+      "environment_setup_commit": "c2f762460f4c42547de906d53ea498dd499ea837",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "doc/en/example/nonpython/conftest.py",
+        "src/_pytest/_code/code.py",
+        "src/_pytest/stepwise.py"
+      ],
+      "instance_id": "pytest-dev__pytest-5559",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "7b8cbc875b862ebb81a9b3415bdee235cca99ca6",
+      "environment_setup_commit": "7e85a6d1f038bbb932b36f18d75df6be937ed00d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sklearn/externals/_scipy_linalg.py",
+        "sklearn/linear_model/bayes.py",
+        "sklearn/utils/fixes.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-14067",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "f35d2a6cc726f97d0e859ca7a0e1729f7da8a6c8",
+      "environment_setup_commit": "a651e6bf4ad7a1dc293525d0a70e6d0d11b827db",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/directives/other.py",
+        "sphinx/environment/adapters/toctree.py",
+        "sphinx/environment/collectors/toctree.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-10673",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "0e89979355c6c88adb960a7272c633d5afd34e67",
+      "environment_setup_commit": "50d2d289e150cb429de15770bdd48a723de8c45d",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/ext/autodoc/__init__.py",
+        "sphinx/ext/autosummary/generate.py",
+        "sphinx/util/inspect.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-7234",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "487b8436c6e8dc596db4b8d4d06e9145105a2ac2",
+      "environment_setup_commit": "3f560cd67239f75840cc7a439ab54d8509c855f6",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/std.py",
+        "sphinx/events.py",
+        "sphinx/transforms/post_transforms/__init__.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-8075",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "939c7bb7ff7c53a4d27df067cea637540f0e1dad",
+      "environment_setup_commit": "336605b8e4b14c5da9f4d872fb730dc6894edb77",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/python.py",
+        "sphinx/ext/autodoc/__init__.py",
+        "sphinx/util/inspect.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-9461",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "daac289bed6a780e91a452a0538ad6421c2ed8d5",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/calculus/util.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-13301",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "93a65b9bb8a615906e73d5885ff03076bcabc555",
+      "environment_setup_commit": "73b3f90093754c5ed1561bd885242330e3583004",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/core/numbers.py",
+        "sympy/diffgeom/diffgeom.py",
+        "sympy/printing/latex.py"
+      ],
+      "instance_id": "sympy__sympy-16056",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "3449cecacb1938d47ce2eb628a812e4ecf6702f1",
+      "environment_setup_commit": "cffd4e0f86fefd4802349a9f9b19ed70934ea354",
+      "gold_dir_count": 3,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/core/symbol.py",
+        "sympy/matrices/expressions/matexpr.py",
+        "sympy/printing/dot.py"
+      ],
+      "instance_id": "sympy__sympy-20139",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "43ee5806e9c6f7d58c12c1cb9287b3c61abe489d",
+      "environment_setup_commit": "298ccb478e6bf092953bca67a3d29dc6c35f6752",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "astropy/table/column.py",
+        "astropy/table/groups.py",
+        "astropy/utils/data_info.py"
+      ],
+      "instance_id": "astropy__astropy-12825",
+      "repo": "astropy/astropy"
+    },
+    {
+      "base_commit": "3a0cd2d8cd7b459cdc1e1b97a14f3040ccc1fffc",
+      "environment_setup_commit": "cdf311e0714e611d48b0a31eb1f0e2cbffab7f23",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "astropy/time/core.py",
+        "astropy/time/time_helper/__init__.py",
+        "astropy/time/time_helper/function_helpers.py"
+      ],
+      "instance_id": "astropy__astropy-13132",
+      "repo": "astropy/astropy"
+    },
+    {
+      "base_commit": "1f8382d34d54061eddc41df6994e20ee38c60907",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/admin/filters.py",
+        "django/db/models/fields/__init__.py",
+        "django/db/models/fields/reverse_related.py"
+      ],
+      "instance_id": "django__django-11400",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "999891bd80b3d02dd916731a7a239e1036174885",
+      "environment_setup_commit": "419a78300f7cd27611196e1e464d50fd0385ff27",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/models/fields/__init__.py",
+        "django/db/models/fields/related_lookups.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-11734",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "5d654e1e7104d2ce86ec1b9fe52865a7dca4b4be",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/http/request.py",
+        "django/views/debug.py",
+        "django/views/i18n.py"
+      ],
+      "instance_id": "django__django-12091",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "c90ab30fa1305481024b9c3c50b5a6ed6cd9a2f5",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/models/fields/related_descriptors.py",
+        "django/db/models/query.py",
+        "django/db/models/utils.py"
+      ],
+      "instance_id": "django__django-12161",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "4ef107e34f752d51fa2cadff30fdd6fd718b026e",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/admin/views/main.py",
+        "django/db/models/base.py",
+        "django/db/models/options.py"
+      ],
+      "instance_id": "django__django-12364",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "e3f6e18513224c8ad081e5a19da641f49b0b43da",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/core/handlers/base.py",
+        "django/core/handlers/wsgi.py",
+        "django/http/response.py"
+      ],
+      "instance_id": "django__django-12431",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "370628673b98ada302c3930865c4bfde2d8ed5a1",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/core/management/commands/sqlmigrate.py",
+        "django/db/migrations/executor.py",
+        "django/db/migrations/loader.py"
+      ],
+      "instance_id": "django__django-12518",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "d4fff711d4c97356bd6ba1273d2a5e349326eb5f",
+      "environment_setup_commit": "0668164b4ac93a5be79f5b87fae83c657124d9ab",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/backends/mysql/base.py",
+        "django/db/backends/mysql/validation.py",
+        "django/db/models/expressions.py"
+      ],
+      "instance_id": "django__django-12519",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "6c19c2ca51746f30fa35668876416c9178487388",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/admin/bin/compress.py",
+        "django/contrib/admin/helpers.py",
+        "django/contrib/admin/options.py"
+      ],
+      "instance_id": "django__django-12821",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "7f4c9222dfe2f28ff8a7ffc56c28ccbadf19cf6f",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/models/expressions.py",
+        "django/db/models/sql/compiler.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-13300",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "e39e727ded673e74016b5d3658d23cbe20234d11",
+      "environment_setup_commit": "65dfb06a1ab56c238cc80f5e1c31f61210c4577d",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/sessions/middleware.py",
+        "django/middleware/cache.py",
+        "django/middleware/security.py"
+      ],
+      "instance_id": "django__django-13344",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "7c18b22e2fa70aa8dcfadb33beb17933abdf7ee4",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/contrib/postgres/constraints.py",
+        "django/db/models/constraints.py",
+        "django/db/models/indexes.py"
+      ],
+      "instance_id": "django__django-14019",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "6e742dabc95b00ba896434293556adeb4dbaee8a",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/models/expressions.py",
+        "django/db/models/query_utils.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-14309",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "7afca03c4058c25f2e1cec8d0b07c2157c93e831",
+      "environment_setup_commit": "475cffd1d64c690cdad16ede4d5e81985738ceb4",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/core/management/commands/migrate.py",
+        "django/core/management/commands/sqlmigrate.py",
+        "django/db/migrations/loader.py"
+      ],
+      "instance_id": "django__django-14727",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "004f985b918d5ea36fbed9b050459dd22edaf396",
+      "environment_setup_commit": "0fbdb9784da915fce5dcc1fe82bac9b4785749e5",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/middleware/locale.py",
+        "django/utils/translation/trans_null.py",
+        "django/utils/translation/trans_real.py"
+      ],
+      "instance_id": "django__django-16142",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "3fe0c609cf6d50e45e1246492ebac02660561177",
+      "environment_setup_commit": "4a72da71001f154ea60906a2f74898d32b7322a7",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/models/query_utils.py",
+        "django/db/models/sql/datastructures.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-16786",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "89f10a80d7e681cd0cccf22d932e380f51bd3524",
+      "environment_setup_commit": "4a72da71001f154ea60906a2f74898d32b7322a7",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "django/db/models/aggregates.py",
+        "django/db/models/expressions.py",
+        "django/db/models/sql/query.py"
+      ],
+      "instance_id": "django__django-16879",
+      "repo": "django/django"
+    },
+    {
+      "base_commit": "3393a4f22350e5df7aa8d3c7904e26e81428d2cd",
+      "environment_setup_commit": "73909bcb408886a22e2b84581d6b9e6d9907c813",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/figure.py",
+        "lib/matplotlib/pyplot.py",
+        "tutorials/provisional/mosaic.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-24604",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "7eafdd8af3c523c1c77b027d378fb337dd489f18",
+      "environment_setup_commit": "0849036fd992a2dd133a0cffc3f84f58ccf1840f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/backends/backend_agg.py",
+        "lib/matplotlib/figure.py",
+        "lib/matplotlib/image.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-25430",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "3218d1f9d3242d29e7d789fd4d27bffcc7da64a4",
+      "environment_setup_commit": "0849036fd992a2dd133a0cffc3f84f58ccf1840f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "doc/conf.py",
+        "lib/matplotlib/sphinxext/figmpl_directive.py",
+        "lib/matplotlib/sphinxext/plot_directive.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-25515",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "26224d96066b5c60882296c551f54ca7732c0af0",
+      "environment_setup_commit": "0849036fd992a2dd133a0cffc3f84f58ccf1840f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/backends/backend_agg.py",
+        "lib/matplotlib/backends/backend_cairo.py",
+        "lib/matplotlib/text.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-25775",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "8faa835c81d9cf12342992521ddb95e9a645bc36",
+      "environment_setup_commit": "0849036fd992a2dd133a0cffc3f84f58ccf1840f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/axes/_axes.py",
+        "lib/matplotlib/figure.py",
+        "lib/matplotlib/pyplot.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-25859",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "fc350ea5343cf96e231656d97d4b7ac2f32c97d8",
+      "environment_setup_commit": "0849036fd992a2dd133a0cffc3f84f58ccf1840f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "lib/matplotlib/axes/_axes.py",
+        "lib/matplotlib/axes/_base.py",
+        "lib/mpl_toolkits/mplot3d/axes3d.py"
+      ],
+      "instance_id": "matplotlib__matplotlib-26078",
+      "repo": "matplotlib/matplotlib"
+    },
+    {
+      "base_commit": "9276e22a424fe2c834eff85231d0c916e293d613",
+      "environment_setup_commit": "23860365816440b050e9211e1c395a966de3c403",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "seaborn/_core/plot.py",
+        "seaborn/_core/rules.py",
+        "seaborn/_oldcore.py"
+      ],
+      "instance_id": "mwaskom__seaborn-3394",
+      "repo": "mwaskom/seaborn"
+    },
+    {
+      "base_commit": "65ca92a5c0a4143d00dd7a822bcb1d49738717f1",
+      "environment_setup_commit": "1c198a191127c601d091213c4b3292a8bb3054e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "asv_bench/benchmarks/pandas.py",
+        "xarray/core/dataset.py",
+        "xarray/core/indexes.py"
+      ],
+      "instance_id": "pydata__xarray-4184",
+      "repo": "pydata/xarray"
+    },
+    {
+      "base_commit": "5ebbc30afbaa1a3c1e04fc86c3525edf9f579640",
+      "environment_setup_commit": "49a6206c7756307844c1c32c256afdf9836d7bce",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "pylint/lint/pylinter.py",
+        "pylint/reporters/__init__.py",
+        "pylint/reporters/multi_reporter.py"
+      ],
+      "instance_id": "pylint-dev__pylint-4492",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "1daee40d6f1cf3d379396dc272c123d987ad4cdd",
+      "environment_setup_commit": "2c687133e4fcdd73ae3afa2e79be2160b150bb82",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "pylint/extensions/_check_docs_utils.py",
+        "pylint/extensions/docparams.py",
+        "pylint/reporters/text.py"
+      ],
+      "instance_id": "pylint-dev__pylint-5175",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "1f8c4d9eb185c16a2c1d881c054f015e1c2eb334",
+      "environment_setup_commit": "a0ce6e424e3a208f3aed1cbf6e16c40853bec3c0",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "pylint/config/argument.py",
+        "pylint/utils/__init__.py",
+        "pylint/utils/utils.py"
+      ],
+      "instance_id": "pylint-dev__pylint-8898",
+      "repo": "pylint-dev/pylint"
+    },
+    {
+      "base_commit": "fe51121f39ca48c1af21733a60ae069b316b1cdb",
+      "environment_setup_commit": "10056865d2a4784934ce043908a0e78d0578f677",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "src/_pytest/deprecated.py",
+        "src/_pytest/fixtures.py",
+        "src/_pytest/mark/structures.py"
+      ],
+      "instance_id": "pytest-dev__pytest-8428",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "cc0fbbefa0f8a6b390e89ef0d4d64dd78783a5c1",
+      "environment_setup_commit": "572b5657d7ca557593418ce0319fabff88800c73",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "src/_pytest/python.py",
+        "src/_pytest/warning_types.py",
+        "src/pytest/__init__.py"
+      ],
+      "instance_id": "pytest-dev__pytest-9956",
+      "repo": "pytest-dev/pytest"
+    },
+    {
+      "base_commit": "cc50b90034a9cda77a8aabedc8a853fe92de60b5",
+      "environment_setup_commit": "55bf5d93e5674f13a1134d93a11fd0cd11aabcd1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sklearn/datasets/base.py",
+        "sklearn/datasets/lfw.py",
+        "sklearn/externals/_pilutil.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-10427",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "85440978f517118e78dc15f84e397d50d14c8097",
+      "environment_setup_commit": "7813f7efb5b2012412888b69e73d76f2df2b50b6",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sklearn/base.py",
+        "sklearn/linear_model/coordinate_descent.py",
+        "sklearn/multioutput.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-13157",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "6a3fc959b684e2f4b2fab28b27d5fa4018acb6a3",
+      "environment_setup_commit": "7813f7efb5b2012412888b69e73d76f2df2b50b6",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sklearn/calibration.py",
+        "sklearn/metrics/classification.py",
+        "sklearn/metrics/ranking.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-13628",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "5936ae356ce3385cb393384928ca9c6783f18bd8",
+      "environment_setup_commit": "7e85a6d1f038bbb932b36f18d75df6be937ed00d",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sklearn/base.py",
+        "sklearn/gaussian_process/kernels.py",
+        "sklearn/pipeline.py"
+      ],
+      "instance_id": "scikit-learn__scikit-learn-14464",
+      "repo": "scikit-learn/scikit-learn"
+    },
+    {
+      "base_commit": "d951e55bc3419dbda809ed0aca17addeed8e9e30",
+      "environment_setup_commit": "60775ec4c4ea08509eee4b564cbf90f316021aff",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/c.py",
+        "sphinx/domains/cpp.py",
+        "sphinx/util/cfamily.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-10360",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "2e506c5ab457cba743bb47eb5b8c8eb9dd51d23d",
+      "environment_setup_commit": "5afc77ee27fc01c57165ab260d3a76751f9ddb35",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/c.py",
+        "sphinx/domains/cpp.py",
+        "sphinx/util/cfamily.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-7590",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "56772395bb945099a6d5331501c179dd2831fa1c",
+      "environment_setup_commit": "5afc77ee27fc01c57165ab260d3a76751f9ddb35",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/builders/html/__init__.py",
+        "sphinx/builders/html/transforms.py",
+        "sphinx/util/nodes.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-7593",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "66e55a02d125e7b65b211a7cf9b48506195e3bf4",
+      "environment_setup_commit": "f92fa6443fe6f457ab0c26d41eb229e825fda5e1",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/c.py",
+        "sphinx/domains/cpp.py",
+        "sphinx/util/cfamily.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-7854",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "9175da437ed84e43b00ed4c28ccfe629260d3c13",
+      "environment_setup_commit": "3b85187ffa3401e88582073c23188c147857a8a3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/ext/autodoc/__init__.py",
+        "sphinx/util/inspect.py",
+        "sphinx/util/typing.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-8007",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "667a188e25cb70a1c673081b066a8a90c6e8eea7",
+      "environment_setup_commit": "3b85187ffa3401e88582073c23188c147857a8a3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/c.py",
+        "sphinx/domains/cpp.py",
+        "sphinx/util/cfamily.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-8117",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "3a0a6556c59a7b31586dd97b43101f8dbfd2ef63",
+      "environment_setup_commit": "4f8cb861e3b29186b38248fe81e4944fd987fcce",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/builders/html/__init__.py",
+        "sphinx/writers/html.py",
+        "sphinx/writers/html5.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-8599",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "3ad1e5e7d1a5fa38e94124e8afc441764a95cdd9",
+      "environment_setup_commit": "8939a75efaa911a12dbe6edccedf261e88bf7eef",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/environment/adapters/toctree.py",
+        "sphinx/writers/html.py",
+        "sphinx/writers/html5.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-9053",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "31ed71dfb335f46c97ba227cbfc34172eeb71f1f",
+      "environment_setup_commit": "0938c193ea6f56dbb930bfb323602bc4e2b7b9c6",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sphinx/domains/python.py",
+        "sphinx/util/inspect.py",
+        "sphinx/util/typing.py"
+      ],
+      "instance_id": "sphinx-doc__sphinx-9997",
+      "repo": "sphinx-doc/sphinx"
+    },
+    {
+      "base_commit": "075402d6cf9704493d7b3033d214f8a25ebc20b1",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/core/function.py",
+        "sympy/core/symbol.py",
+        "sympy/printing/repr.py"
+      ],
+      "instance_id": "sympy__sympy-12144",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "24ba5c32d9a6383e67cc159740152f60c48c2b2b",
+      "environment_setup_commit": "50b81f9f6be151014501ffac44e5dc6b2416938f",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/core/function.py",
+        "sympy/core/symbol.py",
+        "sympy/printing/repr.py"
+      ],
+      "instance_id": "sympy__sympy-12286",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "3a771edb034c81957c0975ca06f0e0d51ab3741b",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/core/basic.py",
+        "sympy/core/function.py",
+        "sympy/utilities/lambdify.py"
+      ],
+      "instance_id": "sympy__sympy-12945",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "8850d4eb343002601ba3c8fb37cb20dcf4a551cb",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/functions/elementary/hyperbolic.py",
+        "sympy/functions/elementary/trigonometric.py",
+        "sympy/simplify/fu.py"
+      ],
+      "instance_id": "sympy__sympy-13259",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "53fc684467088cdf0acccb6ad770cbde97e32268",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/printing/str.py",
+        "sympy/sets/__init__.py",
+        "sympy/sets/ordinals.py"
+      ],
+      "instance_id": "sympy__sympy-13682",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "84c125972ad535b2dfb245f8d311d347b45e5b8a",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/printing/latex.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/pretty/stringpict.py"
+      ],
+      "instance_id": "sympy__sympy-13806",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "9986b38181cdd556a3f3411e553864f11912244e",
+      "environment_setup_commit": "ec9e3c0436fbff934fa84e22bf07f1b3ef5bfac3",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/printing/latex.py",
+        "sympy/printing/pretty/pretty.py",
+        "sympy/printing/str.py"
+      ],
+      "instance_id": "sympy__sympy-14248",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "0bffa281e62b4d29fbe3cd22faa4d612a4b1ca76",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/sets/fancysets.py",
+        "sympy/sets/handlers/issubset.py",
+        "sympy/sets/sets.py"
+      ],
+      "instance_id": "sympy__sympy-18137",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "80a00842e7164f7865d0933306a94d33ad7ca602",
+      "environment_setup_commit": "28b41c73c12b70d6ad9f6e45109a80649c4456da",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/sets/fancysets.py",
+        "sympy/sets/handlers/union.py",
+        "sympy/sets/sets.py"
+      ],
+      "instance_id": "sympy__sympy-18168",
+      "repo": "sympy/sympy"
+    },
+    {
+      "base_commit": "33b47e4bd60e2302e42616141e76285038b724d6",
+      "environment_setup_commit": "3ac1464b8840d5f8b618a654f9fbf09c452fe969",
+      "gold_dir_count": 2,
+      "gold_py_file_count": 3,
+      "gold_py_files": [
+        "sympy/core/relational.py",
+        "sympy/sets/handlers/comparison.py",
+        "sympy/sets/handlers/issubset.py"
+      ],
+      "instance_id": "sympy__sympy-20438",
+      "repo": "sympy/sympy"
+    }
+  ]
+}
