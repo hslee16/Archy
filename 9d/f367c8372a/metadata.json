@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "9df367c8372a",
+  "strategy": "manual-commit",
+  "branch": "alee/supervised-runner-and-ledger",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "bench/_supervise.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9d/f367c8372a/0/metadata.json",
+      "transcript": "/9d/f367c8372a/0/full.jsonl",
+      "content_hash": "/9d/f367c8372a/0/content_hash.txt",
+      "prompt": "/9d/f367c8372a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3935,
+    "cache_creation_tokens": 1118961,
+    "cache_read_tokens": 89522376,
+    "output_tokens": 268185,
+    "api_call_count": 343
+  }
+}
