@@ -1,0 +1,7 @@
+read this blog post - https://blog.pypi.org/posts/2026-07-22-releases-now-reject-new-files-after-14-days/
+
+does this impact our current pypi deploy pipeline at all?
+
+---
+
+just do it
