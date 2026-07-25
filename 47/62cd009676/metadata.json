@@ -4,7 +4,9 @@
   "strategy": "manual-commit",
   "branch": "alee/publish-the-non-results",
   "checkpoints_count": 2,
-  "files_touched": null,
+  "files_touched": [
+    "docs/WHAT_DIDNT_WORK.md"
+  ],
   "sessions": [
     {
       "metadata": "/47/62cd009676/0/metadata.json",
@@ -14,10 +16,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 2334,
-    "cache_creation_tokens": 596911,
-    "cache_read_tokens": 41660291,
-    "output_tokens": 162331,
-    "api_call_count": 232
+    "input_tokens": 2707,
+    "cache_creation_tokens": 601815,
+    "cache_read_tokens": 43089445,
+    "output_tokens": 164623,
+    "api_call_count": 236
   }
 }
