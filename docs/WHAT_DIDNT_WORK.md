@@ -1,6 +1,7 @@
-# I tested twice whether my tool helps AI agents write better code. Both null.
+# I measured twice whether my architecture tool makes agents cheaper. Both null.
 
-Here is everything I learned anyway.
+Here is everything I learned anyway, including the part where the question I
+actually care about is still unmeasured.
 
 archy is a static analysis tool for Python. It builds a module dependency
 graph, holds the layer rules you declare, and reports when an edit breaks them.
@@ -10,9 +11,17 @@ looked fine and six weeks later the cycle count had doubled.
 
 The premise was plausible enough that a lot of tools are built on it: if you
 give an agent structural feedback, its output gets structurally better, and
-probably cheaper too. I ran two controlled experiments on that premise. Both
-came back null. This is the write-up, with the actual numbers and p-values,
-because the field has a shortage of those.
+probably cheaper too.
+
+I ran two controlled experiments. Both came back null. This is the write-up,
+with the actual numbers and p-values, because the field has a shortage of those.
+
+**One thing to be precise about up front**, because it is the kind of thing this
+write-up exists to insist on. Those two experiments tested the *cheaper* half of
+that premise: agent token footprint, and exploratory reads before the first
+edit. Neither tested whether archy actually stops an agent breaking the
+architecture. That question is real, it is the reason the tool exists, and it is
+still unmeasured. There is a section on it below.
 
 Every figure below is quoted from a document in
 [`docs/research/`](research/) that was adversarially reviewed before
@@ -164,6 +173,44 @@ A later pass over those corrections found more errors *in the corrections
 themselves*, including a fabricated figure introduced while fixing a
 fabrication. The full log is in the document, kept visible rather than folded
 in silently, because a survey about checking denominators has to show its own.
+
+## The question I actually care about is still unmeasured
+
+Both nulls above are about *efficiency*: does archy make an agent cheaper or
+less exploratory. That was never the point of the tool. archy exists to catch an
+agent breaking the architecture, and **I have not measured whether it does
+that.**
+
+The research notes are explicit about the split, which is why I can be:
+
+- **Q1a, the headroom question, is answered.** Across **1,072 human-authored
+  commits in 11 mature repos**, the low-false-positive signal archy gates on (a
+  newly introduced import cycle) appears in only **0.5% of commits**. But those
+  commits are large and transformative: median **7 `.py` files changed against a
+  baseline of 1**. The composite score drops on 29% of commits, and **98% of
+  those drops are sub-0.005 noise**. So archy is a rare-firing, low-FP gate on
+  severe damage concentrated in big changes, not a continuous quality dial.
+- **Q1b, the causal question, is open.** *Does putting archy in an agent's loop
+  reduce structurally-bad edits?* It has a powered, executable A/B protocol
+  written, and a control baseline from Q1a. It has never been run. It is gated
+  behind a usage signal that does not exist yet, and I deprioritized it on
+  2026-05-26.
+
+I want to be careful not to launder that into a defense. "The experiments that
+failed were not testing the real claim" is exactly the move a motivated author
+makes, and it is only legitimate here because the split was written down in
+2026-05, before either null came back, rather than after.
+
+What it does mean is narrower and less flattering: **two nulls on efficiency are
+not evidence archy works, and not evidence it doesn't.** They are evidence about
+a side benefit I hoped for and did not get. The central claim remains untested,
+which is a worse position to be in than either a positive or a negative result.
+
+The reason it stays untested is circular in a way worth naming. The A/B needs
+people running archy inside an agent loop, and nobody does, because there are
+zero outside issues. Waiting for a usage signal to justify measuring the thing
+that would produce a usage signal is a closed loop, and I do not have a clean
+answer to it.
 
 ## What survived, and why archy still exists
 
