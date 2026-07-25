@@ -9,20 +9,74 @@
 [![License](https://img.shields.io/pypi/l/archy.svg)](LICENSE)
 [![Glama](https://glama.ai/mcp/servers/hslee16/archy/badges/score.svg)](https://glama.ai/mcp/servers/hslee16/archy)
 
-> Architectural sensor for Python codebases - keeps structure honest under AI-assisted development.
+> archy holds the structure you *declared* for a Python codebase (layers, forbidden edges, no cycles, a recorded score baseline) and tells you when an edit breaks it.
 
-```bash
-pip install archy
-archy score .         # one-shot architectural health number
-archy hotspots .      # refactor priority = complexity x git churn
-archy mcp             # expose 11 tools to Claude Code, Cursor, any MCP client
+## The failure it catches
+
+I built archy after watching coding agents produce changes that passed review and rotted the import graph underneath. Every individual diff looked fine. Six weeks later the cycle count had doubled, and nobody noticed until a refactor blew up.
+
+Here is that failure compressed into one line. This is archy's own source, under archy's own layer rules, with a single import of the kind an agent adds when it needs a helper and the nearest one is upward:
+
+```python
+# src/archy/parser.py
+from archy.cli import main    # convenience import. The diff looks harmless.
 ```
+
+```console
+$ uvx archy check .
+# 1 layer violation(s) (config: archy.yaml)
+
+parser -> cli (forbidden):
+  archy.parser -> archy.cli  (line: 9)
+
+$ echo $?
+1
+
+$ uvx archy cycles .
+# 1 cycle(s) found
+
+Cycle of 8 module(s):
+  - archy.cli
+  - archy.duplicates
+  - archy.graph
+  - archy.index
+  - archy.mcp
+  - archy.parser
+  - archy.simulate
+  - archy.watcher
+
+$ uvx archy score .
+# archy score: 0.660          (0.669 before the edit)
+...
+acyclicity:  0.930  (1 cycles, tangle=0.070)
+# graph: 115 modules, 244 edges     (243 before the edit)
+```
+
+One import, one edge. A forbidden layer edge, an eight-module cycle, and the score down 0.009. Nothing in the diff itself says any of that, and no amount of reading the file reveals it, because the rule that makes it a violation is not in the source. You supplied it.
+
+Note the size of the score move. 0.009 is small, and that is the honest shape of this problem: no single edit looks alarming on the number. The cycle count going 0 to 1 and `check` exiting 1 are the signals that matter here, and the score is what catches the version of this that happens forty times over six weeks. Read [`docs/SCORING.md`](docs/SCORING.md) before treating the composite as a quality gate.
+
+Reproduce it on a checkout: add that import to `src/archy/parser.py`, then run the three commands above **with the `uvx` prefix**. It has to be a separate archy, because that one import is a genuine runtime import cycle, and an editable-installed archy can no longer start to report on itself. `archy check` exits 1, which is what it does in CI and what the MCP server reports to an agent before it commits.
 
 ![archy demo](docs/demo.gif)
 
-**Free, MIT licensed, no commercial version planned.** Built and maintained by [Alex Lee](https://github.com/hslee16/Archy).
-
 **What archy is not:** a code-navigation tool. It will not help an agent find and read code faster; that job belongs to symbol-level, multi-language graph tools like [codegraph](https://github.com/colbymchenry/codegraph), and they are better at it. archy answers the other question: *you declared this codebase should have these layers, no cycles, and this score; is the agent's edit about to break that, and has the trend been sliding for six weeks?* Nothing in a navigation graph carries that intent, because intent is not in the source, you supply it. The two are both local MCP servers and compose fine; run them together. See [`docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`](docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) for the full comparison, including where archy loses.
+
+## Start in one command
+
+```bash
+uvx archy install     # detects Claude Code, Cursor, Codex, opencode, Continue and wires each one up
+```
+
+Nothing lands on your PATH: the config it writes runs `uvx archy mcp` on demand. Prefer a real install? `pip install archy`, `uv tool install archy`, or `pipx install archy`. Either way, try it on a project without installing anything:
+
+```bash
+uvx archy score .        # one-shot architectural health number
+uvx archy cycles .       # import cycles, Tarjan SCCs plus self-loops
+uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
+```
+
+**Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
 **Status:** v0.42.0. Usable today via:
 
@@ -46,11 +100,11 @@ How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.m
 
 ## In the wild
 
-archy is used in production by the projects listed in [`ADOPTERS.md`](ADOPTERS.md). If you're running archy on a real codebase, please open a PR to add yourself, or file an issue and I'll add you.
+[`ADOPTERS.md`](ADOPTERS.md) is empty so far. If you're running archy on a real codebase, open a PR to add yourself, or file an issue and I'll add you. Either way I want to hear what it found, especially if the answer is "nothing useful."
 
 ## Why
 
-I built archy because I kept watching coding agents generate code that passed review but rotted the import graph underneath. The score on a feature change would look fine; six weeks later the cycle count had doubled and nobody noticed until a refactor blew up. I wanted a single number per commit that would have caught it.
+The failure at the top of this page is the whole reason archy exists: I wanted a single number per commit that would have caught it.
 
 AI agents generate code at machine speed. Without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
 
@@ -79,15 +133,18 @@ That relationship load is exactly what archy reads. Coupling, the DSM, import cy
 
 ## Quick start
 
-**Requires Python 3.10+** (archy depends on `mcp>=1.27.1` which is 3.10-only). If you only have system Python 3.9 or older, install a newer Python first or use [uv](https://docs.astral.sh/uv/) which manages versions for you.
+Covered above in [Start in one command](#start-in-one-command); this section is the detail behind it.
+
+**Requires Python 3.10+** (archy depends on `mcp>=1.28.1` which is 3.10-only). If you only have system Python 3.9 or older, install a newer Python first or use [uv](https://docs.astral.sh/uv/), which manages versions for you and is what `uvx` comes from.
 
 ```bash
 pip install archy
 # or: uv tool install archy
 # or: pipx install archy
+# or nothing at all: prefix any command with `uvx`, e.g. `uvx archy score .`
 ```
 
-Using archy as an MCP server inside an AI coding agent? Skip the manual config and run `uvx archy install` to wire it into Claude Code, Cursor, Codex, opencode, or Continue automatically. See [`docs/INSTALL.md`](docs/INSTALL.md).
+Using archy as an MCP server inside an AI coding agent? Skip the manual config and run `uvx archy install`, which wires it into Claude Code, Cursor, Codex, opencode, or Continue automatically and writes a config that invokes `uvx archy mcp`, so archy never needs to be on your PATH. See [`docs/INSTALL.md`](docs/INSTALL.md).
 
 All examples below use the installed `archy` command. If you're working from a checkout, prefix them with `uv run` (e.g. `uv run archy graph .`).
 
