@@ -39,3 +39,15 @@ lets continue the distribution work
 ---
 
 lets build python_conventions.md right now
+
+---
+
+tell me more about #324
+
+---
+
+yep
+
+---
+
+yep, do both
