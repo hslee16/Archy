@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2082e24b231c",
+  "strategy": "manual-commit",
+  "branch": "alee/q1b-structural-scorer",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/test_q1b_score.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/20/82e24b231c/0/metadata.json",
+      "transcript": "/20/82e24b231c/0/full.jsonl",
+      "content_hash": "/20/82e24b231c/0/content_hash.txt",
+      "prompt": "/20/82e24b231c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 4712,
+    "cache_creation_tokens": 1729036,
+    "cache_read_tokens": 132095446,
+    "output_tokens": 329169,
+    "api_call_count": 419
+  }
+}
