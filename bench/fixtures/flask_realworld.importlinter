@@ -1,0 +1,36 @@
+# The contracts baseline for the #288 pattern-detection bench.
+#
+# Copy to the root of a `gothinkster/flask-realworld-example-app` checkout as
+# `.importlinter`, then:
+#
+#   uv run --with flask --with flask-sqlalchemy --with marshmallow \
+#     --with flask-jwt-extended --with flask-bcrypt --with flask-migrate \
+#     --with flask-cors --with sqlalchemy --with import-linter python -c \
+#     "import sys; sys.path.insert(0, '<checkout>'); sys.path.insert(0, 'src'); \
+#      from pathlib import Path; from archy.contracts import run_contracts; \
+#      r = run_contracts(Path('<checkout>')); print(r.all_kept)"
+#
+# import-linter builds its graph by importing the package, so the app's runtime
+# dependencies must be installed. That requirement is why this baseline was run
+# by hand on one repo rather than wired into `bench/pattern_detection.py`
+# across all 31, and why every contracts-vs-inference claim in the writeups is
+# scoped to this repo.
+#
+# Note what this file does that no inferred detector in the bench managed: the
+# three source_modules are named by a human who knows what the domain is. That
+# is the comparison's whole point, and also its asymmetry.
+
+[importlinter]
+root_package = conduit
+include_external_packages = True
+
+[importlinter:contract:domain-is-pure]
+name = Domain models must not depend on the ORM or the web framework
+type = forbidden
+source_modules =
+    conduit.user.models
+    conduit.profile.models
+    conduit.articles.models
+forbidden_modules =
+    sqlalchemy
+    flask
