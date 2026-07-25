@@ -60,6 +60,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
 # Defaults tuned against the #282 observation (2s CPU over 19 minutes) with
 # generous headroom so healthy-but-slow work is never killed. A legitimate long
 # tool call (a full test suite) can exceed 5 minutes of quiet, so the window is
@@ -78,20 +80,21 @@ class WallTimeout(RuntimeError):
     """The child exceeded the hard wall-clock ceiling while still alive."""
 
 
-@dataclass
-class SupervisedResult:
+class SupervisedResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     returncode: int
     stdout: str
     stderr: str
     wall_seconds: float
     cpu_seconds: float
-    # Diagnostics worth keeping: a run whose CPU is a tiny fraction of its wall
-    # time was probably degraded even if it finished, and that pattern is what
-    # justified this module existing.
-    stall_kills: int = 0
 
     @property
     def cpu_ratio(self) -> float:
+        """Worth recording even on runs that finish: a run whose CPU is a tiny
+        fraction of its wall time was degraded, which is the pattern that
+        justified this module existing. Kept as a property so `model_dump()`
+        excludes it."""
         return self.cpu_seconds / self.wall_seconds if self.wall_seconds else 0.0
 
 
