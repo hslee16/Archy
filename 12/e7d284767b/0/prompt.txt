@@ -1,0 +1,136 @@
+<task-notification>
+<task-id>bj8ovh6yg</task-id>
+<tool-use-id>toolu_01WeyCQgmyNjukp3mSjyGoak</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9af56c8e-f399-435e-8ff9-ce8d99c2438e/tasks/bj8ovh6yg.output</output-file>
+<status>completed</status>
+<summary>Background command "Full re-run with fixed harness and repaired corpus C" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+merge it
+
+---
+
+lets do #261. After, lets do a reserach in ralphloop to answer the big question - There are currently tons of tools that claim to reduce token usage for coding agents. What are they based on? Does it even make sense to implement such features for archy?
+Tools, harnesses, even skills make the token reduction claim. let's thoroughly research so we can make a call for archy one way or another.
+
+---
+
+<task-notification>
+<task-id>aa74600b7f004462f</task-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9af56c8e-f399-435e-8ff9-ce8d99c2438e/tasks/aa74600b7f004462f.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial pass on the token research" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The final check landed and it materially changes finding 15. Addendum:
+
+## 16. §7 — the retraction's *conclusion* holds, but its *reasoning* is invalid, and there is a live counter-example
+
+**The premise is confirmed.** Anthropic tool objects carry `name`, `description`, `input_schema` (plus `cache_control`, `defer_loading`, `strict`) and no output-schema field. Structured outputs does not change this: `output_config.format` is response-level, and `strict: true` only tightens `input_schema`. Verified in Claude Code's own serializer (v2.1.219), which builds the payload from an allowlist of `["name","description","input_schema","cache_control"]` and never reads `outputSchema` at all, using it only to compile an AJV validator for `structuredContent`. So **archy's 3,918 model-visible figure is correct on the dominant client, `outputSchema` costs it zero context, and the 18,345 retraction was right.**
+
+**But the inference does not carry.** §7 argues "the Anthropic API has no output-schema field, **therefore** MCP `outputSchema` does not map into the model-visible tool spec." That is a provider-specific premise doing protocol-wide work. Gemini's `FunctionDeclaration` **does** have a per-tool output-schema field (`response` / `responseJsonSchema`: "Describes the output from this function in JSON Schema format"), and **google/adk-python populates it directly from MCP `outputSchema`**, default-on today:
+
+```python
+output_schema = self._mcp_tool.outputSchema
+if is_feature_enabled(FeatureName.JSON_SCHEMA_FOR_FUNC_DECL):
+    function_decl = FunctionDeclaration(..., response_json_schema=output_schema)
+```
+
+The gate is `FeatureStage.EXPERIMENTAL, default_on=True`, so it is live, not dormant. This is a third forwarding mode the note does not consider: not description-inlining, but a genuine provider tool-definition field.
+
+Everything else surveyed drops it or validates only: Anthropic Python SDK `mcp_tool()`, Vercel AI SDK, MCP Python/TS SDKs, LangChain MCP adapters, OpenAI Agents SDK, mcp-use, FastMCP, Gemini CLI (which drops it despite the API supporting it), VS Code/Copilot. Cursor is closed-source and undetermined.
+
+*Minimal correction to §7:* drop the derivation from the API shape; state it as an observed property of client implementations, not a consequence of the spec. Suggested replacement for the caveat paragraph: "`outputSchema` is consumed client-side rather than forwarded to the model in every Anthropic- and OpenAI-targeting client examined, including Claude Code, whose serializer allowlists `name`/`description`/`input_schema`. The exception is providers whose tool declaration has an output-schema field: Gemini's `FunctionDeclaration` exposes `responseJsonSchema` and Google's ADK populates it from MCP `outputSchema` by default."
+
+Two further notes worth folding in. The spec's normative language is validation-only ("Clients SHOULD validate structured results against this schema"), which supports the note, but the same page's rationale says an output schema helps by "guiding clients and LLMs to properly parse and utilize the returned data," which is quotable against it. And a widely-cited claim (CrowdStrike falcon-mcp #325) that VS Code Copilot counts `outputSchema` toward its per-tool budget is **unverified and contradicted by the VS Code source** (only `inputSchema` reaches `IToolData`), so do not cite it. A real adjacent effect does exist though: claude-code #25081 and zed #55642 show `outputSchema` causing tools to be silently *dropped* by some clients, which is an archy-relevant risk given #228 ships it on all 11 tools, and which §9's "Trim `outputSchema` — **fails on premise**, wontfix" row does not account for.</result>
+<usage><subagent_tokens>109422</subagent_tokens><tool_uses>48</tool_uses><duration_ms>527643</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa74600b7f004462f</task-id>
+<tool-use-id>toolu_01JTjuhzmqzGecJqUfxQcjwS</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9af56c8e-f399-435e-8ff9-ce8d99c2438e/tasks/aa74600b7f004462f.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial pass on the token research" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Both issues are CLOSED (claude-code #25081 closed stale; zed #55642 closed, `meta:upstream`, S3). Consolidated below.
+
+# Consolidated findings, prioritised
+
+## A. Factual corrections required
+
+**1. jCodeMunch's N is fabricated.** `TOKEN_REDUCTION_CLAIMS.md` §2 table: "Self-published, 15 task-runs across 3 repos." That phrase and those numbers appear nowhere in `TOKEN_SAVINGS.md`. The doc's only real measurement is a **third-party** A/B (50 iterations, one repo) reporting "Tool-layer savings: **15-25%**". The cited row is labeled **~99%**, not 95%.
+*Fix (§2 table row + Sources):* drop the N; label the row ~99%; say "no stated N or methodology, and the one third-party measurement in the doc reports 15-25%."
+
+**2. `RESEARCH_METRICS.md` §14c.7 names the wrong two fatal defects.** It says the cancelled cell died on the `.archy/index.db` leak and the path-keyed metric. `bench/agent_footprint_results.md` lists both among the **patched** defects; the two that ended it were the false task premise and the treatment not touching the working set.
+*Fix (§14c.7, "A third cell..." paragraph):* swap in the correct two.
+
+**3. The aider benchmark characterisation is retired and incomplete.** §2, §6.3 and the README row all say "133 single-file Exercism exercises." Retired Dec 2024 for the 225-exercise polyglot benchmark. Aider also publishes an **89-method refactoring benchmark over 9 real Python repos** and **SWE-bench Lite 26.3% / full SWE-bench 18.9%**, all multi-file real repos where the map is live.
+*Fix:* replace with "none of aider's four published benchmarks isolates the repo map."
+
+**4. codegraph "vanishes on ~100-file projects" reverses the source.** §9's reopen design. README says "modest on a 100-file project," headlined "every repo, every size"; Alamofire at ~110 files posts 90% fewer tokens, 3 vs 53 calls. The real tie zone is single-digit to ~40 files.
+*Fix (§9 reopen-path blockquote):* "modest, not absent, at ~100 files; the tie zone is far smaller."
+
+**5. The Cloudflare citation points at the wrong post.** `/code-mode/` (Sept 2025) contains no percentage, no 1.17M, no 2,500. All four figures are in `/code-mode-mcp/` (Feb 20, 2026).
+*Fix (§2 + Sources):* cite `/code-mode-mcp/`.
+
+**6. The 98.7% is pinned to the wrong mechanism.** §2 attributes it to the Google Drive → Salesforce transcript double-pass. It actually closes the **tool-definition discovery** section ("150,000 tokens to 2,000 tokens"); the transcript example is separate and worth "an additional 50,000 tokens."
+*Fix (§2 baseline cell):* re-describe as an unsourced 150k tool-definition load.
+
+**7. The tool-search threshold is stated backwards in §2 and contradicts §7.** §2: "auto-activates when descriptions **exceed** 10%." §7: "loads upfront when tools fit **within** 10%." §7 is right; the docs add that the **default is unconditional deferral**, with the 10% threshold being opt-in `auto`. §7's "archy's surface is deferred, **and** even under threshold mode its 1.96% loads comfortably" is also self-contradictory as written.
+*Fix:* delete §2's version; disambiguate the two modes in §7's bullet.
+
+**8. codegraph's coverage floor is wrong.** §8 says "86.7% to 100%." The published table spans **73.8% (Liquid)** to 100%, with Pascal 77.4%, Lua 84.2%, C# 85.2% below the stated floor.
+*Fix (§8):* "73.8% to 100% published; 86.7%+ across the seven benchmark languages."
+
+**9. §7's retraction reaches the right conclusion by an invalid inference.** "The Anthropic API has no output-schema field, **therefore** MCP `outputSchema` does not map into the model-visible tool spec" generalises one vendor to the protocol. Gemini's `FunctionDeclaration` has `responseJsonSchema`, and **google/adk-python populates it from MCP `outputSchema`, `default_on=True` today**.
+*Fix (§7 caveat paragraph):* state it as an observed property of client implementations, name Claude Code's actual serializer allowlist, and record the ADK/Gemini exception.
+
+**10. §4 Consequence 3 asserts a per-token price asymmetry that does not exist.** "The reads it hopes to displace are cache reads at 0.1x from the second turn" — the brief sits in the same prefix and gets the same 0.1x. The real asymmetry is **conditionality only**, which the same sentence already states correctly.
+*Fix:* delete the "at 0.1x from the second turn" clause.
+
+## B. Overstatements
+
+**11. The -12pp figure is the maximum-compression corner sold as the representative tradeoff.** The paper's own ablation gives remove-docstrings at **-22% tokens for -3pp**, remove-comments **-11% for -1pp**, and says most transformations cost "typically below 5% relative." The headline run even drops dedent because it "significantly impairs" resolution. The note indicts CodeScene for "up to" framing while quoting only the worst point on its key source.
+*Fix (§2, §3, §6.2, §9, README):* quote the frontier alongside the corner.
+
+**12. The minification result is over-extended to briefs.** §6.2's "a brief is a compression of the codebase into the prompt" is not what was tested. The paper minifies **source code the agent must read and edit** and explicitly puts the brief's analogue outside scope: "more than 90% of all tokens are spent on source code... ranking and natural language instructions together account for less than 10%." Its own directory-trie view is never minified.
+*Fix:* downgrade to "adjacent evidence, not a prior on briefs."
+
+**13. "Up to 10x" is asymptotic best-case framing.** Real ratio is N/(1.25 + 0.1(N-1)): **N=2 → 1.5x, N=10 → 4.65x, N=20 → 6.35x**, 10x only as N→∞ with no expiry, against a 5-minute default TTL. The README row also drops the "for cached prefixes" hedge that §4 and §9 carry.
+*Fix (§4, §9.D2, README row):* "roughly 3-6x over a realistic session, approaching 10x only asymptotically"; restore the hedge.
+
+**14. codegraph is praised as "the most serious benchmark found" and "honest about its own weak spots" while its largest weakness goes unmentioned: no correctness control.** No accuracy, diff, or build gate anywhere in the 7-repo table; its own 37-cell matrix shows cost roughly flat/slightly worse with the index ($15.4 vs $13.8). §9.D3 condition 3 demands exactly the gate codegraph lacks.
+*Fix (§8):* one sentence recording both.
+
+**15. "archy is the only party that actually measured the mechanism" contradicts §8 and §2 of the same file.** codegraph published a graph-tool token measurement; the minification paper measured compression.
+*Fix (§6.3):* add "on an editing task."
+
+**16. §7's per-tool comparison is not like-for-like, and the favourable direction is asserted as fact.** archy's 356 is cl100k over description + `inputSchema`. Issue #11364's ~18k/27 tools (and its "550-850 tokens per tool") is Claude Code's own `/context` accounting of the full serialized block. Under the note's own admitted uncertainty a counting client would put archy at **1,668/tool**, worse than GitHub MCP.
+*Fix (§7 final bullet):* attach the same caveat the paragraph above already carries.
+
+# Verdicts on the load-bearing claims
+
+- **"aider publishes no token measurement of the repo map"** — **SURVIVES, but its support is wrong (finding 3).** No with-map vs without-map measurement exists anywhere in aider's docs, blog, or leaderboards. What aider does publish is a budget (`--map-tokens`, default 1k, "a guideline and not a hard limit") and per-run token/cost totals on leaderboards, neither of which isolates the map. The conclusion holds; "133 single-file exercises" must go.
+- **The 3,918 / 1.96% self-measurement** — **SURVIVES cleanly.** Reproduced digit-for-digit (desc 2,256, input 1,662, output 14,427, full 18,345, 356/tool). The tokenizer objection dies: cl100k 3,918 vs o200k 3,928 vs p50k 4,234, under 8% spread; the fully serialized block is 4,094. I also confirmed empirically in-session that Claude Code forwarded archy's tool as `{name, description, parameters}` with no `outputSchema` and none inlined, so the retraction's *conclusion* is right on the dominant client even though its *derivation* is not (finding 9).
+- **The minification paper** — **citation SURVIVES, characterisation is a PROBLEM.** arXiv 2606.01326 resolves; Hrubec &amp; Cito, TU Wien; 42% and -12pp verbatim (50.0% → 38.0%); "May 2026" correct for the submission date. But the note **does over-extend it**: it cherry-picks the worst ablation point (11) and applies a source-code-minification result to repo maps and briefs that the paper explicitly places outside its 90% token budget (12).
+- **The codegraph task-class argument** — **SURVIVES as a real distinction, not a rationalisation.** codegraph publishes its exact prompts; every one is a "how does X work" flow question, one per repo, and there is no editing or patching task in any published benchmark. So §8's core move is sound. Two honest caveats to add: codegraph *does* market editing benefits and ships an unpublished editing harness (`ab-impl.sh`), so phrase it "publishes no editing results," not "never considered editing"; and the reopen path does implicitly concede archy may be leaving a win on the table, which finding 4 makes *more* live rather than less, since the effect does not vanish at archy-repo scale.
+- **The caching "up to 10x"** — **arithmetic is right, framing is a PROBLEM (13).** 0.1x is verified, and 100k cached ≈ 10k uncached is correct at the limit. But 10x needs infinite turns and no cache expiry, and the note is using the identical "up to" device it indicts CodeScene for.
+- **The §2 baselines** — **mixed.** Cloudflare's 99.9% / 1.17M / 2,500 are verbatim correct and the arithmetic checks, but the citation points at the wrong post (5). Anthropic's 150k → 2k / 98.7% is verbatim correct and "one constructed example, no N, illustrative not headline" is fair, but the mechanism is misattributed (6). jCodeMunch is the one that is genuinely mischaracterised, and badly (1). The 67,300 / 33.7% / GitHub-27-tools-18k prefix-bloat baseline is fully verified from issue #11364.
+- **§14c.7's #282/#289 numbers and SWE-Effi** — **SURVIVE.** Every figure matches `bench/agent_footprint_results.md` exactly (+4,213 median, 4/6, p=0.754, spread -28,565 to +27,125; -2.0 median, 14/8, p=0.286, N=10 hint at 0.109; `pre_edit_distinct_files` Δ=0; precision 0.33). SWE-Effi is accurate: Fan et al., arXiv 2509.09853, and the abstract does name the "token snowball" effect and "expensive failures." Both guardrails match the cleanliness paper's §6 Limitations near-verbatim ("The token-to-dollar relationship is also nonlinear"; "All numbers come from Claude Sonnet 4.6 inside Claude Code, on Python and Java"; author-curation; no unrelated-test check). Only the cancelled-cell sentence is wrong (2).
+
+# Is archy's `outputSchema` a live compatibility risk?
+
+**No, and it does not warrant a ticket.** Concretely:
+
+- **Claude Code: not affected.** Issue #25081 is **CLOSED (stale)**, was Windows-labelled, and its repro is the Kotlin SDK emitting the **MCP 2025-11-25** trio (`outputSchema` + tool-level `title` + `toolAnnotations`). archy emits 2025-06-18 `outputSchema`, and I verified directly this session that Claude Code registers and surfaces archy's tools normally. Zero cost too: Claude Code's per-MCP-tool budget counts only `{name, description, input_schema}`.
+- **Zed: closed, upstream, low reach.** Issue #55642 is **CLOSED**, labelled `meta:upstream` / `severity:S3` / `reach:some users`, and the failure is specific to Zed forwarding MCP tools to an *external* agent over ACP (Copilot), not to Zed's own agent. Plausibly would have hit archy while open; no longer live.
+- **Everything else surveyed drops or validates `outputSchema` without incident** (Anthropic SDK, Vercel AI SDK, MCP Python/TS SDKs, LangChain adapters, OpenAI Agents SDK, mcp-use, FastMCP, Gemini CLI, VS Code/Copilot). Cursor is closed-source and undetermined.
+- **Do not cite CrowdStrike falcon-mcp #325** if this gets written up. Its claim that VS Code Copilot counts `outputSchema` toward a per-tool budget is unmeasured and contradicted by the VS Code source, where only `inputSchema` reaches `IToolData`.
+
+The only doc consequence is that §9's D1 row "Trim `outputSchema` — **fails on premise**, wontfix" is correct on token grounds but rests on the flawed derivation in finding 9; fixing §7 fixes the row's justification without changing its verdict.</result>
+<usage><subagent_tokens>117171</subagent_tokens><tool_uses>2</tool_uses><duration_ms>86802</duration_ms></usage>
+</task-notification>
