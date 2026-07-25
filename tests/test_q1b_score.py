@@ -53,11 +53,22 @@ def test_clean_edit_is_not_structurally_bad(tmp_path: Path):
     assert v.cycle_count_after == 0
 
 
+def _close_cycle(repo: Path) -> str:
+    """Make `low` import `high`, closing low -> mid -> high -> low.
+
+    One definition, because the exact edit is a *fact* two tests depend on: if
+    the fixture's module shape changes, both call sites must change together.
+    Returns the new `low.py` body so a caller can assert the tree was untouched.
+    """
+    low = "from pkg.high import EXTRA  # noqa\nVALUE = 1\n"
+    (repo / "pkg" / "low.py").write_text(low)
+    (repo / "pkg" / "high.py").write_text("from pkg.mid import VALUE\n\nEXTRA = 2\n")
+    return low
+
+
 def test_new_cycle_is_caught_and_sized(tmp_path: Path):
     repo = _repo(tmp_path)
-    # low imports high: closes low -> ... -> high -> low, a genuine 3-module SCC.
-    (repo / "pkg" / "low.py").write_text("from pkg.high import EXTRA  # noqa\nVALUE = 1\n")
-    (repo / "pkg" / "high.py").write_text("from pkg.mid import VALUE\n\nEXTRA = 2\n")
+    _close_cycle(repo)
     v = score_working_tree(repo, "pkg", "HEAD")
     assert v.measurable
     assert v.structurally_bad
@@ -73,9 +84,7 @@ def test_worktree_measurement_does_not_disturb_the_agent_edits(tmp_path: Path):
     A stash or checkout here would mutate, and on a crash destroy, a paid run.
     """
     repo = _repo(tmp_path)
-    edited = "from pkg.high import EXTRA  # noqa\nVALUE = 1\n"
-    (repo / "pkg" / "low.py").write_text(edited)
-    (repo / "pkg" / "high.py").write_text("from pkg.mid import VALUE\n\nEXTRA = 2\n")
+    edited = _close_cycle(repo)
     score_working_tree(repo, "pkg", "HEAD")
     assert (repo / "pkg" / "low.py").read_text() == edited
     # And no worktree is left registered behind.
