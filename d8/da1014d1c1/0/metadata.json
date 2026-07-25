@@ -1,0 +1,74 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d8da1014d1c1",
+  "session_id": "9af56c8e-f399-435e-8ff9-ce8d99c2438e",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-25T00:50:47.643029Z",
+  "branch": "alee/288-pattern-detection-research",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "bench/fixtures/flask_realworld.importlinter",
+    "bench/pattern_detection.py",
+    "bench/pattern_detection_results.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5[1m]",
+  "turn_id": "78842f9feec6",
+  "token_usage": {
+    "input_tokens": 370,
+    "cache_creation_tokens": 686786,
+    "cache_read_tokens": 26462687,
+    "output_tokens": 141265,
+    "api_call_count": 152
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01SyxGVdwYNiLcNMcVyQeJDw",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "78842f9feec6",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 222,
+        "end": 223,
+        "entry_ids": [
+          "df992795-7648-4b36-8570-1e032b6f24d1"
+        ],
+        "tool_use_id": "toolu_01SyxGVdwYNiLcNMcVyQeJDw"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01SyxGVdwYNiLcNMcVyQeJDw"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-25T00:50:47.616408Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 19,
+    "human_removed": 18,
+    "total_committed": 0,
+    "total_lines_changed": 37,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}
