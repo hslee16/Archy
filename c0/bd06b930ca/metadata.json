@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c0bd06b930ca",
+  "strategy": "manual-commit",
+  "branch": "alee/hn-title-fits-cap",
+  "checkpoints_count": 7,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/c0/bd06b930ca/0/metadata.json",
+      "transcript": "/c0/bd06b930ca/0/full.jsonl",
+      "content_hash": "/c0/bd06b930ca/0/content_hash.txt",
+      "prompt": "/c0/bd06b930ca/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3792,
+    "cache_creation_tokens": 985036,
+    "cache_read_tokens": 54176561,
+    "output_tokens": 191731,
+    "api_call_count": 266
+  }
+}
