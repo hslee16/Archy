@@ -1,0 +1,32 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "47868bdb1bbc",
+  "strategy": "manual-commit",
+  "branch": "alee/q1b-layers-355",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "bench/q1b_layers/README.md",
+    "bench/q1b_layers/django.yaml",
+    "bench/q1b_layers/matplotlib.yaml",
+    "bench/q1b_layers/requests.yaml",
+    "bench/q1b_layers/scikit-learn.yaml",
+    "bench/q1b_layers/sympy.yaml",
+    "bench/q1b_layers/xarray.yaml",
+    "bench/q1b_layers_check.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/47/868bdb1bbc/0/metadata.json",
+      "transcript": "/47/868bdb1bbc/0/full.jsonl",
+      "content_hash": "/47/868bdb1bbc/0/content_hash.txt",
+      "prompt": "/47/868bdb1bbc/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 194,
+    "cache_creation_tokens": 164274,
+    "cache_read_tokens": 12637117,
+    "output_tokens": 67646,
+    "api_call_count": 102
+  }
+}
