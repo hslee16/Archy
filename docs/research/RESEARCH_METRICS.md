@@ -245,7 +245,8 @@ resolver ([`FUTURE.md`](../FUTURE.md), already noted) cleans this up.
 
 **Feasibility:** ~15-line hand-rolled power iteration (archy avoids
 the numpy dependency `nx.pagerank` now pulls in). Linear per
-iteration, fast. Live in `archy_graph_summary`'s `top_pagerank`
+iteration, fast. Live in `archy_graph(response_format='summary')`'s
+`top_pagerank`
 field; see [`SPEC_GRAPH_MCP.md`](../SPEC_GRAPH_MCP.md).
 
 **Signal:** Useful as a per-module *diagnostic*, weak as a
@@ -253,7 +254,7 @@ graph-level summary. Better than raw in-degree because it weights by
 importance recursively (a utility imported only by `__main__` looks
 less important than one imported by core modules).
 
-**Fit:** shipped in `archy_graph_summary` as `top_pagerank`. Still
+**Fit:** shipped in `archy_graph(response_format='summary')` as `top_pagerank`. Still
 open as a `FUTURE.md` item: surface per-module PageRank in
 `archy graph --format json` and in `archy_impact` so CLI and
 blast-radius callers get the same diagnostic. Use it for navigation
@@ -441,9 +442,10 @@ first." Pairs well with the AI-agent loop
 highest-risk files you might be touching."
 
 **Fit:** standalone CLI command (`archy hotspots`) plus the
-`archy_hotspots` MCP tool (shipped in v0.19.0) so an agent can read
+`archy_what_to_refactor_next(lens='behavioral')` MCP tool (shipped
+v0.19.0 as `archy_hotspots`, folded v0.36 #227) so an agent can read
 the ranking without spawning a subprocess. The MCP variant returns
-an empty list + a `note` pointing at `archy_high_risk_modules` when
+an empty list + a `note` pointing at the structural lens when
 the project isn't under git, rather than raising; the structural
 cousin needs no git history and is the natural fallback for the
 agent loop.
@@ -1075,7 +1077,7 @@ finding is that **larger LLM context windows do not eliminate the
 need for structural navigation**: failure shifts from retrieval
 capacity to *navigational salience*, where architecturally critical
 but semantically distant files are absent from the model's
-attention. The implication for archy is that `archy_graph_focus`
+attention. The implication for archy is that `archy_graph(focus=...)`
 (bounded local neighborhood with edge metadata) and `archy_impact`
 (blast radius) are not redundant with a long-context model; they
 solve a distinct failure mode the model can't budget its way out
@@ -1121,11 +1123,11 @@ these failure modes to archy capabilities:
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | Scope drift causes regression         | Did this PR introduce new cycles / layer violations / score drops?                                               | **Shipping** (`archy_snapshot` + `archy_diff`).                     |
 | Hidden cross-file impact              | Blast radius, weighted by propagation cost                                                                       | **Partially shipping** (`archy_impact` returns reverse-closure set; propagation-cost weighting on the roadmap). |
-| Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Shipping** (`archy_high_risk_modules` / `edit_risk`, v0.14.0).                 |
-| Agent should read X first             | Top-N by PageRank / fan-in                                                                                       | **Shipping** (`archy_graph_summary`).                                |
+| Edit lands in fragile area            | Per-module risk score (propagation cost × instability × fan-in)                                                  | **Shipping** (`archy_what_to_refactor_next(lens='structural')` / `edit_risk`, shipped v0.14.0 as `archy_high_risk_modules`, folded v0.36 #227).                 |
+| Agent should read X first             | Top-N by PageRank / fan-in                                                                                       | **Shipping** (`archy_graph(response_format='summary')`).                                |
 | Deprecated-pattern propagation        | Out of scope for archy (handled by ruff / mypy / pattern lints).                                                 | **Not shipping; not planned.**                                       |
-| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Shipping** (`archy hotspots` CLI v0.18.0; `archy_hotspots` MCP tool v0.19.0).               |
-| Cross-file reasoning failure          | Bounded subgraph navigation, edge-level metadata                                                                 | **Shipping** (`archy_graph_focus` with import line numbers).         |
+| Edit affects a hotspot                | CC × per-file churn                                                                                              | **Shipping** (`archy hotspots` CLI v0.18.0; `archy_what_to_refactor_next(lens='behavioral')` MCP tool, shipped v0.19.0 as `archy_hotspots`).               |
+| Cross-file reasoning failure          | Bounded subgraph navigation, edge-level metadata                                                                 | **Shipping** (`archy_graph(focus=...)` with import line numbers).         |
 
 **Implication for archy's roadmap.** The three top-priority
 additions identified here, in order of evidence weight, have all
@@ -1136,7 +1138,7 @@ literature plus §c.3 mapping above; shipped v0.13.3); (3) a
 per-module risk composite that surfaces the "navigational salience"
 the Navigation Paradox paper §c.1 names as the residual failure mode
 after large context windows (shipped v0.14.0 as
-`archy_high_risk_modules` / `edit_risk`). Detailed roadmap entries in
+`archy_what_to_refactor_next(lens='structural')` / `edit_risk`). Detailed roadmap entries in
 [`FUTURE.md`](../FUTURE.md). The §c.4 paper below
 adds two more, both low-cost and both reusing the existing layer
 machinery: convention-based layer inference and a layer-presence
@@ -1275,7 +1277,7 @@ items):
   separate report of ~75-80% style-match when the agent could see how
   a pattern was already implemented). archy today is purely negative -
   it ranks violations (`archy check`) and fragile modules
-  (`archy_high_risk_modules`); the inverse, ranking the *cleanest*
+  (`archy_what_to_refactor_next(lens='structural')`); the inverse, ranking the *cleanest*
   existing module as a copy-me template, is the highest-payoff
   technique in the thread and has no roadmap item. It is **not small**,
   and the obvious framing (build a corpus of patterns) is a trap; the
@@ -1515,9 +1517,15 @@ ran twice and landed null twice.
 
 A third cell (a harder-to-navigate repo) was **cancelled by pre-run adversarial
 review before any agent time was spent**, on two defects that could not be
-patched: a variant tree that leaked `.archy/index.db` into the treatment only,
-and a path-keyed primary metric that scored the treatment better by
-construction. Two nulls plus that cancellation closed the line (#300, #303,
+patched: the task's premise was **factually false** (it assumed a failure mode
+`Console.get_style` does not have), and **the treatment never touched the
+task's working set**, so the design actually tested whether deleting 662 lines
+of unrelated code from a file the agent must read anyway changes its footprint.
+A null there would have been written up as evidence about cleaner code helping
+agents, which it is not. (Three further defects were found and patched,
+including a variant tree leaking `.archy/index.db` into the treatment only and
+a path-keyed primary metric that scored the treatment better by construction.) Two nulls plus that cancellation closed the line (#300,
+#303,
 #307): the minimal-pair design cannot yield an interpretable positive at
 archy's layer with this power budget.
 
