@@ -98,6 +98,28 @@ def test_cpu_burning_process_is_not_killed(tmp_path: Path):
     assert res.returncode == 0
 
 
+def test_completed_run_reports_nonzero_cpu(tmp_path: Path):
+    """Regression: `cpu_seconds` must survive the child exiting.
+
+    Caught by a live smoke run against `claude -p`, not by the tests above. The
+    first implementation read CPU once more *after* `proc.wait()` returned, by
+    which point the process group no longer exists and `ps` reports nothing, so
+    every completed run logged 0.0s CPU and a `cpu_ratio` of 0.00. The value is
+    now the peak observed while the group was alive.
+    """
+    script = "x = 0\nfor i in range(30_000_000):\n    x += i\nprint(x)\n"
+    res = run_supervised(
+        [PY, "-c", script],
+        cwd=tmp_path,
+        progress_paths=[tmp_path],
+        stall_after=60,
+        poll=0.2,
+    )
+    assert res.returncode == 0
+    assert res.cpu_seconds > 0.0, "CPU must be sampled while the child is alive"
+    assert res.cpu_ratio > 0.0
+
+
 def test_wall_ceiling_kills_even_a_busy_process(tmp_path: Path):
     script = "import time\nwhile True:\n    _ = sum(range(10000))\n"
     with pytest.raises(WallTimeout):

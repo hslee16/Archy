@@ -227,6 +227,10 @@ def run_supervised(
 
     pgid = os.getpgid(proc.pid)
     cpu_start = _group_cpu_seconds(pgid)
+    # Track the peak seen while the group is ALIVE. Reading CPU after the child
+    # exits returns nothing (the group is gone) and would report 0.0 for every
+    # completed run, which is what the first live smoke test did.
+    cpu_peak = cpu_start
     last_progress_at = time.monotonic()
     last_mtime = _newest_mtime(progress_paths)
     cpu_at_last_progress = cpu_start
@@ -245,6 +249,7 @@ def run_supervised(
 
         mtime = _newest_mtime(progress_paths)
         cpu_now = _group_cpu_seconds(pgid)
+        cpu_peak = max(cpu_peak, cpu_now)
         made_progress = mtime > last_mtime or (cpu_now - cpu_at_last_progress) > cpu_epsilon
         if made_progress:
             last_mtime = max(mtime, last_mtime)
@@ -266,7 +271,7 @@ def run_supervised(
         stdout=stdout or "",
         stderr=stderr or "",
         wall_seconds=wall,
-        cpu_seconds=max(0.0, _group_cpu_seconds(pgid) - cpu_start),
+        cpu_seconds=max(0.0, cpu_peak - cpu_start),
     )
 
 
