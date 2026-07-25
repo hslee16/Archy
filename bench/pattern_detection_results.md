@@ -5,7 +5,7 @@ Cosmic Python's architectural patterns from the dependency graph, or is
 "pattern detection" either redundant with contracts or undetectable without
 declared intent?
 
-Run 2026-07-24. `uv run --extra contracts python bench/pattern_detection.py`.
+Run 2026-07-24. `uv run python bench/pattern_detection.py`.
 
 > **This file records the second run.** The first run's writeup was refuted on
 > three points by an adversarial review and is not preserved: it used a wrong
@@ -197,7 +197,7 @@ and is blind to the transitive case that matters most. **NO-GO.**
 | # | first-run claim | what was wrong | fix |
 | --- | --- | --- | --- |
 | 1 | `D_position` precision 0.00 on all three controls; "never once found the domain"; flagged `.utils` | `conduit.apps.core.models` (the abstract ORM base of all three domain models) was missing from the ground truth and *was* flagged; `.utils` was never flagged | `GROUND_TRUTH` moved into the harness and corrected; precision is 0.33 there |
-| 2 | 4/20 corpus-C false positives = discriminant-validity failure | all 13 violation instances were self-stack deps (fastapi→starlette, boto3/scrapy→botocore) or the `sqlite3` stdlib carve-out | `SELF_STACK` subtraction added; those four projects now flag 0 |
+| 2 | 4/20 corpus-C false positives = discriminant-validity failure | all 14 violation instances were self-stack deps (fastapi→starlette, boto3/scrapy→botocore) or the `sqlite3` stdlib carve-out | `SELF_STACK` subtraction added; those four projects now flag 0 |
 | 3 | "Contracts separate them exactly", "inference loses on every axis measured" | one repo, run by hand, with the domain names handed over; `D_naming` matched its domain precision there | claim scoped to transitivity on one repo; fixture committed |
 | 4 | corpus C = 20 projects | 9 broken local clones silently dropped, disproportionately the large app-shaped ones | clones repaired, now **29/29**, coverage printed by the harness |
 | 5 | only strict-sink positional inference tested | the negative was a property of one operationalization | `D_position_relaxed` added |

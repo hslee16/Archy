@@ -54,8 +54,8 @@ imports are collapsed by `_external_target` and dropped by `assemble_graph`
 `parse_project`'s ParseResult imports, one layer below the graph.
 
 Usage:
-    uv run --extra contracts python bench/pattern_detection.py
-    uv run --extra contracts python bench/pattern_detection.py --json out.json
+    uv run python bench/pattern_detection.py
+    uv run python bench/pattern_detection.py --json out.json
 """
 
 from __future__ import annotations
@@ -297,22 +297,22 @@ def analyze(root: Path, corpus: str, name: str, label: str) -> RepoResult | None
     # accounted for every corpus-C flag in the first run of this bench.
     self_stack = SELF_STACK.get(name, frozenset())
 
-    def infra(q: str) -> set[str]:
+    def _infra(q: str) -> set[str]:
         return _infra_of(ext[q]) - self_stack
 
     # D_purity: domain := imports nothing external at all.
     purity_domain = {q for q in real if not ext[q]}
-    purity_violations = {q for q in purity_domain if infra(q)}
+    purity_violations = {q for q in purity_domain if _infra(q)}
 
     # D_naming: domain := carries a domain-ish name token.
     naming_domain = {q for q in real if _has_domain_token(q)}
-    naming_violations = {q for q in naming_domain if infra(q)}
+    naming_violations = {q for q in naming_domain if _infra(q)}
 
     # D_position: domain := internal sink (imported by peers, imports no peer).
     position_domain = {
         q for q in real if internal_graph.in_degree(q) > 0 and internal_graph.out_degree(q) == 0
     }
-    position_violations = {q for q in position_domain if infra(q)}
+    position_violations = {q for q in position_domain if _infra(q)}
 
     # D_position_relaxed: the steelman. A strict sink is a demanding definition
     # (in cosmic, `domain.model` is not one, because it imports `domain.events`).
@@ -329,7 +329,7 @@ def analyze(root: Path, corpus: str, name: str, label: str) -> RepoResult | None
         if internal_graph.in_degree(q) > 0
         and all(_prefix(s) == _prefix(q) for s in internal_graph.successors(q))
     }
-    relaxed_violations = {q for q in relaxed_domain if infra(q)}
+    relaxed_violations = {q for q in relaxed_domain if _infra(q)}
 
     truth = GROUND_TRUTH.get(name)
     return RepoResult(
@@ -345,13 +345,13 @@ def analyze(root: Path, corpus: str, name: str, label: str) -> RepoResult | None
         position_violations=len(position_violations),
         relaxed_domain=len(relaxed_domain),
         relaxed_violations=len(relaxed_violations),
-        infra_using_modules=len([q for q in real if infra(q)]),
+        infra_using_modules=len([q for q in real if _infra(q)]),
         truth_size=len(truth) if truth else 0,
         purity_tp=len(purity_domain & truth) if truth else 0,
         naming_tp=len(naming_domain & truth) if truth else 0,
         position_tp=len(position_domain & truth) if truth else 0,
         relaxed_tp=len(relaxed_domain & truth) if truth else 0,
-        position_flagged=tuple(sorted(q for q in position_domain if infra(q))),
+        position_flagged=tuple(sorted(q for q in position_domain if _infra(q))),
     )
 
 
@@ -359,32 +359,14 @@ def _git(args: list[str], cwd: Path | None = None) -> int:
     return subprocess.run(args, cwd=cwd, capture_output=True).returncode
 
 
-def prepare_cosmic() -> Path | None:
-    target = WORKDIR / "cosmic"
-    if not target.exists():
-        WORKDIR.mkdir(parents=True, exist_ok=True)
-        if _git(
-            ["git", "clone", "--quiet", "https://github.com/cosmicpython/code.git", str(target)]
-        ):
-            return None
-    return target
-
-
-def prepare_control(name: str, repo: str) -> Path | None:
+def _prepare(name: str, repo: str, *, shallow: bool = True) -> Path | None:
+    """Clone `repo` to WORKDIR/name if absent. Corpus A needs full history
+    (the bench checks out one branch per chapter); the controls do not."""
     target = WORKDIR / name
     if not target.exists():
         WORKDIR.mkdir(parents=True, exist_ok=True)
-        if _git(
-            [
-                "git",
-                "clone",
-                "--quiet",
-                "--depth",
-                "1",
-                f"https://github.com/{repo}.git",
-                str(target),
-            ]
-        ):
+        depth = ["--depth", "1"] if shallow else []
+        if _git(["git", "clone", "--quiet", *depth, f"https://github.com/{repo}.git", str(target)]):
             return None
     return target
 
@@ -407,7 +389,7 @@ def main() -> int:
 
     results: list[RepoResult] = []
 
-    cosmic = prepare_cosmic()
+    cosmic = _prepare("cosmic", "cosmicpython/code", shallow=False)
     if cosmic:
         for branch, label in COSMIC_BRANCHES:
             if _git(["git", "checkout", "--quiet", branch], cwd=cosmic):
@@ -419,7 +401,7 @@ def main() -> int:
                 _print_row("A", branch, r)
 
     for name, repo, label in CONTROL_REPOS:
-        target = prepare_control(name, repo)
+        target = _prepare(name, repo)
         if not target:
             continue
         r = analyze(target, "B_absent", name, label)

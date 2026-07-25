@@ -13,7 +13,7 @@
 # import-linter builds its graph by importing the package, so the app's runtime
 # dependencies must be installed. That requirement is why this baseline was run
 # by hand on one repo rather than wired into `bench/pattern_detection.py`
-# across all 31, and why every contracts-vs-inference claim in the writeups is
+# across all 40, and why every contracts-vs-inference claim in the writeups is
 # scoped to this repo.
 #
 # Note what this file does that no inferred detector in the bench managed: the
