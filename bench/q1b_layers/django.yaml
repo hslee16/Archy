@@ -1,0 +1,92 @@
+# Authored layer rules for django/django, for the Q1b A/B (#348).
+#
+# PROVENANCE, because these rules are author-supplied and that is a bias risk
+# the results doc has to carry.
+#
+# SWE-bench repositories declare no architecture: no `.importlinter`, no
+# `[tool.importlinter]`, no `tach.toml` in any of the six repos this pilot
+# touches (checked 2026-07-25). archy's normative half needs declared intent, so
+# for Q1b it had to be written, which puts the measurer in the position of
+# authoring the intent being measured.
+#
+# The procedure used to constrain that, in this order:
+#
+#   1. Candidates were derived from Django's OWN documented conventions, not
+#      from the import graph. Specifically: `django.contrib` is documented as
+#      optional add-on applications built on top of core Django, and
+#      `django.utils` is documented as shared utility code. Deriving rules from
+#      observed edges instead would be tautological by construction, the same
+#      failure `D_purity` hit in #288 (0 flags across 40 repos because the
+#      definition made the violation impossible).
+#   2. Every candidate was then checked against PRISTINE upstream code. A rule
+#      that already fires on unmodified Django is useless here: it would fire on
+#      every agent run and the signal would be constant.
+#   3. Candidates that fired were dropped, and are listed below rather than
+#      quietly removed.
+#
+# Authored blind to the task set: no gold patch, problem statement, or
+# `gold_py_files` entry was consulted. The rules cannot have been tuned toward
+# the tasks because the tasks were not looked at.
+#
+# DROPPED, because pristine Django violates them (1 edge each). Each is a real
+# upstream departure from the documented convention, so the honest reading is
+# that my reading of the intent was too strict, not that Django is wrong:
+#
+#   utils -> db
+#   utils -> forms
+#   utils -> template
+#   core  -> views
+#
+# 15 rules survived. Validated against django @ 189c2d2ce5.
+
+layers:
+  contrib:
+    modules: ["django.contrib"]
+  db:
+    modules: ["django.db"]
+  forms:
+    modules: ["django.forms"]
+  views:
+    modules: ["django.views"]
+  template:
+    modules: ["django.template"]
+  middleware:
+    modules: ["django.middleware"]
+  http:
+    modules: ["django.http"]
+  core:
+    modules: ["django.core"]
+  conf:
+    modules: ["django.conf"]
+  utils:
+    modules: ["django.utils"]
+  test:
+    modules: ["django.test"]
+
+forbid:
+  # `django.contrib` is optional add-on applications. Nothing in core Django
+  # may depend on it, or the "optional" claim is false.
+  - {from: core, to: contrib}
+  - {from: db, to: contrib}
+  - {from: http, to: contrib}
+  - {from: template, to: contrib}
+  - {from: forms, to: contrib}
+  - {from: conf, to: contrib}
+  - {from: utils, to: contrib}
+
+  # `django.utils` is shared utility code, so it must not reach up into the
+  # request/response and presentation layers. Note `utils -> db|forms|template`
+  # are NOT here: pristine Django violates all three (see DROPPED above).
+  - {from: utils, to: views}
+  - {from: utils, to: middleware}
+  - {from: utils, to: test}
+
+  # The ORM is the bottom of the request path and must not depend on anything
+  # above it. All four hold on pristine code.
+  - {from: db, to: views}
+  - {from: db, to: forms}
+  - {from: db, to: template}
+  - {from: db, to: middleware}
+
+  # HTTP primitives predate and underpin the ORM in the request path.
+  - {from: http, to: db}
