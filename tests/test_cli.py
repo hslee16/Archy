@@ -32,6 +32,13 @@ def _make_acyclic_project(tmp_path: Path) -> Path:
     return _make_two_module_project(tmp_path, cyclic=False)
 
 
+def _make_empty_package_project(tmp_path: Path) -> Path:
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    return tmp_path
+
+
 def test_cycles_text_output_lists_cycle(tmp_path: Path):
     project = _make_cyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["cycles", str(project)])
@@ -197,9 +204,7 @@ def test_check_sdp_invalid_mode_clear_error(tmp_path: Path):
 
 
 def test_check_no_config_gives_clear_error(tmp_path: Path):
-    pkg = tmp_path / "myapp"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    _make_empty_package_project(tmp_path)
     result = CliRunner().invoke(main, ["check", str(tmp_path)])
     assert result.exit_code != 0
     assert "no archy.yaml found" in result.output.lower()
@@ -578,9 +583,7 @@ def test_hotspots_top_rejects_invalid_values(tmp_path: Path, bad: str):
     # --top was unvalidated: 0 showed nothing and -1 sliced off the
     # lowest-score row while mislabeling the count. The guard runs before the
     # git check, so a non-git tmp dir still exercises it.
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    _make_empty_package_project(tmp_path)
     result = CliRunner().invoke(main, ["hotspots", str(tmp_path), "--top", bad])
     assert result.exit_code != 0
     assert f"--top must be >= 1; got {bad}" in result.output
@@ -588,9 +591,7 @@ def test_hotspots_top_rejects_invalid_values(tmp_path: Path, bad: str):
 
 @pytest.mark.parametrize("bad", ["0", "-1"])
 def test_what_to_refactor_next_top_rejects_invalid_values(tmp_path: Path, bad: str):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    _make_empty_package_project(tmp_path)
     result = CliRunner().invoke(main, ["what-to-refactor-next", str(tmp_path), "--top", bad])
     assert result.exit_code != 0
     assert f"--top must be >= 1; got {bad}" in result.output
@@ -598,9 +599,7 @@ def test_what_to_refactor_next_top_rejects_invalid_values(tmp_path: Path, bad: s
 
 @pytest.mark.parametrize("bad", ["1.5", "-0.1"])
 def test_what_to_refactor_next_min_risk_rejects_out_of_range(tmp_path: Path, bad: str):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    _make_empty_package_project(tmp_path)
     result = CliRunner().invoke(main, ["what-to-refactor-next", str(tmp_path), "--min-risk", bad])
     assert result.exit_code != 0
     assert "--min-risk must be in [0, 1]" in result.output
@@ -712,9 +711,7 @@ def test_contracts_missing_config_exits_one(tmp_path: Path):
     # Regression for #170 (F8): missing contracts config exits 1 (like
     # check/score gate failures), not 2, and prints a clean message rather
     # than a traceback.
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+    _make_empty_package_project(tmp_path)
     result = CliRunner().invoke(main, ["contracts", str(tmp_path)])
     assert result.exit_code == 1
     assert result.exception is None or isinstance(result.exception, SystemExit)
