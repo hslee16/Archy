@@ -56,7 +56,9 @@ One import, one edge. A forbidden layer edge, an eight-module cycle, and the sco
 
 Note the size of the score move. 0.009 is small, and that is the honest shape of this problem: no single edit looks alarming on the number. The cycle count going 0 to 1 and `check` exiting 1 are the signals that matter here, and the score is what catches the version of this that happens forty times over six weeks. Read [`docs/SCORING.md`](docs/SCORING.md) before treating the composite as a quality gate.
 
-Reproduce it on a checkout: add that import to `src/archy/parser.py`, then run the three commands above **with the `uvx` prefix**. It has to be a separate archy, because that one import is a genuine runtime import cycle, and an editable-installed archy can no longer start to report on itself. `archy check` exits 1, which is what it does in CI and what the MCP server reports to an agent before it commits.
+That example is a *direct* forbidden import, which is the easy case: an agent that reads `archy.yaml` first can catch it without archy. The harder and more honest case is a **transitive** violation, where the edit adds no forbidden import at all and reading the config tells you nothing. [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) is a one-command reproduction of that, and it states plainly which archy surfaces catch it (one) and which miss it (three).
+
+Reproduce the example above on a checkout: add that import to `src/archy/parser.py`, then run the three commands **with the `uvx` prefix**. It has to be a separate archy, because that one import is a genuine runtime import cycle, and an editable-installed archy can no longer start to report on itself. `archy check` exits 1, which is what it does in CI and what the MCP server reports to an agent before it commits.
 
 ![archy demo](docs/demo.gif)
 
