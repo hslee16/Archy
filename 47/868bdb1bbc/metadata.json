@@ -3,7 +3,7 @@
   "checkpoint_id": "47868bdb1bbc",
   "strategy": "manual-commit",
   "branch": "alee/q1b-layers-355",
-  "checkpoints_count": 1,
+  "checkpoints_count": 5,
   "files_touched": [
     "bench/q1b_layers/README.md",
     "bench/q1b_layers/django.yaml",
@@ -23,10 +23,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 194,
-    "cache_creation_tokens": 164274,
-    "cache_read_tokens": 12637117,
-    "output_tokens": 67646,
-    "api_call_count": 102
+    "input_tokens": 56,
+    "cache_creation_tokens": 198829,
+    "cache_read_tokens": 5777550,
+    "output_tokens": 6575,
+    "api_call_count": 30
   }
 }

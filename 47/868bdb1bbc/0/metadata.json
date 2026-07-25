@@ -3,28 +3,31 @@
   "checkpoint_id": "47868bdb1bbc",
   "session_id": "35c746bf-65af-4277-8fe6-7e3aa551c19d",
   "strategy": "manual-commit",
-  "created_at": "2026-07-25T22:20:56.799507Z",
+  "created_at": "2026-07-25T22:25:35.740115Z",
   "branch": "alee/q1b-layers-355",
-  "checkpoints_count": 1,
+  "checkpoints_count": 5,
+  "save_step_count": 2,
   "files_touched": [
+    "bench/q1b_layers/README.md",
+    "bench/q1b_layers/django.yaml",
+    "bench/q1b_layers/matplotlib.yaml",
+    "bench/q1b_layers/requests.yaml",
+    "bench/q1b_layers/scikit-learn.yaml",
     "bench/q1b_layers/sympy.yaml",
     "bench/q1b_layers/xarray.yaml",
-    "bench/q1b_layers/matplotlib.yaml",
-    "bench/q1b_layers/django.yaml",
-    "bench/q1b_layers/scikit-learn.yaml",
-    "bench/q1b_layers/requests.yaml",
-    "bench/q1b_layers/README.md",
     "bench/q1b_layers_check.py"
   ],
   "agent": "Claude Code",
   "model": "claude-opus-5[1m]",
-  "turn_id": "dd59c1c7fc91",
+  "turn_id": "f44fee283207",
+  "checkpoint_transcript_start": 496,
+  "transcript_lines_at_start": 496,
   "token_usage": {
-    "input_tokens": 194,
-    "cache_creation_tokens": 164274,
-    "cache_read_tokens": 12637117,
-    "output_tokens": 67646,
-    "api_call_count": 102
+    "input_tokens": 56,
+    "cache_creation_tokens": 198829,
+    "cache_read_tokens": 5777550,
+    "output_tokens": 6575,
+    "api_call_count": 30
   },
   "skill_events_version": 1,
   "skill_events": [
@@ -39,7 +42,7 @@
         "signal": "skill_tool_use",
         "confidence": "explicit"
       },
-      "turn_id": "dd59c1c7fc91",
+      "turn_id": "f44fee283207",
       "transcript_anchor": {
         "unit": "line",
         "start": 501,
@@ -60,15 +63,18 @@
       }
     }
   ],
+  "session_metrics": {
+    "turn_count": 5
+  },
   "initial_attribution": {
-    "calculated_at": "2026-07-25T22:20:56.782545Z",
-    "agent_lines": 778,
-    "agent_removed": 51,
+    "calculated_at": "2026-07-25T22:25:35.721273Z",
+    "agent_lines": 27,
+    "agent_removed": 12,
     "human_added": 0,
     "human_modified": 0,
     "human_removed": 0,
-    "total_committed": 778,
-    "total_lines_changed": 829,
+    "total_committed": 27,
+    "total_lines_changed": 39,
     "agent_percentage": 100,
     "metric_version": 2
   },
@@ -79,6 +85,20 @@
       "user_lines_removed": 0,
       "agent_lines_added": 0,
       "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 27,
+      "agent_lines_removed": 12
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 27,
+      "agent_lines_removed": 12
     }
   ]
 }
