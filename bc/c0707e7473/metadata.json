@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "bcc0707e7473",
+  "strategy": "manual-commit",
+  "branch": "alee/walkthrough-transitive-violation",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "README.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/bc/c0707e7473/0/metadata.json",
+      "transcript": "/bc/c0707e7473/0/full.jsonl",
+      "content_hash": "/bc/c0707e7473/0/content_hash.txt",
+      "prompt": "/bc/c0707e7473/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 2224,
+    "cache_creation_tokens": 489630,
+    "cache_read_tokens": 23891752,
+    "output_tokens": 112105,
+    "api_call_count": 173
+  }
+}
