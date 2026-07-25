@@ -1,0 +1,41 @@
+merge PR
+
+---
+
+lets do the distribution work
+
+---
+
+merge PR and lets continue
+
+---
+
+what is the acceptance criterion from #325? I will review it right now
+
+---
+
+make sense to me. The placement if good. Lets mark it done and edit it after some actual external feedback. I predict that won't happen for a while
+
+---
+
+there are currently 3 external PR contributions in the github repo right now
+
+---
+
+looks green on CI
+
+---
+
+merge  #330 first. Lets create tickets for new findings
+
+---
+
+i'll wait on the response for both
+
+---
+
+lets continue the distribution work
+
+---
+
+lets build python_conventions.md right now
