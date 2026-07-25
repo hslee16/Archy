@@ -1,0 +1,111 @@
+# Authored layer rules for matplotlib/matplotlib, for the Q1b A/B (#348).
+#
+# Same procedure as the other five configs: candidates from THIS project's own
+# documented conventions, validated against pristine upstream code, failures
+# dropped and recorded. Authored blind to the task set.
+#
+# THE DOCUMENTED CONVENTIONS THESE RULES COME FROM
+#
+# 1. `galleries/users_explain/figure/api_interfaces.rst`: matplotlib has two
+#    interfaces, an explicit "Axes" one and an implicit "pyplot" one, and
+#    "`matplotlib.pyplot` shadows most of the" Axes methods. `pyplot.py`'s own
+#    docstring adds "The explicit object-oriented API is recommended for complex
+#    plots". pyplot is therefore the top layer: it wraps the artist layer and
+#    tracks global state, so the artist layer must not import it back.
+# 2. `galleries/users_explain/figure/backends.rst`: a backend is selected at
+#    runtime (rcParam, MPLBACKEND, `use()`), and `backend_bases.py` documents
+#    itself as "Abstract base classes define the primitives that renderers and
+#    graphics contexts must implement to serve as a Matplotlib backend". The
+#    drawing layer talks to the abstraction, not to a concrete backend.
+# 3. `matplotlib/_api/__init__.py`: "This module and its submodules are for
+#    internal use only." Helper functions for managing the API, used from
+#    everywhere, so they must not import the objects they help manage.
+# 4. `matplotlib/testing/__init__.py`: "Helper functions for testing."
+# 5. `matplotlib/sphinxext/plot_directive.py` is a Sphinx extension: docs
+#    tooling built on the library.
+#
+# DROPPED, because pristine matplotlib violates them (1 edge each):
+#
+#   figure        -> pyplot     (matplotlib.figure -> matplotlib.pyplot)
+#   figure        -> backends   (matplotlib.figure -> matplotlib.backends.backend_webagg)
+#   backends      -> pyplot     (backend_webagg_core -> pyplot)
+#   backend_bases -> backends   (backend_bases -> matplotlib.backends.registry)
+#
+# `figure` and `backend_bases` are consequently NOT part of the `core` layer:
+# `Figure` reaches up into pyplot and into the webagg backend, and
+# `backend_bases` imports the backend registry it defines the interface for.
+# Both are declared as their own layers and carry only the rules they pass, so
+# the exception is visible rather than hidden by dropping the rule for the whole
+# group.
+#
+# BASE-COMMIT DROPS. These rules are also checked at the base commit of every
+# top-25 matplotlib task, not only at HEAD, because a rule that fires on the
+# base commit makes that task's declared-layer signal constant. One rule died
+# there:
+#
+#   backend_bases -> pyplot   1 edge at 394748d584 and 39c997ee9d (the
+#                             `backend_bases -> pyplot` import that upstream
+#                             later removed). Dropped, so both matplotlib tasks
+#                             run the same ruleset rather than a per-task one.
+#
+# GROUPED LAYERS: `core` groups the drawing layer (artist, axes, axis,
+# transforms, cbook, projections, tri, style) so each documented statement is
+# one rule row rather than a cross-product over eight modules. See the README.
+#
+# 14 rules. Validated against matplotlib @ 357b274ac3 and at both top-25 task
+# base commits: `archy check` exits 0.
+
+exclude: ["tests"]
+
+layers:
+  pyplot:
+    modules: ["matplotlib.pyplot"]
+  backends:
+    modules: ["matplotlib.backends.**"]
+  backend_bases:
+    modules: ["matplotlib.backend_bases"]
+  figure:
+    modules: ["matplotlib.figure"]
+  testing:
+    modules: ["matplotlib.testing.**"]
+  sphinxext:
+    modules: ["matplotlib.sphinxext.**"]
+  api:
+    modules: ["matplotlib._api.**"]
+  core:
+    modules:
+      - "matplotlib.artist"
+      - "matplotlib.axes.**"
+      - "matplotlib.axis"
+      - "matplotlib.transforms"
+      - "matplotlib.cbook"
+      - "matplotlib.projections.**"
+      - "matplotlib.tri.**"
+      - "matplotlib.style.**"
+
+forbid:
+  # pyplot is the implicit interface layered over the explicit one.
+  # `backend_bases -> pyplot` is NOT here: it holds at HEAD but not at either
+  # matplotlib base commit (see BASE-COMMIT DROPS).
+  - {from: core, to: pyplot}
+
+  # Concrete backends are runtime-selected renderers behind `backend_bases`.
+  - {from: core, to: backends}
+
+  # `matplotlib/_api` is internal helper code used from everywhere.
+  - {from: api, to: core}
+  - {from: api, to: figure}
+  - {from: api, to: backend_bases}
+
+  # `matplotlib/testing` is test helpers.
+  - {from: core, to: testing}
+  - {from: figure, to: testing}
+  - {from: backend_bases, to: testing}
+  - {from: backends, to: testing}
+  - {from: pyplot, to: testing}
+
+  # `matplotlib/sphinxext` is documentation tooling built on the library.
+  - {from: core, to: sphinxext}
+  - {from: figure, to: sphinxext}
+  - {from: backends, to: sphinxext}
+  - {from: pyplot, to: sphinxext}

@@ -41,23 +41,39 @@
 # and weaker than Django's, which is the honest outcome rather than a problem to
 # engineer around.
 #
-# Validated against scikit-learn @ 8fac97f31b: `archy check` exits 0.
+# PATTERN SCOPE CORRECTION. This file first shipped with bare patterns
+# (`sklearn.externals`), which archy matches as an EXACT dotted name, so the
+# `externals` layer held exactly one module (`sklearn/externals/__init__.py`)
+# instead of 57, and every rule below was dead. `pkg.**` is the canonical form
+# for "the package and all descendants". Re-validated at the corrected scope:
+# all 7 rules still hold on pristine code.
+#
+# TESTS ARE EXCLUDED FROM THE SCAN, uniformly across all six configs. Test
+# modules import across layers by design in every one of these repos, and that
+# is not architecture. Consequence to carry into the results: a layer violation
+# introduced inside a `tests/` directory cannot fire. scikit-learn keeps its
+# tests inside the packages they test (`sklearn/ensemble/tests/`), so this
+# matters more here than in django.
+#
+# 7 rules. Validated against scikit-learn @ 8fac97f31b: `archy check` exits 0.
+
+exclude: ["tests"]
 
 layers:
   externals:
-    modules: ["sklearn.externals"]
+    modules: ["sklearn.externals.**"]
   loss:
-    modules: ["sklearn._loss"]
+    modules: ["sklearn._loss.**"]
   utils:
-    modules: ["sklearn.utils"]
+    modules: ["sklearn.utils.**"]
   linear_model:
-    modules: ["sklearn.linear_model"]
+    modules: ["sklearn.linear_model.**"]
   ensemble:
-    modules: ["sklearn.ensemble"]
+    modules: ["sklearn.ensemble.**"]
   datasets:
-    modules: ["sklearn.datasets"]
+    modules: ["sklearn.datasets.**"]
   metrics:
-    modules: ["sklearn.metrics"]
+    modules: ["sklearn.metrics.**"]
 
 forbid:
   # `sklearn/externals` is VENDORED third-party code. Vendored code importing

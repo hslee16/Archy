@@ -22,29 +22,43 @@
 # Any "layer" rule across those pairs would fire immediately. So the rules stay
 # at the edges of the package, where the roles are unambiguous.
 #
-# Validated against requests @ d64b9ad4: `archy check` exits 0.
+# PATTERN SCOPE CORRECTION. This file first shipped with bare patterns
+# (`requests.compat`), which archy matches as an EXACT dotted name. requests is
+# a flat package, so unlike django.yaml and scikit-learn.yaml every layer here
+# really was the single module it names and no rule was dead. The patterns are
+# still written `pkg.**` for consistency with the other five configs; it changes
+# nothing for requests.
+#
+# TESTS ARE EXCLUDED FROM THE SCAN, uniformly across all six configs. Test
+# modules import across layers by design, and that is not architecture.
+# Consequence to carry into the results: a layer violation introduced inside a
+# `tests/` directory cannot fire.
+#
+# 22 rules. Validated against requests @ d64b9ad4: `archy check` exits 0.
+
+exclude: ["tests"]
 
 layers:
   api:
-    modules: ["requests.api"]
+    modules: ["requests.api.**"]
   sessions:
-    modules: ["requests.sessions"]
+    modules: ["requests.sessions.**"]
   models:
-    modules: ["requests.models"]
+    modules: ["requests.models.**"]
   adapters:
-    modules: ["requests.adapters"]
+    modules: ["requests.adapters.**"]
   auth:
-    modules: ["requests.auth"]
+    modules: ["requests.auth.**"]
   utils:
-    modules: ["requests.utils"]
+    modules: ["requests.utils.**"]
   compat:
-    modules: ["requests.compat"]
+    modules: ["requests.compat.**"]
   structures:
-    modules: ["requests.structures"]
+    modules: ["requests.structures.**"]
   internal_utils:
-    modules: ["requests._internal_utils"]
+    modules: ["requests._internal_utils.**"]
   status_codes:
-    modules: ["requests.status_codes"]
+    modules: ["requests.status_codes.**"]
 
 forbid:
   # `requests.api` is the public facade (get/post/...). It is imported by the
