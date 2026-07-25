@@ -37,31 +37,63 @@
 #   utils -> template
 #   core  -> views
 #
-# 15 rules survived. Validated against django @ 189c2d2ce5.
+# ALSO DROPPED, found when the pattern scope was corrected (see below):
+#
+#   db -> forms   4 edges  (django.db.models.fields{,.files,.json,.related} ->
+#                           django.forms: model fields build their own form
+#                           fields, so the model layer does reach the form
+#                           layer on pristine code)
+#
+# PATTERN SCOPE CORRECTION. This file first shipped with bare patterns
+# (`django.contrib`), which archy matches as an EXACT dotted name, so the
+# `contrib` layer held exactly one module (`django/contrib/__init__.py`) instead
+# of 338, and every rule below was dead. `pkg.**` is the canonical form for "the
+# package and all descendants". Re-validated at the corrected scope: 1 of the 15
+# rules fired (`db -> forms`) and is now dropped.
+#
+# BASE-COMMIT DROPS. These rules are also checked at the base commit of every
+# top-25 django task, not only at HEAD, because a rule that fires on the base
+# commit makes that task's declared-layer signal constant. One more rule died
+# there:
+#
+#   utils -> views   1 edge at 2b03e8e9e8, 7444f32527, f63811f481
+#                    (django.utils.log -> django.views.debug, removed upstream
+#                     later). Dropped, so every django task runs the same
+#                     ruleset rather than a per-task one.
+#
+# TESTS ARE EXCLUDED FROM THE SCAN, uniformly across all six configs. Test
+# modules import across layers by design in every one of these repos, and that
+# is not architecture. Consequence to carry into the results: a layer violation
+# introduced inside a `tests/` directory cannot fire.
+#
+# 13 rules. Validated against django @ 189c2d2ce5 and at all seven top-25 task
+# base commits: `archy check` exits 0.
+
+exclude: ["tests"]
 
 layers:
   contrib:
-    modules: ["django.contrib"]
+    modules: ["django.contrib.**"]
   db:
-    modules: ["django.db"]
+    modules: ["django.db.**"]
   forms:
-    modules: ["django.forms"]
+    modules: ["django.forms.**"]
   views:
-    modules: ["django.views"]
+    modules: ["django.views.**"]
   template:
-    modules: ["django.template"]
+    modules: ["django.template.**"]
   middleware:
-    modules: ["django.middleware"]
+    modules: ["django.middleware.**"]
   http:
-    modules: ["django.http"]
+    modules: ["django.http.**"]
   core:
-    modules: ["django.core"]
+    modules: ["django.core.**"]
   conf:
-    modules: ["django.conf"]
+    modules: ["django.conf.**"]
   utils:
-    modules: ["django.utils"]
+    modules: ["django.utils.**"]
   test:
-    modules: ["django.test"]
+    modules: ["django.test.**"]
 
 forbid:
   # `django.contrib` is optional add-on applications. Nothing in core Django
@@ -76,15 +108,16 @@ forbid:
 
   # `django.utils` is shared utility code, so it must not reach up into the
   # request/response and presentation layers. Note `utils -> db|forms|template`
-  # are NOT here: pristine Django violates all three (see DROPPED above).
-  - {from: utils, to: views}
+  # are NOT here: pristine Django violates all three (see DROPPED above), and
+  # neither is `utils -> views`, which holds today but not at four of the seven
+  # django base commits (see BASE-COMMIT DROPS).
   - {from: utils, to: middleware}
   - {from: utils, to: test}
 
   # The ORM is the bottom of the request path and must not depend on anything
-  # above it. All four hold on pristine code.
+  # above it. `db -> forms` is NOT here: model fields build form fields, so
+  # pristine Django has 4 such edges (see DROPPED above).
   - {from: db, to: views}
-  - {from: db, to: forms}
   - {from: db, to: template}
   - {from: db, to: middleware}
 

@@ -1,0 +1,95 @@
+# Authored layer rules for pydata/xarray, for the Q1b A/B (#348).
+#
+# Same procedure as the other five configs: candidates from THIS project's own
+# documented conventions, validated against pristine upstream code, failures
+# dropped and recorded. Authored blind to the task set.
+#
+# THE DOCUMENTED CONVENTIONS THESE RULES COME FROM
+#
+# 1. `doc/getting-started-guide/installing.rst` lists matplotlib under optional
+#    dependencies, "required for plotting". So `xarray/plot` is an optional
+#    surface, and the layers that do encoding, computation, alignment, and IO
+#    must not depend on it.
+# 2. `doc/internals/how-to-add-new-backend.rst`: "Adding a new backend for read
+#    support to Xarray does not require one to integrate any code in Xarray" --
+#    backends are plugins registered through an entry point, behind
+#    `BackendEntrypoint`. Nothing except the top-level API should reach for a
+#    concrete backend.
+# 3. `xarray/testing` is assertion helpers for test suites.
+#
+# WHAT WAS PROBED AND FAILED
+#
+# `xarray/namedarray` looks like a standalone low-level array package (it is the
+# extracted core of `Variable`), so "namedarray imports nothing else in xarray"
+# was the obvious candidate. It is false on pristine code:
+#
+#   namedarray -> core        18 edges  (xarray.namedarray._aggregations -> xarray.core.duck_array_ops)
+#   namedarray -> structure    1 edge
+#
+# The same probe against the version-compat shims also failed:
+#
+#   compat -> core         3 edges
+#   compat -> namedarray   5 edges
+#   util   -> core         2 edges
+#
+# so `util` and `compat` are not declared as layers here at all, rather than
+# kept as layers with no rules attached.
+#
+# DROPPED, because pristine xarray violates them:
+#
+#   core -> plot       3 edges  (xarray.core.dataarray -> xarray.plot.accessor: the
+#                                `.plot` accessor is attached to the data structures,
+#                                so the data model does reach the optional surface)
+#   core -> backends  12 edges  (xarray.core.dataarray -> xarray.backends.zarr and
+#                                friends: `to_netcdf`/`to_zarr` live on the objects)
+#
+# Both drops are the same finding: `xarray/core` is the public object layer, not
+# a pure data model, so it legitimately reaches the optional and pluggable
+# surfaces. The rules that survive are the ones about the layers BELOW that
+# object layer, which is a weaker ruleset than it first looked like, and that is
+# the honest outcome.
+#
+# GROUPED LAYERS: `derived` groups the algorithmic layers over the data model
+# (coding, computation, structure) so each documented statement is one rule row
+# instead of a cross-product. See sympy.yaml and the README for why.
+#
+# 11 rules. Validated against xarray @ adc8005a20: `archy check` exits 0.
+
+exclude: ["tests"]
+
+layers:
+  core:
+    modules: ["xarray.core.**"]
+  namedarray:
+    modules: ["xarray.namedarray.**"]
+  backends:
+    modules: ["xarray.backends.**"]
+  plot:
+    modules: ["xarray.plot.**"]
+  testing:
+    modules: ["xarray.testing.**"]
+  derived:
+    modules:
+      - "xarray.coding.**"
+      - "xarray.computation.**"
+      - "xarray.structure.**"
+
+forbid:
+  # Plotting is optional (matplotlib is an optional dependency). Encoding,
+  # computation, alignment, IO, and the low-level array layer must not need it.
+  - {from: derived, to: plot}
+  - {from: namedarray, to: plot}
+  - {from: backends, to: plot}
+
+  # Backends are entry-point plugins. A new one requires no code inside xarray,
+  # which only holds if xarray's own layers do not import concrete backends.
+  - {from: derived, to: backends}
+  - {from: namedarray, to: backends}
+  - {from: plot, to: backends}
+
+  # `xarray/testing` is assertion helpers, consumed by test suites.
+  - {from: core, to: testing}
+  - {from: derived, to: testing}
+  - {from: namedarray, to: testing}
+  - {from: backends, to: testing}
+  - {from: plot, to: testing}

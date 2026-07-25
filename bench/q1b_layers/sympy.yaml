@@ -1,0 +1,135 @@
+# Authored layer rules for sympy/sympy, for the Q1b A/B (#348).
+#
+# Same procedure as django.yaml, scikit-learn.yaml, and requests.yaml:
+# candidates from THIS project's own documented conventions, validated against
+# pristine upstream code, failures dropped and recorded. Authored blind to the
+# task set.
+#
+# THE DOCUMENTED CONVENTIONS THESE RULES COME FROM
+#
+# 1. `doc/src/contributing/dependencies.md`: "SymPy only has one hard
+#    dependency, which is required for it to work: mpmath." Everything else is
+#    listed as optional, per feature area: matplotlib and pyglet for
+#    `sympy.plotting`, antlr/lark/clang/lfortran for parts of `sympy.parsing`,
+#    IPython for `sympy.interactive`. A surface documented as needing an
+#    optional dependency sits ABOVE the symbolic engine, so the engine must not
+#    import it.
+# 2. `sympy/external/__init__.py`: "Unified place for determining if external
+#    dependencies are installed or not. You should import all external modules
+#    using the import_module() function." That is a bottom shim by role.
+# 3. `sympy/sandbox/__init__.py`: "This module contains experimental code, use
+#    at your own risk! There is no warranty that this code will still be
+#    located here in future versions of SymPy." Library code must not depend on
+#    a package that documents itself as removable.
+# 4. `sympy/benchmarks/` is benchmark scripts, not library code.
+#
+# WHAT SYMPY TAUGHT THAT THE EARLIER REPOS DID NOT
+#
+# `sympy.core` is NOT a leaf, and the "everything builds on core" prior is
+# wrong as a layer rule. On pristine code core imports upward, hard:
+#
+#   core -> functions   168 edges
+#   core -> simplify     52
+#   core -> matrices     47
+#   core -> polys        24
+#   core -> printing      3
+#
+# So no `X -> core` rule of any kind survives, and none is written here. This
+# is the same shape as scikit-learn's `utils` (#354): the plausible foundation
+# package is bidirectionally tangled with what sits on it.
+#
+# GROUPED LAYERS, AND WHY
+#
+# django/scikit-learn/requests use one layer per subpackage, which turns each
+# documented statement into a cross-product of rule rows. sympy has ~40
+# subpackages, so that shape would produce ~40 rows saying the same four
+# things. `engine` therefore groups the symbolic machinery into one layer and
+# each documented statement becomes one rule. Coverage is identical; only the
+# row count differs, which matters when reading ruleset size across repos (see
+# README).
+#
+# DROPPED, because pristine sympy violates them:
+#
+#   core      -> parsing     1 edge  (sympy.core.sympify -> sympy.parsing.sympy_parser;
+#                                     dependencies.md says the Python parser needs
+#                                     no external dependency, so this is consistent
+#                                     with the documented intent, and my rule was
+#                                     too broad). `core` is kept out of `engine`
+#                                     for this reason and ruled separately.
+#   integrals -> plotting    1 edge  (sympy.integrals.intpoly -> sympy.plotting.plot),
+#                                     so `integrals` is not in `engine`.
+#   physics   -> plotting    7 edges
+#   physics   -> interactive 1 edge  (physics is an application layer above the
+#                                     engine and legitimately plots)
+#   testing   -> plotting/interactive  1 each (sympy.testing.runtests drives them)
+#
+# BASE-COMMIT DROPS. These rules are also checked at the base commit of every
+# top-25 sympy task, not only at HEAD, because a rule that fires on the base
+# commit makes that task's declared-layer signal constant. One rule died there:
+#
+#   external -> core   1 edge at d1320814ed, 5813bdbae2, dd53633d0f, cab3c1cbfa,
+#                      115dd821a4 (sympy.external.importtools ->
+#                      sympy.core.compatibility, the Python 2/3 shim that
+#                      upstream deleted later). Dropped, so every sympy task
+#                      runs the same ruleset rather than a per-task one.
+#
+# TESTS ARE EXCLUDED FROM THE SCAN. sympy keeps its tests inside the packages
+# they test (`sympy/external/tests/`, `sympy/sandbox/tests/`), and those test
+# modules import the whole library by design: with tests scanned,
+# `external -> core` is 7 edges, `sandbox -> functions` is 1. Those are test
+# imports, not architecture. Consequence to carry into the results: for sympy a
+# layer violation introduced inside a `tests/` directory cannot fire.
+#
+# 10 rules. Validated against sympy @ 89796fa512 and at all eight top-25 task
+# base commits: `archy check` exits 0.
+
+exclude: ["tests"]
+
+layers:
+  external:
+    modules: ["sympy.external.**"]
+  sandbox:
+    modules: ["sympy.sandbox.**"]
+  benchmarks:
+    modules: ["sympy.benchmarks.**"]
+  plotting:
+    modules: ["sympy.plotting.**"]
+  parsing:
+    modules: ["sympy.parsing.**"]
+  interactive:
+    modules: ["sympy.interactive.**"]
+  core:
+    modules: ["sympy.core.**"]
+  engine:
+    modules:
+      - "sympy.functions.**"
+      - "sympy.polys.**"
+      - "sympy.matrices.**"
+      - "sympy.simplify.**"
+      - "sympy.solvers.**"
+      - "sympy.series.**"
+      - "sympy.printing.**"
+
+forbid:
+  # `sympy/external` decides whether an optional dependency is installed. It is
+  # the bottom of the stack and imports nothing from sympy on pristine code.
+  # `external -> core` is NOT here: it holds at HEAD but not at five of the
+  # eight sympy base commits (see BASE-COMMIT DROPS).
+  - {from: external, to: engine}
+
+  # `sympy/sandbox` documents itself as experimental and removable.
+  - {from: core, to: sandbox}
+  - {from: engine, to: sandbox}
+
+  # `sympy/benchmarks` is benchmark scripts built on the library.
+  - {from: core, to: benchmarks}
+  - {from: engine, to: benchmarks}
+
+  # Optional-dependency surfaces, per dependencies.md. sympy has exactly one
+  # hard dependency, so the symbolic engine cannot reach a feature area that
+  # documents matplotlib/pyglet, antlr/lark, or IPython as a requirement.
+  - {from: core, to: plotting}
+  - {from: engine, to: plotting}
+  - {from: engine, to: parsing}
+  - {from: core, to: interactive}
+  - {from: engine, to: interactive}
