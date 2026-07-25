@@ -1060,6 +1060,12 @@ When this section was first written, the agent-feedback-loop framing
 was a positioning bet. As of mid-2026 there are three converging
 empirical results worth citing as direct support.
 
+> **Read §14c.7 before quoting any number from this section in
+> user-facing copy.** archy ran its own controlled tests of the
+> agent-footprint claim, on archy's own recommendations, and both
+> returned null. External evidence that *cleanliness* lowers agent cost
+> does not license a claim that *archy* does.
+
 **c.1. The Navigation Paradox (Feb 2026)**
 ([arxiv:2602.20048][nav-paradox]). The paper introduces an
 MCP-based graph navigation tool (CodeCompass) shaped almost
@@ -1468,6 +1474,78 @@ manufacture one. The reusable rule: an external paper motivates a
 *claim*; a shippable metric additionally needs a *validated proxy* and a
 stake beyond the noise floor, and #260 had neither.
 
+### 14c.7. The agent-cost axis, and archy's own two nulls against it (#261)
+
+§14c.6 records what the external literature establishes. This subsection
+records the part that is uncomfortable and more important for positioning:
+**archy ran its own controlled tests of the same claim, at archy's own layer,
+and both returned null.**
+
+**The cost axis is established prior art, not archy's invention.** SWE-Effi
+([arxiv:2509.09853][swe-effi]) reframes agent evaluation as accuracy *balanced
+against* token and time budgets rather than accuracy alone, and names the
+"token snowball" and "expensive failure" effects. That is the axis §14c.6's
+cleanliness numbers live on, and citing it matters because it establishes that
+agent *cost* is a legitimate quality dimension independently of archy wanting
+one.
+
+**Two guardrails that must travel with any quotation of those numbers.**
+
+- **Tokens, never dollars.** The cleanliness paper's §6 states the
+  token-to-dollar mapping is nonlinear and configuration-dependent. archy may
+  claim token and re-read deltas; it may never state a dollar saving.
+- **One configuration.** Every delta in §14c.6 is Claude Sonnet 4.6 in Claude
+  Code, on Python and Java, with author-curated variants and no
+  unrelated-test-regression check. Directional evidence, not a settled effect
+  size.
+
+**archy's own attempts, and what they returned.** The honest reason to keep
+this subsection short on celebration: the paper's effect is about *cleanliness*
+in general, and archy's shippable claim would have to be about *archy's own
+recommendations*. Those are not the same proposition, and the bench built to
+close that gap ([`SPEC_AGENT_FOOTPRINT_BENCH.md`](../SPEC_AGENT_FOOTPRINT_BENCH.md),
+harness `bench/agent_footprint.py`, results
+[`bench/agent_footprint_results.md`](../../bench/agent_footprint_results.md))
+ran twice and landed null twice.
+
+| study | design | N | headline | verdict |
+| --- | --- | --- | --- | --- |
+| **#282** (arm B) | apply archy's own #1 `what_to_refactor_next` recommendation to flask, measure agent footprint on a fixed task | 10 pairs | `footprint_tokens` median **+4,213 in the refactored direction** (4/6 pairs, p=0.754); per-pair deltas span −28,565 to +27,125 | **null**, and the token headline leans the *wrong* way |
+| **#289** (arm C) | inject an archy structural brief before the task, measure reads before first edit | 22 pairs | `pre_edit_reads` median **−2.0** (14/8, **p=0.286**), after an N=10 hint at p=0.109 that did not survive more data | **null**; NO-GO on an `archy brief` surface |
+
+A third cell (a harder-to-navigate repo) was **cancelled by pre-run adversarial
+review before any agent time was spent**, on two defects that could not be
+patched: a variant tree that leaked `.archy/index.db` into the treatment only,
+and a path-keyed primary metric that scored the treatment better by
+construction. Two nulls plus that cancellation closed the line (#300, #303,
+#307): the minimal-pair design cannot yield an interpretable positive at
+archy's layer with this power budget.
+
+**What this means for positioning, stated as the rule archy follows.**
+
+- **Supportable:** "cleaner structure tends to shrink an agent's navigation
+  footprint, not its success rate" as a claim about the *literature*, cited to
+  §14c.6 with both guardrails attached.
+- **Not supportable, on our own evidence:** any claim that applying an
+  **archy** recommendation reduces agent tokens or re-reads. We tested exactly
+  that, twice, and could not show it. The README and marketing copy therefore
+  carry **no** token-savings number, and #261's original framing ("archy's
+  pitch is cheaper agent runs / fewer tokens") is **superseded by this
+  subsection**: it was written before the bench reported.
+- **What archy does claim** stays what it always was: a deterministic
+  structural checker that catches cycles, layer violations, and score
+  regressions an agent would otherwise introduce. That claim rests on
+  mechanism, not on a footprint effect size we could not reproduce.
+
+The general lesson, and the reason this is recorded in the survey rather than
+buried in `bench/`: **an external paper's effect does not transfer to your
+tool just because your tool operates on the same substrate.** The paper moved
+line-level cleanliness with author-built variants; archy moves module
+dependency structure with its own ranking. Testing the transfer is the whole
+job, and reporting the null when it fails is what keeps the rest of this
+section worth citing.
+
+[swe-effi]: https://arxiv.org/abs/2509.09853
 [cleanliness]: https://arxiv.org/abs/2605.20049
 [co-committal]: https://doi.org/10.3390/software5010011
 [ai-friendliness]: https://arxiv.org/abs/2601.02200
