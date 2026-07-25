@@ -52,7 +52,7 @@ analogy should never have produced candidates in the first place, because of
 what it does to the selection:
 
 > candidates from analogy, filtered by "does it fire upstream", leaves
-> **{my guesses} intersected with {pairs that happen to be zero}** — and the
+> **{my guesses} intersected with {pairs that happen to be zero}**, and the
 > zero-filter is then doing the real work.
 
 That is the `D_purity` tautology in a slower form. The whole point of sourcing
