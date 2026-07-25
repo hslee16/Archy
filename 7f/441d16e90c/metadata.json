@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "7f441d16e90c",
+  "strategy": "manual-commit",
+  "branch": "alee/token-reduction-research",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "docs/research/README.md",
+    "docs/research/RESEARCH_METRICS.md",
+    "docs/research/TOKEN_REDUCTION_CLAIMS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/7f/441d16e90c/0/metadata.json",
+      "transcript": "/7f/441d16e90c/0/full.jsonl",
+      "content_hash": "/7f/441d16e90c/0/content_hash.txt",
+      "prompt": "/7f/441d16e90c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 536,
+    "cache_creation_tokens": 1627032,
+    "cache_read_tokens": 62644626,
+    "output_tokens": 230588,
+    "api_call_count": 242
+  }
+}

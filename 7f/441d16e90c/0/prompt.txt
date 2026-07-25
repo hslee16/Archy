@@ -1,0 +1,48 @@
+<task-notification>
+<task-id>bj8ovh6yg</task-id>
+<tool-use-id>toolu_01WeyCQgmyNjukp3mSjyGoak</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9af56c8e-f399-435e-8ff9-ce8d99c2438e/tasks/bj8ovh6yg.output</output-file>
+<status>completed</status>
+<summary>Background command "Full re-run with fixed harness and repaired corpus C" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+merge it
+
+---
+
+lets do #261. After, lets do a reserach in ralphloop to answer the big question - There are currently tons of tools that claim to reduce token usage for coding agents. What are they based on? Does it even make sense to implement such features for archy?
+Tools, harnesses, even skills make the token reduction claim. let's thoroughly research so we can make a call for archy one way or another.
+
+---
+
+<task-notification>
+<task-id>aa74600b7f004462f</task-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9af56c8e-f399-435e-8ff9-ce8d99c2438e/tasks/aa74600b7f004462f.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial pass on the token research" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The final check landed and it materially changes finding 15. Addendum:
+
+## 16. §7 — the retraction's *conclusion* holds, but its *reasoning* is invalid, and there is a live counter-example
+
+**The premise is confirmed.** Anthropic tool objects carry `name`, `description`, `input_schema` (plus `cache_control`, `defer_loading`, `strict`) and no output-schema field. Structured outputs does not change this: `output_config.format` is response-level, and `strict: true` only tightens `input_schema`. Verified in Claude Code's own serializer (v2.1.219), which builds the payload from an allowlist of `["name","description","input_schema","cache_control"]` and never reads `outputSchema` at all, using it only to compile an AJV validator for `structuredContent`. So **archy's 3,918 model-visible figure is correct on the dominant client, `outputSchema` costs it zero context, and the 18,345 retraction was right.**
+
+**But the inference does not carry.** §7 argues "the Anthropic API has no output-schema field, **therefore** MCP `outputSchema` does not map into the model-visible tool spec." That is a provider-specific premise doing protocol-wide work. Gemini's `FunctionDeclaration` **does** have a per-tool output-schema field (`response` / `responseJsonSchema`: "Describes the output from this function in JSON Schema format"), and **google/adk-python populates it directly from MCP `outputSchema`**, default-on today:
+
+```python
+output_schema = self._mcp_tool.outputSchema
+if is_feature_enabled(FeatureName.JSON_SCHEMA_FOR_FUNC_DECL):
+    function_decl = FunctionDeclaration(..., response_json_schema=output_schema)
+```
+
+The gate is `FeatureStage.EXPERIMENTAL, default_on=True`, so it is live, not dormant. This is a third forwarding mode the note does not consider: not description-inlining, but a genuine provider tool-definition field.
+
+Everything else surveyed drops it or validates only: Anthropic Python SDK `mcp_tool()`, Vercel AI SDK, MCP Python/TS SDKs, LangChain MCP adapters, OpenAI Agents SDK, mcp-use, FastMCP, Gemini CLI (which drops it despite the API supporting it), VS Code/Copilot. Cursor is closed-source and undetermined.
+
+*Minimal correction to §7:* drop the derivation from the API shape; state it as an observed property of client implementations, not a consequence of the spec. Suggested replacement for the caveat paragraph: "`outputSchema` is consumed client-side rather than forwarded to the model in every Anthropic- and OpenAI-targeting client examined, including Claude Code, whose serializer allowlists `name`/`description`/`input_schema`. The exception is providers whose tool declaration has an output-schema field: Gemini's `FunctionDeclaration` exposes `responseJsonSchema` and Google's ADK populates it from MCP `outputSchema` by default."
+
+Two further notes worth folding in. The spec's normative language is validation-only ("Clients SHOULD validate structured results against this schema"), which supports the note, but the same page's rationale says an output schema helps by "guiding clients and LLMs to properly parse and utilize the returned data," which is quotable against it. And a widely-cited claim (CrowdStrike falcon-mcp #325) that VS Code Copilot counts `outputSchema` toward its per-tool budget is **unverified and contradicted by the VS Code source** (only `inputSchema` reaches `IToolData`), so do not cite it. A real adjacent effect does exist though: claude-code #25081 and zed #55642 show `outputSchema` causing tools to be silently *dropped* by some clients, which is an archy-relevant risk given #228 ships it on all 11 tools, and which §9's "Trim `outputSchema` — **fails on premise**, wontfix" row does not account for.</result>
+<usage><subagent_tokens>109422</subagent_tokens><tool_uses>48</tool_uses><duration_ms>527643</duration_ms></usage>
+</task-notification>
