@@ -1180,6 +1180,22 @@ Two implications for archy, both sharper than the earlier citations:
   to the agent as static prose, with no course-correction, measurably
   degrades output, which is the gap archy's feedback loop is designed
   to close (the paper does not itself test archy or any feedback loop).
+
+  **CORRECTION, 2026-07-26.** That last clause is an inference, and it
+  reads across two different regimes. The paper measures whether an agent
+  can **construct** a specified architecture (greenfield, plus 20 feature
+  tasks, from an OpenAPI spec). archy operates on **existing** codebases
+  and asks whether an edit **damages** an architecture already present.
+  #356 measured that second question and got 0 of 25, 95% upper bound
+  12%, and every one of those runs edited a mature human-architected
+  repository, so the corpus supplied the architecture the agent then
+  copied. The paper is not refuted by that, and it does not support archy
+  either: **neither study tested the other's regime.** The claim being
+  retired is that the -9.1 pp is a gap archy is *shown* to close. Whether
+  a dynamic course-correction loop helps during greenfield construction
+  under a specified architecture is unmeasured by anyone, and it is the
+  one regime where the paper's numbers predict real headroom. See
+  `docs/WHAT_DIDNT_WORK.md`.
 - The study's explicit gap, "no dynamic course-correction", is exactly
   archy's MCP loop. But it surfaces two capabilities archy does *not*
   yet have, both motivated directly. **Convention-based layer
