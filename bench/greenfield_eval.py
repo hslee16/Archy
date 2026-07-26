@@ -108,12 +108,15 @@ HURL_VERSION = "7.1.0"
 # suite's true total; re-derive it with `--calibrate <host>` and change it
 # deliberately, noting it in the results, exactly as with the image digest.
 #
-# Provenance: 241 asserts executed by borys25ol/fastapi-realworld-backend
-# (2026-07-26, with its `POST /api/users` status corrected to the spec's 201),
-# under --continue-on-error. That backend is near-conforming, not conforming, so
-# the true total is >= this.
-ASSERT_DENOMINATOR = 241
-ASSERT_DENOMINATOR_SOURCE = "borys25ol/fastapi-realworld-backend @ 2026-07-26"
+# Provenance, and it has been re-pinned once already. The first floor was 241,
+# from borys25ol/fastapi-realworld-backend (2026-07-26, with its `POST
+# /api/users` status corrected to the spec's 201). The arm-A smoke generation
+# then executed 687, which makes 241 far too low: every run between the two
+# would have been scored over its own smaller denominator and read as better
+# than it was. Re-pinned to 687 from that run, and this is a FLOOR, not a claim
+# about the suite's true total. Re-derive with `--calibrate <host>`.
+ASSERT_DENOMINATOR = 687
+ASSERT_DENOMINATOR_SOURCE = "arm-A smoke generation, 2026-07-26 (615/687 passed)"
 
 # `hurl --test` summary lines, e.g. "Executed files:  13" / "Succeeded files:  11".
 SUMMARY = re.compile(r"^(?P<label>[A-Za-z ]+):\s+(?P<count>\d+)", re.MULTILINE)
