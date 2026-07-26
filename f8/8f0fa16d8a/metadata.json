@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f88f0fa16d8a",
+  "strategy": "manual-commit",
+  "branch": "alee/retire-the-claim",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "src/archy/layers.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f8/8f0fa16d8a/0/metadata.json",
+      "transcript": "/f8/8f0fa16d8a/0/full.jsonl",
+      "content_hash": "/f8/8f0fa16d8a/0/content_hash.txt",
+      "prompt": "/f8/8f0fa16d8a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1130,
+    "cache_creation_tokens": 6347985,
+    "cache_read_tokens": 234419405,
+    "output_tokens": 389381,
+    "api_call_count": 605
+  }
+}
