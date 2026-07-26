@@ -1,5 +1,13 @@
 # Roadmap
 
+> **Status note, 2026-07-26.** Many feature items below were closed as `not planned` after archy's
+> central claim was measured and retracted (three pre-registered claims, three nulls). They are
+> kept here because the design thinking is still worth reading and any of them can be reopened, but
+> **the tracker, not this file, is the source of truth for what is planned.** Read
+> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) before picking one up. Distribution work (#322 and
+> children) and #369 are active.
+
+
 Short, opinionated summary of where archy is going. The detailed item-by-item list (with shipped, in-flight, deferred, and rejected items, plus citations to the literature each idea came from) lives in [`FUTURE.md`](FUTURE.md). This page is the executive summary.
 
 ## Audience principle (load-bearing)

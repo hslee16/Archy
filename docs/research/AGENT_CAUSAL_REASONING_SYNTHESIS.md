@@ -48,6 +48,13 @@ research already names this gap under different vocabulary:
 - The **additive vs transformative** split is archy's reason for existing. The README "Why" is
   exactly this: "coding agents generate code that passed review but rotted the import graph
   underneath." That is the transformative-work failure the article describes.
+
+  **CORRECTION, 2026-07-26.** That quoted premise has since been **retracted**, and the README no
+  longer states it unqualified. 25 live agent runs on the structurally riskiest SWE-bench tasks
+  produced zero structural regressions (95% upper bound 12%), and humans break their own declared
+  contracts on 0.66% of commits. The event is real and rare, for agents and humans alike. Whatever
+  this document argues, it cannot rest on "agents rot the import graph" as an established fact.
+  See [`../WHAT_DIDNT_WORK.md`](../WHAT_DIDNT_WORK.md).
 - [`AUTONOMY_CONTINUUM_SYNTHESIS.md`](AUTONOMY_CONTINUUM_SYNTHESIS.md) already frames archy as
   "minimum viable governance that grows proportionally with autonomy" and as
   "cross-session, cross-agent architecture memory that prose CLAUDE.md notes are not." That is the
