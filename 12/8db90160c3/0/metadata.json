@@ -3,23 +3,24 @@
   "checkpoint_id": "128db90160c3",
   "session_id": "35c746bf-65af-4277-8fe6-7e3aa551c19d",
   "strategy": "manual-commit",
-  "created_at": "2026-07-26T19:10:26.670714Z",
+  "created_at": "2026-07-26T19:13:05.937746Z",
   "branch": "alee/contract-decay-364",
-  "checkpoints_count": 3,
-  "save_step_count": 4,
+  "checkpoints_count": 2,
+  "save_step_count": 1,
   "files_touched": [
     "bench/contract_decay.py",
+    "bench/contract_decay_results.md",
     "docs/WHAT_DIDNT_WORK.md"
   ],
   "agent": "Claude Code",
   "model": "claude-opus-5[1m]",
   "turn_id": "06d800968929",
   "token_usage": {
-    "input_tokens": 1006,
-    "cache_creation_tokens": 4882617,
-    "cache_read_tokens": 188055888,
-    "output_tokens": 334909,
-    "api_call_count": 539
+    "input_tokens": 1025,
+    "cache_creation_tokens": 5561605,
+    "cache_read_tokens": 194286189,
+    "output_tokens": 340006,
+    "api_call_count": 549
   },
   "skill_events_version": 1,
   "skill_events": [
@@ -87,41 +88,18 @@
     }
   ],
   "session_metrics": {
-    "turn_count": 54
+    "turn_count": 56
   },
   "initial_attribution": {
-    "calculated_at": "2026-07-26T19:10:26.595633Z",
-    "agent_lines": 434,
+    "calculated_at": "2026-07-26T19:13:05.859501Z",
+    "agent_lines": 0,
     "agent_removed": 0,
-    "human_added": 402,
-    "human_modified": 43,
+    "human_added": 137,
+    "human_modified": 4,
     "human_removed": 0,
-    "total_committed": 879,
-    "total_lines_changed": 879,
-    "agent_percentage": 49.37428896473265,
+    "total_committed": 137,
+    "total_lines_changed": 141,
+    "agent_percentage": 0,
     "metric_version": 2
-  },
-  "prompt_attributions": [
-    {
-      "checkpoint_number": 2,
-      "user_lines_added": 0,
-      "user_lines_removed": 0,
-      "agent_lines_added": 0,
-      "agent_lines_removed": 0
-    },
-    {
-      "checkpoint_number": 3,
-      "user_lines_added": 0,
-      "user_lines_removed": 0,
-      "agent_lines_added": 0,
-      "agent_lines_removed": 0
-    },
-    {
-      "checkpoint_number": 4,
-      "user_lines_added": 0,
-      "user_lines_removed": 0,
-      "agent_lines_added": 0,
-      "agent_lines_removed": 0
-    }
-  ]
+  }
 }

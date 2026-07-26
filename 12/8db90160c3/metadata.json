@@ -3,9 +3,10 @@
   "checkpoint_id": "128db90160c3",
   "strategy": "manual-commit",
   "branch": "alee/contract-decay-364",
-  "checkpoints_count": 3,
+  "checkpoints_count": 2,
   "files_touched": [
     "bench/contract_decay.py",
+    "bench/contract_decay_results.md",
     "docs/WHAT_DIDNT_WORK.md"
   ],
   "sessions": [
@@ -17,10 +18,10 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 1006,
-    "cache_creation_tokens": 4882617,
-    "cache_read_tokens": 188055888,
-    "output_tokens": 334909,
-    "api_call_count": 539
+    "input_tokens": 1025,
+    "cache_creation_tokens": 5561605,
+    "cache_read_tokens": 194286189,
+    "output_tokens": 340006,
+    "api_call_count": 549
   }
 }
