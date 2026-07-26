@@ -112,9 +112,16 @@ def test_the_port_survives_rewriting():
     assert ":9999" in greenfield_eval.container_host("http://localhost:9999")
 
 
+def _sample_cmd() -> list[str]:
+    """The container invocation as the real run builds it."""
+    return greenfield_eval._hurl_cmd(
+        Path("/suite"), "http://localhost:8000", "uid", "/suite/*.hurl"
+    )
+
+
 def test_the_suite_is_never_run_on_the_host_network():
     """`--network host` is the defect itself. It must not come back."""
-    cmd = greenfield_eval._hurl_cmd(Path("/suite"), "http://localhost:8000", "uid", "/suite/*.hurl")
+    cmd = _sample_cmd()
     assert "--network" not in cmd
     assert "--add-host=host.docker.internal:host-gateway" in cmd
 
@@ -122,8 +129,7 @@ def test_the_suite_is_never_run_on_the_host_network():
 def test_every_assert_runs_so_the_denominator_is_not_a_function_of_quality():
     """Without --continue-on-error hurl abandons a file at its first failure, so
     a worse server executes fewer asserts and can post a higher ratio."""
-    cmd = greenfield_eval._hurl_cmd(Path("/suite"), "http://localhost:8000", "uid", "/suite/*.hurl")
-    assert "--continue-on-error" in cmd
+    assert "--continue-on-error" in _sample_cmd()
 
 
 # --- the score is assert-level ------------------------------------------------
