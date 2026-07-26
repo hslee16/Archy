@@ -24,7 +24,9 @@ I built archy after watching coding agents produce changes that passed review an
 
 So: the problem is real (I have watched a developer's own architecture rule get broken in the wild), and it is **rare, for agents and humans alike**. "Agents will rot your import graph" is a claim I made and have retracted. Nobody has measured what one occurrence costs, so I cannot argue "rare but expensive" either.
 
-**archy is therefore not under active development.** It works, it is installable, and the numbers above are why there is nothing further to build on the original thesis. The full write-up, including the six measurement artifacts that nearly made a failed study look like a success, is in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). That document, not the tool, is the most useful thing here.
+**What that means for the roadmap:** feature work premised on "agents will wreck your architecture" is off the table, because that premise is retracted. archy is maintained, bugs get fixed, and contributions are welcome; it is not being expanded on a thesis that failed its own tests.
+
+The full write-up, including the six measurement artifacts that nearly turned a failed study into a success story, is in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). If you only read one thing here, read that.
 
 What follows describes what archy does, which is unchanged and still true.
 
@@ -95,7 +97,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.42.0, working and installable, **not under active development** (see the top of this page). Usable today via:
+**Status:** v0.42.0, working, installed and maintained; feature work is paused pending evidence anyone wants it (see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -117,9 +119,9 @@ How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.m
 
 ## In the wild
 
-[`ADOPTERS.md`](ADOPTERS.md) is empty, and across 96+ issues not one has been filed by anyone but me. That is the honest state of adoption, and it is a large part of why development stopped.
+[`ADOPTERS.md`](ADOPTERS.md) is empty and no issue has yet been filed by anyone but me. Outside **pull requests** are a different story and recent: three landed on 2026-07-25, two merged. Good-first tickets are labelled and deliberately left for others.
 
-If you are running archy on a real codebase I would still like to hear what it found, especially if the answer is "nothing useful" - that answer is now supported by measurement rather than merely possible.
+If you are running archy on a real codebase I would like to hear what it found, especially if the answer is "nothing useful" - that answer is now supported by measurement rather than merely possible.
 
 ## Why
 
