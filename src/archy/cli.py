@@ -1800,6 +1800,11 @@ def _coverage_to_text(coverage: LayerCoverage) -> str:
     Printed on a PASS specifically: a clean result is exactly when a reader is
     entitled to know whether the rules could have said anything at all (#362).
     """
+    if coverage.governs_nothing:
+        return (
+            "#   layer coverage: NO modules under the declared root packages, so no rule "
+            "here can ever fire"
+        )
     line = (
         f"#   layer coverage: {coverage.modules_matched} of {coverage.modules_total} modules "
         f"({coverage.module_ratio:.0%}), {coverage.edges_governed} of {coverage.edges_total} "
