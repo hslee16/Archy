@@ -167,12 +167,28 @@ def _server_script(port: int) -> str:
     )
 
 
-def _assert_port_is_free(port: int) -> None:
-    """Rebinding is the only proof the listener is gone. A leaked one means the
-    NEXT task's suite would score THIS task's server."""
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("127.0.0.1", port))
+def _assert_port_is_freed(port: int, within: float = 15.0) -> None:
+    """Rebinding is the only proof the listener is gone.
+
+    Polled rather than asserted once. SIGKILL to a process group is delivered
+    asynchronously, so on Linux the port is routinely still held for a few
+    milliseconds after `wait()` returns; the first version of this asserted the
+    instantaneous state, passed on macOS, and failed in CI on both teardown
+    tests. The invariant is that the listener GOES AWAY, not that it is already
+    gone by the next statement, and asserting the latter is asserting a fact
+    about the scheduler.
+    """
+    deadline = time.monotonic() + within
+    while True:
+        try:
+            with socket.socket() as sock:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                sock.bind(("127.0.0.1", port))
+            return
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(0.1)
 
 
 def test_a_server_that_binds_is_detected_and_then_killed(tmp_path):
@@ -181,7 +197,7 @@ def test_a_server_that_binds_is_detected_and_then_killed(tmp_path):
     _write_run_sh(tmp_path, f"#!/bin/sh\nexec {_server_script(port)}\n")
     with greenfield_run.served(tmp_path, port, boot_timeout=30.0) as (bound, why):
         assert bound is True, why
-    _assert_port_is_free(port)
+    _assert_port_is_freed(port)
 
 
 def test_a_shell_that_forks_is_still_torn_down(tmp_path):
@@ -191,7 +207,7 @@ def test_a_shell_that_forks_is_still_torn_down(tmp_path):
     _write_run_sh(tmp_path, f"#!/bin/sh\n{_server_script(port)} &\nwait\n")
     with greenfield_run.served(tmp_path, port, boot_timeout=30.0) as (bound, why):
         assert bound is True, why
-    _assert_port_is_free(port)
+    _assert_port_is_freed(port)
 
 
 def test_free_ports_do_not_repeat(tmp_path):
