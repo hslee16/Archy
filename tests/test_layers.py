@@ -25,6 +25,12 @@ def _g(*edges: tuple[str, str, tuple[int, ...]]) -> nx.DiGraph:
     return g
 
 
+def _cfg(tmp_path: Path, body: str) -> LayerConfig:
+    path = tmp_path / "archy.yaml"
+    path.write_text(body)
+    return load_config(path)
+
+
 @pytest.fixture
 def core_cli_config() -> LayerConfig:
     return LayerConfig(
@@ -122,47 +128,42 @@ def test_load_config_missing_forbid_key(tmp_path: Path):
 
 
 def test_load_config_exclude_omitted_defaults_to_empty(tmp_path: Path):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text("layers:\n  core: {modules: [myapp.core.**]}\nforbid: []\n")
-    assert load_config(cfg).exclude == ()
+    assert _cfg(tmp_path, "layers:\n  core: {modules: [myapp.core.**]}\nforbid: []\n").exclude == ()
 
 
 def test_load_config_exclude_parsed(tmp_path: Path):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text(
+    config = _cfg(
+        tmp_path,
         "layers:\n  core: {modules: [myapp.core.**]}\n"
         "forbid: []\n"
-        "exclude:\n  - baml_client\n  - generated\n"
+        "exclude:\n  - baml_client\n  - generated\n",
     )
-    assert load_config(cfg).exclude == ("baml_client", "generated")
+    assert config.exclude == ("baml_client", "generated")
 
 
 def test_load_config_exclude_must_be_list_of_strings(tmp_path: Path):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text("layers: {core: {modules: [myapp.core.**]}}\nforbid: []\nexclude: not_a_list\n")
     with pytest.raises(LayerConfigError, match="exclude"):
-        load_config(cfg)
+        _cfg(
+            tmp_path,
+            "layers: {core: {modules: [myapp.core.**]}}\nforbid: []\nexclude: not_a_list\n",
+        )
 
 
 def test_load_config_roots_omitted_defaults_to_empty(tmp_path: Path):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text("layers:\n  core: {modules: [myapp.core.**]}\nforbid: []\n")
-    assert load_config(cfg).roots == ()
+    assert _cfg(tmp_path, "layers:\n  core: {modules: [myapp.core.**]}\nforbid: []\n").roots == ()
 
 
 def test_load_config_roots_parsed(tmp_path: Path):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text(
-        "layers:\n  core: {modules: [app.**]}\nforbid: []\nroots:\n  - app\n  - experiments\n"
+    config = _cfg(
+        tmp_path,
+        "layers:\n  core: {modules: [app.**]}\nforbid: []\nroots:\n  - app\n  - experiments\n",
     )
-    assert load_config(cfg).roots == ("app", "experiments")
+    assert config.roots == ("app", "experiments")
 
 
 def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text("layers: {core: {modules: [app.**]}}\nforbid: []\nroots: not_a_list\n")
     with pytest.raises(LayerConfigError, match="roots"):
-        load_config(cfg)
+        _cfg(tmp_path, "layers: {core: {modules: [app.**]}}\nforbid: []\nroots: not_a_list\n")
 
 
 @pytest.mark.parametrize(
@@ -183,17 +184,13 @@ def test_load_config_rejects_malformed_layer_pattern(tmp_path: Path, bad: str):
     # Malformed patterns must fail at load with a clear archy error rather than
     # surfacing later as a cryptic import-linter ModuleNotFoundError or a
     # silently-wrong match regex. Quote the pattern to keep YAML happy.
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text(f'layers:\n  core: {{modules: ["{bad}"]}}\nforbid: []\n')
     with pytest.raises(LayerConfigError, match="invalid module pattern"):
-        load_config(cfg)
+        _cfg(tmp_path, f'layers:\n  core: {{modules: ["{bad}"]}}\nforbid: []\n')
 
 
 @pytest.mark.parametrize("good", ["myapp", "myapp.core.**", "myapp.*", "app.routers.user"])
 def test_load_config_accepts_canonical_layer_patterns(tmp_path: Path, good: str):
-    cfg = tmp_path / "archy.yaml"
-    cfg.write_text(f'layers:\n  core: {{modules: ["{good}"]}}\nforbid: []\n')
-    config = load_config(cfg)
+    config = _cfg(tmp_path, f'layers:\n  core: {{modules: ["{good}"]}}\nforbid: []\n')
     assert config.layers[0].patterns == (good,)
 
 
@@ -284,12 +281,6 @@ def test_load_config_max_modules_rejects_invalid(tmp_path: Path, bad: str):
     cfg.write_text(f"layers: {{}}\nforbid: []\nmax_modules: {bad}\n")
     with pytest.raises(LayerConfigError, match="max_modules"):
         load_config(cfg)
-
-
-def _cfg(tmp_path: Path, body: str) -> LayerConfig:
-    path = tmp_path / "archy.yaml"
-    path.write_text(body)
-    return load_config(path)
 
 
 def test_coverage_reports_what_the_rules_cannot_reach(tmp_path: Path):

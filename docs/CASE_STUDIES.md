@@ -94,6 +94,7 @@ $ uv run archy cycles .
 
 $ uv run archy check .
 # No layer violations (config: /Users/.../archy/archy.yaml).
+#   layer coverage: 9 of 42 modules (21%), 16 of 117 internal edges (14%); 33 module(s) match no layer (`archy check --show-unlayered`)
 ```
 
 The CI step (`.github/workflows/ci.yml`) makes any layer-crossing PR fail

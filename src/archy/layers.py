@@ -141,12 +141,17 @@ class LayerCoverage(BaseModel):
         return self.edges_governed / self.edges_total if self.edges_total else 1.0
 
 
-def declared_roots(config: LayerConfig) -> frozenset[str]:
-    """The top-level packages the config's patterns actually talk about.
+def governed_roots(config: LayerConfig) -> frozenset[str]:
+    """The top-level packages the config's LAYER PATTERNS talk about.
 
     A pattern is a dotted-name glob rooted at a real package (`_validate_layer_pattern`
     enforces that), so its first segment names the namespace the author intended
     to govern.
+
+    NOT `LayerConfig.roots`, despite the name proximity. That field declares
+    extra PEP 420 scan roots so the graph builder can find namespace packages at
+    all; this function asks which namespaces the rules claim authority over.
+    Neither reads the other.
     """
     return frozenset(pattern.split(".")[0] for layer in config.layers for pattern in layer.patterns)
 
@@ -167,7 +172,7 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
     ruled_layers = {rule.from_layer for rule in config.forbid} | {
         rule.to_layer for rule in config.forbid
     }
-    roots = declared_roots(config)
+    roots = governed_roots(config)
     layer_of: dict[str, str | None] = {}
     outside = 0
     for node, data in graph.nodes(data=True):
