@@ -288,6 +288,19 @@ def load_config(path: Path) -> LayerConfig:
     )
 
 
+def _parse_non_negative_int(value: object, field: str, path: Path) -> int | None:
+    """Shared guard for the integer config knobs. None when the key is absent.
+
+    `bool` is an `int` subclass in Python, so `true` would otherwise sail
+    through as 1 and configure something the author never asked for.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise LayerConfigError(f"`{field}` must be a non-negative integer in {path}, got {value!r}")
+    return value
+
+
 def _parse_min_layers_present(value: object, declared: int, path: Path) -> int | None:
     """Validate `min_layers_present:`. Absent -> None (no presence gate).
 
@@ -295,18 +308,15 @@ def _parse_min_layers_present(value: object, declared: int, path: Path) -> int |
     such a config can never pass and the failure would otherwise look like a
     finding about the codebase rather than a typo in the config.
     """
-    if value is None:
+    parsed = _parse_non_negative_int(value, "min_layers_present", path)
+    if parsed is None:
         return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+    if parsed > declared:
         raise LayerConfigError(
-            f"`min_layers_present` must be a non-negative integer in {path}, got {value!r}"
-        )
-    if value > declared:
-        raise LayerConfigError(
-            f"`min_layers_present` is {value} in {path} but only {declared} layer(s) are "
+            f"`min_layers_present` is {parsed} in {path} but only {declared} layer(s) are "
             "declared, so the check could never pass."
         )
-    return value
+    return parsed
 
 
 def _parse_max_modules(value: object, path: Path) -> int | None:
@@ -315,13 +325,7 @@ def _parse_max_modules(value: object, path: Path) -> int | None:
     Rejects non-integers and negatives (a `bool` is an `int` subclass in Python,
     so it is rejected explicitly). `0` is allowed and means "disable the guard".
     """
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise LayerConfigError(
-            f"`max_modules` must be a non-negative integer in {path}, got {value!r}"
-        )
-    return value
+    return _parse_non_negative_int(value, "max_modules", path)
 
 
 def discover_config(start: Path) -> Path | None:
