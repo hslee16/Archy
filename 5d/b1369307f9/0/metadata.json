@@ -3,27 +3,26 @@
   "checkpoint_id": "5db1369307f9",
   "session_id": "35c746bf-65af-4277-8fe6-7e3aa551c19d",
   "strategy": "manual-commit",
-  "created_at": "2026-07-26T16:27:27.511798Z",
+  "created_at": "2026-07-26T16:34:10.888256Z",
   "branch": "alee/q1b-pilot-356",
-  "checkpoints_count": 19,
-  "save_step_count": 15,
+  "checkpoints_count": 7,
+  "save_step_count": 5,
   "files_touched": [
-    "bench/q1b_results.jsonl",
+    ".gitignore",
+    "bench/q1b_results.md",
     "bench/q1b_run.py",
     "bench/q1b_score.py",
     "tests/test_q1b_run.py"
   ],
   "agent": "Claude Code",
   "model": "claude-opus-5[1m]",
-  "turn_id": "58dee4b573b2",
-  "checkpoint_transcript_start": 681,
-  "transcript_lines_at_start": 681,
+  "turn_id": "61629ab4e3cd",
   "token_usage": {
-    "input_tokens": 330,
-    "cache_creation_tokens": 2199784,
-    "cache_read_tokens": 52357459,
-    "output_tokens": 99989,
-    "api_call_count": 177
+    "input_tokens": 641,
+    "cache_creation_tokens": 2977588,
+    "cache_read_tokens": 83189171,
+    "output_tokens": 184741,
+    "api_call_count": 342
   },
   "skill_events_version": 1,
   "skill_events": [
@@ -38,7 +37,7 @@
         "signal": "skill_tool_use",
         "confidence": "explicit"
       },
-      "turn_id": "58dee4b573b2",
+      "turn_id": "61629ab4e3cd",
       "transcript_anchor": {
         "unit": "line",
         "start": 501,
@@ -60,325 +59,55 @@
     }
   ],
   "session_metrics": {
-    "turn_count": 24
+    "turn_count": 31
   },
   "initial_attribution": {
-    "calculated_at": "2026-07-26T16:27:27.477266Z",
-    "agent_lines": 969,
-    "agent_removed": 0,
-    "human_added": 269,
-    "human_modified": 13,
+    "calculated_at": "2026-07-26T16:34:10.829422Z",
+    "agent_lines": 69,
+    "agent_removed": 67,
+    "human_added": 27,
+    "human_modified": 4,
     "human_removed": 0,
-    "total_committed": 1250,
-    "total_lines_changed": 1251,
-    "agent_percentage": 77.45803357314148,
+    "total_committed": 100,
+    "total_lines_changed": 167,
+    "agent_percentage": 81.437125748503,
     "metric_version": 2
   },
   "prompt_attributions": [
     {
-      "checkpoint_number": 1,
+      "checkpoint_number": 2,
       "user_lines_added": 0,
       "user_lines_removed": 0,
       "agent_lines_added": 0,
       "agent_lines_removed": 0
     },
     {
-      "checkpoint_number": 2,
+      "checkpoint_number": 3,
       "user_lines_added": 0,
       "user_lines_removed": 0,
-      "agent_lines_added": 687,
-      "agent_lines_removed": 6
-    },
-    {
-      "checkpoint_number": 3,
-      "user_lines_added": 16,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1054,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "tests/test_q1b_run.py": 16
-      },
-      "user_removed_per_file": {
-        "tests/test_q1b_run.py": 1
-      }
+      "agent_lines_added": 72,
+      "agent_lines_removed": 65
     },
     {
       "checkpoint_number": 4,
-      "user_lines_added": 1161,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1054,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 15,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68,
-        "tests/test_q1b_run.py": 16
-      },
-      "user_removed_per_file": {
-        "tests/test_q1b_run.py": 1
-      }
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 72,
+      "agent_lines_removed": 65
     },
     {
       "checkpoint_number": 5,
-      "user_lines_added": 1130,
+      "user_lines_added": 0,
       "user_lines_removed": 0,
-      "agent_lines_added": 1213,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      }
+      "agent_lines_added": 73,
+      "agent_lines_removed": 67
     },
     {
       "checkpoint_number": 6,
-      "user_lines_added": 1130,
+      "user_lines_added": 0,
       "user_lines_removed": 0,
-      "agent_lines_added": 1213,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      }
-    },
-    {
-      "checkpoint_number": 7,
-      "user_lines_added": 1451,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1214,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 1,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 8,
-      "user_lines_added": 1451,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1214,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 1,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 9,
-      "user_lines_added": 2015,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1214,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 2,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 10,
-      "user_lines_added": 2015,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1214,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 2,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 11,
-      "user_lines_added": 2015,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1214,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 2,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 12,
-      "user_lines_added": 2589,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1214,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 4,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7019_B_1d928c7e-9fef-401f-88a7-b4670311ee70.jsonl": 572,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 13,
-      "user_lines_added": 2638,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1243,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 5,
-        "bench/q1b_transcripts/django__django-11281_B_2df7c0ed-a9bc-4fe3-bebf-a35eefa1eb6e.jsonl": 48,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7019_B_1d928c7e-9fef-401f-88a7-b4670311ee70.jsonl": 572,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 14,
-      "user_lines_added": 3656,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1320,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 10,
-        "bench/q1b_transcripts/django__django-10904_B_ddc77331-27c0-482a-91f8-15874f31c9b0.jsonl": 337,
-        "bench/q1b_transcripts/django__django-11281_B_2df7c0ed-a9bc-4fe3-bebf-a35eefa1eb6e.jsonl": 48,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_58aa5274-c141-4c7b-816d-285cb0b67ffe.jsonl": 185,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7019_B_1d928c7e-9fef-401f-88a7-b4670311ee70.jsonl": 572,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-12784_B_f26864d2-9195-4a03-9905-d41a95f469d0.jsonl": 163,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_8764aac8-2144-4faa-bdb2-91354053053b.jsonl": 217,
-        "bench/q1b_transcripts/sympy__sympy-18198_B_d18524c2-097a-4439-9c86-41c393f21238.jsonl": 111
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 15,
-      "user_lines_added": 5592,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1327,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 16,
-        "bench/q1b_transcripts/django__django-10904_B_ddc77331-27c0-482a-91f8-15874f31c9b0.jsonl": 337,
-        "bench/q1b_transcripts/django__django-11281_B_2df7c0ed-a9bc-4fe3-bebf-a35eefa1eb6e.jsonl": 48,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/django__django-12910_B_3b4026dd-032a-42ab-89f6-0def4d8808f2.jsonl": 251,
-        "bench/q1b_transcripts/django__django-13207_B_14a053e8-e789-45d8-9a05-db0d55a6acd4.jsonl": 113,
-        "bench/q1b_transcripts/django__django-14463_B_3bfaafb6-861f-4ddb-b408-9a00ed6f8919.jsonl": 781,
-        "bench/q1b_transcripts/django__django-16092_B_af5d8451-f358-453b-b2c8-60b7bf8efd18.jsonl": 65,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_58aa5274-c141-4c7b-816d-285cb0b67ffe.jsonl": 185,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/pydata__xarray-7019_B_1d928c7e-9fef-401f-88a7-b4670311ee70.jsonl": 572,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-12784_B_f26864d2-9195-4a03-9905-d41a95f469d0.jsonl": 163,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-12108_B_d240111c-5196-4676-8e94-846620d4c31f.jsonl": 481,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_8764aac8-2144-4faa-bdb2-91354053053b.jsonl": 217,
-        "bench/q1b_transcripts/sympy__sympy-18198_B_d18524c2-097a-4439-9c86-41c393f21238.jsonl": 111,
-        "bench/q1b_transcripts/sympy__sympy-21931_B_88a10d99-0b76-4f1a-9aa9-407716c1ba8f.jsonl": 239
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
-    },
-    {
-      "checkpoint_number": 16,
-      "user_lines_added": 7767,
-      "user_lines_removed": 1,
-      "agent_lines_added": 1327,
-      "agent_lines_removed": 6,
-      "user_added_per_file": {
-        "bench/q1b_results.jsonl": 26,
-        "bench/q1b_transcripts/django__django-10904_B_ddc77331-27c0-482a-91f8-15874f31c9b0.jsonl": 337,
-        "bench/q1b_transcripts/django__django-10989_B_b221122c-019a-41a8-9b8b-88df75f0f1eb.jsonl": 290,
-        "bench/q1b_transcripts/django__django-11281_B_2df7c0ed-a9bc-4fe3-bebf-a35eefa1eb6e.jsonl": 48,
-        "bench/q1b_transcripts/django__django-11281_B_5db9c83d-79b8-46ee-b0a4-28f07fc11934.jsonl": 133,
-        "bench/q1b_transcripts/django__django-12910_B_3b4026dd-032a-42ab-89f6-0def4d8808f2.jsonl": 251,
-        "bench/q1b_transcripts/django__django-13207_B_14a053e8-e789-45d8-9a05-db0d55a6acd4.jsonl": 113,
-        "bench/q1b_transcripts/django__django-13915_B_eb965c1e-80fe-4500-a07a-d6325d028585.jsonl": 434,
-        "bench/q1b_transcripts/django__django-14374_B_a5ba7f33-4144-4fbc-822d-bdf59b44bd76.jsonl": 184,
-        "bench/q1b_transcripts/django__django-14463_B_3bfaafb6-861f-4ddb-b408-9a00ed6f8919.jsonl": 781,
-        "bench/q1b_transcripts/django__django-16092_B_af5d8451-f358-453b-b2c8-60b7bf8efd18.jsonl": 65,
-        "bench/q1b_transcripts/matplotlib__matplotlib-23573_B_24d528f6-bd91-4692-9d61-a9be6d4d989d.jsonl": 213,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_58aa5274-c141-4c7b-816d-285cb0b67ffe.jsonl": 185,
-        "bench/q1b_transcripts/matplotlib__matplotlib-24013_B_8e11e95e-0b52-4516-bb53-0fe47ce90c8b.jsonl": 242,
-        "bench/q1b_transcripts/psf__requests-2678_B_dc8f6ace-ac83-479e-a542-af2de6bd148b.jsonl": 167,
-        "bench/q1b_transcripts/pydata__xarray-7019_B_1d928c7e-9fef-401f-88a7-b4670311ee70.jsonl": 572,
-        "bench/q1b_transcripts/pydata__xarray-7052_B_b295c5c0-2b2b-4d5b-84db-1cc9a1676c0f.jsonl": 113,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_1b5f7e49-4b18-435c-9ff7-aabc1459d339.jsonl": 563,
-        "bench/q1b_transcripts/pydata__xarray-7179_B_f8fe90ef-0168-4d65-92f5-7ad8032a839f.jsonl": 687,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-12784_B_f26864d2-9195-4a03-9905-d41a95f469d0.jsonl": 163,
-        "bench/q1b_transcripts/scikit-learn__scikit-learn-25363_B_35d9d6d9-933b-4522-9ec0-beb4d491f09d.jsonl": 320,
-        "bench/q1b_transcripts/sympy__sympy-12108_B_d240111c-5196-4676-8e94-846620d4c31f.jsonl": 481,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_49a63a8a-5f65-4521-a3ed-28250d1b1a88.jsonl": 68,
-        "bench/q1b_transcripts/sympy__sympy-13091_B_8764aac8-2144-4faa-bdb2-91354053053b.jsonl": 217,
-        "bench/q1b_transcripts/sympy__sympy-15198_B_8858a724-d9d9-4740-bb4d-f64f4218f247.jsonl": 193,
-        "bench/q1b_transcripts/sympy__sympy-17845_B_1d2f9ccc-3aee-4003-9bde-8a1b317dc655.jsonl": 276,
-        "bench/q1b_transcripts/sympy__sympy-18033_B_bcace409-918a-423e-a670-2d6ab8588313.jsonl": 246,
-        "bench/q1b_transcripts/sympy__sympy-18198_B_d18524c2-097a-4439-9c86-41c393f21238.jsonl": 111,
-        "bench/q1b_transcripts/sympy__sympy-19093_B_89d24dc4-e84f-4654-8838-627dc68b0f74.jsonl": 49,
-        "bench/q1b_transcripts/sympy__sympy-21931_B_88a10d99-0b76-4f1a-9aa9-407716c1ba8f.jsonl": 239
-      },
-      "user_removed_per_file": {
-        "bench/q1b_results.jsonl": 1
-      }
+      "agent_lines_added": 73,
+      "agent_lines_removed": 67
     }
   ]
 }

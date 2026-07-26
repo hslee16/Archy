@@ -3,9 +3,10 @@
   "checkpoint_id": "5db1369307f9",
   "strategy": "manual-commit",
   "branch": "alee/q1b-pilot-356",
-  "checkpoints_count": 21,
+  "checkpoints_count": 9,
   "files_touched": [
-    "bench/q1b_results.jsonl",
+    ".gitignore",
+    "bench/q1b_results.md",
     "bench/q1b_run.py",
     "bench/q1b_score.py",
     "tests/test_q1b_run.py"
@@ -25,11 +26,11 @@
     }
   ],
   "token_usage": {
-    "input_tokens": 5103,
-    "cache_creation_tokens": 4578609,
-    "cache_read_tokens": 204826220,
-    "output_tokens": 461413,
-    "api_call_count": 629
+    "input_tokens": 5414,
+    "cache_creation_tokens": 5356413,
+    "cache_read_tokens": 235657932,
+    "output_tokens": 546165,
+    "api_call_count": 794
   },
   "combined_attribution": {
     "calculated_at": "2026-07-26T16:27:28.935394Z",

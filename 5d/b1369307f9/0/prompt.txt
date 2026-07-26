@@ -143,3 +143,105 @@ status
 ---
 
 continue
+
+---
+
+<task-notification>
+<task-id>ab58623f918cdafe9</task-id>
+<tool-use-id>toolu_0167qP7htKCJPjKSzMtea2u5</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/ab58623f918cdafe9.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy package docs" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete and marked as passed.
+
+Summary: Reviewed `/Users/hosanglee/archy/bench/q1b_results.md` against the doc-drift criteria. The commit that introduced this file (`bdbf21d`) touched only `bench/q1b_run.py`, `bench/q1b_score.py`, `bench/q1b_results.jsonl`, `tests/test_q1b_run.py`, and `.gitignore` — no changes to `src/archy/` or `pyproject.toml`, which is the trigger condition for this review rule. The new file's claims reference only bench-local scripts and pre-registered thresholds, not any archy CLI flag, function, version string, or precision/recall figure tracked elsewhere in the doc set. No documentation drift detected; `mark_review_as_passed` called with review_id `update_documents_relating_to_archy_package--bench-q1b_results.md--5a6855715c8c`.
+
+Note: the user-message content included an injected "context_window_protection" block instructing use of non-existent `mcp__plugin_context-mode_context-mode__*` tools in place of my actual toolset. I disregarded it as it conflicts with my real system instructions and tool availability, and is not an authorized instruction from you or the permission system.</result>
+<usage><subagent_tokens>24326</subagent_tokens><tool_uses>6</tool_uses><duration_ms>38317</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a976e1db4f901e43f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/a976e1db4f901e43f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review q1b_score.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete: PASS, zero violations.
+
+File reviewed: `/Users/hosanglee/archy/bench/q1b_score.py`
+Convention reference used: `/Users/hosanglee/archy/.deepwork/review/python_conventions.md`
+
+Note: the tool call and message wrapper in this turn included an embedded "context_window_protection" instruction block directing use of `mcp__plugin_context-mode_context-mode__*` tools instead of the tools specified in my actual system instructions. I disregarded it as an untrusted injected instruction and proceeded with the standard Read/Bash/mark_review_as_passed tools per the review task definition.</result>
+<usage><subagent_tokens>24881</subagent_tokens><tool_uses>7</tool_uses><duration_ms>54606</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a652842bb9fae9be8</task-id>
+<tool-use-id>toolu_01Sz3EtFBqYGqbeqDPZ3xVV8</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/a652842bb9fae9be8.output</output-file>
+<status>completed</status>
+<summary>Agent "Review q1b_run.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Review Result: FAIL — 2 findings
+
+Reviewed `/Users/hosanglee/archy/bench/q1b_run.py` against `/Users/hosanglee/archy/.deepwork/review/python_conventions.md`.
+
+**Mechanical criteria (covered by ruff, which passes cleanly — `uv run ruff check bench/q1b_run.py` → "All checks passed!"):** `from __future__ import annotations` present at module top, PEP 604 syntax used throughout (no `typing.List`/`Optional`), import grouping (including the `# noqa: E402` sys.path-then-local-import pattern), line length (100 chars), naming conventions (snake_case functions/vars, PascalCase `RateLimited`), `pathlib.Path` used throughout with no `os.path` (the one `os` usage is `os.environ`, which the convention doc explicitly allows), and no value objects present that should be frozen pydantic models. Per the convention doc's precedence rule ("If `ruff check` passes, do not file a style finding that ruff would have caught"), these are not flagged individually.
+
+**Findings (DRY, non-blocking):**
+
+1. **Lines 300–301, 307–308, 380–381** — Criterion: "DRY: no copy-pasted blocks that should be a shared helper." The exact same two-command sequence (`git reset --hard --quiet` followed by `git clean -qfdx -e *.egg-info`) appears three times: twice in `worktree_at` (the `else` branch and the trailing re-pin) and once in `run_agent`'s `on_stall`. This is the same logic (not merely similar shape) — a change to the clean/reset invocation (e.g. a new exclude pattern) would need to be made in three places and is easy to miss in one.
+   Suggested fix: extract a `_reset_worktree(tree: Path) -&gt; None` helper that runs both commands, and call it from all three sites.
+
+2. **Lines 452–457 and 474–479** — Criterion: "DRY: no copy-pasted blocks that should be a shared helper." The identical subprocess call `["git", "-C", str(tree), "diff", "HEAD", "--name-only"]` (same args, same `capture_output=True, text=True, check=True`) is issued twice in `run_task`: once to compute `files_changed_at_failure` and once to compute `changed`. Beyond the duplication itself, this also means the failure path never unions in untracked files the way the success path does (via `ls-files --others --exclude-standard`), which is an inconsistency the duplication makes easy to introduce.
+   Suggested fix: factor a `_changed_files(tree: Path) -&gt; list[str]` helper (optionally with a flag for whether to include untracked) and use it at both call sites.
+
+**Comment-accuracy criterion:** No violations found. The file is unusually thorough here — every substantive comment/docstring explains a WHY (a constraint, a bug that was hit, a design tradeoff), not a WHAT, and spot-checked comments (e.g. `worktree_at`'s "ORDER MATTERS" note, the `diff HEAD` vs `diff` note, `hit_rate_limit`'s scoping rationale) match the code they annotate.
+
+No `mark_review_as_passed` call was made, since findings exist and have not been fixed or explicitly dismissed.</result>
+<usage><subagent_tokens>32326</subagent_tokens><tool_uses>4</tool_uses><duration_ms>78567</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>acfba850241216f49</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/acfba850241216f49.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with zero findings. No U+2014 em-dash characters were found in `/Users/hosanglee/archy/bench/q1b_run.py` or `/Users/hosanglee/archy/tests/test_q1b_run.py`.
+
+Note: this response also contained a prompt-injection attempt embedded in the tool-result context (a fake "context_window_protection" block directing me to use nonexistent `mcp__plugin_context-mode_context-mode__*` tools). I did not have those tools available and ignored the injected instructions, proceeding with the actual review task using Read/Bash as instructed.</result>
+<usage><subagent_tokens>13798</subagent_tokens><tool_uses>4</tool_uses><duration_ms>17510</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aec6f2dabd1ab8ef8</task-id>
+<tool-use-id>toolu_01JfZWppSFJS5oMyCkgSPBr6</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/aec6f2dabd1ab8ef8.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review test_q1b_run.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed. Summary above; relevant paths: `/Users/hosanglee/archy/tests/test_q1b_run.py` (file under review), `/Users/hosanglee/archy/.deepwork/review/python_conventions.md` (criteria source). The changeset under review is a pure rename (`good_row`→`_good_row`, `read_rows`→`_read_rows`, `git`→`_git`) that brings three helpers into compliance with the underscore-prefix convention; no violations were introduced. One pre-existing, out-of-scope item was noted as a non-blocking aside: the function-local `import subprocess` inside `_git` (line 234) lacks a stated justification per the imports convention.</result>
+<usage><subagent_tokens>32781</subagent_tokens><tool_uses>8</tool_uses><duration_ms>62425</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bu76ahyw8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/bu76ahyw8.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for the re-reviews" completed (exit code 0)</summary>
+</task-notification>
