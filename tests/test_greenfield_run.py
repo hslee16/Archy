@@ -542,6 +542,128 @@ def test_attempts_survive_a_torn_row(tmp_path):
     assert greenfield_run.attempts_per_key(ledger_path)["a:A"] == 1
 
 
+# --- chunking is fine; scoring a chunk is not ---------------------------------
+#
+# The prereg fixes N in advance. Running the batch in pieces is operational;
+# reading it in pieces is optional stopping, and a partial batch that happens to
+# look good is exactly how a null becomes a finding.
+
+
+def _complete_ledger(path: Path) -> None:
+    """A ledger holding the full pre-registered N, both arms."""
+    rows = [
+        {"key": f"conduit-{i:02d}:{arm}", "status": "ok"}
+        for i in range(1, greenfield_run.TARGET_N_PER_ARM + 1)
+        for arm in ("A", "B")
+    ]
+    path.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+
+
+def test_raising_the_limit_only_adds_work(batch, monkeypatch, tmp_path):
+    """Chunking works because unit ids are stable: a later, larger --limit runs
+    the new units and leaves the earlier ones alone."""
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(greenfield_run, "RUNS", tmp_path / "runs")
+    monkeypatch.setattr(greenfield_run, "preflight", lambda _arms: None)
+    seen: list[str] = []
+
+    def record(task_id, arm, **kwargs):
+        seen.append(f"{task_id}:{arm}")
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", record)
+
+    for limit in ("2", "4"):
+        monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--limit", limit, "--pause", "0"])
+        assert greenfield_run.main() == 0
+
+    # Four units in the first chunk, then only the four NEW ones in the second.
+    assert seen == [
+        "conduit-01:A",
+        "conduit-01:B",
+        "conduit-02:A",
+        "conduit-02:B",
+        "conduit-03:A",
+        "conduit-03:B",
+        "conduit-04:A",
+        "conduit-04:B",
+    ]
+
+
+def test_every_chunk_contains_both_arms(monkeypatch, tmp_path):
+    """The reason chunking is safe. All of arm A on Monday and all of arm B on
+    Wednesday would put any server-side model change entirely on one arm, where
+    it would read as an effect."""
+    units = [(f"conduit-{i:02d}", arm) for i in range(1, 4) for arm in ("A", "B")]
+    first_chunk = units[:4]
+    assert {arm for _, arm in first_chunk} == {"A", "B"}
+
+
+def test_report_refuses_before_the_pre_registered_n(monkeypatch, tmp_path):
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text('{"key": "conduit-01:A", "status": "ok"}\n')
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", ledger_path)
+    monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--report"])
+    assert greenfield_run.main() == 1
+
+
+def test_report_scores_once_the_pre_registered_n_is_reached(monkeypatch, tmp_path, capsys):
+    ledger_path = tmp_path / "ledger.jsonl"
+    _complete_ledger(ledger_path)
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", ledger_path)
+    monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--report"])
+    assert greenfield_run.main() == 0
+    assert "VERDICT" in capsys.readouterr().out
+
+
+def test_force_partial_scores_but_says_it_is_not_the_reading(monkeypatch, tmp_path, capsys):
+    """An escape hatch that cannot be mistaken for the real thing."""
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text('{"key": "conduit-01:A", "status": "ok"}\n')
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", ledger_path)
+    monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--report", "--force-partial"])
+    assert greenfield_run.main() == 0
+    out = capsys.readouterr().out
+    assert "PARTIAL" in out
+    assert "must not be reported" in out
+
+
+def test_progress_shows_counts_and_no_outcomes(monkeypatch, tmp_path, capsys):
+    """Monitoring must not become peeking. Compliance and pass rates are what
+    the thresholds read, so they stay hidden until the batch completes."""
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text(
+        '{"key": "conduit-01:A", "status": "ok", "structural": {"compliant": true},'
+        ' "behavioral": {"pass_rate": 0.9}}\n'
+    )
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", ledger_path)
+    monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--progress"])
+    assert greenfield_run.main() == 0
+    out = capsys.readouterr().out
+    assert "1/25 done" in out
+    for leak in ("compliant", "pass_rate", "0.9", "VERDICT"):
+        assert leak not in out
+
+
+def test_a_limit_beyond_the_pre_registered_n_is_refused(monkeypatch, tmp_path):
+    """Adding runs after the fact is optional stopping wearing a different hat.
+    The pre-registered way to get more data is EXPAND."""
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["greenfield_run.py", "--limit", str(greenfield_run.TARGET_N_PER_ARM + 1), "--dry-run"],
+    )
+    with pytest.raises(SystemExit) as exc:
+        greenfield_run.main()
+    assert exc.value.code != 0
+
+
+def test_the_target_n_comes_from_the_prereg_not_a_restatement():
+    """A second copy of N could drift from the document that fixes it."""
+    assert greenfield_run.TARGET_N_PER_ARM == greenfield_run.greenfield_prereg.N_PER_ARM
+
+
 def test_a_finished_batch_reports_complete_without_another_pass(batch, monkeypatch, tmp_path):
     monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", batch)
     assert greenfield_run.main() == 0
