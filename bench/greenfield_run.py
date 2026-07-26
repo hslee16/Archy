@@ -3,8 +3,10 @@
 
     uv run python bench/greenfield_run.py --dry-run
     uv run python bench/greenfield_run.py --limit 1 --arms A       # smoke, 1 run
+    uv run python bench/greenfield_run.py --limit 5                # a 10-run chunk
     uv run python bench/greenfield_run.py                          # the pre-registered N
-    uv run python bench/greenfield_run.py --report
+    uv run python bench/greenfield_run.py --progress               # safe at any time
+    uv run python bench/greenfield_run.py --report                 # only once N is reached
 
 THE GENERATION HALF. The measurement half is `bench/greenfield_eval.py` and the
 thresholds are `bench/greenfield_prereg.py`, both of which exist and are
@@ -100,6 +102,22 @@ Three ways it stops, and all three are needed or it either spins or quits early:
 `--passes` bounds the whole thing. Re-running always resumes, so an operator
 who fixes a bug mid-batch just starts it again and keeps everything already
 recorded.
+
+## Running it in chunks is fine; scoring it in chunks is not
+
+`--limit 5` runs 10 units, `--limit 10` then runs the next 10, and so on to the
+pre-registered N. The unit ids are stable, so raising `--limit` only ever ADDS
+work, and the arms are interleaved within every chunk. That interleaving is what
+makes chunking safe: running all of arm A on Monday and all of arm B on
+Wednesday would put any server-side model change entirely on one arm, where it
+would read as an effect.
+
+**Scoring between chunks is optional stopping**, which is what the fixed N in
+the prereg exists to prevent: a partial batch that happens to look good is how a
+null becomes a finding. So `--report` refuses until the pre-registered N is
+complete, and `--progress` exists to watch the batch WITHOUT showing outcomes.
+`--limit` above the pre-registered N is refused for the same reason; the
+pre-registered way to get more data is EXPAND, not a bigger N here.
 """
 
 from __future__ import annotations
@@ -123,6 +141,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.append(str(REPO_ROOT / "bench"))
 import greenfield_eval  # noqa: E402
+import greenfield_prereg  # noqa: E402
 from _supervise import Ledger, run_supervised, with_retries  # noqa: E402
 from q1b_run import (  # noqa: E402
     RateLimited,
@@ -150,6 +169,10 @@ ALLOWED_TOOLS = ("Read", "Write", "Edit", "Bash", "Grep", "Glob")
 #: is recorded on the row rather than retried, because re-rolling a result
 #: selects for the runs that happened to converge.
 MAX_CORRECTION_ITERATIONS = 10
+
+#: The pre-registered N per arm. Read from the prereg rather than restated, so
+#: the runner cannot drift from the document that fixes it.
+TARGET_N_PER_ARM = greenfield_prereg.N_PER_ARM
 
 # Verbatim from the paper (section 3.2 / Appendix E.2). This is the ONLY part of
 # the prompt taken from the paper, and it is the part both arms share.
@@ -577,11 +600,61 @@ def preflight(arms: tuple[str, ...]) -> str | None:
     return None
 
 
+def unit_id(index: int) -> str:
+    """The stable id for run `index`.
+
+    One definition, because chunking depends on these ids not moving: a later
+    `--limit` must name the SAME units the earlier one did, or raising it would
+    re-run work the ledger thinks is done.
+    """
+    return f"conduit-{index:02d}"
+
+
+def ledger_key(index: int, arm: str) -> str:
+    return f"{unit_id(index)}:{arm}"
+
+
+def missing_for_verdict(ledger: Ledger) -> int:
+    """Runs still owed before the pre-registered reading may be taken."""
+    done = sum(
+        1
+        for arm in ("A", "B")
+        for i in range(1, TARGET_N_PER_ARM + 1)
+        if ledger.is_done(ledger_key(i, arm))
+    )
+    return max(0, TARGET_N_PER_ARM * 2 - done)
+
+
+def render_progress(ledger: Ledger) -> str:
+    """Where the batch is, WITHOUT saying anything about how it is going.
+
+    Deliberately counts only. Compliance and pass rates are the things the
+    thresholds read, so showing them mid-batch would be the peek the fixed N
+    exists to prevent, dressed up as monitoring.
+    """
+    failures = attempts_per_key(LEDGER_PATH)
+    lines = ["batch progress (counts only; outcomes are not shown before the batch completes)", ""]
+    for arm in ("A", "B"):
+        keys = [ledger_key(i, arm) for i in range(1, TARGET_N_PER_ARM + 1)]
+        done = sum(1 for key in keys if ledger.is_done(key))
+        retrying = sum(1 for key in keys if not ledger.is_done(key) and failures[key])
+        label = "arm A (static)" if arm == "A" else "arm B (archy)"
+        lines.append(
+            f"  {label:16} {done:2}/{TARGET_N_PER_ARM} done, "
+            f"{TARGET_N_PER_ARM - done:2} pending ({retrying} of them previously failed)"
+        )
+    short = missing_for_verdict(ledger)
+    lines += [
+        "",
+        "complete. `--report` will score it."
+        if not short
+        else f"{short} run(s) to go before `--report` will score it.",
+    ]
+    return "\n".join(lines)
+
+
 def summarize(rows: list[dict]) -> str:
     """Score the ledger through the pre-registered reading, never by eye."""
-    sys.path.append(str(REPO_ROOT / "bench"))
-    import greenfield_prereg
-
     arm_a = greenfield_prereg.summarize_rows(rows, "A")
     arm_b = greenfield_prereg.summarize_rows(rows, "B")
     return greenfield_prereg.render(arm_a, arm_b, greenfield_prereg.verdict(arm_a, arm_b))
@@ -612,6 +685,16 @@ def main() -> int:
     )
     ap.add_argument("--dry-run", action="store_true", help="plan only; spends nothing")
     ap.add_argument("--report", action="store_true", help="score the ledger and exit")
+    ap.add_argument(
+        "--progress",
+        action="store_true",
+        help="how far along the batch is, without showing any outcome",
+    )
+    ap.add_argument(
+        "--force-partial",
+        action="store_true",
+        help="score before the pre-registered N is reached. Not the pre-registered reading.",
+    )
     ap.add_argument("--check-tree", type=Path, help=argparse.SUPPRESS)  # used by the arm B wrapper
     args = ap.parse_args()
 
@@ -619,17 +702,44 @@ def main() -> int:
         return run_check(args.check_tree)
 
     ledger = Ledger(LEDGER_PATH)
+    if args.progress:
+        print(render_progress(ledger))
+        return 0
     if args.report:
         rows = [r for r in (ledger.get(k) for k in ledger._done) if r]
+        short = missing_for_verdict(ledger)
+        if short and not args.force_partial:
+            print(
+                f"refusing to score: {short} of the pre-registered "
+                f"{TARGET_N_PER_ARM * 2} run(s) are not complete.\n"
+                "The reading is pre-registered at a FIXED N and scoring early is optional\n"
+                "stopping: a partial batch that happens to look good is exactly how a null\n"
+                "becomes a finding. Use --progress to watch the batch without seeing outcomes,\n"
+                "or --force-partial if you have a reason that is not 'I want to know yet'."
+            )
+            return 1
+        if short:
+            print(
+                f"# WARNING: PARTIAL, {short} run(s) short of the pre-registered N.\n"
+                "# This is NOT the pre-registered reading and must not be reported as one.\n"
+            )
         print(summarize(rows))
         return 0
 
     arms = tuple(a for a in args.arms.upper() if a in "AB")
     if not arms:
         ap.error("--arms must name at least one of A, B")
+    if args.limit > TARGET_N_PER_ARM:
+        # Adding runs beyond the pre-registered N is optional stopping wearing a
+        # different hat. The pre-registered way to get more data is EXPAND
+        # (flask and django at the same N), not more conduit runs on fastapi.
+        ap.error(
+            f"--limit {args.limit} exceeds the pre-registered {TARGET_N_PER_ARM} per arm. "
+            "More data is EXPAND (see bench/greenfield_prereg.py), not a bigger N here."
+        )
     # Interleaved, so a batch stopped halfway is balanced rather than being all
     # of one arm. An unbalanced partial batch cannot be read at all.
-    units = [(f"conduit-{i:02d}", arm) for i in range(1, args.limit + 1) for arm in arms]
+    units = [(unit_id(i), arm) for i in range(1, args.limit + 1) for arm in arms]
 
     if args.dry_run:
         pending = [u for u in units if not ledger.is_done(f"{u[0]}:{u[1]}")]
