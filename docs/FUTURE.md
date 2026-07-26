@@ -1,5 +1,13 @@
 # Future Features
 
+> **Status note, 2026-07-26.** Many feature items below were closed as `not planned` after archy's
+> central claim was measured and retracted (three pre-registered claims, three nulls). They are
+> kept here because the design thinking is still worth reading and any of them can be reopened, but
+> **the tracker, not this file, is the source of truth for what is planned.** Read
+> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) before picking one up. Distribution work (#322 and
+> children) and #369 are active.
+
+
 Concrete things to build next, with rough order. Items in brackets cite where the idea came from. Items annotated `[RESEARCH_METRICS.md §N]` are validated against the survey in [`RESEARCH_METRICS.md`](research/RESEARCH_METRICS.md).
 
 ## Pre-call-graph wins (validated, low cost)
