@@ -562,9 +562,6 @@ def _complete_ledger(path: Path) -> None:
 def test_raising_the_limit_only_adds_work(batch, monkeypatch, tmp_path):
     """Chunking works because unit ids are stable: a later, larger --limit runs
     the new units and leaves the earlier ones alone."""
-    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", tmp_path / "ledger.jsonl")
-    monkeypatch.setattr(greenfield_run, "RUNS", tmp_path / "runs")
-    monkeypatch.setattr(greenfield_run, "preflight", lambda _arms: None)
     seen: list[str] = []
 
     def record(task_id, arm, **kwargs):

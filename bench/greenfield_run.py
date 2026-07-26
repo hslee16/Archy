@@ -600,13 +600,27 @@ def preflight(arms: tuple[str, ...]) -> str | None:
     return None
 
 
+def unit_id(index: int) -> str:
+    """The stable id for run `index`.
+
+    One definition, because chunking depends on these ids not moving: a later
+    `--limit` must name the SAME units the earlier one did, or raising it would
+    re-run work the ledger thinks is done.
+    """
+    return f"conduit-{index:02d}"
+
+
+def ledger_key(index: int, arm: str) -> str:
+    return f"{unit_id(index)}:{arm}"
+
+
 def missing_for_verdict(ledger: Ledger) -> int:
     """Runs still owed before the pre-registered reading may be taken."""
     done = sum(
         1
         for arm in ("A", "B")
         for i in range(1, TARGET_N_PER_ARM + 1)
-        if ledger.is_done(f"conduit-{i:02d}:{arm}")
+        if ledger.is_done(ledger_key(i, arm))
     )
     return max(0, TARGET_N_PER_ARM * 2 - done)
 
@@ -621,7 +635,7 @@ def render_progress(ledger: Ledger) -> str:
     failures = attempts_per_key(LEDGER_PATH)
     lines = ["batch progress (counts only; outcomes are not shown before the batch completes)", ""]
     for arm in ("A", "B"):
-        keys = [f"conduit-{i:02d}:{arm}" for i in range(1, TARGET_N_PER_ARM + 1)]
+        keys = [ledger_key(i, arm) for i in range(1, TARGET_N_PER_ARM + 1)]
         done = sum(1 for key in keys if ledger.is_done(key))
         retrying = sum(1 for key in keys if not ledger.is_done(key) and failures[key])
         label = "arm A (static)" if arm == "A" else "arm B (archy)"
@@ -641,9 +655,6 @@ def render_progress(ledger: Ledger) -> str:
 
 def summarize(rows: list[dict]) -> str:
     """Score the ledger through the pre-registered reading, never by eye."""
-    sys.path.append(str(REPO_ROOT / "bench"))
-    import greenfield_prereg
-
     arm_a = greenfield_prereg.summarize_rows(rows, "A")
     arm_b = greenfield_prereg.summarize_rows(rows, "B")
     return greenfield_prereg.render(arm_a, arm_b, greenfield_prereg.verdict(arm_a, arm_b))
@@ -728,7 +739,7 @@ def main() -> int:
         )
     # Interleaved, so a batch stopped halfway is balanced rather than being all
     # of one arm. An unbalanced partial batch cannot be read at all.
-    units = [(f"conduit-{i:02d}", arm) for i in range(1, args.limit + 1) for arm in arms]
+    units = [(unit_id(i), arm) for i in range(1, args.limit + 1) for arm in arms]
 
     if args.dry_run:
         pending = [u for u in units if not ledger.is_done(f"{u[0]}:{u[1]}")]
