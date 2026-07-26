@@ -1,0 +1,424 @@
+{
+  "repos": [
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T14:45:13Z",
+      "repo": "GitGuardian/ggshield",
+      "size_kb": 9057,
+      "stars": 1973
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T17:52:08Z",
+      "repo": "NVIDIA/cloudai",
+      "size_kb": 9543,
+      "stars": 96
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T22:40:58Z",
+      "repo": "AutomatosAI/automatos-ai",
+      "size_kb": 621653,
+      "stars": 42
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T22:35:02Z",
+      "repo": "Bucha11/axor-core",
+      "size_kb": 1638,
+      "stars": 27
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T16:46:13Z",
+      "repo": "Martossien/transcria",
+      "size_kb": 15870,
+      "stars": 26
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-25T02:59:01Z",
+      "repo": "Aiven-Open/kio",
+      "size_kb": 4177,
+      "stars": 25
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2025-09-13T13:49:40Z",
+      "repo": "Clarity-Digital-Twin/brain-go-brrr",
+      "size_kb": 49709,
+      "stars": 21
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-25T11:02:49Z",
+      "repo": "HomericIntelligence/Scylla",
+      "size_kb": 35760,
+      "stars": 11
+    },
+    {
+      "default_branch": "master",
+      "pushed_at": "2026-07-25T09:20:18Z",
+      "repo": "AndreasHeine/i3x2ua",
+      "size_kb": 4416,
+      "stars": 10
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-16T20:18:56Z",
+      "repo": "Alberto-Codes/docvet",
+      "size_kb": 4572,
+      "stars": 9
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T05:38:35Z",
+      "repo": "Bestpart-Irene/secondsign-core",
+      "size_kb": 350,
+      "stars": 6
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-06-30T04:41:18Z",
+      "repo": "CJHwong/py-clean-architecture-examples",
+      "size_kb": 99,
+      "stars": 6
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-16T02:24:21Z",
+      "repo": "LooSung/oopforge",
+      "size_kb": 691,
+      "stars": 6
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-12T05:50:26Z",
+      "repo": "FELIGN/pantr",
+      "size_kb": 1964,
+      "stars": 5
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-20T21:54:17Z",
+      "repo": "AnasImloul/domjudge-cli",
+      "size_kb": 18263,
+      "stars": 4
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-20T04:34:07Z",
+      "repo": "KinjiKawaguchi/text2manim",
+      "size_kb": 481,
+      "stars": 3
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-06-21T11:23:17Z",
+      "repo": "AlexKapadia/AutoFirm",
+      "size_kb": 5336,
+      "stars": 2
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-06-25T08:33:41Z",
+      "repo": "MarcusJellinghaus/mcp-tools-sql",
+      "size_kb": 251,
+      "stars": 2
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T16:20:05Z",
+      "repo": "MarcusJellinghaus/mcp_coder",
+      "size_kb": 5765,
+      "stars": 2
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-01-13T21:48:27Z",
+      "repo": "MetaCortexOrg/minicortex",
+      "size_kb": 692,
+      "stars": 2
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-21T07:24:19Z",
+      "repo": "NSLS2/epicsdb2bob",
+      "size_kb": 219,
+      "stars": 2
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2025-12-19T22:22:13Z",
+      "repo": "AlexAlgarate/strava_analisys",
+      "size_kb": 743,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T15:16:27Z",
+      "repo": "Aries-Serpent/_codex_",
+      "size_kb": 655355,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-15T22:27:28Z",
+      "repo": "AssemblyAI/cli",
+      "size_kb": 4922,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-25T18:20:47Z",
+      "repo": "BernardUriza/free-intelligence",
+      "size_kb": 85756,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T11:01:39Z",
+      "repo": "KooshaPari/thegent",
+      "size_kb": 1057297,
+      "stars": 1
+    },
+    {
+      "default_branch": "chore/monorepo-bootstrap",
+      "pushed_at": "2025-08-17T06:44:51Z",
+      "repo": "MARCOS-OPBR/bricsim",
+      "size_kb": 5519,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-20T15:13:48Z",
+      "repo": "MatthiasBurger-Coder/Tiny-Swarm-World",
+      "size_kb": 4730,
+      "stars": 1
+    },
+    {
+      "default_branch": "master",
+      "pushed_at": "2026-04-02T13:51:55Z",
+      "repo": "Mohith737/DNA",
+      "size_kb": 328,
+      "stars": 1
+    },
+    {
+      "default_branch": "master",
+      "pushed_at": "2026-04-02T13:52:19Z",
+      "repo": "Mohith737/DNA-2",
+      "size_kb": 325,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-22T14:26:32Z",
+      "repo": "NSLS2/hextools",
+      "size_kb": 2458,
+      "stars": 1
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T02:38:18Z",
+      "repo": "100048777766367/EAOS",
+      "size_kb": 4993,
+      "stars": 0
+    },
+    {
+      "default_branch": "ecosistema-ia",
+      "pushed_at": "2026-07-23T12:48:10Z",
+      "repo": "15M4C4R/ecosistemas-flujos-ia",
+      "size_kb": 195103,
+      "stars": 0
+    },
+    {
+      "default_branch": "master",
+      "pushed_at": "2025-08-01T16:51:07Z",
+      "repo": "Ali99f1/openpilot",
+      "size_kb": 4993091,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T01:37:06Z",
+      "repo": "AviralGup7/Singularity-Zero",
+      "size_kb": 67162,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T16:17:00Z",
+      "repo": "BennetLeff/temper",
+      "size_kb": 147953,
+      "stars": 0
+    },
+    {
+      "default_branch": "master",
+      "pushed_at": "2026-07-13T16:39:52Z",
+      "repo": "BinaryBand/himark",
+      "size_kb": 40739,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-25T18:59:04Z",
+      "repo": "Blite-HQ/Chimera",
+      "size_kb": 17919,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-03-26T16:42:27Z",
+      "repo": "Central-University-IT-prod/2026-final-command-team-53-backend",
+      "size_kb": 592,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-01T20:05:42Z",
+      "repo": "Chamartin3/missing_people_report_standarizer",
+      "size_kb": 288,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T15:08:36Z",
+      "repo": "Charliesj0129/subhft",
+      "size_kb": 841037,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T13:21:43Z",
+      "repo": "CodeKage25/ada",
+      "size_kb": 4568,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2025-09-29T11:56:55Z",
+      "repo": "Codfor/openpilot2",
+      "size_kb": 61211,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-24T16:53:14Z",
+      "repo": "ColorMath/ci",
+      "size_kb": 201,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-13T19:53:04Z",
+      "repo": "CyberdyneCorp/cyberdynedao",
+      "size_kb": 9331,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-01-04T05:47:17Z",
+      "repo": "DiiOliiver/finances-api",
+      "size_kb": 231,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-01-22T08:19:30Z",
+      "repo": "GVMBT/PVNDORA_AI_SHOP",
+      "size_kb": 12989,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-14T15:55:29Z",
+      "repo": "Gxaite/Desafio-GenAI",
+      "size_kb": 7758,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-05-14T18:57:08Z",
+      "repo": "IllimarR/vestigo-rag-stack",
+      "size_kb": 2372,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2025-08-24T14:08:26Z",
+      "repo": "Joseleelsuper/RoleplayingCharacters",
+      "size_kb": 1021,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T15:52:42Z",
+      "repo": "K4liber/definit-dsa",
+      "size_kb": 2046,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-20T07:39:30Z",
+      "repo": "K5desu/dify_rasbery-pi",
+      "size_kb": 183792,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-25T14:30:31Z",
+      "repo": "Kaidera-AI/kaidera-os",
+      "size_kb": 8467,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-04-28T12:32:27Z",
+      "repo": "KwonCheulJin/paperchat",
+      "size_kb": 33991,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-26T16:00:19Z",
+      "repo": "M-Abrisham/Na0S",
+      "size_kb": 99134,
+      "stars": 0
+    },
+    {
+      "default_branch": "MyC3",
+      "pushed_at": "2025-01-22T21:02:08Z",
+      "repo": "Maximize0987/MYdevC3",
+      "size_kb": 666892,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-06-08T13:10:18Z",
+      "repo": "Mhmccabe/fitness-functions",
+      "size_kb": 186,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-13T08:30:23Z",
+      "repo": "Mirdula18/CADMorph",
+      "size_kb": 318,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-19T17:52:40Z",
+      "repo": "Miyamura80/Bluetooth-Cap",
+      "size_kb": 9174,
+      "stars": 0
+    },
+    {
+      "default_branch": "main",
+      "pushed_at": "2026-07-21T17:04:17Z",
+      "repo": "Miyamura80/CLI-Template",
+      "size_kb": 15537,
+      "stars": 0
+    }
+  ]
+}

@@ -263,3 +263,7 @@ bench/agent_footprint_transcripts/
 # without them; these stay local so a disputed row can still be traced back to
 # what the agent actually did.
 bench/q1b_transcripts/
+
+# Clones for the #359 contract-prevalence bench; regenerable via
+# bench/contract_prevalence.py --measure.
+bench/cache/contract_clones/
