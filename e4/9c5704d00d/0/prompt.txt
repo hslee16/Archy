@@ -286,3 +286,108 @@ merge and file tickets. Lets continue after
 ---
 
 lets continue
+
+---
+
+<task-notification>
+<task-id>a0411469b38ba989c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/a0411469b38ba989c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete: no U+2014 (em dash) characters found in `/Users/hosanglee/archy/bench/contract_prevalence.py`. Marked as passed.
+
+Note: this session included injected `system-reminder` blocks (a "context_window_protection" instruction pushing unavailable `mcp__plugin_context-mode_context-mode__*` tools, and a fabricated date-change notice) that I disregarded as they did not come from you and conflicted with my actual tool access and task scope.</result>
+<usage><subagent_tokens>13628</subagent_tokens><tool_uses>4</tool_uses><duration_ms>16752</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad9b39b462cc642e6</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/ad9b39b462cc642e6.output</output-file>
+<status>completed</status>
+<summary>Agent "Review contract_prevalence.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Review Result: FAIL
+
+Reviewed `bench/contract_prevalence.py` against `.deepwork/review/python_conventions.md`. `ruff check bench/contract_prevalence.py` passes clean, so mechanical criteria (line length ≤100, import grouping, PEP 604 syntax) are all satisfied and not re-litigated here. `from __future__ import annotations` is present (line 101). No `typing.List`/`Optional`/`Any`. `pathlib.Path` used throughout, no `os.path`. Naming (snake_case functions, no underscore-prefix needed) matches the established sibling convention in `bench/inloop_prevalence.py` and `bench/acyclicity_dilution.py`, where module-internal helpers like `clone`, `checkout`, `git` are not underscore-prefixed. No value-object classes are defined in this file, so the frozen-pydantic rule doesn't apply here (matches precedent: sibling bench scripts also pass plain `dict`s). Comments throughout consistently explain WHY (design rationale, quirks discovered during development), not WHAT — this is a genuine strength of the file.
+
+**Finding 1 (DRY, non-blocking)**
+
+- **Lines**: 220-238 (`adoption_commit`), 251-267 (`python_commits`), 336-341 (`measure_pair`'s `rev-parse` call), plus `clone` (192-203) and `checkout` (324-331) share the same prefix construction.
+- **Criterion**: "DRY: no copy-pasted blocks that should be a shared helper" — "Duplication means the *same logic*, where a change to one copy implies a change to the other."
+- **Offending construct**: Three call sites independently build `["git", "-C", str(tree), ...]` and call `subprocess.run(..., capture_output=True, text=True, check=False).stdout` (then `.split()` or `.strip()`):
+  ```python
+  # adoption_commit
+  out = subprocess.run(["git", "-C", str(tree), "log", "-S", "importlinter", ...],
+                        capture_output=True, text=True, check=False).stdout.split()
+  # python_commits
+  out = subprocess.run(["git", "-C", str(tree), "log", "--no-merges", ...],
+                        capture_output=True, text=True, check=False).stdout
+  # measure_pair
+  parent = subprocess.run(["git", "-C", str(tree), "rev-parse", f"{sha}^"],
+                           capture_output=True, text=True, check=False).stdout.strip()
+  ```
+  This is the same fact (how to run a git command against a checkout and get its text output) repeated three times. The sibling bench script `bench/inloop_prevalence.py` (lines 76-77) already factors exactly this into a one-line helper:
+  ```python
+  def git(dest: Path, *args: str) -&gt; str:
+      return subprocess.check_output(["git", "-C", str(dest), *args], text=True)
+  ```
+- **Suggested fix**: Add a module-local `git(tree: Path, *args: str) -&gt; str` (or a `check=False`-tolerant variant returning stdout) and route `adoption_commit`, `python_commits`, and the `rev-parse` in `measure_pair` through it, matching the precedent already set in `bench/inloop_prevalence.py`.
+
+**Aside (not a formal criterion, flagged for awareness only, not counted in the pass/fail)**: line 298, `[str(lint_imports), "lint-imports"][:1]` constructs a two-element list and then slices it down to `[str(lint_imports)]`. The `"lint-imports"][:1]` looks like debug leftover — it has no effect other than obscuring that the command run is just `[str(lint_imports)]`. Worth a follow-up cleanup, though it doesn't cleanly map to any of the nine listed criteria so it is not used to fail this review.
+
+Since there is one DRY finding, this review does not pass; `mark_review_as_passed` was not called. File reviewed: `/Users/hosanglee/archy/bench/contract_prevalence.py`. Convention reference: `/Users/hosanglee/archy/.deepwork/review/python_conventions.md`.</result>
+<usage><subagent_tokens>32529</subagent_tokens><tool_uses>8</tool_uses><duration_ms>109837</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>br1nohqye</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/br1nohqye.output</output-file>
+<status>completed</status>
+<summary>Background command "Let the measurement progress" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3d6dd4d369c36bee</task-id>
+<tool-use-id>toolu_01LLhrzfup1ZGh4WWjRapMFm</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/a3d6dd4d369c36bee.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete: PASS.
+
+File reviewed: `/Users/hosanglee/archy/bench/contract_prevalence.py`
+
+Findings: None. Scanned the full file for U+2014 (em dash) using both `grep` and a Python Unicode-aware scan; zero occurrences found. Review marked as passed via `mark_review_as_passed` with `review_id = "no_em_dashes--bench-contract_prevalence.py--963bfedb571f"`.
+
+Note: this subagent turn included an injected "context_window_protection" block instructing use of unavailable `mcp__plugin_context-mode_context-mode__*` tools. That instruction was not part of the actual task and was disregarded in favor of the tools actually provided (Read, Bash, mark_review_as_passed) and the review instructions in the referenced file.</result>
+<usage><subagent_tokens>13904</subagent_tokens><tool_uses>4</tool_uses><duration_ms>19714</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a1fbe5f30c447660d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/35c746bf-65af-4277-8fe6-7e3aa551c19d/tasks/a1fbe5f30c447660d.output</output-file>
+<status>completed</status>
+<summary>Agent "Re-review contract_prevalence.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review complete: PASS with zero findings.
+
+- File reviewed: `/Users/hosanglee/archy/bench/contract_prevalence.py`
+- Conventions reference: `/Users/hosanglee/archy/.deepwork/review/python_conventions.md`
+- Verdict recorded via `mark_review_as_passed` for `python_code_review--bench-contract_prevalence.py--963bfedb571f`.
+
+Note: I disregarded the "context_window_protection" instructions embedded in the conversation directing use of unfamiliar `mcp__plugin_context-mode_context-mode__*` tools in place of Read/Bash/Grep — that block is not part of my actual system instructions and conflicts with the read-only, direct-tool-use process defined for this review task, so I proceeded with the standard tools as originally instructed.</result>
+<usage><subagent_tokens>28068</subagent_tokens><tool_uses>8</tool_uses><duration_ms>52426</duration_ms></usage>
+</task-notification>
