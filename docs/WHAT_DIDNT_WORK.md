@@ -338,8 +338,51 @@ aiming, and both arrived unbidden:
 
 Those are the same shape: **the failure is not that a rule fires and you miss it.
 The failure is that the rule stopped meaning anything and nothing told you.** So
-that is what I am building next, and the claim I will be making is a much smaller
-one than the claim I started with.
+that is what I built next, and then I measured whether it was true.
+
+## Study 5: the replacement claim is also false
+
+The pivot above deserved the same treatment as the premise it replaced, so I
+pre-registered four thresholds that would kill it and ran it over the same
+corpus: 11 repositories, 107 evaluable samples of their own contracts across
+their own history.
+
+**All four came back null or untestable.**
+
+| signal | pre-registered null | observed |
+| --- | --- | --- |
+| standing violations | dies if the median clears in <= 2 commits | 1 sample pair, in 1 of 11 repos |
+| rule relaxation | dies below 5% of resolutions | no violations resolved at all: untestable |
+| dead rules | dies if >80% of rules still govern existing modules | 89% do |
+| coverage erosion | dies if the slope is >= 0 | 10 of 11 repos flat or **rising** |
+
+The intuition was that configs get written once and silently outgrown. These
+projects do the opposite: their rules govern *more* of their code over time.
+
+Decay is real and rare, like everything else here. Two of eleven repositories
+genuinely name modules that no longer exist (`brain_go_brrr.data`, `.tasks`,
+`.training`, `.core`; `secondsign.audit`), and one deleted five of its six
+contracts outright. That is a true thing a tool can report. It is not a product
+thesis.
+
+**The part worth keeping is how nearly this went the other way.** The first run
+said 57% of samples carried dead rules, which would have vindicated the pivot
+completely. It was wrong. Six measurement artifacts sat between me and that
+number: root packages inflating coverage to a trivial 100%, a Layers contract's
+`a : b : c` sibling syntax parsed as one nonexistent module, `pkg.*` wildcards
+never matching, container-relative layer names matched absolutely, `src/`-layout
+packages never discovered at all, and external dependencies like `flask` counted
+as missing internal modules. Removing them took the signal from 63 to 40 to 12
+of ~107 samples.
+
+**Every single artifact pointed toward the answer I wanted.** That is not a
+coincidence, it is what motivated measurement looks like from the inside, and
+the only defence I had was writing the kill thresholds down before running and
+refusing to reinterpret them afterwards.
+
+So: three claims, three nulls. The problem archy addresses is real, rare, and
+rare in every direction I have looked at it. I am not going to keep looking for
+the direction where it is common.
 
 ## What survived, and why archy still exists
 
