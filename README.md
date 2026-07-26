@@ -330,7 +330,7 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 |---|---|
 | `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. Pass `record=True` to record a start-of-session baseline (replaces the removed `archy_record_baseline`). `view="history"` returns the recent score history from `.archy/history.jsonl` (up to `last_n` rows, oldest-first, for comparing deltas over time; replaces the removed `archy_trend`). |
 | `archy_cycles` | Find import cycles. |
-| `archy_check` | Run direct-edge layer rules from `archy.yaml`. Pass `contracts=True` to also run the transitive import-linter contracts (Layers, Forbidden, Independence, Protected, AcyclicSiblings; stricter than the direct edges), nested under the `contracts` field (replaces the removed `archy_contracts`; requires `archy[contracts]`, and degrades to `available=false` with an advisory if the extra is absent). Contracts are skipped when no `archy.yaml` is found (you get a `CheckErrorPayload` first). |
+| `archy_check` | Run direct-edge layer rules from `archy.yaml`. Pass `contracts=True` to also run the transitive import-linter contracts (Layers, Forbidden, Independence, Protected, AcyclicSiblings; stricter than the direct edges), nested under the `contracts` field (replaces the removed `archy_contracts`; requires `archy[contracts]`, and degrades to `available=false` with an advisory if the extra is absent). Contracts are skipped when no `archy.yaml` is found (you get a `CheckErrorPayload` first). Always returns `coverage`: how many modules and import edges the rules actually reach, so `passed=true` can be told apart from a config that governs almost nothing. |
 | `archy_impact` | Given changed file paths, return what they affect. `mode="blast"` (**default**) returns the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. `mode="affected"` (replaces the removed `archy_affected`) is the CI-shaped lookup instead: modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes; `test_filter` overrides pytest test detection with a recursive glob. `co_change=true` (blast mode, opt-in) adds a `co_changed` list: modules that historically co-change with the edit in git but have no import/call edge to it, so the structural blast radius misses them (`archy coupling` scoped to your edit; source-only, best-effort, the only path that reads git). |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. Also returns an `invariant_brief` (declared layers, forbidden edges, acyclic invariant, baseline score, load-bearing modules) to read before the first edit. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations, per-component score deltas, and a risk-weighted `summary` whose items carry a `prompt` reframing each delta as a judgment question ("new cycle a -> b; intended, or invert an edge?"). |
@@ -468,6 +468,18 @@ roots:
 Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
 
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
+
+**Coverage.** Every `check` reports how much of your code the rules actually reach, on a pass as well as a failure:
+
+```console
+$ archy check .
+# No layer violations (config: archy.yaml).
+#   layer coverage: 9 of 42 modules (21%), 16 of 117 internal edges (14%); 33 module(s) match no layer (`archy check --show-unlayered`)
+```
+
+That line exists because **a rule set that cannot fire is indistinguishable from a clean codebase**: without it, a config governing 14% of your import edges prints the same "No layer violations" as one governing all of them. The edge percentage is the one to watch, since a config can put most modules in layers while ruling almost none of the edges between them. Coverage is scoped to the root packages your patterns name, so scripts and benchmarks sitting beside your package are counted separately rather than dragging the number down. `--show-unlayered` lists the modules no layer matches.
+
+The numbers above are archy's own, and they are not flattering. They are printed here because the alternative is not knowing.
 
 archy enforces its own architecture this way; see [`archy.yaml`](archy.yaml) at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
 

@@ -94,6 +94,117 @@ class SdpViolation(BaseModel):
     lines: tuple[int, ...]
 
 
+class LayerCoverage(BaseModel):
+    """How much of a codebase the declared layers actually reach.
+
+    Exists because a ruleset that cannot fire is indistinguishable from a clean
+    codebase: `check` prints "No layer violations" either way. That is not
+    hypothetical. archy's own `archy.yaml` governs 9 of 42 modules and 16 of 117
+    internal edges while reporting a clean pass, and a real violation
+    (`archy.diff -> archy.layers`) sat on the main branch under it (#362). The
+    same failure killed two shipped bench configs whose patterns matched one
+    empty `__init__.py` instead of a 338-module package (#355).
+
+    Three numbers, because the loose one flatters the config:
+
+    - `modules_matched`: in at least one layer. The weakest reading.
+    - `modules_in_ruled_layer`: in a layer that some `forbid` rule names. A
+      layer no rule mentions cannot produce a violation, so a module in one is
+      covered on paper only.
+    - `edges_governed`: import edges whose BOTH endpoints are layered, and so
+      could be subject to a rule. This is the honest metric: a config can put
+      90% of modules in layers while ruling almost none of the edges between
+      them.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    modules_total: int
+    modules_matched: int
+    modules_in_ruled_layer: int
+    edges_total: int
+    edges_governed: int
+    unlayered_modules: tuple[str, ...]
+    # Modules the scan found OUTSIDE every root package the config names, e.g.
+    # `bench/` scripts and top-level tooling sitting beside the package. Held
+    # apart from the ratios on purpose: counting them would make any project
+    # with scripts beside its package look uncovered, which is a fact about the
+    # scan path and not about the config. Reported so the exclusion is visible.
+    modules_outside_declared_roots: int = 0
+
+    @property
+    def module_ratio(self) -> float:
+        return self.modules_matched / self.modules_total if self.modules_total else 1.0
+
+    @property
+    def edge_ratio(self) -> float:
+        return self.edges_governed / self.edges_total if self.edges_total else 1.0
+
+
+def governed_roots(config: LayerConfig) -> frozenset[str]:
+    """The top-level packages the config's LAYER PATTERNS talk about.
+
+    A pattern is a dotted-name glob rooted at a real package (`_validate_layer_pattern`
+    enforces that), so its first segment names the namespace the author intended
+    to govern.
+
+    NOT `LayerConfig.roots`, despite the name proximity. That field declares
+    extra PEP 420 scan roots so the graph builder can find namespace packages at
+    all; this function asks which namespaces the rules claim authority over.
+    Neither reads the other.
+    """
+    return frozenset(pattern.split(".")[0] for layer in config.layers for pattern in layer.patterns)
+
+
+def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
+    """Measure the reach of `config`'s layers over `graph`.
+
+    Scoped to the root packages the config names, NOT to everything the scan
+    happened to reach. `archy check .` on this repository walks `bench/` too,
+    and counting those scripts would report 7% coverage for a config that never
+    claimed to govern them. The interpretable question is "of the code you said
+    you were governing, how much do the rules reach", and modules outside those
+    roots are counted separately rather than silently dropped.
+
+    External nodes are excluded: they are not the user's code and no layer rule
+    is expected to name them.
+    """
+    ruled_layers = {rule.from_layer for rule in config.forbid} | {
+        rule.to_layer for rule in config.forbid
+    }
+    roots = governed_roots(config)
+    layer_of: dict[str, str | None] = {}
+    outside = 0
+    for node, data in graph.nodes(data=True):
+        if data.get("external"):
+            continue
+        if roots and node.split(".")[0] not in roots:
+            outside += 1
+            continue
+        layer_of[node] = match_layer(node, config.layers)
+
+    matched = [node for node, layer in layer_of.items() if layer is not None]
+    in_ruled = [node for node, layer in layer_of.items() if layer in ruled_layers]
+    unlayered = sorted(node for node, layer in layer_of.items() if layer is None)
+
+    internal_edges = [(src, dst) for src, dst in graph.edges if src in layer_of and dst in layer_of]
+    governed = [
+        (src, dst)
+        for src, dst in internal_edges
+        if layer_of[src] is not None and layer_of[dst] is not None
+    ]
+
+    return LayerCoverage(
+        modules_total=len(layer_of),
+        modules_matched=len(matched),
+        modules_in_ruled_layer=len(in_ruled),
+        edges_total=len(internal_edges),
+        edges_governed=len(governed),
+        unlayered_modules=tuple(unlayered),
+        modules_outside_declared_roots=outside,
+    )
+
+
 class LayerConfigError(Exception):
     """Raised when an archy.yaml file is missing, malformed, or self-inconsistent."""
 
