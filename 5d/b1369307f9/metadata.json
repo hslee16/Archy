@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "5db1369307f9",
+  "strategy": "manual-commit",
+  "branch": "alee/q1b-pilot-356",
+  "checkpoints_count": 19,
+  "files_touched": [
+    "bench/q1b_results.jsonl",
+    "bench/q1b_run.py",
+    "bench/q1b_score.py",
+    "tests/test_q1b_run.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5d/b1369307f9/0/metadata.json",
+      "transcript": "/5d/b1369307f9/0/full.jsonl",
+      "content_hash": "/5d/b1369307f9/0/content_hash.txt",
+      "prompt": "/5d/b1369307f9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 330,
+    "cache_creation_tokens": 2199784,
+    "cache_read_tokens": 52357459,
+    "output_tokens": 99989,
+    "api_call_count": 177
+  }
+}
