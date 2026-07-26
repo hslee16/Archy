@@ -106,8 +106,16 @@ def test_check_passed_respects_the_layer_presence_floor(tmp_path: Path):
     assert isinstance(payload, CheckPayload)
     assert payload.violations == ()
     assert payload.passed is False
-    assert payload.coverage is not None
-    assert payload.coverage.layers_present == 0
+
+    # Asserted on the SERIALIZED form, not attributes. FastMCP sends
+    # `model_dump()`, which drops plain properties, so an attribute-only
+    # assertion passed while the agent-facing payload carried no reason at all.
+    dumped = payload.model_dump()
+    assert dumped["passed"] is False
+    assert dumped["presence_fails"] is True
+    assert dumped["min_layers_present"] == 2
+    assert dumped["coverage"]["layers_present"] == 0
+    assert sorted(dumped["coverage"]["empty_layers"]) == ["routes", "services"]
 
 
 def test_create_server_registers_expected_tools():

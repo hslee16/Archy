@@ -13,7 +13,7 @@ from pathlib import Path
 
 import networkx as nx
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 
 class LayerSpec(BaseModel):
@@ -153,24 +153,34 @@ class LayerCoverage(BaseModel):
     # declared roots match nothing in the tree governs nothing, and saying it
     # governs everything is worse than saying nothing at all. Found by pointing
     # archy at a single-module project whose config named four layer packages.
+    # `computed_field`, not a bare property: MCP tool returns are serialized with
+    # `model_dump()`, which silently drops properties. Without this an agent
+    # receiving `passed=false` for a presence shortfall got a coverage object
+    # with nothing in it explaining why, which is the "indistinguishable from a
+    # bug in archy" state this class exists to prevent, reproduced on the wire.
+    @computed_field
     @property
     def module_ratio(self) -> float:
         return self.modules_matched / self.modules_total if self.modules_total else 0.0
 
+    @computed_field
     @property
     def edge_ratio(self) -> float:
         return self.edges_governed / self.edges_total if self.edges_total else 0.0
 
+    @computed_field
     @property
     def governs_nothing(self) -> bool:
         """No module in the tree falls under any root the config names."""
         return self.modules_total == 0
 
+    @computed_field
     @property
     def empty_layers(self) -> tuple[str, ...]:
         """Declared layers that matched no module at all."""
         return tuple(name for name, size in self.layer_sizes if size == 0)
 
+    @computed_field
     @property
     def layers_present(self) -> int:
         return sum(1 for _, size in self.layer_sizes if size)

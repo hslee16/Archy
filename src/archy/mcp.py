@@ -314,6 +314,11 @@ class CheckPayload(BaseModel):
     # whether the config could have said anything (#362). Without it, a config
     # governing 14% of edges is indistinguishable from a clean codebase.
     coverage: LayerCoverage | None = None
+    # Why the gate failed, on the wire. `passed=false` with an empty
+    # `violations` list is not actionable on its own, and an agent correcting
+    # its own output needs the reason, not just the verdict.
+    presence_fails: bool = False
+    min_layers_present: int | None = None
     # Nested only when archy_check(contracts=True) additionally runs
     # import-linter (#268): the transitive contract results that used to be the
     # separate archy_contracts tool. None when contracts were not requested.
@@ -1145,6 +1150,8 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
         sdp_violations=tuple(sdp_violations),
         passed=not violations and not sdp_fails_gate and not presence_fails,
         coverage=coverage,
+        presence_fails=presence_fails,
+        min_layers_present=config.min_layers_present,
     )
 
 
