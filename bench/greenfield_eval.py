@@ -50,9 +50,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -60,7 +63,13 @@ from pydantic import BaseModel, ConfigDict
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 from archy.graph import DEFAULT_IGNORED_DIRS, build_graph  # noqa: E402
-from archy.layers import compute_coverage, find_violations, load_config  # noqa: E402
+from archy.layers import (  # noqa: E402
+    LayerConfig,
+    LayerSpec,
+    compute_coverage,
+    find_violations,
+    load_config,
+)
 
 CONDUIT_CONFIG = REPO_ROOT / "bench/fixtures/conduit_clean/archy.yaml"
 SUITE_DIR = REPO_ROOT / "bench/cache/realworld_hurl"
@@ -147,6 +156,42 @@ def fetch_suite() -> int:
     return 0 if fetched else 1
 
 
+def nesting_tolerant_config(config: LayerConfig, modules: Sequence[str]) -> LayerConfig:
+    """Expand each layer alias to the package prefixes it actually appears under.
+
+    THE PAPER CHECKS FOR A DIRECTORY; ARCHY MATCHES A DOTTED NAME. A tree whose
+    root is a package (`conduit/__init__.py`, `app/`, `src/app/`) yields modules
+    like `conduit.services.user`, and the alias `services.**` does not match it.
+    Left alone, a correctly-layered generation reports 0 of 4 layers and scores
+    NON-COMPLIANT, in both arms, with any arm-difference in nesting habit
+    reading as an architecture effect.
+
+    The nested pattern cannot be written in the config: archy rejects a leading
+    `**` at load, deliberately (the contracts fallback derives the root package
+    from the first segment). So the prefixes are discovered from the tree under
+    test and the valid `<prefix>.<alias>.**` form is generated per prefix.
+
+    Alias matching is on whole dotted segments, so `myservices.x` does not count
+    as a `services` directory.
+    """
+    expanded: list[LayerSpec] = []
+    for layer in config.layers:
+        patterns: list[str] = list(layer.patterns)
+        for pattern in layer.patterns:
+            alias = pattern.split(".", 1)[0]
+            for module in modules:
+                segments = module.split(".")
+                if alias not in segments[1:]:
+                    # segments[0] is already covered by the unnested `alias.**`.
+                    continue
+                prefix = ".".join(segments[: segments.index(alias)])
+                candidate = f"{prefix}.{alias}.**"
+                if candidate not in patterns:
+                    patterns.append(candidate)
+        expanded.append(layer.model_copy(update={"patterns": tuple(patterns)}))
+    return config.model_copy(update={"layers": tuple(expanded)})
+
+
 def structural_verdict(tree: Path) -> StructuralVerdict:
     """The paper's architecture verifier, as archy expresses it.
 
@@ -170,6 +215,11 @@ def structural_verdict(tree: Path) -> StructuralVerdict:
     except Exception as exc:
         return StructuralVerdict(evaluable=False, reason=f"{type(exc).__name__}: {exc}")
 
+    # `build_graph` returns a networkx DiGraph whose nodes are module qualnames.
+    # An empty graph is a real state, not a failure: the degenerate single-module
+    # solution the paper describes yields one, and it must read as "0 layers
+    # present" rather than raising.
+    config = nesting_tolerant_config(config, sorted(graph.nodes))
     violations = find_violations(graph, config)
     coverage = compute_coverage(graph, config)
     floor = config.min_layers_present or 0
@@ -186,10 +236,13 @@ def structural_verdict(tree: Path) -> StructuralVerdict:
 
 
 def _server_responds(host: str, timeout: float = 5.0) -> bool:
-    """Is anything listening? Any HTTP status counts, including 404 and 500.
+    """Is anything listening, as seen from *this* process? Any HTTP status
+    counts, including 404 and 500.
 
     The question is "did the server come up", not "is it correct", so only a
-    transport-level failure counts as absent.
+    transport-level failure counts as absent. Note this answers the question
+    from the host's network, which is NOT where the suite runs; see
+    `_suite_can_reach`.
     """
     try:
         with urllib.request.urlopen(f"{host.rstrip('/')}/api/tags", timeout=timeout):
@@ -200,13 +253,81 @@ def _server_responds(host: str, timeout: float = 5.0) -> bool:
         return False
 
 
+def container_host(host: str) -> str:
+    """Rewrite a host-local URL into one a container can resolve.
+
+    `localhost` inside a container is the container, so the suite would test
+    itself and find nothing. Docker publishes the host as
+    `host.docker.internal`, which `--add-host=...:host-gateway` guarantees on
+    every platform rather than only where the daemon happens to inject it.
+    """
+    parsed = urllib.parse.urlsplit(host.rstrip("/"))
+    if parsed.hostname not in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return host.rstrip("/")
+    netloc = "host.docker.internal" + (f":{parsed.port}" if parsed.port else "")
+    return urllib.parse.urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+
+
+def _hurl_cmd(mount: Path, host: str, uid: str, glob: str) -> list[str]:
+    """The one place the container invocation is spelled out.
+
+    `--add-host` rather than `--network host`: Docker Desktop on macOS accepts
+    `--network host` and then cannot reach the host at all, which is the worst
+    available behaviour because the suite still *runs* and reports 0 of 13. A
+    correct server measured that way is indistinguishable from one that answers
+    every request wrongly, and both arms would have scored a behavioral zero.
+    Verified 2026-07-26 on Docker Desktop 28.1.1: `--network host` gets
+    connection-refused, `--add-host=host.docker.internal:host-gateway` gets 200.
+    """
+    return [
+        "docker",
+        "run",
+        "--rm",
+        "--add-host=host.docker.internal:host-gateway",
+        "-v",
+        f"{mount}:/suite:ro",
+        HURL_IMAGE,
+        "--test",
+        "--variable",
+        f"host={container_host(host)}",
+        "--variable",
+        f"uid={uid}",
+        "--glob",
+        glob,
+    ]
+
+
+def _suite_can_reach(host: str, timeout: float = 60.0) -> bool:
+    """Probe from inside the container, where the suite actually runs.
+
+    `_server_responds` asks the host's network stack, which answers yes for a
+    server the container cannot see. That gap is not hypothetical: it is exactly
+    the defect this probe was added to close, and it produced `evaluable=true,
+    pass_rate=0.0` against a server that was up and answering.
+
+    Uses the same image, flags and variable as the real run, so it tests the
+    path the suite will take rather than an approximation of it.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "probe.hurl").write_text("GET {{host}}/api/tags\nHTTP *\n", encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                _hurl_cmd(Path(tmp), host, "probe", "/suite/probe.hurl"),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+    return proc.returncode == 0
+
+
 def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
     """Run the RealWorld Hurl suite against a live server.
 
     Runs in Docker so the hurl version is pinned and no local install is needed.
-    `--network host` because the server under test is on the host, not in the
-    container; that is a real portability limit and it is stated rather than
-    hidden (Docker Desktop on macOS honours it for this purpose).
+    The server under test is on the host, so the container reaches it through
+    `host.docker.internal`; see `_hurl_cmd` for why not `--network host`.
 
     TWO VARIABLES, both taken from the project's own `run-api-tests-hurl.sh`
     rather than guessed:
@@ -234,26 +355,18 @@ def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
         # code runs badly, which is the same "unmeasurable is not clean" trap
         # #356 hit from the other direction.
         return BehavioralVerdict(evaluable=False, reason=f"nothing listening at {host}")
+    if not _suite_can_reach(host):
+        # The server is up and the container cannot see it. That is a fact about
+        # this machine's docker networking, not about the generated code, so it
+        # must never reach the ledger as a score of any kind.
+        return BehavioralVerdict(
+            evaluable=False,
+            reason=f"server is up at {host} but the suite container cannot reach it",
+        )
 
     try:
         proc = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--network",
-                "host",
-                "-v",
-                f"{SUITE_DIR}:/suite:ro",
-                HURL_IMAGE,
-                "--test",
-                "--variable",
-                f"host={host.rstrip('/')}",
-                "--variable",
-                f"uid={uid}",
-                "--glob",
-                "/suite/*.hurl",
-            ],
+            _hurl_cmd(SUITE_DIR, host, uid, "/suite/*.hurl"),
             capture_output=True,
             text=True,
             timeout=timeout,
