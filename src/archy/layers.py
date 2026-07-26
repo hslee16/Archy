@@ -132,13 +132,23 @@ class LayerCoverage(BaseModel):
     # scan path and not about the config. Reported so the exclusion is visible.
     modules_outside_declared_roots: int = 0
 
+    # An empty scope reports 0.0, not 1.0. "0 of 0 modules (100%)" is the exact
+    # failure this class exists to prevent, reproduced inside it: a config whose
+    # declared roots match nothing in the tree governs nothing, and saying it
+    # governs everything is worse than saying nothing at all. Found by pointing
+    # archy at a single-module project whose config named four layer packages.
     @property
     def module_ratio(self) -> float:
-        return self.modules_matched / self.modules_total if self.modules_total else 1.0
+        return self.modules_matched / self.modules_total if self.modules_total else 0.0
 
     @property
     def edge_ratio(self) -> float:
-        return self.edges_governed / self.edges_total if self.edges_total else 1.0
+        return self.edges_governed / self.edges_total if self.edges_total else 0.0
+
+    @property
+    def governs_nothing(self) -> bool:
+        """No module in the tree falls under any root the config names."""
+        return self.modules_total == 0
 
 
 def governed_roots(config: LayerConfig) -> frozenset[str]:

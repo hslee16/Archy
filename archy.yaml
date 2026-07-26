@@ -48,3 +48,9 @@ exclude:
   - replay_cache
   - repo_cache
   - cache
+  # Sample source trees for the benches, not archy code. `conduit_clean/violating`
+  # deliberately contains an upward import, which forms a genuine 3-module cycle
+  # (routes -> services -> repositories -> routes). archy's own `cycles --strict`
+  # CI gate found it immediately, which is the gate working correctly on a tree
+  # that is supposed to be broken.
+  - fixtures

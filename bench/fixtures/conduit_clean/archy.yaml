@@ -1,0 +1,50 @@
+# Clean Architecture as specified by the Constraint Decay paper
+# (arxiv:2605.06445, section 3.2 and Appendix E.2), transcribed for archy.
+#
+# TRANSCRIPTION, NOT INFERENCE. Every layer and every forbidden pair below is
+# stated in the task prompt the paper gives its agents:
+#
+#   "split the codebase into four domain layers with strict top-down dependency
+#    direction: routes/handlers, services/use cases, models/entities, and
+#    repository/data access. Each layer must reside in its own directory."
+#
+# That distinction is what makes this config usable as a measurement instrument.
+# #353-#355 had to author intent for repos that declared none, which is a bias
+# the results had to carry; here the corpus supplies it and the measurer only
+# writes it down.
+#
+# RANKS, from Appendix C.1: routes 3, services 2, repositories 1, models 0.
+# A file in a LOWER-rank layer importing from a HIGHER-rank layer is the paper's
+# dependency-direction violation, so all six downward-forbidden pairs are listed.
+#
+# ALIASES: the paper's verifier maps directory names through an alias set
+# ("routes, handlers, routers, views all map to the routes layer") because
+# agents name things differently. archy patterns are dotted-name globs, so the
+# aliases are enumerated per layer.
+#
+# NOT EXPRESSIBLE HERE: the paper's OTHER check, layer PRESENCE (at least 3 of
+# the 4 layers must exist as distinct directories). archy has no such check
+# (#135), so this config states half the paper's compliance definition. A
+# degenerate single-module solution satisfies every rule below by having no
+# layers at all.
+
+layers:
+  routes:
+    modules: ["routes.**", "handlers.**", "routers.**", "views.**", "api.**", "controllers.**"]
+  services:
+    modules: ["services.**", "use_cases.**", "usecases.**", "service.**"]
+  repositories:
+    modules: ["repositories.**", "repository.**", "repos.**", "dao.**", "persistence.**", "data.**"]
+  models:
+    modules: ["models.**", "entities.**", "domain.**", "model.**"]
+
+forbid:
+  # rank 0 (models) must not reach anything above it
+  - {from: models, to: repositories}
+  - {from: models, to: services}
+  - {from: models, to: routes}
+  # rank 1 (repositories) must not reach services or routes
+  - {from: repositories, to: services}
+  - {from: repositories, to: routes}
+  # rank 2 (services) must not reach routes
+  - {from: services, to: routes}

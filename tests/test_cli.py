@@ -128,6 +128,33 @@ def test_check_clean_project_exits_zero(tmp_path: Path):
     assert "No layer violations" in result.output
 
 
+def test_check_reports_coverage_on_a_clean_pass(tmp_path: Path):
+    """A pass is exactly when the reader needs to know the rules could fire."""
+    project = _make_layered_project(tmp_path, with_violation=False)
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 0
+    assert "layer coverage:" in result.output
+
+
+def test_check_says_so_when_the_config_governs_nothing(tmp_path: Path):
+    """The silent-failure case: rules naming a package the tree does not have.
+
+    Previously this printed "0 of 0 modules (100%)", which is the exact failure
+    the coverage line exists to prevent.
+    """
+    project = tmp_path / "proj"
+    (project / "app").mkdir(parents=True)
+    (project / "app" / "__init__.py").write_text("")
+    (project / "app" / "main.py").write_text("x = 1\n")
+    (project / "archy.yaml").write_text(
+        "layers:\n  routes:\n    modules: ['routes.**']\nforbid: []\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 0
+    assert "NO modules under the declared root packages" in result.output
+    assert "100%" not in result.output
+
+
 def test_check_violations_exit_one_and_listed(tmp_path: Path):
     project = _make_layered_project(tmp_path, with_violation=True)
     result = CliRunner().invoke(main, ["check", str(project)])

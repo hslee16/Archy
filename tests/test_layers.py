@@ -367,3 +367,22 @@ def test_coverage_ignores_external_nodes(tmp_path: Path):
 
     assert coverage.modules_total == 1
     assert coverage.modules_outside_declared_roots == 0
+
+
+def test_coverage_of_an_empty_scope_is_zero_not_perfect(tmp_path: Path):
+    """ "0 of 0 modules (100%)" is this class's own failure mode, inside itself.
+
+    Found by pointing a four-layer Clean Architecture config at a single-module
+    project: nothing matched the declared roots, and coverage reported 100%.
+    """
+    config = _cfg(tmp_path, "layers:\n  routes:\n    modules: ['routes.**']\nforbid: []\n")
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["app"])  # nothing under `routes`
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.modules_total == 0
+    assert coverage.module_ratio == 0.0
+    assert coverage.edge_ratio == 0.0
+    assert coverage.governs_nothing is True
+    assert coverage.modules_outside_declared_roots == 1

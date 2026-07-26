@@ -11,11 +11,28 @@
 
 > archy holds the structure you *declared* for a Python codebase (layers, forbidden edges, no cycles, a recorded score baseline) and tells you when an edit breaks it.
 
+## Read this first: I measured the premise, and it was wrong
+
+I built archy after watching coding agents produce changes that passed review and rotted the import graph underneath. Then I measured whether that happens, and **it barely does.**
+
+| measurement | subject | rate |
+|---|---|---|
+| 25 live agent runs on the riskiest SWE-bench tasks | cycles or declared-layer violations | **0%** (95% upper bound 12%) |
+| 1,072 human commits, 11 repos | cycles introduced | **0.5%** per commit |
+| 151 commit pairs in projects that declare an architecture | contract violations | **0.66%** per commit |
+| 107 samples of those same projects over time | rules going stale, coverage eroding | **null on all four pre-registered signals** |
+
+So: the problem is real (I have watched a developer's own architecture rule get broken in the wild), and it is **rare, for agents and humans alike**. "Agents will rot your import graph" is a claim I made and have retracted. Nobody has measured what one occurrence costs, so I cannot argue "rare but expensive" either.
+
+**What that means for the roadmap:** feature work premised on "agents will wreck your architecture" is off the table, because that premise is retracted. archy is maintained, bugs get fixed, and contributions are welcome; it is not being expanded on a thesis that failed its own tests.
+
+The full write-up, including the six measurement artifacts that nearly turned a failed study into a success story, is in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). If you only read one thing here, read that.
+
+What follows describes what archy does, which is unchanged and still true.
+
 ## The failure it catches
 
-I built archy after watching coding agents produce changes that passed review and rotted the import graph underneath. Every individual diff looked fine. Six weeks later the cycle count had doubled, and nobody noticed until a refactor blew up.
-
-Here is that failure compressed into one line. This is archy's own source, under archy's own layer rules, with a single import of the kind an agent adds when it needs a helper and the nearest one is upward:
+Here is the failure it was built for, compressed into one line. This is archy's own source, under archy's own layer rules, with a single import of the kind an agent adds when it needs a helper and the nearest one is upward:
 
 ```python
 # src/archy/parser.py
@@ -80,7 +97,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.42.0. Usable today via:
+**Status:** v0.42.0, working, installed and maintained; feature work is paused pending evidence anyone wants it (see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -102,13 +119,17 @@ How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.m
 
 ## In the wild
 
-[`ADOPTERS.md`](ADOPTERS.md) is empty so far. If you're running archy on a real codebase, open a PR to add yourself, or file an issue and I'll add you. Either way I want to hear what it found, especially if the answer is "nothing useful."
+[`ADOPTERS.md`](ADOPTERS.md) is empty and no issue has yet been filed by anyone but me. Outside **pull requests** are a different story and recent: three landed on 2026-07-25, two merged. Good-first tickets are labelled and deliberately left for others.
+
+If you are running archy on a real codebase I would like to hear what it found, especially if the answer is "nothing useful" - that answer is now supported by measurement rather than merely possible.
 
 ## Why
 
 The failure at the top of this page is the whole reason archy exists: I wanted a single number per commit that would have caught it.
 
-AI agents generate code at machine speed. Without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
+AI agents generate code at machine speed, and the reasoning went: without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
+
+**That reasoning is the part I tested and could not support.** Twenty-five agent runs produced zero structural regressions, and human commits break their own declared rules on 0.66% of commits. The drift may still be real over long horizons, which is not what a per-edit measurement can see, but I have no evidence for it and I am not going to assert it. The rest of this section is the case as I originally made it, kept because the citations are accurate even where my inference from them was not.
 
 `archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
