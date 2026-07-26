@@ -177,6 +177,33 @@ def test_check_fails_when_declared_layers_are_absent(tmp_path: Path):
     assert "min_layers_present is 2" in result.output
 
 
+def test_check_json_explains_a_presence_failure(tmp_path: Path):
+    """Exit 1 with an empty `violations` list is indistinguishable from a bug.
+
+    A JSON consumer has no text output to fall back on, so the payload has to
+    say why the gate failed.
+    """
+    project = tmp_path / "proj"
+    (project / "app").mkdir(parents=True)
+    (project / "app" / "__init__.py").write_text("")
+    (project / "app" / "everything.py").write_text("x = 1\n")
+    (project / "archy.yaml").write_text(
+        "min_layers_present: 2\n"
+        "layers:\n"
+        "  routes:\n    modules: ['app.routes.**']\n"
+        "  services:\n    modules: ['app.services.**']\n"
+        "forbid:\n  - {from: services, to: routes}\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["violations"] == []
+    assert payload["presence_fails"] is True
+    assert payload["min_layers_present"] == 2
+    assert payload["coverage"]["layers_present"] == 0
+    assert sorted(payload["coverage"]["empty_layers"]) == ["routes", "services"]
+
+
 def test_check_violations_exit_one_and_listed(tmp_path: Path):
     project = _make_layered_project(tmp_path, with_violation=True)
     result = CliRunner().invoke(main, ["check", str(project)])

@@ -1129,12 +1129,22 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
     if config.sdp.enabled:
         sdp_violations = find_sdp_violations(graph, tolerance=config.sdp.tolerance)
     sdp_fails_gate = bool(sdp_violations) and config.sdp.mode == "error"
+    coverage = compute_coverage(graph, config)
+    # The presence floor gates `passed` here exactly as it gates the CLI's exit
+    # code. Wiring it into one surface and not the other was the first cut, and
+    # it left the AGENT-FACING surface reporting passed=true on the degenerate
+    # single-module solution the check exists to catch: the case an agent in a
+    # course-correction loop most needs to be told about.
+    presence_fails = (
+        config.min_layers_present is not None
+        and coverage.layers_present < config.min_layers_present
+    )
     return CheckPayload(
         config_path=str(config_path),
         violations=tuple(violations),
         sdp_violations=tuple(sdp_violations),
-        passed=not violations and not sdp_fails_gate,
-        coverage=compute_coverage(graph, config),
+        passed=not violations and not sdp_fails_gate and not presence_fails,
+        coverage=coverage,
     )
 
 

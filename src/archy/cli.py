@@ -230,12 +230,19 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
     if config.sdp.enabled:
         sdp_violations = find_sdp_violations(g, tolerance=config.sdp.tolerance)
 
+    presence_fails = (
+        config.min_layers_present is not None
+        and coverage.layers_present < config.min_layers_present
+    )
+
     if fmt == "json":
         payload = {
             "violations": _violations_to_json(violations),
             "sdp_violations": _sdp_violations_to_json(sdp_violations),
             "sdp_mode": config.sdp.mode,
             "coverage": _coverage_to_json(coverage),
+            "min_layers_present": config.min_layers_present,
+            "presence_fails": presence_fails,
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -258,10 +265,6 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
     # edges between layers says nothing about whether the layers exist, and a
     # codebase that collapsed them into one module satisfies every forbid rule
     # by having no cross-layer edges at all.
-    presence_fails = (
-        config.min_layers_present is not None
-        and coverage.layers_present < config.min_layers_present
-    )
     if violations or sdp_fails or presence_fails:
         sys.exit(1)
 
@@ -1802,6 +1805,12 @@ def _coverage_to_json(coverage: LayerCoverage) -> dict:
         "edge_ratio": round(coverage.edge_ratio, 4),
         "unlayered_modules": list(coverage.unlayered_modules),
         "modules_outside_declared_roots": coverage.modules_outside_declared_roots,
+        # Presence, in the payload as well as the text output. Without these a
+        # JSON consumer sees exit 1 with an empty `violations` list and nothing
+        # explaining why, which is indistinguishable from a bug in archy.
+        "layer_sizes": dict(coverage.layer_sizes),
+        "layers_present": coverage.layers_present,
+        "empty_layers": list(coverage.empty_layers),
     }
 
 
