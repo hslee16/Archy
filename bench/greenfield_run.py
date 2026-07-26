@@ -75,6 +75,31 @@ interrupts exit cleanly saying how to resume.
 
 Two failure modes #356 did not have, both handled per task: a generated server
 that will not start, and a port or process leaked into the next task.
+
+## The batch sweeps until it is done, rather than once
+
+A single pass is not enough for a run measured in hours. The failures are
+ordinary and mostly transient (a stalled CLI, a port that lost a race, a suite
+timeout), so the batch re-sweeps, and each pass skips what is already `ok` and
+retries what is not. That is only safe BECAUSE the ledger checkpoints per unit;
+the loop is the payoff for the checkpointing, not a substitute for it.
+
+Three ways it stops, and all three are needed or it either spins or quits early:
+
+- **nothing pending**: complete.
+- **a wipeout**: two or more units were tried in a pass and not one advanced.
+  That points at the environment, not at any single generation, and retrying to
+  the per-unit cap would spend `pending * max_attempts` agent runs reproducing
+  it. Stops so a human can read the rows and fix.
+- **per-unit attempt cap** (`--max-attempts`): one poisoned unit cannot hold the
+  batch open, and is NOT treated as a wipeout, because a single stubborn unit is
+  not evidence about the environment. It is recorded, reported, and **dropped,
+  never scored**, because an unmeasurable run counted clean biases the rate by
+  exactly the runs that broke.
+
+`--passes` bounds the whole thing. Re-running always resumes, so an operator
+who fixes a bug mid-batch just starts it again and keeps everything already
+recorded.
 """
 
 from __future__ import annotations
@@ -89,6 +114,7 @@ import socket
 import subprocess
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 import yaml
@@ -572,6 +598,18 @@ def main() -> int:
     ap.add_argument("--pause", type=float, default=30.0, help="seconds between runs that spent")
     ap.add_argument("--limit-waits", type=int, default=6)
     ap.add_argument("--max-backoff", type=float, default=3600.0)
+    ap.add_argument(
+        "--passes",
+        type=int,
+        default=8,
+        help="how many times to sweep the batch, retrying units that failed",
+    )
+    ap.add_argument(
+        "--max-attempts",
+        type=int,
+        default=3,
+        help="per-unit failures before it is dropped, so one bad unit cannot spin the loop",
+    )
     ap.add_argument("--dry-run", action="store_true", help="plan only; spends nothing")
     ap.add_argument("--report", action="store_true", help="score the ledger and exit")
     ap.add_argument("--check-tree", type=Path, help=argparse.SUPPRESS)  # used by the arm B wrapper
@@ -606,12 +644,106 @@ def main() -> int:
         return 1
 
     RUNS.mkdir(parents=True, exist_ok=True)
+    return loop(units, arms, args)
+
+
+def attempts_per_key(path: Path) -> Counter[str]:
+    """How many times each unit has already failed, across every pass.
+
+    Read from the file rather than held in memory, because the whole point is
+    that a later process can pick up where an earlier one died.
+    """
+    counts: Counter[str] = Counter()
+    if not path.exists():
+        return counts
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue  # a torn row; the unit is simply re-run
+        if row.get("status") in {"error", "limited"} and "key" in row:
+            counts[row["key"]] += 1
+    return counts
+
+
+def loop(units: list[tuple[str, str]], arms: tuple[str, ...], args) -> int:
+    """Sweep the batch repeatedly until every unit is `ok` or given up on.
+
+    A single pass is not enough. Failures here are ordinary and mostly
+    transient (a stalled CLI, a port that lost a race, a suite timeout), and
+    they are spread across a run measured in hours, so the batch has to be able
+    to heal itself while a human watches and fixes the ones that do not.
+
+    Two stopping conditions, and BOTH are needed:
+
+    - nothing pending: the batch is complete.
+    - no unit advanced this pass: everything still failing is failing
+      deterministically, so another identical pass would only burn agent time.
+
+    Per-unit attempts are capped as well, so one poisoned unit cannot hold the
+    batch open forever. An abandoned unit is recorded and reported, never
+    scored: an unmeasurable run is dropped, not counted clean.
+    """
+    for sweep_index in range(1, args.passes + 1):
+        ledger = Ledger(LEDGER_PATH)
+        failures = attempts_per_key(LEDGER_PATH)
+        pending = [
+            (task_id, arm)
+            for task_id, arm in units
+            if not ledger.is_done(f"{task_id}:{arm}")
+            and failures[f"{task_id}:{arm}"] < args.max_attempts
+        ]
+        abandoned = [
+            (task_id, arm)
+            for task_id, arm in units
+            if not ledger.is_done(f"{task_id}:{arm}")
+            and failures[f"{task_id}:{arm}"] >= args.max_attempts
+        ]
+        if not pending:
+            if abandoned:
+                print(
+                    f"\n{len(abandoned)} unit(s) gave up after {args.max_attempts} attempts "
+                    f"and are DROPPED, not scored: {[f'{t}:{a}' for t, a in abandoned][:6]}"
+                )
+            print(f"\nbatch complete: {ledger.completed} of {len(units)} unit(s) ok")
+            return 0
+
+        print(
+            f"\n=== pass {sweep_index}/{args.passes}: {len(pending)} pending, "
+            f"{ledger.completed} done, {len(abandoned)} abandoned ===",
+            flush=True,
+        )
+        before = ledger.completed
+        code = sweep(pending, ledger, args)
+        if code:
+            return code
+        if Ledger(LEDGER_PATH).completed == before and len(pending) >= 2:
+            # A WIPEOUT, not a bad unit. Several units were tried and not one
+            # advanced, which points at the environment (docker down, the CLI
+            # unauthenticated, the disk full) rather than at any single
+            # generation. Retrying to the per-unit cap would spend
+            # len(pending) * max_attempts agent runs reproducing it.
+            #
+            # Deliberately NOT triggered when a single unit is left: that is
+            # just a stubborn unit, the attempt cap is the right bound for it,
+            # and stopping there would leave the batch one row short forever.
+            print(
+                f"\nno unit advanced in pass {sweep_index} across {len(pending)} units; "
+                "this looks environmental rather than per-unit. Stopping rather than "
+                "re-spending. Fix what the rows report and re-run to resume."
+            )
+            return 1
+    print(f"\nout of passes ({args.passes}). Re-run to resume.")
+    return 1
+
+
+def sweep(units: list[tuple[str, str]], ledger: Ledger, args) -> int:
+    """One pass over the pending units. Returns non-zero only to stop the loop."""
     spent = 0
     for index, (task_id, arm) in enumerate(units, 1):
         key = f"{task_id}:{arm}"
-        if ledger.is_done(key):
-            print(f"[{index}/{len(units)}] skip {key} (done)", flush=True)
-            continue
         if spent and args.pause:
             time.sleep(args.pause)
         print(f"[{index}/{len(units)}] {key} ...", flush=True)
@@ -663,7 +795,6 @@ def main() -> int:
         else:
             print(f"      {row['error']}", flush=True)
 
-    print(f"\n{ledger.completed} run(s) recorded in {LEDGER_PATH}")
     return 0
 
 

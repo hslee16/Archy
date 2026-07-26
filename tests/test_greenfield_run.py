@@ -17,6 +17,7 @@ import socket
 import sys
 import textwrap
 import time
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -353,11 +354,14 @@ def test_a_crash_in_one_unit_does_not_end_the_batch(batch, monkeypatch, tmp_path
 
     monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", sometimes_explodes)
     assert greenfield_run.main() == 0
-    assert calls == ["conduit-01", "conduit-02"]
 
+    # The invariant: the crash did not stop the REST OF THE PASS. conduit-02 was
+    # still attempted and recorded, in the same sweep, immediately after.
+    assert calls[:2] == ["conduit-01", "conduit-02"]
     rows = _rows(tmp_path / "ledger.jsonl")
-    assert [r["status"] for r in rows] == ["error", "ok"]
+    assert rows[0]["status"] == "error"
     assert "scorer fell over" in rows[0]["error"]
+    assert [r["key"] for r in rows if r["status"] == "ok"] == ["conduit-02:A"]
 
 
 def test_only_ok_units_are_skipped_on_resume(batch, monkeypatch, tmp_path):
@@ -457,6 +461,106 @@ def _unparseable(line: str) -> bool:
     except json.JSONDecodeError:
         return True
     return False
+
+
+# --- the sweep loop -----------------------------------------------------------
+#
+# The batch re-sweeps until every unit is ok, which is only safe because the
+# ledger checkpoints per unit. These pin that it heals transient failures, and
+# that it cannot spin on ones it cannot heal.
+
+
+def test_a_transient_failure_is_healed_by_the_next_pass(batch, monkeypatch, tmp_path):
+    """The reason the loop exists: a stalled CLI or a lost port race should cost
+    a retry, not a hole in the batch."""
+    attempts: Counter[str] = Counter()
+
+    def flaky(task_id, arm, **kwargs):
+        attempts[task_id] += 1
+        if task_id == "conduit-01" and attempts[task_id] == 1:
+            raise RuntimeError("transient")
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", flaky)
+    assert greenfield_run.main() == 0
+    # Both units end ok without a human resuming by hand.
+    ok = {r["key"] for r in _rows(tmp_path / "ledger.jsonl") if r["status"] == "ok"}
+    assert ok == {"conduit-01:A", "conduit-02:A"}
+
+
+def test_a_unit_that_always_fails_is_dropped_rather_than_spun_on(batch, monkeypatch, tmp_path):
+    """One poisoned unit must not hold the batch open, and must not be scored:
+    an unmeasurable run counted clean biases the rate by exactly the runs that
+    broke."""
+    attempts: Counter[str] = Counter()
+
+    def always_fails_one(task_id, arm, **kwargs):
+        attempts[task_id] += 1
+        if task_id == "conduit-01":
+            raise RuntimeError("poisoned")
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", always_fails_one)
+    assert greenfield_run.main() == 0
+    # Tried exactly --max-attempts times (default 3), then abandoned.
+    assert attempts["conduit-01"] == 3
+    rows = _rows(tmp_path / "ledger.jsonl")
+    assert not [r for r in rows if r["key"] == "conduit-01:A" and r["status"] == "ok"]
+    assert [r for r in rows if r["key"] == "conduit-02:A" and r["status"] == "ok"]
+
+
+def test_a_wipeout_stops_the_loop_instead_of_retrying_to_the_cap(batch, monkeypatch, tmp_path):
+    """Several units tried and none advanced points at the environment (docker
+    down, CLI unauthenticated), not at any generation. Retrying to the per-unit
+    cap would spend pending * max_attempts agent runs reproducing it."""
+    calls = Counter()
+
+    def everything_fails(task_id, arm, **kwargs):
+        calls[task_id] += 1
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", everything_fails)
+    assert greenfield_run.main() == 1
+    # One pass over both units, then stop: no second sweep of the same failures.
+    assert sum(calls.values()) == 2
+
+
+def test_attempts_are_counted_across_processes_not_held_in_memory(tmp_path):
+    """A later process must see what an earlier one already tried, or the cap
+    resets on every resume and a poisoned unit runs forever."""
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text(
+        '{"key": "a:A", "status": "error"}\n'
+        '{"key": "a:A", "status": "error"}\n'
+        '{"key": "b:A", "status": "ok"}\n'
+        '{"key": "c:A", "status": "limited"}\n'
+    )
+    counts = greenfield_run.attempts_per_key(ledger_path)
+    assert counts["a:A"] == 2
+    assert counts["b:A"] == 0
+    # A usage limit counts toward attempts too: it is not a result, but a unit
+    # that only ever hits limits must not hold the batch open either.
+    assert counts["c:A"] == 1
+
+
+def test_attempts_survive_a_torn_row(tmp_path):
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text('{"key": "a:A", "status": "error"}\n{"key": "a:A", "sta')
+    assert greenfield_run.attempts_per_key(ledger_path)["a:A"] == 1
+
+
+def test_a_finished_batch_reports_complete_without_another_pass(batch, monkeypatch, tmp_path):
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", batch)
+    assert greenfield_run.main() == 0
+    calls = Counter()
+
+    def should_not_run(task_id, arm, **kwargs):
+        calls[task_id] += 1
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", should_not_run)
+    assert greenfield_run.main() == 0
+    assert sum(calls.values()) == 0
 
 
 def test_arms_are_interleaved_so_a_partial_batch_stays_balanced(monkeypatch, tmp_path):
