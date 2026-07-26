@@ -46,6 +46,31 @@ grep -rn $'\u2014' --include='*.md' --include='*.py' \
   --include='*.yaml' --include='*.yml' --include='*.toml' .
 ```
 
+### Before you push
+
+Run what CI runs, not a subset:
+
+```bash
+uv run ruff check          # no path argument
+uv run ruff format --check
+uv run ty check
+uv run pytest
+uv run archy check .       # archy enforces its own layer rules
+uv run archy cycles . --strict
+```
+
+`ruff check some/file.py` is a different command from `ruff check` and will pass
+while CI fails. The last two commands are archy checking itself: a new fixture
+or sample tree can introduce a real cycle or layer violation, and the fix is to
+add it to `exclude:` in `archy.yaml` with a note saying why, not to weaken a
+rule.
+
+### If review finds something in code you did not touch
+
+File it as its own issue rather than widening your PR (precedent: #317, #318,
+#335). It keeps your diff reviewable, and the finding does not get lost. Check
+the tracker first, since someone may already be on it.
+
 ### Other conventions
 
 See `.deepwork/review/python_conventions.md` (local-only) for the broader

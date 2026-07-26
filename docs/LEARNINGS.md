@@ -311,3 +311,40 @@ v0.37 point 3 named two research levers, precision beyond syntax (change-history
 3. **Type-3 recall needed a second, deliberately weaker primitive (v0.40, #246).** Exact shape-hashing is all-or-nothing: one inserted statement changes the node-type stream and the clone vanishes. `compute_near_duplicates` closes this with token-multiset (bag-of-tokens) overlap, an intentionally *lower-confidence* `near_miss` tier gated behind an opt-in `near_miss=true` flag rather than folded into the primary list. The discipline from v0.37 held: a recall primitive with weaker precision earns a separate, clearly-labeled tier and an explicit opt-in, never a silent widening of the "investigate these" set. Empirics: §12h (~60-100% Type-3 recall on the django injection, 14/15 genuine on the spot-check).
 
 The throughline across the arc: precision and recall are separately-tracked axes with separate primitives (co-change vs token-overlap), each shipped behind honest tiering, and the precision primitive was built as a standalone diagnostic first so its value did not depend on the duplicate feature landing.
+
+## v0.42.0+ - two ways a clean pass can mean nothing
+
+Two features shipped from the same discovery, made while pointing another
+project's tool at archy: `archy check` reported "No layer violations" on a
+codebase where its rules governed 21% of modules and 14% of import edges, and a
+real violation (`archy.diff -> archy.layers`) sat on `main` underneath that
+clean pass.
+
+1. **Coverage (#362).** A config's reach is not observable from its verdict.
+   Three numbers get reported now, because the loosest one flatters the config:
+   modules matched, modules in a layer some rule actually names, and **import
+   edges with both endpoints layered**, which is the honest one. A config can
+   put 90% of modules in layers while ruling almost none of the edges between
+   them. Coverage is scoped to the root packages the patterns name, since
+   counting the `bench/` scripts beside the package reported 7% for a config
+   that never claimed them: a fact about the scan path, not the config.
+
+2. **Presence (#123).** Forbidding edges *between* layers says nothing about
+   whether the layers exist. A codebase that collapsed four layers into one
+   module satisfies every `forbid` rule by having no cross-layer edges at all.
+   `min_layers_present` is that floor, taken from the Constraint Decay paper's
+   verifier, which pairs a dependency-direction rule with "at least 3 of 4
+   canonical layers present as distinct directories".
+
+Three technical gotchas from building them, each of which shipped a silently
+wrong result first:
+
+- **An empty scope must report 0%, not 100%.** `0 of 0 modules (100%)` is the
+  exact failure the coverage line exists to prevent, reproduced inside the
+  coverage line.
+- **`model_dump()` drops plain `@property`.** FastMCP serializes tool returns
+  that way, so derived values that consumers need must be `@computed_field`. A
+  test asserting on the attribute passed while the wire format carried nothing.
+- **A gate must reach every surface.** CLI text, CLI JSON, and the MCP payload
+  are three consumers, and the presence gate was wired to one at a time across
+  three review rounds. The MCP surface is the one agents call.
