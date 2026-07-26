@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "99f2518e5bcb",
+  "strategy": "manual-commit",
+  "branch": "alee/369-generation-loop",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/test_greenfield_run.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/99/f2518e5bcb/0/metadata.json",
+      "transcript": "/99/f2518e5bcb/0/full.jsonl",
+      "content_hash": "/99/f2518e5bcb/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 449,
+    "cache_creation_tokens": 743695,
+    "cache_read_tokens": 55656505,
+    "output_tokens": 172596,
+    "api_call_count": 240
+  }
+}
