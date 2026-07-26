@@ -12,7 +12,9 @@ which would have cost the whole batch.
 from __future__ import annotations
 
 import contextlib
+import json
 import os
+import shutil
 import socket
 import sys
 import textwrap
@@ -96,8 +98,6 @@ def test_a_reused_directory_is_wiped_first(tmp_path, monkeypatch):
     [("compliant", 0), ("violating", 1), ("degenerate", 1)],
 )
 def test_the_gate_agrees_with_the_paper_on_each_fixture(fixture, expected, tmp_path):
-    import shutil
-
     tree = tmp_path / fixture
     shutil.copytree(FIXTURES / fixture, tree)
     assert greenfield_run.run_check(tree) == expected
@@ -152,58 +152,46 @@ def test_a_server_that_exits_on_boot_does_not_wait_out_the_timeout(tmp_path):
     assert time.monotonic() - started < 15.0
 
 
-def test_a_server_that_binds_is_detected_and_then_killed(tmp_path):
-    """The teardown half matters as much as the detection half: a leaked
-    listener means the NEXT task's suite scores THIS task's server."""
-    port = greenfield_run._free_port()
-    _write_run_sh(
-        tmp_path,
-        f"""\
-        #!/bin/sh
-        exec {sys.executable} -c "
-        import http.server, socketserver
-        class H(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200); self.send_header('Content-Length','2')
-                self.end_headers(); self.wfile.write(b'{{}}')
-            def log_message(self, *a): pass
-        socketserver.TCPServer(('0.0.0.0', {port}), H).serve_forever()
-        "
-        """,
+def _server_script(port: int) -> str:
+    """A one-liner HTTP server that binds `port` and answers any GET."""
+    return (
+        f'{sys.executable} -c "\n'
+        "import http.server, socketserver\n"
+        "class H(http.server.BaseHTTPRequestHandler):\n"
+        "    def do_GET(self):\n"
+        "        self.send_response(200); self.send_header('Content-Length','2')\n"
+        "        self.end_headers(); self.wfile.write(b'{}')\n"
+        "    def log_message(self, *a): pass\n"
+        f"socketserver.TCPServer(('0.0.0.0', {port}), H).serve_forever()\n"
+        '"'
     )
-    with greenfield_run.served(tmp_path, port, boot_timeout=30.0) as (bound, why):
-        assert bound is True, why
-    # The port must be free again immediately after the context exits.
+
+
+def _assert_port_is_free(port: int) -> None:
+    """Rebinding is the only proof the listener is gone. A leaked one means the
+    NEXT task's suite would score THIS task's server."""
     with socket.socket() as sock:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("127.0.0.1", port))
+
+
+def test_a_server_that_binds_is_detected_and_then_killed(tmp_path):
+    """The teardown half matters as much as the detection half."""
+    port = greenfield_run._free_port()
+    _write_run_sh(tmp_path, f"#!/bin/sh\nexec {_server_script(port)}\n")
+    with greenfield_run.served(tmp_path, port, boot_timeout=30.0) as (bound, why):
+        assert bound is True, why
+    _assert_port_is_free(port)
 
 
 def test_a_shell_that_forks_is_still_torn_down(tmp_path):
     """`run.sh` usually spawns uvicorn rather than exec'ing it, so killing only
     the direct child leaves the listener behind. The whole process group goes."""
     port = greenfield_run._free_port()
-    _write_run_sh(
-        tmp_path,
-        f"""\
-        #!/bin/sh
-        {sys.executable} -c "
-        import http.server, socketserver
-        class H(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200); self.send_header('Content-Length','2')
-                self.end_headers(); self.wfile.write(b'{{}}')
-            def log_message(self, *a): pass
-        socketserver.TCPServer(('0.0.0.0', {port}), H).serve_forever()
-        " &
-        wait
-        """,
-    )
+    _write_run_sh(tmp_path, f"#!/bin/sh\n{_server_script(port)} &\nwait\n")
     with greenfield_run.served(tmp_path, port, boot_timeout=30.0) as (bound, why):
         assert bound is True, why
-    with socket.socket() as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("127.0.0.1", port))
+    _assert_port_is_free(port)
 
 
 def test_free_ports_do_not_repeat(tmp_path):
@@ -331,8 +319,6 @@ def batch(monkeypatch, tmp_path):
 
 def _rows(path: Path) -> list[dict]:
     """Parseable rows, skipping a torn one exactly as `Ledger` does on read."""
-    import json
-
     rows = []
     for line in path.read_text().splitlines():
         if not line.strip():
@@ -436,8 +422,6 @@ def test_a_torn_final_row_costs_one_unit_and_not_two(batch, monkeypatch, tmp_pat
     line is left in place (history is not rewritten); what must hold is that
     every row written after it is intact and independently parseable.
     """
-    import json
-
     ledger_path = tmp_path / "ledger.jsonl"
     ledger_path.write_text('{"key": "conduit-01:A", "status": "ok"}\n{"key": "conduit-0')
     monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", batch)
@@ -454,8 +438,6 @@ def test_a_torn_final_row_costs_one_unit_and_not_two(batch, monkeypatch, tmp_pat
 
 
 def _unparseable(line: str) -> bool:
-    import json
-
     try:
         json.loads(line)
     except json.JSONDecodeError:
