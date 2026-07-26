@@ -56,16 +56,32 @@ def test_unreadable_tree_is_unevaluable_not_compliant(tmp_path: Path):
     assert verdict.compliant is False
 
 
-def test_a_server_that_never_started_is_not_a_zero_score():
+def test_nothing_listening_is_detected_without_docker_or_the_suite():
+    """The transport probe on its own, so this holds on any machine.
+
+    Any HTTP answer counts as present, including 404 and 500: the question is
+    whether the server came up, not whether it is correct.
+    """
+    assert greenfield_eval._server_responds("http://localhost:59999", timeout=2.0) is False
+
+
+def test_an_unmeasurable_run_never_receives_a_score():
     """ "did not run" and "ran and failed everything" are different facts.
 
     Both make the suite report 0 of 13. Folding them together would let an arm
     that produced code which does not start masquerade as one whose code runs
     badly.
+
+    Asserts the invariant, NOT the reason text. Which precondition trips first
+    depends on the machine: locally the suite and Docker are present so the
+    probe reports the dead host, while CI has neither and stops earlier. The
+    first version of this test asserted the local message and failed in CI,
+    which is a fact about the runner rather than about the code.
     """
     verdict = greenfield_eval.behavioral_verdict("http://localhost:59999", timeout=60.0)
     assert verdict.evaluable is False
-    assert verdict.reason is not None and "nothing listening" in verdict.reason
+    assert verdict.reason  # says which precondition failed, whichever it was
     # None, never 0.0: a score of zero would be a behavioral claim about a
     # server that never answered.
     assert verdict.pass_rate is None
+    assert verdict.files_executed is None
