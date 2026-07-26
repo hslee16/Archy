@@ -64,9 +64,16 @@ CONDUIT_CONFIG = REPO_ROOT / "bench/fixtures/conduit_clean/archy.yaml"
 SUITE_DIR = REPO_ROOT / "bench/cache/realworld_hurl"
 SUITE_RAW = "https://api.github.com/repos/gothinkster/realworld/contents/specs/api/hurl"
 
-# Official image, so the suite runs without a local hurl install and the version
-# is pinned in one place rather than varying per machine.
-HURL_IMAGE = "ghcr.io/orange-opensource/hurl:latest"
+# Official image, DIGEST-pinned. The first draft used `:latest` while claiming
+# to pin, which for a measurement instrument is worse than not claiming it: the
+# behavioral oracle could change between arm A and arm B and move the result
+# without anything in the study recording that it had. Resolved 2026-07-26,
+# hurl 7.1.0. Re-pin deliberately, and note it in the results, never silently.
+HURL_IMAGE = (
+    "ghcr.io/orange-opensource/hurl"
+    "@sha256:d7727dcc0166de8aea88916e73ea435ee09bfecb8ba0c281200206b6cf37cf64"
+)
+HURL_VERSION = "7.1.0"
 
 # `hurl --test` summary lines, e.g. "Executed files:  13" / "Succeeded files:  11".
 SUMMARY = re.compile(r"^(?P<label>[A-Za-z ]+):\s+(?P<count>\d+)", re.MULTILINE)
@@ -234,6 +241,9 @@ def behavioral_verdict(host: str, timeout: float) -> dict:
         "pass_rate": round(succeeded / executed, 4) if executed else 0.0,
         "exit_code": proc.returncode,
         "uid": uid,
+        # Recorded per run so a later re-pin is visible in the data rather than
+        # being an invisible difference between two batches.
+        "hurl_version": HURL_VERSION,
     }
 
 
