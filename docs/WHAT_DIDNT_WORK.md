@@ -1,7 +1,8 @@
-# I measured twice whether my architecture tool makes agents cheaper. Both null.
+# My tool prevents a problem that happens on 0.66% of commits. I measured it.
 
-Here is everything I learned anyway, including the part where the question I
-actually care about is still unmeasured.
+Here is everything I learned on the way there, including two nulls, one
+retracted premise, and the part where the tool turned out to be blind to its own
+blind spot.
 
 archy is a static analysis tool for Python. It builds a module dependency
 graph, holds the layer rules you declare, and reports when an edit breaks them.
@@ -13,15 +14,27 @@ The premise was plausible enough that a lot of tools are built on it: if you
 give an agent structural feedback, its output gets structurally better, and
 probably cheaper too.
 
-I ran two controlled experiments. Both came back null. This is the write-up,
-with the actual numbers and p-values, because the field has a shortage of those.
+I ran two controlled experiments on the *cheaper* half of that premise. Both
+came back null. Then I ran the experiment that tests the actual premise, and
+then a study asking whether the problem exists at all.
 
-**One thing to be precise about up front**, because it is the kind of thing this
-write-up exists to insist on. Those two experiments tested the *cheaper* half of
-that premise: agent token footprint, and exploratory reads before the first
-edit. Neither tested whether archy actually stops an agent breaking the
-architecture. That question is real, it is the reason the tool exists, and it is
-still unmeasured. There is a section on it below.
+**The headline, up front.** Across three measurements with different subjects and
+different outcome definitions, the event archy exists to catch shows up at
+roughly half a percent of commits, for humans and agents alike:
+
+| measurement | subject | rate |
+| --- | --- | --- |
+| Q1a, 1,072 human commits | cycles introduced | **0.5%** per commit |
+| 25 live agent runs | cycles or declared-layer violations | **0%** (95% upper bound 12%) |
+| 151 commit pairs, projects that declare an architecture | contract violations | **0.66%** per commit |
+
+The problem is **real** and I have now watched it happen in the wild. It is also
+**much rarer than the pitch I built the tool on**, which was that agents rot the
+import graph underneath you. I no longer claim that, and this write-up is where
+I retract it.
+
+Every figure below is quoted from a document or a committed result ledger, and
+where a document corrected itself, I say so.
 
 Every figure below is quoted from a document in
 [`docs/research/`](research/) that was adversarially reviewed before
@@ -174,49 +187,211 @@ themselves*, including a fabricated figure introduced while fixing a
 fabrication. The full log is in the document, kept visible rather than folded
 in silently, because a survey about checking denominators has to show its own.
 
-## The question I actually care about is still unmeasured
+## Experiment 3: do agents actually break the architecture?
 
 Both nulls above are about *efficiency*: does archy make an agent cheaper or
 less exploratory. That was never the point of the tool. archy exists to catch an
-agent breaking the architecture, and **I have not measured whether it does
-that.**
+agent breaking the architecture, and for a long time this section said I had not
+measured whether it does. **I have now.**
 
-The research notes are explicit about the split, which is why I can be:
+**Setup.** 25 live agent runs (`claude-sonnet-5`, no archy in the loop) on the 25
+structurally riskiest tasks in SWE-bench, selected by a filter written before any
+run. Six repositories, each given a hand-authored layer config derived from that
+project's own documented conventions and validated to be silent on pristine code.
+Outcome, fixed in advance: a newly introduced import cycle, or a violation of a
+declared layer rule.
 
-- **Q1a, the headroom question, is answered.** Across **1,072 human-authored
-  commits in 11 mature repos**, the low-false-positive signal archy gates on (a
-  newly introduced import cycle) appears in only **0.5% of commits**. But those
-  commits are large and transformative: median **7 `.py` files changed against a
-  baseline of 1**. The composite score drops on 29% of commits, and **98% of
-  those drops are sub-0.005 noise**. So archy is a rare-firing, low-FP gate on
-  severe damage concentrated in big changes, not a continuous quality dial.
-- **Q1b, the causal question, is open.** *Does putting archy in an agent's loop
-  reduce structurally-bad edits?* It has a powered, executable A/B protocol
-  written, and a control baseline from Q1a. It has never been run. It is gated
-  behind a usage signal that does not exist yet, and I deprioritized it on
-  2026-05-26.
+**Result: 0 of 25.** All 25 measurable, nothing dropped. The agents were not
+idling: 332 files changed, median 12 per run, median 64 turns.
 
-I want to be careful not to launder that into a defense. "The experiments that
-failed were not testing the real claim" is exactly the move a motivated author
-makes, and it is only legitimate here because the split was written down in
-2026-05, before either null came back, rather than after.
+**What I pre-registered, and why it matters.** Before spending anything, I wrote
+two thresholds into the repository: at `p_B >= 25%` the A/B is powered and I
+proceed; at `p_B <= 10%` **the corpus is wrong, not the tool**. That second
+branch is the kind of claim a motivated author invents after seeing a null, so I
+committed it first, along with the measurement that justifies it: **430 of
+SWE-bench Verified's 500 gold patches touch exactly one `.py` file.** A corpus of
+single-file bug fixes cannot exhibit multi-file structural damage.
 
-What it does mean is narrower and less flattering: **two nulls on efficiency are
-not evidence archy works, and not evidence it doesn't.** They are evidence about
-a side benefit I hoped for and did not get. The central claim remains untested,
-which is a worse position to be in than either a positive or a negative result.
+I also wrote down the constraint that keeps that honest: **"the corpus was wrong"
+is playable once.** The successor corpus is pre-registered the same way, and if
+it returns ~0 as well, that counts against the thesis rather than against the
+corpus. Otherwise this becomes a search for a dataset where my tool wins.
 
-The reason it stays untested is circular in a way worth naming. The A/B needs
-people running archy inside an agent loop, and nobody does, because there are
-zero outside issues. Waiting for a usage signal to justify measuring the thing
-that would produce a usage signal is a closed loop, and I do not have a clean
-answer to it.
+**A confound I missed, and a reader caught.** Every one of those 25 runs edited a
+*mature, human-architected* codebase: django, sympy, matplotlib. Those repos have
+decades of accumulated structure, and an agent editing them copies idiom that
+already exists in the files it reads. **The corpus supplied the architecture.**
+So 0 of 25 is consistent with "agents inherit human architecture", which is a
+different and much weaker claim than "agents do not damage architecture". The
+regime that would actually test it is code largely written by agents, which is
+now measurable in the wild and which I have not done.
+
+**One number I could have reported and did not.** A score regression fired on 12
+of 25 runs. "archy detects degradation in 48% of agent edits" was available from
+this data. Every one of those deltas was inside the 0.005 noise floor established
+by the human baseline, the largest drop being 0.004, the median exactly 0.0. It
+was noise, the outcome definition excluded it in advance, and reporting it would
+have been theater.
+
+## Study 4: does the problem happen at all, to anyone?
+
+The agent result raised a harder question than it answered. If humans introduce a
+cycle on 0.5% of commits and agents did it zero times in 25, maybe the event is
+rare for everyone, and the tool addresses something that barely occurs.
+
+So I stopped measuring agents and measured the phenomenon. There are projects
+that already declare an architecture and check it in CI, using `import-linter`.
+Their contracts are written by their own developers, in their own words. **I
+authored nothing**, which fixes the largest bias in the previous experiment,
+where I wrote the rules I then measured against.
+
+**Result: 1 of 151 commit pairs, 0.66%**, across 14 repositories. The one
+violation is real and specific:
+
+```
+AndreasHeine/i3x2ua  "Application must not depend on bootstrap"
+```
+
+A developer wrote a clean-architecture rule and a later commit broke it. That is
+the first time in this whole line of work that I have observed the target event
+in the wild instead of constructing it, and it settles that the previous zero was
+not evidence of nonexistence.
+
+**The finding I was not looking for, which is the one that changed the roadmap.**
+Zero commits in the entire sample *fixed* a standing violation, while several sat
+on one: 2 of 14 repositories carry contracts that are broken and stay broken
+across commits. Detection did not help those projects, because they already knew.
+The interesting failure is not the moment of violation. It is **living with the
+violation**.
+
+**How thin the category is.** GitHub code search returns roughly 1,590 hits for
+import-linter configuration. Of 40 repositories I sampled from it, **9 declare no
+such architecture at all** (they matched a doc, a lockfile, or a deleted config).
+Most of the rest had too little history to yield a rate. **14 survived**, only two
+of them well known. Declaring an architecture and enforcing it in CI is a rare
+practice, and that bears on whether this category has users, not just whether it
+has a problem.
+
+**Limits I am not going to bury.** 107 of 258 sampled pairs (41%) could not be
+evaluated at all, clustered by repository, mostly because historical configs do
+not load under a current import-linter. Those were dropped, never counted as
+clean. And 1 of 151 has a 95% confidence interval running from roughly 0.02% to
+3.7%: this distinguishes "rare" from "common" and not much else.
+
+## The tool was blind to its own blind spot
+
+While building the study above, I pointed `import-linter` at archy itself and it
+reported a broken contract:
+
+```
+graph layer must not reach policy/cli layers
+archy.diff is not allowed to import archy.layers
+```
+
+`archy check` on the same tree reported **"No layer violations"** and exited 0.
+
+Not a matching bug. A coverage one: **33 of archy's 76 modules match no declared
+layer at all.** Its own architecture governs 43 modules and says nothing about the
+rest, and there is no output anywhere that would tell you that. I had two config
+files, one claiming to mirror the other, quietly disagreeing about which modules
+belong to which layer, and a real violation sitting on the main branch.
+
+This is the same failure I had just found in my own benchmark configs, where
+pattern globs matched one empty `__init__.py` instead of a 338-module package and
+**every rule in two shipped configs was dead**. I fixed it there with a canary:
+add a deliberately violating import, assert the check fails. Users will never do
+that.
+
+**A rule set that cannot fire is indistinguishable from a clean codebase**, and a
+tool whose entire differentiator is holding the structure you declared should be
+able to tell you how much of your code its rules actually reach. Mine could not.
+
+## What I am retracting, and what I am changing
+
+**Retracted: the premise in the second paragraph of this document.** "Agents
+produce changes that pass review and rot the import graph underneath" is the
+belief I built archy on, and I no longer have evidence for it. Twenty-five agent
+runs produced zero structural regressions, and the honest bound is under 12%
+rather than zero. If I ever write that sentence again it needs a citation I do
+not currently have.
+
+**Retracted: the framing that this is an agent problem.** Humans introduce cycles
+on 0.5% of commits and break their own declared contracts on 0.66%. Whatever this
+is, it is not something coding agents do to you.
+
+**Not retracted: that the problem is real.** I watched a developer's own
+architecture rule get broken by a later commit. Rare is not zero, and a rare
+event can still be worth catching. But I cannot argue that from rarity alone: I
+would need the cost of one occurrence, and **nobody has measured that, including
+me.** Until someone does, "rare but expensive" is a hypothesis, not a defence.
+
+**What changes.** Two findings above point somewhere different from where I was
+aiming, and both arrived unbidden:
+
+1. **Nobody fixed a standing violation.** Zero, out of 151 commit pairs, while
+   2 of 14 repositories sat on broken contracts across commits. The moment of
+   violation is rare and already visible in CI. *Living with* the violation is
+   neither.
+2. **My own rules governed 43 of 76 modules and I did not know.** Silent
+   under-coverage is invisible by construction, and it is invisible in every tool
+   in this category, not just mine.
+
+Those are the same shape: **the failure is not that a rule fires and you miss it.
+The failure is that the rule stopped meaning anything and nothing told you.** So
+that is what I built next, and then I measured whether it was true.
+
+## Study 5: the replacement claim is also false
+
+The pivot above deserved the same treatment as the premise it replaced, so I
+pre-registered four thresholds that would kill it and ran it over the same
+corpus: 11 repositories, 107 evaluable samples of their own contracts across
+their own history.
+
+**All four came back null or untestable.**
+
+| signal | pre-registered null | observed |
+| --- | --- | --- |
+| standing violations | dies if the median clears in <= 2 commits | 1 sample pair, in 1 of 11 repos |
+| rule relaxation | dies below 5% of resolutions | no violations resolved at all: untestable |
+| dead rules | dies if >80% of rules still govern existing modules | 89% do |
+| coverage erosion | dies if the slope is >= 0 | 10 of 11 repos flat or **rising** |
+
+The intuition was that configs get written once and silently outgrown. These
+projects do the opposite: their rules govern *more* of their code over time.
+
+Decay is real and rare, like everything else here. Two of eleven repositories
+genuinely name modules that no longer exist (`brain_go_brrr.data`, `.tasks`,
+`.training`, `.core`; `secondsign.audit`), and one deleted five of its six
+contracts outright. That is a true thing a tool can report. It is not a product
+thesis.
+
+**The part worth keeping is how nearly this went the other way.** The first run
+said 57% of samples carried dead rules, which would have vindicated the pivot
+completely. It was wrong. Six measurement artifacts sat between me and that
+number: root packages inflating coverage to a trivial 100%, a Layers contract's
+`a : b : c` sibling syntax parsed as one nonexistent module, `pkg.*` wildcards
+never matching, container-relative layer names matched absolutely, `src/`-layout
+packages never discovered at all, and external dependencies like `flask` counted
+as missing internal modules. Removing them took the signal from 63 to 40 to 12
+of ~107 samples.
+
+**Every single artifact pointed toward the answer I wanted.** That is not a
+coincidence, it is what motivated measurement looks like from the inside, and
+the only defence I had was writing the kill thresholds down before running and
+refusing to reinterpret them afterwards.
+
+So: three claims, three nulls. The problem archy addresses is real, rare, and
+rare in every direction I have looked at it. I am not going to keep looking for
+the direction where it is common.
 
 ## What survived, and why archy still exists
 
-Two nulls on agent-side benefit did not kill the tool, but they did narrow what
-I am allowed to claim about it. archy's README carries no token-savings number,
-and a rule in `RESEARCH_METRICS.md` §14c.7 forbids adding one.
+Two nulls on agent-side benefit, one retracted premise, and a study saying the
+problem is rare did not kill the tool, but between them they have narrowed what
+I am allowed to claim about it almost to nothing. archy's README carries no
+token-savings number, and a rule in `RESEARCH_METRICS.md` §14c.7 forbids adding
+one. It carries no agent-safety number either, and after Experiment 3 it never
+will.
 
 What survived is a narrower and more defensible job. A competitive analysis I
 ran against the most successful tool in the adjacent category found the

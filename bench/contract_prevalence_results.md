@@ -129,8 +129,13 @@ supported by any measurement this project has made.
 **Does not support:** any claim about archy's detection ability. This bench used
 import-linter, not archy. #347 is that experiment.
 
-**Changes the emphasis:** zero commits in the sample fixed a standing violation,
-while three sat on one. If that holds at scale, the valuable signal is not "you
-just broke a rule" (rare) but "you have been living with a broken rule" (visible
-here in 2 of 14 repos). That is #139's territory, and it deserves the weight the
-introduction-rate framing has been getting.
+**Changed the emphasis, and then that failed too.** Zero commits in this sample
+fixed a standing violation, while three sat on one, which read as a signal worth
+weighting toward #139's territory rather than the introduction rate.
+
+**#364 tested that conditional directly and it did not hold.** Across 11 repos
+and 107 samples, standing violations turned out to be just as rare (1 sample
+pair, 1 of 11 repos), and the other three decay signals came back null or
+untestable. See `bench/contract_decay_results.md` and `docs/WHAT_DIDNT_WORK.md`
+Study 5. The "living with a broken rule" framing is **not** a surviving
+replacement for the introduction-rate framing; it is a third null.
