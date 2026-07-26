@@ -93,6 +93,27 @@ def _drop_leading_newline(text: str) -> str:
     return text[1:] if text.startswith("\n") else text
 
 
+def _marker_block_range(text: str) -> tuple[int, int] | None:
+    """Locate the archy-owned marker block.
+
+    Returns:
+        (start, end) where end is exclusive.
+
+    Recovery behavior:
+    If the opening marker exists but the closing marker is missing, treat EOF
+    as the end of the block, so a hand-corrupted file still re-installs cleanly
+    and uninstall stays idempotent on a corrupted file.
+    """
+    start = text.find(INSTRUCTIONS_BEGIN)
+    if start == -1:
+        return None
+    end = text.find(INSTRUCTIONS_END, start)
+    if end == -1:
+        # No closing marker: recover by treating EOF as the block boundary.
+        return (start, len(text))
+    return (start, end + len(INSTRUCTIONS_END))
+
+
 def upsert_instructions(existing: str | None) -> str:
     """Insert or replace the archy instruction block, leaving the rest intact.
 
@@ -103,16 +124,11 @@ def upsert_instructions(existing: str | None) -> str:
     block = instructions_block()
     if not existing:
         return block
-    start = existing.find(INSTRUCTIONS_BEGIN)
-    if start == -1:
+    span = _marker_block_range(existing)
+    if span is None:
         sep = "" if existing.endswith("\n") else "\n"
         return f"{existing}{sep}\n{block}"
-    end = existing.find(INSTRUCTIONS_END, start)
-    if end == -1:
-        # No closing marker: recover by overwriting from the marker rather than
-        # raising, so a hand-corrupted file still re-installs cleanly.
-        return f"{existing[:start]}{block}"
-    end += len(INSTRUCTIONS_END)
+    start, end = span
     return f"{existing[:start]}{block}{_drop_leading_newline(existing[end:])}"
 
 
@@ -126,17 +142,11 @@ def remove_instructions(existing: str | None) -> str | None:
     """
     if not existing:
         return None
-    start = existing.find(INSTRUCTIONS_BEGIN)
-    if start == -1:
+    span = _marker_block_range(existing)
+    if span is None:
         return existing
-    end = existing.find(INSTRUCTIONS_END, start)
-    if end == -1:
-        # No closing marker: recover by discarding from the marker on rather
-        # than raising, so uninstall stays idempotent on a corrupted file.
-        remainder = existing[:start]
-    else:
-        end += len(INSTRUCTIONS_END)
-        remainder = existing[:start] + _drop_leading_newline(existing[end:])
+    start, end = span
+    remainder = existing[:start] + _drop_leading_newline(existing[end:])
     return None if not remainder.strip() else remainder
 
 
