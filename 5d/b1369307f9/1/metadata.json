@@ -1,0 +1,81 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "5db1369307f9",
+  "session_id": "b373e6d4-4192-45e8-be65-734350e3306b",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-26T16:27:28.835254Z",
+  "branch": "alee/q1b-pilot-356",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [
+    "bench/q1b_score.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5[1m]",
+  "turn_id": "7c7aaa09dbfa",
+  "token_usage": {
+    "input_tokens": 4773,
+    "cache_creation_tokens": 2378825,
+    "cache_read_tokens": 152468761,
+    "output_tokens": 361424,
+    "api_call_count": 452
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01M4e46xFinZLKT5zGCfYgB6",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "7c7aaa09dbfa",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 296,
+        "end": 297,
+        "entry_ids": [
+          "e7e785b7-7075-4b1f-8dce-f02717f0fc9a"
+        ],
+        "tool_use_id": "toolu_01M4e46xFinZLKT5zGCfYgB6"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01M4e46xFinZLKT5zGCfYgB6"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 41
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-26T16:27:28.775535Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 1230,
+    "human_modified": 6,
+    "human_removed": 0,
+    "total_committed": 1230,
+    "total_lines_changed": 1236,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
