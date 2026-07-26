@@ -9,6 +9,7 @@ subprocesses rather than mocks, because the failure being guarded against
 
 from __future__ import annotations
 
+import json
 import sys
 import time
 from pathlib import Path
@@ -213,3 +214,31 @@ def test_ledger_survives_a_torn_final_row(tmp_path: Path):
     assert reopened.is_done("task2:B")
     # The torn unit is simply re-run, which is the safe direction.
     assert not reopened.is_done("task3:B")
+
+
+def test_appending_after_a_torn_row_does_not_destroy_the_new_row(tmp_path: Path):
+    """Reading tolerated a torn last line; writing after one did not.
+
+    The append landed directly onto the partial line, concatenating the two into
+    one unparseable row, so a single hard kill cost TWO units: the one that was
+    interrupted and the next one written after the resume. That is the opposite
+    of what this class exists to guarantee.
+    """
+    path = tmp_path / "ledger.jsonl"
+    path.write_text('{"key": "task1:B", "status": "ok"}\n{"key": "task2:B", "status": "o')
+
+    Ledger(path).record("task3:B", {"ok": 1})
+
+    lines = [line for line in path.read_text().splitlines() if line.strip()]
+    parsed = []
+    for line in lines:
+        try:
+            parsed.append(json.loads(line))
+        except json.JSONDecodeError:
+            parsed.append(None)
+    # The torn row stays torn (history is not rewritten) but stands alone, and
+    # the new row is intact rather than glued onto it.
+    assert parsed[-2] is None
+    assert parsed[-1] is not None
+    assert parsed[-1]["key"] == "task3:B"
+    assert Ledger(path).is_done("task3:B")

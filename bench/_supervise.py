@@ -341,11 +341,24 @@ class Ledger:
     def get(self, key: str) -> dict | None:
         return self._done.get(key)
 
+    def _ends_without_newline(self) -> bool:
+        """Did a previous process die mid-write, leaving a partial last line?"""
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return False
+        with self.path.open("rb") as fh:
+            fh.seek(-1, os.SEEK_END)
+            return fh.read(1) != b"\n"
+
     def record(self, key: str, payload: dict, *, status: str = "ok") -> None:
         row = {"key": key, "status": status, **payload}
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        # HEAL A TORN TAIL BEFORE APPENDING. Reading already tolerates a partial
+        # last line, but appending onto one concatenates the two and destroys
+        # THIS row as well as the torn one, so a single hard kill cost two units
+        # instead of the one it should. Found by the resume test, 2026-07-26.
+        prefix = "\n" if self._ends_without_newline() else ""
         with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(row, sort_keys=True) + "\n")
+            fh.write(prefix + json.dumps(row, sort_keys=True) + "\n")
         if status == "ok":
             self._done[key] = row
 

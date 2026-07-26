@@ -11,6 +11,7 @@ which would have cost the whole batch.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import socket
 import sys
@@ -292,3 +293,182 @@ def test_preflight_refuses_a_batch_with_no_suite(tools_present, monkeypatch, tmp
     monkeypatch.setattr(greenfield_run.greenfield_eval, "SUITE_DIR", tmp_path / "empty")
     problem = greenfield_run.preflight(("A",))
     assert problem and "hurl suite" in problem
+
+
+# --- checkpoint and resume ----------------------------------------------------
+#
+# A run is hours long and the failure modes are ordinary: a stalled subprocess,
+# a usage limit, a laptop sleeping, a crash in the scorer, someone pressing
+# Ctrl-C. `q1b_run.py` supplies this shape and `tests/test_q1b_run.py` pins it;
+# these pin that THIS loop honours it, because copying the shape is not the same
+# as keeping it.
+
+
+@pytest.fixture
+def batch(monkeypatch, tmp_path):
+    """A runnable two-unit batch whose agent call is under the test's control."""
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", tmp_path / "ledger.jsonl")
+    monkeypatch.setattr(greenfield_run, "RUNS", tmp_path / "runs")
+    monkeypatch.setattr(greenfield_run, "preflight", lambda _arms: None)
+    # --pause 0: the real batch paces itself to spread usage, which would
+    # otherwise add 30s of sleep per unit to every test here.
+    monkeypatch.setattr(
+        sys, "argv", ["greenfield_run.py", "--limit", "2", "--arms", "A", "--pause", "0"]
+    )
+
+    def ok_row(task_id, arm, **_):
+        return {
+            "task_id": task_id,
+            "arm": arm,
+            "structural": {"compliant": True, "layers_present": 4},
+            "behavioral": {"pass_rate": 0.9},
+            "archy_invocations": 0,
+        }
+
+    return ok_row
+
+
+def _rows(path: Path) -> list[dict]:
+    """Parseable rows, skipping a torn one exactly as `Ledger` does on read."""
+    import json
+
+    rows = []
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        with contextlib.suppress(json.JSONDecodeError):
+            rows.append(json.loads(line))
+    return rows
+
+
+def test_a_crash_in_one_unit_does_not_end_the_batch(batch, monkeypatch, tmp_path):
+    """Otherwise one bad task costs a batch that has already run for hours."""
+    calls: list[str] = []
+
+    def sometimes_explodes(task_id, arm, **kwargs):
+        calls.append(task_id)
+        if task_id == "conduit-01":
+            raise RuntimeError("scorer fell over")
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", sometimes_explodes)
+    assert greenfield_run.main() == 0
+    assert calls == ["conduit-01", "conduit-02"]
+
+    rows = _rows(tmp_path / "ledger.jsonl")
+    assert [r["status"] for r in rows] == ["error", "ok"]
+    assert "scorer fell over" in rows[0]["error"]
+
+
+def test_only_ok_units_are_skipped_on_resume(batch, monkeypatch, tmp_path):
+    """`error` rows are work still owed. Treating them as done would silently
+    shrink N by exactly the units that broke."""
+    attempts: list[str] = []
+
+    def explode_once(task_id, arm, **kwargs):
+        attempts.append(task_id)
+        if task_id == "conduit-01" and attempts.count("conduit-01") == 1:
+            raise RuntimeError("transient")
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", explode_once)
+    greenfield_run.main()
+    greenfield_run.main()  # resume
+
+    # conduit-02 succeeded first time and is not re-run; conduit-01 is retried.
+    assert attempts == ["conduit-01", "conduit-02", "conduit-01"]
+    statuses = [r["status"] for r in _rows(tmp_path / "ledger.jsonl")]
+    assert statuses == ["error", "ok", "ok"]
+
+
+def test_an_exhausted_usage_limit_is_not_recorded_as_a_result(batch, monkeypatch, tmp_path):
+    """A limit is a fact about the account. Recording it as an outcome would put
+    the subscription into the measurement, and `limited` is not `ok`, so the
+    unit is picked up untouched on resume."""
+
+    def limited(task_id, arm, **kwargs):
+        raise greenfield_run.RateLimited("usage limit reached")
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", limited)
+    assert greenfield_run.main() == 1
+
+    rows = _rows(tmp_path / "ledger.jsonl")
+    assert [r["status"] for r in rows] == ["limited"]
+    assert "structural" not in rows[0]
+    # And the next run retries it rather than skipping it.
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", batch)
+    assert greenfield_run.main() == 0
+    assert [r["status"] for r in _rows(tmp_path / "ledger.jsonl")] == ["limited", "ok", "ok"]
+
+
+def test_an_interrupt_keeps_everything_already_written(batch, monkeypatch, tmp_path):
+    """Only the in-flight unit is lost."""
+
+    def interrupt_on_second(task_id, arm, **kwargs):
+        if task_id == "conduit-02":
+            raise KeyboardInterrupt
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", interrupt_on_second)
+    assert greenfield_run.main() == 130
+    assert [r["status"] for r in _rows(tmp_path / "ledger.jsonl")] == ["ok"]
+
+
+def test_each_row_is_written_in_a_single_append(batch, monkeypatch, tmp_path):
+    """Two writes leave a window where a crash merges the next row into a torn
+    one and loses both. Every line must be independently parseable."""
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", batch)
+    greenfield_run.main()
+    text = (tmp_path / "ledger.jsonl").read_text()
+    assert text.endswith("\n")
+    assert len(_rows(tmp_path / "ledger.jsonl")) == len(text.strip().splitlines())
+
+
+def test_a_torn_final_row_costs_one_unit_and_not_two(batch, monkeypatch, tmp_path):
+    """A hard kill can leave a partial line with no trailing newline.
+
+    Reading already skipped it, but APPENDING onto it concatenated the two and
+    destroyed the incoming row as well, so one crash cost two units. The torn
+    line is left in place (history is not rewritten); what must hold is that
+    every row written after it is intact and independently parseable.
+    """
+    import json
+
+    ledger_path = tmp_path / "ledger.jsonl"
+    ledger_path.write_text('{"key": "conduit-01:A", "status": "ok"}\n{"key": "conduit-0')
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", batch)
+    assert greenfield_run.main() == 0
+
+    lines = [ln for ln in ledger_path.read_text().splitlines() if ln.strip()]
+    torn = [ln for ln in lines if _unparseable(ln)]
+    assert len(torn) == 1, "the torn row must not have absorbed the next one"
+    assert torn[0] == '{"key": "conduit-0'
+
+    written = [json.loads(ln) for ln in lines if not _unparseable(ln)]
+    # conduit-01 was already ok and is skipped; conduit-02 is run and recorded.
+    assert [r["key"] for r in written] == ["conduit-01:A", "conduit-02:A"]
+
+
+def _unparseable(line: str) -> bool:
+    import json
+
+    try:
+        json.loads(line)
+    except json.JSONDecodeError:
+        return True
+    return False
+
+
+def test_arms_are_interleaved_so_a_partial_batch_stays_balanced(monkeypatch, tmp_path):
+    """A batch stopped halfway must not be all of one arm; an unbalanced partial
+    batch cannot be read against the thresholds at all."""
+    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", tmp_path / "l.jsonl")
+    monkeypatch.setattr(greenfield_run, "preflight", lambda _arms: None)
+    monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--limit", "3", "--dry-run"])
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        greenfield_run, "run_with_limit_backoff", lambda t, a, **k: seen.append((t, a))
+    )
+    greenfield_run.main()  # --dry-run only plans, so assert on the unit order
+    units = [(f"conduit-{i:02d}", arm) for i in range(1, 4) for arm in ("A", "B")]
+    assert units[:2] == [("conduit-01", "A"), ("conduit-01", "B")]
