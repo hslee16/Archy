@@ -67,6 +67,18 @@ class LayerConfig(BaseModel):
     # apply the default); 0 = explicitly disabled; positive = that ceiling. Kept
     # as a raw override here so the policy layer carries no dependency on graph.
     max_modules: int | None = None
+    # How many DECLARED layers must actually contain at least one module for the
+    # check to pass. None (default) = no gate, which is backward compatible: a
+    # config that never asked for this keeps its old exit codes.
+    #
+    # Exists because forbidding edges between layers says nothing about whether
+    # the layers are there. A codebase that collapsed four layers into one file
+    # satisfies every `forbid` rule by having no cross-layer edges at all, and
+    # the Constraint Decay paper (arxiv:2605.06445) reports that is exactly what
+    # agents produce under architectural constraints. Its verifier pairs
+    # dependency direction with a presence floor of "at least 3 of 4 layers", so
+    # this is that floor, generalised.
+    min_layers_present: int | None = None
 
 
 class Violation(BaseModel):
@@ -125,6 +137,10 @@ class LayerCoverage(BaseModel):
     edges_total: int
     edges_governed: int
     unlayered_modules: tuple[str, ...]
+    # (layer name, module count) for every DECLARED layer, in config order. A
+    # zero here is a layer that exists on paper only: it can never source or
+    # receive a violation, so every rule naming it is dead.
+    layer_sizes: tuple[tuple[str, int], ...] = ()
     # Modules the scan found OUTSIDE every root package the config names, e.g.
     # `bench/` scripts and top-level tooling sitting beside the package. Held
     # apart from the ratios on purpose: counting them would make any project
@@ -149,6 +165,15 @@ class LayerCoverage(BaseModel):
     def governs_nothing(self) -> bool:
         """No module in the tree falls under any root the config names."""
         return self.modules_total == 0
+
+    @property
+    def empty_layers(self) -> tuple[str, ...]:
+        """Declared layers that matched no module at all."""
+        return tuple(name for name, size in self.layer_sizes if size == 0)
+
+    @property
+    def layers_present(self) -> int:
+        return sum(1 for _, size in self.layer_sizes if size)
 
 
 def governed_roots(config: LayerConfig) -> frozenset[str]:
@@ -193,6 +218,11 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
             continue
         layer_of[node] = match_layer(node, config.layers)
 
+    sizes = {layer.name: 0 for layer in config.layers}
+    for layer in layer_of.values():
+        if layer is not None:
+            sizes[layer] = sizes.get(layer, 0) + 1
+
     matched = [node for node, layer in layer_of.items() if layer is not None]
     in_ruled = [node for node, layer in layer_of.items() if layer in ruled_layers]
     unlayered = sorted(node for node, layer in layer_of.items() if layer is None)
@@ -212,6 +242,7 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         edges_governed=len(governed),
         unlayered_modules=tuple(unlayered),
         modules_outside_declared_roots=outside,
+        layer_sizes=tuple((layer.name, sizes[layer.name]) for layer in config.layers),
     )
 
 
@@ -235,6 +266,7 @@ def load_config(path: Path) -> LayerConfig:
     roots = _parse_str_list(raw.get("roots", []), "roots", path)
     sdp = _parse_sdp(raw.get("sdp"), path)
     max_modules = _parse_max_modules(raw.get("max_modules"), path)
+    min_layers_present = _parse_min_layers_present(raw.get("min_layers_present"), len(layers), path)
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
@@ -242,7 +274,29 @@ def load_config(path: Path) -> LayerConfig:
         roots=tuple(roots),
         sdp=sdp,
         max_modules=max_modules,
+        min_layers_present=min_layers_present,
     )
+
+
+def _parse_min_layers_present(value: object, declared: int, path: Path) -> int | None:
+    """Validate `min_layers_present:`. Absent -> None (no presence gate).
+
+    Rejects a floor higher than the number of layers actually declared, because
+    such a config can never pass and the failure would otherwise look like a
+    finding about the codebase rather than a typo in the config.
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise LayerConfigError(
+            f"`min_layers_present` must be a non-negative integer in {path}, got {value!r}"
+        )
+    if value > declared:
+        raise LayerConfigError(
+            f"`min_layers_present` is {value} in {path} but only {declared} layer(s) are "
+            "declared, so the check could never pass."
+        )
+    return value
 
 
 def _parse_max_modules(value: object, path: Path) -> int | None:

@@ -488,6 +488,21 @@ roots:
 
 Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
 
+**Layer presence (`min_layers_present:`).** Forbidding edges *between* layers says nothing about whether the layers exist. A codebase that collapsed four layers into one module satisfies every `forbid` rule by having no cross-layer edges at all, and passes silently. Set a floor to catch that:
+
+```yaml
+min_layers_present: 3   # at least 3 of the declared layers must contain a module
+```
+
+Empty declared layers are reported either way, because every rule naming one is dead:
+
+```console
+#   layers present: 2 of 4 declared; empty: repositories, models
+#   FAIL: 2 layer(s) present, min_layers_present is 3
+```
+
+Unset by default, so existing configs keep their exit codes. The shape is taken from the Constraint Decay paper ([arxiv:2605.06445](https://arxiv.org/abs/2605.06445)), whose architecture verifier pairs a dependency-direction rule with exactly this presence floor ("at least 3 of the 4 canonical layers present as distinct directories"). `bench/fixtures/conduit_clean/` reproduces its three cases.
+
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 
 **Coverage.** Every `check` reports how much of your code the rules actually reach, on a pass as well as a failure:

@@ -241,6 +241,9 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
     else:
         click.echo(_violations_to_text(violations, config_path))
         click.echo(_coverage_to_text(coverage))
+        presence = _presence_to_text(coverage, config.min_layers_present)
+        if presence:
+            click.echo(presence)
         if show_unlayered and coverage.unlayered_modules:
             for module in coverage.unlayered_modules:
                 click.echo(f"#     {module}")
@@ -251,7 +254,15 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
                 click.echo("# (sdp.mode=warn; not failing the gate)")
 
     sdp_fails = bool(sdp_violations) and config.sdp.mode == "error"
-    if violations or sdp_fails:
+    # A presence shortfall fails the gate like a violation does. Forbidding
+    # edges between layers says nothing about whether the layers exist, and a
+    # codebase that collapsed them into one module satisfies every forbid rule
+    # by having no cross-layer edges at all.
+    presence_fails = (
+        config.min_layers_present is not None
+        and coverage.layers_present < config.min_layers_present
+    )
+    if violations or sdp_fails or presence_fails:
         sys.exit(1)
 
 
@@ -1792,6 +1803,29 @@ def _coverage_to_json(coverage: LayerCoverage) -> dict:
         "unlayered_modules": list(coverage.unlayered_modules),
         "modules_outside_declared_roots": coverage.modules_outside_declared_roots,
     }
+
+
+def _presence_to_text(coverage: LayerCoverage, minimum: int | None) -> str:
+    """Report empty declared layers, and whether they breach a presence floor.
+
+    Printed even without a floor configured: a layer matching nothing is worth
+    saying out loud regardless, because every rule naming it is dead.
+    """
+    empty = coverage.empty_layers
+    if not empty and minimum is None:
+        return ""
+    total = len(coverage.layer_sizes)
+    lines = []
+    if empty:
+        lines.append(
+            f"#   layers present: {coverage.layers_present} of {total} declared; "
+            f"empty: {', '.join(empty)}"
+        )
+    if minimum is not None and coverage.layers_present < minimum:
+        lines.append(
+            f"#   FAIL: {coverage.layers_present} layer(s) present, min_layers_present is {minimum}"
+        )
+    return "\n".join(lines)
 
 
 def _coverage_to_text(coverage: LayerCoverage) -> str:
