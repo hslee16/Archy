@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c4a1566f71ef",
+  "strategy": "manual-commit",
+  "branch": "alee/contract-prevalence-359",
+  "checkpoints_count": 4,
+  "files_touched": [
+    ".gitignore",
+    "bench/contract_prevalence.jsonl"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c4/a1566f71ef/0/metadata.json",
+      "transcript": "/c4/a1566f71ef/0/full.jsonl",
+      "content_hash": "/c4/a1566f71ef/0/content_hash.txt",
+      "prompt": "/c4/a1566f71ef/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 798,
+    "cache_creation_tokens": 3519508,
+    "cache_read_tokens": 122527282,
+    "output_tokens": 244938,
+    "api_call_count": 426
+  }
+}
