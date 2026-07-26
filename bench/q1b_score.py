@@ -22,14 +22,19 @@ the agent arm comparable to the 0.5% human control baseline it must beat.
 
 The protocol's primary outcome is "introduced cycle OR declared-layer/contract
 violation OR score regression beyond a noise floor". **SWE-bench repositories
-have no `archy.yaml`**, so the declared-layer arm cannot fire at all here.
+have no `archy.yaml`**, so the declared-layer arm cannot fire in THIS file.
 
 That is not a small caveat. Per #316, archy's differentiator is the *normative*
-job (rules the user declares), and this corpus supplies no declared intent. So a
-Q1b run on SWE-bench tests the *descriptive* half only: cycles and score. The
-honest options are to report the narrower claim, or to author `archy.yaml` per
-repo, which makes the measurer the author of the intent being measured. Not
-resolved here; recorded so the results doc cannot quietly skip it.
+job (rules the user declares), and this corpus supplies no declared intent. The
+honest options were to report the narrower claim, or to author `archy.yaml` per
+repo, which makes the measurer the author of the intent being measured.
+
+**Resolved since, the second way** (#353/#354/#355): `bench/q1b_layers/` holds
+an authored, validated config for all six repos, and `bench/q1b_run.py` gates on
+`cycle_regression OR an introduced layer violation`. The bias that creates is
+carried in `bench/q1b_layers/README.md`, which is where it belongs. This file
+still defines the cycle half alone, deliberately: it is the piece that has to
+stay byte-comparable with Q1a's human baseline.
 
 ## Score is a supporting outcome, never the gate
 

@@ -257,3 +257,9 @@ bench/repo_cache/
 # than sharing #289's fate of being unverifiable; not committed, since they carry
 # full prompts and file contents and would bloat the repo.
 bench/agent_footprint_transcripts/
+
+# Same deal for the Q1b arm-B pilot (#356, ~17MB, 25 live runs). The derived
+# rows in bench/q1b_results.jsonl ARE committed, so the 0/25 can be re-derived
+# without them; these stay local so a disputed row can still be traced back to
+# what the agent actually did.
+bench/q1b_transcripts/
