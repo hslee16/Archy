@@ -34,11 +34,12 @@ Fetch the job's failing *step*, then its log.
 
 ## Adding a gate or a payload field
 
-**Wire it to every surface in one change.** archy has three: the CLI's text
-output, the CLI's `--format json`, and the MCP payload. A presence check shipped
-to the CLI alone left the MCP surface, which is what agents actually call,
-reporting `passed=true` for the exact case the check existed to catch. Three
-consecutive review rounds each found one more surface it had been omitted from.
+**Wire it to every surface in one change.** Three at the time of writing, and
+worth confirming that is still current: the CLI's text output, the CLI's
+`--format json`, and the MCP payload. A presence check shipped to the CLI alone
+left the MCP surface, the one agents actually call, reporting `passed=true` for
+the exact case the check existed to catch. Three consecutive review rounds each
+found one more surface it had been omitted from.
 
 **Test the serialized form, not the attribute.** FastMCP sends `model_dump()`,
 which silently drops plain `@property`. A test asserting
@@ -53,12 +54,17 @@ gate must also say why, in every format.
 ## Review findings
 
 Reviews here regularly find real bugs, not just style. When a round finds
-something substantive, run another round after fixing: the last feature needed
-four, and rounds two, three and four each found a distinct real defect.
+something substantive, run another round after fixing. `min_layers_present`
+(#123, PR #371) needed four rounds, and rounds two, three and four each found a
+distinct real defect: the gate missing from the MCP surface, the JSON output not
+saying why it failed, and `model_dump()` dropping the reason entirely.
 
-**Pre-existing findings get filed, not folded in.** Precedent: #317, #318, #335.
-Widening a PR to fix code it did not touch makes the diff harder to review and
-buries the actual change. **Check for an existing ticket first** - it is easy to
+**Pre-existing findings get filed, not folded in.** Widening a PR to fix code it
+did not touch makes the diff harder to review and buries the actual change.
+Precedent, all split out of unrelated PRs and all still readable as standalone
+tickets: #317 (duplicated empty-package setup in the CLI tests), #318 (the
+repeated Click bound-check validations), #335 (two duplicated text-renderer
+blocks in `cli.py`). **Check for an existing ticket first** - it is easy to
 file a duplicate of something a contributor is already working on.
 
 **Leave `good first issue` tickets alone.** Outside contributors pick these up;
