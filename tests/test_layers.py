@@ -10,6 +10,7 @@ from archy.layers import (
     LayerConfig,
     LayerConfigError,
     LayerSpec,
+    compute_coverage,
     discover_config,
     find_violations,
     load_config,
@@ -283,3 +284,95 @@ def test_load_config_max_modules_rejects_invalid(tmp_path: Path, bad: str):
     cfg.write_text(f"layers: {{}}\nforbid: []\nmax_modules: {bad}\n")
     with pytest.raises(LayerConfigError, match="max_modules"):
         load_config(cfg)
+
+
+def _cfg(tmp_path: Path, body: str) -> LayerConfig:
+    path = tmp_path / "archy.yaml"
+    path.write_text(body)
+    return load_config(path)
+
+
+def test_coverage_reports_what_the_rules_cannot_reach(tmp_path: Path):
+    """The failure this exists to make visible: a clean pass over almost nothing.
+
+    archy's own config governed 9 of 42 modules and 16 of 117 edges while
+    `check` reported "No layer violations" (#362).
+    """
+    config = _cfg(
+        tmp_path,
+        "layers:\n"
+        "  api:\n"
+        "    modules: ['app.api']\n"
+        "  db:\n"
+        "    modules: ['app.db']\n"
+        "forbid:\n"
+        "  - {from: db, to: api}\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["app.api", "app.db", "app.util", "app.helpers"])
+    graph.add_edges_from([("app.api", "app.db"), ("app.util", "app.helpers")])
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.modules_total == 4
+    assert coverage.modules_matched == 2
+    assert coverage.unlayered_modules == ("app.helpers", "app.util")
+    # The edge between two unlayered modules cannot be governed by any rule.
+    assert coverage.edges_total == 2
+    assert coverage.edges_governed == 1
+    assert coverage.edge_ratio == 0.5
+
+
+def test_coverage_excludes_modules_outside_the_declared_roots(tmp_path: Path):
+    """Scanning a repo root pulls in bench/ and scripts/ beside the package.
+
+    Counting those would report a fact about the scan path, not about the
+    config: archy's own check read 7% before this scoping, 21% after.
+    """
+    config = _cfg(
+        tmp_path,
+        "layers:\n  core:\n    modules: ['app.core.**']\nforbid: []\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["app.core.a", "app.other", "benchscript", "conftest"])
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.modules_total == 2  # app.* only
+    assert coverage.modules_matched == 1
+    assert coverage.modules_outside_declared_roots == 2
+
+
+def test_coverage_separates_layered_from_actually_ruled(tmp_path: Path):
+    """A layer no forbid rule names cannot produce a violation."""
+    config = _cfg(
+        tmp_path,
+        "layers:\n"
+        "  api:\n"
+        "    modules: ['app.api']\n"
+        "  db:\n"
+        "    modules: ['app.db']\n"
+        "  orphan:\n"
+        "    modules: ['app.orphan']\n"
+        "forbid:\n"
+        "  - {from: db, to: api}\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["app.api", "app.db", "app.orphan"])
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.modules_matched == 3
+    assert coverage.modules_in_ruled_layer == 2  # app.orphan is covered on paper only
+
+
+def test_coverage_ignores_external_nodes(tmp_path: Path):
+    config = _cfg(tmp_path, "layers:\n  core:\n    modules: ['app.core']\nforbid: []\n")
+    graph = nx.DiGraph()
+    graph.add_node("app.core")
+    graph.add_node("requests", external=True)
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.modules_total == 1
+    assert coverage.modules_outside_declared_roots == 0

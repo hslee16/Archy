@@ -469,6 +469,18 @@ Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is eith
 
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 
+**Coverage.** Every `check` reports how much of your code the rules actually reach, on a pass as well as a failure:
+
+```console
+$ archy check .
+# No layer violations (config: archy.yaml).
+#   layer coverage: 9 of 42 modules (21%), 16 of 117 internal edges (14%); 33 module(s) match no layer (`archy check --show-unlayered`)
+```
+
+That line exists because **a rule set that cannot fire is indistinguishable from a clean codebase**: without it, a config governing 14% of your import edges prints the same "No layer violations" as one governing all of them. The edge percentage is the one to watch, since a config can put most modules in layers while ruling almost none of the edges between them. Coverage is scoped to the root packages your patterns name, so scripts and benchmarks sitting beside your package are counted separately rather than dragging the number down. `--show-unlayered` lists the modules no layer matches.
+
+The numbers above are archy's own, and they are not flattering. They are printed here because the alternative is not knowing.
+
 archy enforces its own architecture this way; see [`archy.yaml`](archy.yaml) at the repo root and the `archy check .` step in `.github/workflows/ci.yml`.
 
 **Stability check (`sdp:`).** Optionally enable Robert Martin's Stable Dependencies Principle: a module should not import one that is *less stable* than itself. Stability is `I = Ce / (Ce + Ca)` where `Ce` is outgoing internal imports and `Ca` is incoming, so `I = 0` means "depended on, depends on nothing" (most stable) and `I = 1` means "depends on lots, nothing depends on this" (least stable).

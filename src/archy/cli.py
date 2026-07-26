@@ -62,8 +62,10 @@ from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.layers import (
     LayerConfig,
     LayerConfigError,
+    LayerCoverage,
     SdpViolation,
     Violation,
+    compute_coverage,
     discover_config,
     find_sdp_violations,
     find_violations,
@@ -184,7 +186,13 @@ def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: boo
     default="text",
     help="Output format.",
 )
-def check(path: Path, config_path: Path | None, fmt: str) -> None:
+@click.option(
+    "--show-unlayered",
+    is_flag=True,
+    default=False,
+    help="List every module that matches no declared layer.",
+)
+def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) -> None:
     """Check the project at PATH against layer rules in archy.yaml.
 
     Exits 0 if there are no violations, 1 otherwise.
@@ -216,6 +224,8 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
     except LayerConfigError as exc:
         raise click.ClickException(str(exc)) from exc
 
+    coverage = compute_coverage(g, config)
+
     sdp_violations: list[SdpViolation] = []
     if config.sdp.enabled:
         sdp_violations = find_sdp_violations(g, tolerance=config.sdp.tolerance)
@@ -225,10 +235,15 @@ def check(path: Path, config_path: Path | None, fmt: str) -> None:
             "violations": _violations_to_json(violations),
             "sdp_violations": _sdp_violations_to_json(sdp_violations),
             "sdp_mode": config.sdp.mode,
+            "coverage": _coverage_to_json(coverage),
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_violations_to_text(violations, config_path))
+        click.echo(_coverage_to_text(coverage))
+        if show_unlayered and coverage.unlayered_modules:
+            for module in coverage.unlayered_modules:
+                click.echo(f"#     {module}")
         if config.sdp.enabled:
             click.echo("")
             click.echo(_sdp_violations_to_text(sdp_violations, config.sdp.tolerance))
@@ -1763,6 +1778,42 @@ def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
             current_rule = rule_pair
         lines.append(f"  {v.source} -> {v.target}  {_format_lines(v.lines)}")
     return "\n".join(lines)
+
+
+def _coverage_to_json(coverage: LayerCoverage) -> dict:
+    return {
+        "modules_total": coverage.modules_total,
+        "modules_matched": coverage.modules_matched,
+        "modules_in_ruled_layer": coverage.modules_in_ruled_layer,
+        "module_ratio": round(coverage.module_ratio, 4),
+        "edges_total": coverage.edges_total,
+        "edges_governed": coverage.edges_governed,
+        "edge_ratio": round(coverage.edge_ratio, 4),
+        "unlayered_modules": list(coverage.unlayered_modules),
+        "modules_outside_declared_roots": coverage.modules_outside_declared_roots,
+    }
+
+
+def _coverage_to_text(coverage: LayerCoverage) -> str:
+    """One line, always printed, including on a clean pass.
+
+    Printed on a PASS specifically: a clean result is exactly when a reader is
+    entitled to know whether the rules could have said anything at all (#362).
+    """
+    line = (
+        f"#   layer coverage: {coverage.modules_matched} of {coverage.modules_total} modules "
+        f"({coverage.module_ratio:.0%}), {coverage.edges_governed} of {coverage.edges_total} "
+        f"internal edges ({coverage.edge_ratio:.0%})"
+    )
+    unlayered = len(coverage.unlayered_modules)
+    if unlayered:
+        line += f"; {unlayered} module(s) match no layer (`archy check --show-unlayered`)"
+    if coverage.modules_outside_declared_roots:
+        line += (
+            f"\n#   {coverage.modules_outside_declared_roots} scanned module(s) sit outside "
+            "every declared root package and are not counted above"
+        )
+    return line
 
 
 def _sdp_violations_to_json(violations: list[SdpViolation]) -> list[dict]:

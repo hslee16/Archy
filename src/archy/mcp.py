@@ -152,8 +152,10 @@ from archy.hotspots import git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
+    LayerCoverage,
     SdpViolation,
     Violation,
+    compute_coverage,
     discover_config,
     find_sdp_violations,
     find_violations,
@@ -307,6 +309,11 @@ class CheckPayload(BaseModel):
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
     passed: bool
+    # How much of the declared roots the rules actually reach. Present on a PASS
+    # too, deliberately: `passed=True` is exactly when an agent needs to know
+    # whether the config could have said anything (#362). Without it, a config
+    # governing 14% of edges is indistinguishable from a clean codebase.
+    coverage: LayerCoverage | None = None
     # Nested only when archy_check(contracts=True) additionally runs
     # import-linter (#268): the transitive contract results that used to be the
     # separate archy_contracts tool. None when contracts were not requested.
@@ -1127,6 +1134,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
         violations=tuple(violations),
         sdp_violations=tuple(sdp_violations),
         passed=not violations and not sdp_fails_gate,
+        coverage=compute_coverage(graph, config),
     )
 
 
