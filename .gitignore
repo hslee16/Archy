@@ -267,3 +267,4 @@ bench/q1b_transcripts/
 # Clones for the #359 contract-prevalence bench; regenerable via
 # bench/contract_prevalence.py --measure.
 bench/cache/contract_clones/
+bench/greenfield_transcripts/
