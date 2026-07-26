@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2c0fe16ca22f",
+  "strategy": "manual-commit",
+  "branch": "alee/layer-presence-135",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "src/archy/layers.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2c/0fe16ca22f/0/metadata.json",
+      "transcript": "/2c/0fe16ca22f/0/full.jsonl",
+      "content_hash": "/2c/0fe16ca22f/0/content_hash.txt",
+      "prompt": "/2c/0fe16ca22f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1283,
+    "cache_creation_tokens": 8001112,
+    "cache_read_tokens": 300415865,
+    "output_tokens": 432168,
+    "api_call_count": 688
+  }
+}
