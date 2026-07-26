@@ -22,11 +22,13 @@
 # agents name things differently. archy patterns are dotted-name globs, so the
 # aliases are enumerated per layer.
 #
-# NOT EXPRESSIBLE HERE: the paper's OTHER check, layer PRESENCE (at least 3 of
-# the 4 layers must exist as distinct directories). archy has no such check
-# (#135), so this config states half the paper's compliance definition. A
-# degenerate single-module solution satisfies every rule below by having no
-# layers at all.
+# BOTH halves of the paper's verifier are now expressible. `min_layers_present`
+# (#135) is its layer-presence check: "A solution is considered layered if at
+# least 3 of the 4 canonical layers are present as distinct directories."
+# Without it, the degenerate single-module solution the paper says agents
+# produce satisfies every rule below by having no layers at all.
+
+min_layers_present: 3
 
 layers:
   routes:

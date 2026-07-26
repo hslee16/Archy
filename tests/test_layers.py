@@ -386,3 +386,48 @@ def test_coverage_of_an_empty_scope_is_zero_not_perfect(tmp_path: Path):
     assert coverage.edge_ratio == 0.0
     assert coverage.governs_nothing is True
     assert coverage.modules_outside_declared_roots == 1
+
+
+def test_coverage_counts_each_declared_layer(tmp_path: Path):
+    config = _cfg(
+        tmp_path,
+        "layers:\n"
+        "  routes:\n    modules: ['routes.**']\n"
+        "  services:\n    modules: ['services.**']\n"
+        "  ghost:\n    modules: ['ghost.**']\n"
+        "forbid: []\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["routes.a", "routes.b", "services.a"])
+
+    coverage = compute_coverage(graph, config)
+
+    assert dict(coverage.layer_sizes) == {"routes": 2, "services": 1, "ghost": 0}
+    assert coverage.empty_layers == ("ghost",)
+    assert coverage.layers_present == 2
+
+
+def test_min_layers_present_rejects_a_floor_above_the_declared_count(tmp_path: Path):
+    """A config that could never pass is a typo, and its failure would otherwise
+    read as a finding about the codebase."""
+    with pytest.raises(LayerConfigError, match="could never pass"):
+        _cfg(
+            tmp_path,
+            "min_layers_present: 4\nlayers:\n  a:\n    modules: ['a.**']\nforbid: []\n",
+        )
+
+
+def test_min_layers_present_defaults_to_no_gate(tmp_path: Path):
+    config = _cfg(tmp_path, "layers:\n  a:\n    modules: ['a.**']\nforbid: []\n")
+    assert config.min_layers_present is None
+
+
+@pytest.mark.parametrize("value", ["-1", "'three'", "true"])
+def test_min_layers_present_rejects_invalid(tmp_path: Path, value: str):
+    with pytest.raises(LayerConfigError, match="min_layers_present"):
+        _cfg(
+            tmp_path,
+            f"min_layers_present: {value}\n"
+            "layers:\n  a:\n    modules: ['a.**']\n  b:\n    modules: ['b.**']\n"
+            "  c:\n    modules: ['c.**']\n  d:\n    modules: ['d.**']\nforbid: []\n",
+        )

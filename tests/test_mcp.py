@@ -81,6 +81,43 @@ def project_with_caller(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def test_check_passed_respects_the_layer_presence_floor(tmp_path: Path):
+    """The gate has to hold on the AGENT-FACING surface, not just the CLI.
+
+    It shipped wired into `archy check` only, so `archy_check` reported
+    passed=True for the degenerate single-module solution the floor exists to
+    catch: precisely the case an agent in a correction loop needs told.
+    """
+    from archy.mcp import CheckPayload, _run_check
+
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "everything.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        "min_layers_present: 2\n"
+        "layers:\n"
+        "  routes:\n    modules: ['app.routes.**']\n"
+        "  services:\n    modules: ['app.services.**']\n"
+        "forbid:\n  - {from: services, to: routes}\n"
+    )
+
+    payload = _run_check(tmp_path, config_path=None)
+
+    assert isinstance(payload, CheckPayload)
+    assert payload.violations == ()
+    assert payload.passed is False
+
+    # Asserted on the SERIALIZED form, not attributes. FastMCP sends
+    # `model_dump()`, which drops plain properties, so an attribute-only
+    # assertion passed while the agent-facing payload carried no reason at all.
+    dumped = payload.model_dump()
+    assert dumped["passed"] is False
+    assert dumped["presence_fails"] is True
+    assert dumped["min_layers_present"] == 2
+    assert dumped["coverage"]["layers_present"] == 0
+    assert sorted(dumped["coverage"]["empty_layers"]) == ["routes", "services"]
+
+
 def test_create_server_registers_expected_tools():
     server = create_server()
     tools = asyncio.run(server.list_tools())
