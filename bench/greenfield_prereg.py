@@ -367,6 +367,16 @@ def verdict(arm_a: ArmSummary, arm_b: ArmSummary) -> Verdict:
     )
 
 
+def _behaviorally_evaluable(row: dict) -> bool:
+    """One definition of "this run's behaviour can be scored", because both the
+    guardrail and the composite ask it and they must never drift apart. A row
+    that is evaluable but carries no rate is a harness bug, and treating it as
+    0.0 would be the exact substitution `greenfield_eval` refuses to make.
+    """
+    behavioral = row.get("behavioral") or {}
+    return bool(behavioral.get("evaluable")) and behavioral.get("pass_rate") is not None
+
+
 def summarize_rows(rows: list[dict], arm: str) -> ArmSummary:
     """Reduce ledger rows to an `ArmSummary`.
 
@@ -378,12 +388,7 @@ def summarize_rows(rows: list[dict], arm: str) -> ArmSummary:
     structural = [r for r in mine if (r.get("structural") or {}).get("evaluable")]
     compliant = [r for r in structural if (r["structural"] or {}).get("compliant")]
 
-    behavioral = [
-        r
-        for r in compliant
-        if (r.get("behavioral") or {}).get("evaluable")
-        and (r.get("behavioral") or {}).get("pass_rate") is not None
-    ]
+    behavioral = [r for r in compliant if _behaviorally_evaluable(r)]
     behavioral_mean = (
         sum(r["behavioral"]["pass_rate"] for r in behavioral) / len(behavioral)
         if behavioral
@@ -393,12 +398,7 @@ def summarize_rows(rows: list[dict], arm: str) -> ArmSummary:
     # Composite needs both axes, so its denominator is the runs evaluable on
     # both. A non-compliant run contributes 0, which is the paper's rule; an
     # unevaluable one is absent, which is this repo's.
-    both = [
-        r
-        for r in structural
-        if (r.get("behavioral") or {}).get("evaluable")
-        and (r.get("behavioral") or {}).get("pass_rate") is not None
-    ]
+    both = [r for r in structural if _behaviorally_evaluable(r)]
     composite_mean = (
         sum(r["behavioral"]["pass_rate"] if r["structural"]["compliant"] else 0.0 for r in both)
         / len(both)
