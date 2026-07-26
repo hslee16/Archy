@@ -50,9 +50,12 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
+from collections.abc import Sequence
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -60,7 +63,13 @@ from pydantic import BaseModel, ConfigDict
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 from archy.graph import DEFAULT_IGNORED_DIRS, build_graph  # noqa: E402
-from archy.layers import compute_coverage, find_violations, load_config  # noqa: E402
+from archy.layers import (  # noqa: E402
+    LayerConfig,
+    LayerSpec,
+    compute_coverage,
+    find_violations,
+    load_config,
+)
 
 CONDUIT_CONFIG = REPO_ROOT / "bench/fixtures/conduit_clean/archy.yaml"
 SUITE_DIR = REPO_ROOT / "bench/cache/realworld_hurl"
@@ -76,6 +85,35 @@ HURL_IMAGE = (
     "@sha256:d7727dcc0166de8aea88916e73ea435ee09bfecb8ba0c281200206b6cf37cf64"
 )
 HURL_VERSION = "7.1.0"
+
+# THE BEHAVIORAL SCORE IS ASSERT-LEVEL, AND THE DENOMINATOR IS PINNED.
+#
+# Measured 2026-07-26 against a live server, which is the only way either of
+# these was going to surface. Two facts forced this shape:
+#
+#   - `succeeded files` cannot discriminate. The suite is 13 all-or-nothing
+#     files, every one gated on registration, so one wrong status code zeroes
+#     the lot. A near-conforming backend and a stub that 501s everything BOTH
+#     scored 0.000. A metric that cannot separate those cannot support the
+#     behavioral guardrail, and an unfirable guardrail is worse than none: the
+#     prereg lets it VOID a structural win.
+#   - `passed / executed` rewards failing early. hurl abandons a file at its
+#     first failure, so a worse server executes fewer asserts and can post a
+#     HIGHER ratio. `--continue-on-error` shrinks that (241 asserts vs 67 on the
+#     same server) but does not remove it: the stub still executed only 169.
+#
+# So the denominator is `max(pinned, executed)`. A run that conforms better than
+# the calibration is not capped, and one that dies early cannot inflate. The pin
+# is a FLOOR taken from the best reference available, not a claim about the
+# suite's true total; re-derive it with `--calibrate <host>` and change it
+# deliberately, noting it in the results, exactly as with the image digest.
+#
+# Provenance: 241 asserts executed by borys25ol/fastapi-realworld-backend
+# (2026-07-26, with its `POST /api/users` status corrected to the spec's 201),
+# under --continue-on-error. That backend is near-conforming, not conforming, so
+# the true total is >= this.
+ASSERT_DENOMINATOR = 241
+ASSERT_DENOMINATOR_SOURCE = "borys25ol/fastapi-realworld-backend @ 2026-07-26"
 
 # `hurl --test` summary lines, e.g. "Executed files:  13" / "Succeeded files:  11".
 SUMMARY = re.compile(r"^(?P<label>[A-Za-z ]+):\s+(?P<count>\d+)", re.MULTILINE)
@@ -109,9 +147,17 @@ class BehavioralVerdict(BaseModel):
 
     evaluable: bool = True
     reason: str | None = None
+    #: Whole-file pass counts. Kept because they are the suite's own headline,
+    #: but NOT the score: see `pass_rate`.
     files_executed: int | None = None
     files_succeeded: int | None = None
+    #: The score. Assert-level, over a denominator that does not shrink when the
+    #: server fails early. Raw counts are recorded beside it so the pinned
+    #: denominator stays auditable rather than being an invisible constant.
     pass_rate: float | None = None
+    asserts_passed: int | None = None
+    asserts_executed: int | None = None
+    asserts_denominator: int | None = None
     exit_code: int | None = None
     uid: str | None = None
     hurl_version: str | None = None
@@ -147,6 +193,42 @@ def fetch_suite() -> int:
     return 0 if fetched else 1
 
 
+def nesting_tolerant_config(config: LayerConfig, modules: Sequence[str]) -> LayerConfig:
+    """Expand each layer alias to the package prefixes it actually appears under.
+
+    THE PAPER CHECKS FOR A DIRECTORY; ARCHY MATCHES A DOTTED NAME. A tree whose
+    root is a package (`conduit/__init__.py`, `app/`, `src/app/`) yields modules
+    like `conduit.services.user`, and the alias `services.**` does not match it.
+    Left alone, a correctly-layered generation reports 0 of 4 layers and scores
+    NON-COMPLIANT, in both arms, with any arm-difference in nesting habit
+    reading as an architecture effect.
+
+    The nested pattern cannot be written in the config: archy rejects a leading
+    `**` at load, deliberately (the contracts fallback derives the root package
+    from the first segment). So the prefixes are discovered from the tree under
+    test and the valid `<prefix>.<alias>.**` form is generated per prefix.
+
+    Alias matching is on whole dotted segments, so `myservices.x` does not count
+    as a `services` directory.
+    """
+    expanded: list[LayerSpec] = []
+    for layer in config.layers:
+        patterns: list[str] = list(layer.patterns)
+        for pattern in layer.patterns:
+            alias = pattern.split(".", 1)[0]
+            for module in modules:
+                segments = module.split(".")
+                if alias not in segments[1:]:
+                    # segments[0] is already covered by the unnested `alias.**`.
+                    continue
+                prefix = ".".join(segments[: segments.index(alias)])
+                candidate = f"{prefix}.{alias}.**"
+                if candidate not in patterns:
+                    patterns.append(candidate)
+        expanded.append(layer.model_copy(update={"patterns": tuple(patterns)}))
+    return config.model_copy(update={"layers": tuple(expanded)})
+
+
 def structural_verdict(tree: Path) -> StructuralVerdict:
     """The paper's architecture verifier, as archy expresses it.
 
@@ -170,6 +252,11 @@ def structural_verdict(tree: Path) -> StructuralVerdict:
     except Exception as exc:
         return StructuralVerdict(evaluable=False, reason=f"{type(exc).__name__}: {exc}")
 
+    # `build_graph` returns a networkx DiGraph whose nodes are module qualnames.
+    # An empty graph is a real state, not a failure: the degenerate single-module
+    # solution the paper describes yields one, and it must read as "0 layers
+    # present" rather than raising.
+    config = nesting_tolerant_config(config, sorted(graph.nodes))
     violations = find_violations(graph, config)
     coverage = compute_coverage(graph, config)
     floor = config.min_layers_present or 0
@@ -186,10 +273,13 @@ def structural_verdict(tree: Path) -> StructuralVerdict:
 
 
 def _server_responds(host: str, timeout: float = 5.0) -> bool:
-    """Is anything listening? Any HTTP status counts, including 404 and 500.
+    """Is anything listening, as seen from *this* process? Any HTTP status
+    counts, including 404 and 500.
 
     The question is "did the server come up", not "is it correct", so only a
-    transport-level failure counts as absent.
+    transport-level failure counts as absent. Note this answers the question
+    from the host's network, which is NOT where the suite runs; see
+    `_suite_can_reach`.
     """
     try:
         with urllib.request.urlopen(f"{host.rstrip('/')}/api/tags", timeout=timeout):
@@ -200,13 +290,118 @@ def _server_responds(host: str, timeout: float = 5.0) -> bool:
         return False
 
 
+def container_host(host: str) -> str:
+    """Rewrite a host-local URL into one a container can resolve.
+
+    `localhost` inside a container is the container, so the suite would test
+    itself and find nothing. Docker publishes the host as
+    `host.docker.internal`, which `--add-host=...:host-gateway` guarantees on
+    every platform rather than only where the daemon happens to inject it.
+    """
+    parsed = urllib.parse.urlsplit(host.rstrip("/"))
+    if parsed.hostname not in {"localhost", "127.0.0.1", "0.0.0.0", "::1"}:
+        return host.rstrip("/")
+    netloc = "host.docker.internal" + (f":{parsed.port}" if parsed.port else "")
+    return urllib.parse.urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
+
+
+def count_asserts(report: object) -> tuple[int, int]:
+    """(passed, executed) asserts across a hurl `--report-json` report.
+
+    Assert-level rather than file-level because the paper's own oracle is
+    assertion-level (291 of them) and because the file counts cannot separate a
+    near-conforming backend from a stub; see ASSERT_DENOMINATOR.
+    """
+    passed = executed = 0
+    for entry_file in report if isinstance(report, list) else []:
+        for entry in entry_file.get("entries", []):
+            for assertion in entry.get("asserts", []):
+                executed += 1
+                passed += 1 if assertion.get("success") else 0
+    return passed, executed
+
+
+def assert_pass_rate(passed: int, executed: int) -> float:
+    """Score over `max(pinned, executed)`, so failing early cannot pay.
+
+    Using `executed` alone would let a server that dies on request 1 of each
+    file post a high ratio off a handful of asserts. Using `pinned` alone would
+    cap a run that conforms better than the calibration did.
+    """
+    return round(passed / max(ASSERT_DENOMINATOR, executed), 4)
+
+
+def _hurl_cmd(
+    mount: Path, host: str, uid: str, glob: str, report_dir: Path | None = None
+) -> list[str]:
+    """The one place the container invocation is spelled out.
+
+    `--add-host` rather than `--network host`: Docker Desktop on macOS accepts
+    `--network host` and then cannot reach the host at all, which is the worst
+    available behaviour because the suite still *runs* and reports 0 of 13. A
+    correct server measured that way is indistinguishable from one that answers
+    every request wrongly, and both arms would have scored a behavioral zero.
+    Verified 2026-07-26 on Docker Desktop 28.1.1: `--network host` gets
+    connection-refused, `--add-host=host.docker.internal:host-gateway` gets 200.
+    """
+    cmd = [
+        "docker",
+        "run",
+        "--rm",
+        "--add-host=host.docker.internal:host-gateway",
+        "-v",
+        f"{mount}:/suite:ro",
+    ]
+    if report_dir is not None:
+        cmd += ["-v", f"{report_dir}:/out"]
+    cmd += [
+        HURL_IMAGE,
+        "--test",
+        # Without this hurl abandons a file at its first failure, so the number
+        # of asserts executed shrinks as the server gets worse. The denominator
+        # must not be a function of the thing being measured.
+        "--continue-on-error",
+        "--variable",
+        f"host={container_host(host)}",
+        "--variable",
+        f"uid={uid}",
+    ]
+    if report_dir is not None:
+        cmd += ["--report-json", "/out/json"]
+    return [*cmd, "--glob", glob]
+
+
+def _suite_can_reach(host: str, timeout: float = 60.0) -> bool:
+    """Probe from inside the container, where the suite actually runs.
+
+    `_server_responds` asks the host's network stack, which answers yes for a
+    server the container cannot see. That gap is not hypothetical: it is exactly
+    the defect this probe was added to close, and it produced `evaluable=true,
+    pass_rate=0.0` against a server that was up and answering.
+
+    Uses the same image, flags and variable as the real run, so it tests the
+    path the suite will take rather than an approximation of it.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        (Path(tmp) / "probe.hurl").write_text("GET {{host}}/api/tags\nHTTP *\n", encoding="utf-8")
+        try:
+            proc = subprocess.run(
+                _hurl_cmd(Path(tmp), host, "probe", "/suite/probe.hurl"),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return False
+    return proc.returncode == 0
+
+
 def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
     """Run the RealWorld Hurl suite against a live server.
 
     Runs in Docker so the hurl version is pinned and no local install is needed.
-    `--network host` because the server under test is on the host, not in the
-    container; that is a real portability limit and it is stated rather than
-    hidden (Docker Desktop on macOS honours it for this purpose).
+    The server under test is on the host, so the container reaches it through
+    `host.docker.internal`; see `_hurl_cmd` for why not `--network host`.
 
     TWO VARIABLES, both taken from the project's own `run-api-tests-hurl.sh`
     rather than guessed:
@@ -234,32 +429,27 @@ def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
         # code runs badly, which is the same "unmeasurable is not clean" trap
         # #356 hit from the other direction.
         return BehavioralVerdict(evaluable=False, reason=f"nothing listening at {host}")
-
-    try:
-        proc = subprocess.run(
-            [
-                "docker",
-                "run",
-                "--rm",
-                "--network",
-                "host",
-                "-v",
-                f"{SUITE_DIR}:/suite:ro",
-                HURL_IMAGE,
-                "--test",
-                "--variable",
-                f"host={host.rstrip('/')}",
-                "--variable",
-                f"uid={uid}",
-                "--glob",
-                "/suite/*.hurl",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+    if not _suite_can_reach(host):
+        # The server is up and the container cannot see it. That is a fact about
+        # this machine's docker networking, not about the generated code, so it
+        # must never reach the ledger as a score of any kind.
+        return BehavioralVerdict(
+            evaluable=False,
+            reason=f"server is up at {host} but the suite container cannot reach it",
         )
-    except subprocess.TimeoutExpired:
-        return BehavioralVerdict(evaluable=False, reason=f"suite exceeded {timeout}s")
+
+    with tempfile.TemporaryDirectory() as out:
+        try:
+            proc = subprocess.run(
+                _hurl_cmd(SUITE_DIR, host, uid, "/suite/*.hurl", report_dir=Path(out)),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return BehavioralVerdict(evaluable=False, reason=f"suite exceeded {timeout}s")
+        report_path = Path(out) / "json/report.json"
+        report = json.loads(report_path.read_text()) if report_path.exists() else None
 
     blob = f"{proc.stdout}\n{proc.stderr}"
     counts = {
@@ -274,10 +464,21 @@ def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
         return BehavioralVerdict(
             evaluable=False, reason="no hurl summary in output", tail=blob[-400:]
         )
+    if report is None:
+        # The score is assert-level, so no report means no score. The file counts
+        # survive in the summary, but reporting them AS the rate would silently
+        # substitute the metric this run exists to avoid.
+        return BehavioralVerdict(
+            evaluable=False, reason="hurl produced no report.json", tail=blob[-400:]
+        )
+    passed, asserts_executed = count_asserts(report)
     return BehavioralVerdict(
         files_executed=executed,
         files_succeeded=succeeded,
-        pass_rate=round(succeeded / executed, 4) if executed else 0.0,
+        pass_rate=assert_pass_rate(passed, asserts_executed),
+        asserts_passed=passed,
+        asserts_executed=asserts_executed,
+        asserts_denominator=max(ASSERT_DENOMINATOR, asserts_executed),
         exit_code=proc.returncode,
         uid=uid,
         # Recorded per run so a later re-pin is visible in the data rather than
@@ -295,11 +496,31 @@ def main() -> int:
     )
     ap.add_argument("--structural-only", action="store_true")
     ap.add_argument("--fetch-suite", action="store_true", help="download the RealWorld Hurl suite")
+    ap.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="report the assert total for --host, to re-derive ASSERT_DENOMINATOR",
+    )
     ap.add_argument("--timeout", type=float, default=300.0)
     args = ap.parse_args()
 
     if args.fetch_suite:
         return fetch_suite()
+    if args.calibrate:
+        if not args.host:
+            ap.error("--calibrate needs --host")
+        verdict = behavioral_verdict(args.host, args.timeout)
+        print(json.dumps(verdict.model_dump(), indent=2, sort_keys=True))
+        if not verdict.evaluable:
+            return 1
+        executed = verdict.asserts_executed or 0
+        print(
+            f"\n# ASSERT_DENOMINATOR is {ASSERT_DENOMINATOR} "
+            f"(from {ASSERT_DENOMINATOR_SOURCE}); this host executed {executed}."
+        )
+        if executed > ASSERT_DENOMINATOR:
+            print("# This host is a better floor. Re-pin deliberately and say so in the results.")
+        return 0
     if args.tree is None:
         ap.print_help()
         return 1

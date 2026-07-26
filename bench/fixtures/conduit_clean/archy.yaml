@@ -22,6 +22,28 @@
 # agents name things differently. archy patterns are dotted-name globs, so the
 # aliases are enumerated per layer.
 #
+# THESE ALIASES ARE UNNESTED FORMS ONLY, AND THAT IS NOT SUFFICIENT ON ITS OWN.
+# The paper's verifier looks for a DIRECTORY anywhere in the tree; archy matches
+# DOTTED MODULE NAMES, which carry the enclosing package. A generated project
+# whose root is itself a package (`conduit/__init__.py`, `app/`, `src/app/`) has
+# modules named `conduit.services.user`, which `services.**` does not match.
+#
+# Caught 2026-07-26 by canarying against a working third-party Conduit backend:
+# it reported 0 of 4 layers present and NON-COMPLIANT on a tree with real
+# `api/`, `services/` and `infrastructure/` directories, because every pattern
+# here was dead against it. That is #355's lesson ("a rule set that cannot fire
+# looks exactly like a clean codebase") in the direction that matters most: it
+# would have scored well-layered generations as failures in BOTH arms, and any
+# arm-difference in how often agents nest under a package would have read as an
+# architecture effect.
+#
+# The nested forms cannot be written here: archy rejects a leading `**` at config
+# load, deliberately, because the import-linter contracts fallback derives the
+# root package from the first segment. So `greenfield_eval.nesting_tolerant_config`
+# discovers the actual package prefixes in the tree under test and expands each
+# alias below into `<prefix>.<alias>.**`. Edit the alias set here; the expansion
+# is mechanical and belongs with the code that knows the tree.
+#
 # BOTH halves of the paper's verifier are now expressible. `min_layers_present`
 # (#135) is its layer-presence check: "A solution is considered layered if at
 # least 3 of the 4 canonical layers are present as distinct directories."
