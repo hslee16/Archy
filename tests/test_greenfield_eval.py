@@ -23,18 +23,18 @@ FIXTURES = Path(__file__).resolve().parent.parent / "bench/fixtures/conduit_clea
 
 def test_compliant_tree_matches_the_papers_verdict():
     verdict = greenfield_eval.structural_verdict(FIXTURES / "compliant")
-    assert verdict["compliant"] is True
-    assert verdict["layers_present"] == 4
-    assert verdict["dependency_violations"] == []
+    assert verdict.compliant is True
+    assert verdict.layers_present == 4
+    assert verdict.dependency_violations == ()
 
 
 def test_upward_import_is_a_dependency_violation():
     """A repository importing a route handler: the paper's own example."""
     verdict = greenfield_eval.structural_verdict(FIXTURES / "violating")
-    assert verdict["compliant"] is False
-    assert verdict["dependency_violations"] == ["repositories.article_repo -> routes.articles"]
+    assert verdict.compliant is False
+    assert verdict.dependency_violations == ("repositories.article_repo -> routes.articles",)
     # Presence still passes; only the direction check fails.
-    assert verdict["presence_ok"] is True
+    assert verdict.presence_ok is True
 
 
 def test_degenerate_single_module_fails_on_presence():
@@ -44,16 +44,16 @@ def test_degenerate_single_module_fails_on_presence():
     all, which is why the presence floor exists.
     """
     verdict = greenfield_eval.structural_verdict(FIXTURES / "degenerate")
-    assert verdict["compliant"] is False
-    assert verdict["dependency_violations"] == []
-    assert verdict["presence_ok"] is False
-    assert verdict["layers_present"] == 0
+    assert verdict.compliant is False
+    assert verdict.dependency_violations == ()
+    assert verdict.presence_ok is False
+    assert verdict.layers_present == 0
 
 
 def test_unreadable_tree_is_unevaluable_not_compliant(tmp_path: Path):
     verdict = greenfield_eval.structural_verdict(tmp_path / "does_not_exist")
-    assert verdict["evaluable"] is False
-    assert verdict.get("compliant") is not True
+    assert verdict.evaluable is False
+    assert verdict.compliant is False
 
 
 def test_a_server_that_never_started_is_not_a_zero_score():
@@ -64,6 +64,8 @@ def test_a_server_that_never_started_is_not_a_zero_score():
     badly.
     """
     verdict = greenfield_eval.behavioral_verdict("http://localhost:59999", timeout=60.0)
-    assert verdict["evaluable"] is False
-    assert "nothing listening" in verdict["reason"]
-    assert "pass_rate" not in verdict
+    assert verdict.evaluable is False
+    assert verdict.reason is not None and "nothing listening" in verdict.reason
+    # None, never 0.0: a score of zero would be a behavioral claim about a
+    # server that never answered.
+    assert verdict.pass_rate is None
