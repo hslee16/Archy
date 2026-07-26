@@ -1,0 +1,103 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "e4d99dee91d5",
+  "session_id": "35c746bf-65af-4277-8fe6-7e3aa551c19d",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-26T20:42:27.08065Z",
+  "branch": "alee/greenfield-eval-369",
+  "checkpoints_count": 6,
+  "save_step_count": 1,
+  "files_touched": [
+    "bench/greenfield_eval.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5[1m]",
+  "turn_id": "06d800968929",
+  "token_usage": {
+    "input_tokens": 1415,
+    "cache_creation_tokens": 8955790,
+    "cache_read_tokens": 364356024,
+    "output_tokens": 480332,
+    "api_call_count": 759
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01Qi7U5SwNSt5NxEYbtNCsqg",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "06d800968929",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 501,
+        "end": 502,
+        "entry_ids": [
+          "2ba9ce75-ef6b-405e-a3bf-d34a9dc90abe"
+        ],
+        "tool_use_id": "toolu_01Qi7U5SwNSt5NxEYbtNCsqg"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Qi7U5SwNSt5NxEYbtNCsqg"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01ATbzV4DGQujbCrZyhdYU53",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "loop"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "06d800968929",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 2937,
+        "end": 2938,
+        "entry_ids": [
+          "630bb338-755f-4ed2-a584-cb10ed8e686f"
+        ],
+        "tool_use_id": "toolu_01ATbzV4DGQujbCrZyhdYU53"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01ATbzV4DGQujbCrZyhdYU53"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: loop",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 87
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-26T20:42:26.953861Z",
+    "agent_lines": 268,
+    "agent_removed": 0,
+    "human_added": 10,
+    "human_modified": 3,
+    "human_removed": 0,
+    "total_committed": 281,
+    "total_lines_changed": 281,
+    "agent_percentage": 95.37366548042705,
+    "metric_version": 2
+  }
+}
