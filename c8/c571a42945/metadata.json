@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c8c571a42945",
+  "strategy": "manual-commit",
+  "branch": "alee/369-prereg",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "tests/test_greenfield_eval.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/c8/c571a42945/0/metadata.json",
+      "transcript": "/c8/c571a42945/0/full.jsonl",
+      "content_hash": "/c8/c571a42945/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 281,
+    "cache_creation_tokens": 370296,
+    "cache_read_tokens": 26027426,
+    "output_tokens": 98479,
+    "api_call_count": 150
+  }
+}
