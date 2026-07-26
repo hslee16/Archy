@@ -28,6 +28,12 @@ fixture tree or bench sample can introduce a real cycle or layer violation in a
 directory that is not archy's code. Add such trees to `exclude:` in `archy.yaml`
 with the reason, rather than weakening a rule.
 
+**Some failures only appear in CI's environment.** The bench caches under
+`bench/cache/` are gitignored, so a test that depends on one passes locally and
+fails on the runner. Move the cache aside and re-run before pushing a test that
+touches it. Assert the invariant, not the message: a test that checks *which*
+precondition failed is asserting a fact about your laptop.
+
 **Open the failing check, never the tally.** A summary line saying "1 failed"
 tells you nothing; `main` has been broken by merging on a green-looking count.
 Fetch the job's failing *step*, then its log.
@@ -81,6 +87,31 @@ runs are the only expensive part of any bench here. Every harness bug found
 during a paid run is a run wasted, and the arm-B pilot found five plumbing bugs
 that would each have cost the whole batch had they not been caught by a
 one-task smoke run first.
+
+**Anything that spends agent time must checkpoint per unit and resume.** A run
+is hours long, and the failure modes are ordinary: a stalled subprocess, a usage
+limit, a laptop sleeping, a crash in the scorer, someone pressing Ctrl-C. Copy
+the shape from `bench/_supervise.py` and `bench/q1b_run.py` rather than inventing
+one, because each rule in it was paid for:
+
+- **One ledger row per completed unit, appended with its newline in a single
+  write.** Two writes leave a window where a crash merges the next row into the
+  torn one and loses both.
+- **Only `status="ok"` counts as done.** Rows recorded as `error` or `stalled`
+  are retried on the next run, which is the safe direction.
+- **Retry stalls, never results.** A non-zero exit from the agent is a real
+  outcome; re-rolling it selects for runs that happened to succeed and biases
+  the sample.
+- **A crash in one unit must not end the loop.** Record it and continue, or one
+  bad task costs a batch that has already run for hours.
+- **A usage limit is not a result.** It is a fact about the account, so wait and
+  retry the same unit; recording it as an outcome would put your subscription
+  into the measurement.
+- **Interrupts exit cleanly and say how to resume.** Everything already written
+  survives; only the in-flight unit is lost.
+
+`tests/test_q1b_run.py` pins all of this. A bench without it will eventually eat
+an afternoon and produce nothing.
 
 **Pre-register the thresholds, including the ones that kill your idea.** Write
 them into the repository before running. `p_B <= 10%` and the four decay nulls
