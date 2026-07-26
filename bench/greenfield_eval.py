@@ -86,6 +86,35 @@ HURL_IMAGE = (
 )
 HURL_VERSION = "7.1.0"
 
+# THE BEHAVIORAL SCORE IS ASSERT-LEVEL, AND THE DENOMINATOR IS PINNED.
+#
+# Measured 2026-07-26 against a live server, which is the only way either of
+# these was going to surface. Two facts forced this shape:
+#
+#   - `succeeded files` cannot discriminate. The suite is 13 all-or-nothing
+#     files, every one gated on registration, so one wrong status code zeroes
+#     the lot. A near-conforming backend and a stub that 501s everything BOTH
+#     scored 0.000. A metric that cannot separate those cannot support the
+#     behavioral guardrail, and an unfirable guardrail is worse than none: the
+#     prereg lets it VOID a structural win.
+#   - `passed / executed` rewards failing early. hurl abandons a file at its
+#     first failure, so a worse server executes fewer asserts and can post a
+#     HIGHER ratio. `--continue-on-error` shrinks that (241 asserts vs 67 on the
+#     same server) but does not remove it: the stub still executed only 169.
+#
+# So the denominator is `max(pinned, executed)`. A run that conforms better than
+# the calibration is not capped, and one that dies early cannot inflate. The pin
+# is a FLOOR taken from the best reference available, not a claim about the
+# suite's true total; re-derive it with `--calibrate <host>` and change it
+# deliberately, noting it in the results, exactly as with the image digest.
+#
+# Provenance: 241 asserts executed by borys25ol/fastapi-realworld-backend
+# (2026-07-26, with its `POST /api/users` status corrected to the spec's 201),
+# under --continue-on-error. That backend is near-conforming, not conforming, so
+# the true total is >= this.
+ASSERT_DENOMINATOR = 241
+ASSERT_DENOMINATOR_SOURCE = "borys25ol/fastapi-realworld-backend @ 2026-07-26"
+
 # `hurl --test` summary lines, e.g. "Executed files:  13" / "Succeeded files:  11".
 SUMMARY = re.compile(r"^(?P<label>[A-Za-z ]+):\s+(?P<count>\d+)", re.MULTILINE)
 
@@ -118,9 +147,17 @@ class BehavioralVerdict(BaseModel):
 
     evaluable: bool = True
     reason: str | None = None
+    #: Whole-file pass counts. Kept because they are the suite's own headline,
+    #: but NOT the score: see `pass_rate`.
     files_executed: int | None = None
     files_succeeded: int | None = None
+    #: The score. Assert-level, over a denominator that does not shrink when the
+    #: server fails early. Raw counts are recorded beside it so the pinned
+    #: denominator stays auditable rather than being an invisible constant.
     pass_rate: float | None = None
+    asserts_passed: int | None = None
+    asserts_executed: int | None = None
+    asserts_denominator: int | None = None
     exit_code: int | None = None
     uid: str | None = None
     hurl_version: str | None = None
@@ -268,7 +305,35 @@ def container_host(host: str) -> str:
     return urllib.parse.urlunsplit((parsed.scheme, netloc, parsed.path, "", ""))
 
 
-def _hurl_cmd(mount: Path, host: str, uid: str, glob: str) -> list[str]:
+def count_asserts(report: object) -> tuple[int, int]:
+    """(passed, executed) asserts across a hurl `--report-json` report.
+
+    Assert-level rather than file-level because the paper's own oracle is
+    assertion-level (291 of them) and because the file counts cannot separate a
+    near-conforming backend from a stub; see ASSERT_DENOMINATOR.
+    """
+    passed = executed = 0
+    for entry_file in report if isinstance(report, list) else []:
+        for entry in entry_file.get("entries", []):
+            for assertion in entry.get("asserts", []):
+                executed += 1
+                passed += 1 if assertion.get("success") else 0
+    return passed, executed
+
+
+def assert_pass_rate(passed: int, executed: int) -> float:
+    """Score over `max(pinned, executed)`, so failing early cannot pay.
+
+    Using `executed` alone would let a server that dies on request 1 of each
+    file post a high ratio off a handful of asserts. Using `pinned` alone would
+    cap a run that conforms better than the calibration did.
+    """
+    return round(passed / max(ASSERT_DENOMINATOR, executed), 4)
+
+
+def _hurl_cmd(
+    mount: Path, host: str, uid: str, glob: str, report_dir: Path | None = None
+) -> list[str]:
     """The one place the container invocation is spelled out.
 
     `--add-host` rather than `--network host`: Docker Desktop on macOS accepts
@@ -279,22 +344,31 @@ def _hurl_cmd(mount: Path, host: str, uid: str, glob: str) -> list[str]:
     Verified 2026-07-26 on Docker Desktop 28.1.1: `--network host` gets
     connection-refused, `--add-host=host.docker.internal:host-gateway` gets 200.
     """
-    return [
+    cmd = [
         "docker",
         "run",
         "--rm",
         "--add-host=host.docker.internal:host-gateway",
         "-v",
         f"{mount}:/suite:ro",
+    ]
+    if report_dir is not None:
+        cmd += ["-v", f"{report_dir}:/out"]
+    cmd += [
         HURL_IMAGE,
         "--test",
+        # Without this hurl abandons a file at its first failure, so the number
+        # of asserts executed shrinks as the server gets worse. The denominator
+        # must not be a function of the thing being measured.
+        "--continue-on-error",
         "--variable",
         f"host={container_host(host)}",
         "--variable",
         f"uid={uid}",
-        "--glob",
-        glob,
     ]
+    if report_dir is not None:
+        cmd += ["--report-json", "/out/json"]
+    return [*cmd, "--glob", glob]
 
 
 def _suite_can_reach(host: str, timeout: float = 60.0) -> bool:
@@ -364,15 +438,18 @@ def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
             reason=f"server is up at {host} but the suite container cannot reach it",
         )
 
-    try:
-        proc = subprocess.run(
-            _hurl_cmd(SUITE_DIR, host, uid, "/suite/*.hurl"),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        return BehavioralVerdict(evaluable=False, reason=f"suite exceeded {timeout}s")
+    with tempfile.TemporaryDirectory() as out:
+        try:
+            proc = subprocess.run(
+                _hurl_cmd(SUITE_DIR, host, uid, "/suite/*.hurl", report_dir=Path(out)),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return BehavioralVerdict(evaluable=False, reason=f"suite exceeded {timeout}s")
+        report_path = Path(out) / "json/report.json"
+        report = json.loads(report_path.read_text()) if report_path.exists() else None
 
     blob = f"{proc.stdout}\n{proc.stderr}"
     counts = {
@@ -387,10 +464,21 @@ def behavioral_verdict(host: str, timeout: float) -> BehavioralVerdict:
         return BehavioralVerdict(
             evaluable=False, reason="no hurl summary in output", tail=blob[-400:]
         )
+    if report is None:
+        # The score is assert-level, so no report means no score. The file counts
+        # survive in the summary, but reporting them AS the rate would silently
+        # substitute the metric this run exists to avoid.
+        return BehavioralVerdict(
+            evaluable=False, reason="hurl produced no report.json", tail=blob[-400:]
+        )
+    passed, asserts_executed = count_asserts(report)
     return BehavioralVerdict(
         files_executed=executed,
         files_succeeded=succeeded,
-        pass_rate=round(succeeded / executed, 4) if executed else 0.0,
+        pass_rate=assert_pass_rate(passed, asserts_executed),
+        asserts_passed=passed,
+        asserts_executed=asserts_executed,
+        asserts_denominator=max(ASSERT_DENOMINATOR, asserts_executed),
         exit_code=proc.returncode,
         uid=uid,
         # Recorded per run so a later re-pin is visible in the data rather than
@@ -408,11 +496,31 @@ def main() -> int:
     )
     ap.add_argument("--structural-only", action="store_true")
     ap.add_argument("--fetch-suite", action="store_true", help="download the RealWorld Hurl suite")
+    ap.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="report the assert total for --host, to re-derive ASSERT_DENOMINATOR",
+    )
     ap.add_argument("--timeout", type=float, default=300.0)
     args = ap.parse_args()
 
     if args.fetch_suite:
         return fetch_suite()
+    if args.calibrate:
+        if not args.host:
+            ap.error("--calibrate needs --host")
+        verdict = behavioral_verdict(args.host, args.timeout)
+        print(json.dumps(verdict.model_dump(), indent=2, sort_keys=True))
+        if not verdict.evaluable:
+            return 1
+        executed = verdict.asserts_executed or 0
+        print(
+            f"\n# ASSERT_DENOMINATOR is {ASSERT_DENOMINATOR} "
+            f"(from {ASSERT_DENOMINATOR_SOURCE}); this host executed {executed}."
+        )
+        if executed > ASSERT_DENOMINATOR:
+            print("# This host is a better floor. Re-pin deliberately and say so in the results.")
+        return 0
     if args.tree is None:
         ap.print_help()
         return 1

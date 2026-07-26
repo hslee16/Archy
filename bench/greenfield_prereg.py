@@ -75,6 +75,25 @@ paper's A% zeroes the behavioral score of a non-compliant run, so a naive readin
 of the primary alone rewards a compliant-but-broken server. Reported for both
 arms, and it can VOID a structural win on its own (see `verdict()`).
 
+> **AMENDMENT 2026-07-26, before any run, no data seen.** The behavioral rate was
+> originally whole-FILE (`succeeded / executed` of the suite's 13 files). Running
+> the evaluator against a live server showed that metric cannot discriminate: a
+> near-conforming backend and a stub that 501s everything both scored **0.000**,
+> because the 13 files are all-or-nothing and every one is gated on registration.
+> A guardrail that cannot fire is worse than none here, since the prereg lets it
+> VOID a structural win.
+>
+> The rate is now **assert-level**, which is also *closer* to the paper (its
+> oracle is 291 assertions, not 13 files), over a denominator of
+> `max(ASSERT_DENOMINATOR, executed)` so that a server which dies early cannot
+> post a high ratio off a handful of asserts. Same server, same run:
+> file-level 0.000 versus assert-level 0.776.
+>
+> This is recorded here rather than quietly changed. Amending a pre-registration
+> before it has seen data is legitimate; doing it afterwards, or without saying
+> so, is the failure this file exists to prevent. File counts are still recorded
+> per run as a secondary strictness measure.
+
 **Also reported, never gating:** the paper's composite A% (behavioral, zeroed on
 non-compliance), layers-present and violation counts, correction iterations in
 arm B, wall time, turns, and cost per arm.
