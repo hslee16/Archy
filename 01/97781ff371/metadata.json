@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "0197781ff371",
+  "strategy": "manual-commit",
+  "branch": "alee/wind-down",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "README.md",
+    "docs/WHAT_DIDNT_WORK.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/01/97781ff371/0/metadata.json",
+      "transcript": "/01/97781ff371/0/full.jsonl",
+      "content_hash": "/01/97781ff371/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 848,
+    "cache_creation_tokens": 4786006,
+    "cache_read_tokens": 155717671,
+    "output_tokens": 299918,
+    "api_call_count": 453
+  }
+}
