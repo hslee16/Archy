@@ -12,6 +12,24 @@
 > **Your folders show your architecture. Your imports decide it.**
 > archy is the one that *fails* when they disagree: dependency direction, transitive reach and cycles, checked against layers and forbidden edges you declared, every session and in CI.
 
+> [!IMPORTANT]
+> **Status, 2026-07-27: maintenance. Feature work has stopped, on purpose.**
+>
+> archy works, is tested on every push across three Python versions and three
+> operating systems, and will keep working. Bugs get fixed. Pull requests get
+> reviewed. The `good first issue` tickets are real and deliberately left open.
+>
+> What stopped is *new feature work*, and the reason is the section directly
+> below: I measured this tool's premise four separate times, and each time the
+> problem it prevents turned out to be rare. The fourth study found a real
+> effect and also found it capped at 12% by how seldom the mistake happens. At
+> that point another feature is not what is missing, so I stopped adding them.
+>
+> An earlier version of this note said much the same thing and I took it down,
+> because the reasoning behind it was circular: I had cited a lack of users as
+> grounds to stop the very work meant to attract them. This time the argument
+> is different and it is evidence, not a mood. It is all published below.
+
 ## Read this first: I measured the premise, and it was wrong
 
 I built archy after watching coding agents produce changes that passed review and rotted the import graph underneath. Then I measured whether that happens, and **it barely does.**
@@ -30,7 +48,9 @@ So: the problem is real (I have watched a developer's own architecture rule get 
 
 That is the shape of the whole thing. **Layout is visible in a file tree. Direction, transitive reach and cycles are visible nowhere**, at any zoom level, in any single file. And a separate study found that once one of these lands it is *never repaired*: zero violations were resolved across the sampled corpus, and 2 of 14 repositories sat on broken contracts indefinitely. Rare and permanent, not rare and self-healing.
 
-**What that means for the roadmap:** feature work premised on "agents will wreck your architecture" is still off the table, because that premise is retracted. What survives is narrower and now has a number behind it: directional rules, transitive contracts and cycle detection, checked every session. archy is maintained, bugs get fixed, and contributions are welcome.
+**What that means for the roadmap: it is closed.** Feature work premised on "agents will wreck your architecture" went off the table when that premise was retracted. What survives is narrower and now has a number behind it: directional rules, transitive contracts and cycle detection, checked every session. That is a real job and archy does it, but four studies produced no evidence that *more* of it is worth building, and the honest reading of four headroom-limited results is that the next feature is not the missing piece.
+
+So archy is finished rather than abandoned. It is maintained, bugs get fixed, and contributions are welcome. There is no roadmap left to publish.
 
 The full write-up, including the six measurement artifacts that nearly turned a failed study into a success story, is in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). If you only read one thing here, read that.
 
@@ -103,7 +123,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.42.0, working, installed and maintained; feature work is paused pending evidence anyone wants it (see the top of this page). Usable today via:
+**Status:** v0.42.0, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -561,11 +581,11 @@ uv run pytest              # the test now runs instead of being skipped
 
 ## Roadmap
 
-Executive summary below; [`docs/ROADMAP.md`](docs/ROADMAP.md) is the canonical Now / Next / Deferred / Rejected view, and [`docs/FUTURE.md`](docs/FUTURE.md) is the long-form list with citations to the literature each idea came from.
+**This roadmap is closed. Nothing below is planned.** See the status note at the top of this page; [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/FUTURE.md`](docs/FUTURE.md) carry the same closure and the reasoning behind it.
 
-Both phases of the index-and-install work have shipped (Phase 1 install-DX in v0.25.0 / v0.26.0, Phase 2 persistent index + watcher in v0.27.0). The core mission is built; the current frontier is adoption and validation, not new features.
+Both phases of the index-and-install work shipped (Phase 1 install-DX in v0.25.0 / v0.26.0, Phase 2 persistent index + watcher in v0.27.0). What follows is kept as a record of what was considered and why, not as a plan. Several items rest on a premise that has since been retracted, so read [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md) before picking one up. Anyone is welcome to.
 
-Next up (validated, queued, not yet started):
+Considered and never started:
 
 - **Per-module score breakdown** so an agent can ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
 - **Opt-in agent hooks (`archy install --hooks`)**: register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, ...) that runs the archy gate automatically after edits, so the loop fires whether or not the agent remembers to call the tools. Spec: [`docs/SPEC_INSTALL_HOOKS.md`](docs/SPEC_INSTALL_HOOKS.md).

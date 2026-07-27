@@ -1,12 +1,17 @@
 # Future Features
 
-> **Status note, 2026-07-26.** Many feature items below were closed as `not planned` after archy's
-> central claim was measured and retracted (three pre-registered claims, three nulls). They are
-> kept here because the design thinking is still worth reading and any of them can be reopened, but
-> **the tracker, not this file, is the source of truth for what is planned.** Read
-> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) before picking one up. Distribution work (#322 and
-> children) is active; #369 was measured and closed (results in
-> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6 and `bench/greenfield_results.md`).
+> **Status note, 2026-07-27: THIS ROADMAP IS CLOSED. Nothing on it is planned.**
+>
+> archy is in maintenance. Feature work stopped after its premise was measured four times and came
+> back rare each time, most recently in #369, which found a real effect and found it capped at 12%
+> by how seldom the mistake happens (results in [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6
+> and `bench/greenfield_results.md`). Distribution work (#322 and children) is parked, not active.
+>
+> Everything below is kept because the design thinking is worth reading and because a closed
+> roadmap that has been *deleted* is indistinguishable from one that was never thought through.
+> Treat it as a record of what was considered and why, not as a plan. Anyone is welcome to pick an
+> item up, and **read [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) first**: several items here are
+> premised on a claim that has since been retracted.
 
 
 Concrete things to build next, with rough order. Items in brackets cite where the idea came from. Items annotated `[RESEARCH_METRICS.md §N]` are validated against the survey in [`RESEARCH_METRICS.md`](research/RESEARCH_METRICS.md).

@@ -2,18 +2,40 @@
 
 ## Community Compact
 
+**Read this first: archy is in maintenance as of 2026-07-27.** Feature work has
+stopped, deliberately, after its premise was measured four times and came back
+rare each time. The reasoning is in [`README.md`](README.md) and in full in
+[`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). This does not close the
+project to contributions, but it does change what you should expect, so it is
+said here rather than discovered after you have spent a weekend.
+
 What the maintainer commits to:
 
 - Respond to new issues within a week (best effort; one person, day job).
-- Public roadmap in [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/FUTURE.md`](docs/FUTURE.md); changes land as PRs so the history is in git.
+- Review pull requests, including feature PRs. Maintenance means I am not
+  *driving* new features; it does not mean I will reject yours unread.
+- Keep CI green and the released package working.
 - No surprise re-licensing. archy is MIT and intended to stay that way. Any change would be announced in advance with rationale; released versions stay under their original license.
 - No commercial-feature gating in the OSS package. If a hosted version of archy ever exists, the OSS package will never be the lesser product.
 
+What the maintainer no longer commits to:
+
+- A forward roadmap. [`docs/ROADMAP.md`](docs/ROADMAP.md) and
+  [`docs/FUTURE.md`](docs/FUTURE.md) are kept as a record of what was
+  considered and why, and are explicitly marked closed. Several items in them
+  rest on a claim that has since been retracted.
+- Building requested features myself, on any timeline.
+
 What contributors are asked to do:
 
-- Open an issue before a large PR so we can scope-check before you invest time.
+- **Open an issue before a large PR.** This matters more now, not less: a
+  scope-check costs a comment, and I would rather say "that rests on a premise I
+  retracted, here is the study" before you write it than after.
 - Follow the style rules below (notably the no-em-dash rule; CI does not yet enforce it but reviewers will).
 - Write tests for new behavior, especially anything graph-shape or score-affecting.
+
+The `good first issue` tickets are real, deliberately left open, and a genuinely
+good place to start. Several have already been landed by people who are not me.
 
 For governance details (decision process, how this evolves with multiple committers, right-to-fork) see [`GOVERNANCE.md`](GOVERNANCE.md). For conduct expectations see [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
