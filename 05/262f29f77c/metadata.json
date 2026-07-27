@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "05262f29f77c",
+  "strategy": "manual-commit",
+  "branch": "alee/369-venv-artifact",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "tests/test_greenfield_run.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/05/262f29f77c/0/metadata.json",
+      "transcript": "/05/262f29f77c/0/full.jsonl",
+      "content_hash": "/05/262f29f77c/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 670,
+    "cache_creation_tokens": 1650470,
+    "cache_read_tokens": 106997683,
+    "output_tokens": 237075,
+    "api_call_count": 358
+  }
+}
