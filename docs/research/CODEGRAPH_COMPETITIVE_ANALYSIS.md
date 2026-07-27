@@ -8,8 +8,10 @@ the capability and positioning question instead: **is archy's scope a
 deliberate position or a gap, and is archy differentiated enough to keep
 building?**
 
-Fact-gathering date: 2026-07-24. Every number below is measured, not asserted;
-where a number could not be pulled it says so.
+Fact-gathering date: 2026-07-24, with §3a and §3b re-verified against the live
+repository on 2026-07-27 after #369 made the descriptive-versus-normative split
+archy's headline. Every number below is measured, not asserted; where a number
+could not be pulled it says so.
 
 ## Summary
 
@@ -137,6 +139,48 @@ So the split is not "archy is a worse codegraph". It is:
 - **Structural judgment** (archy): the graph is one input; the *other* input is
   user-supplied intent (declared layers, forbidden edges, an acyclicity
   invariant, a recorded score baseline). The answer is a verdict about drift.
+
+### 3a. Re-verified 2026-07-27, after #369 made this the headline
+
+#369 narrowed archy's claim to direction, transitive reach and cycles, which
+makes this section load-bearing rather than background. So it was re-checked
+against the live repository (62.8k stars, 774 commits) rather than restated
+from the 2026-07-24 pass:
+
+| capability archy now leads with | codegraph, 2026-07-27 |
+| --- | --- |
+| import cycle detection | **not shipped**; no command |
+| declared layers / forbidden edges | **no config format**; nowhere to state intent |
+| dependency-direction violations | **no rule concept**, so nothing to violate |
+| transitive traversal | yes, inside `affected`, for **test selection** |
+| a command that exits non-zero on a violation | **none** |
+
+Its surface is `explore`, `node`, `query`, `callers`, `callees`, `impact`,
+`files`, `affected`, `status`, with a single MCP tool listed by default
+(`codegraph_explore`).
+
+**The sharpening this forced.** "archy checks the part you cannot see" is not
+quite true and codegraph is why: ask it the right question and it *will* show
+you that `models` imports `repositories`. What it will not do is say so
+unprompted, call it wrong, or fail a build. The honest line is not visibility,
+it is **assertion**: descriptive tools answer questions, archy makes a claim
+that breaks CI. The README now says it that way.
+
+### 3b. The risk this analysis previously left as comfort
+
+**The moat is product intent, not capability, and that should be written down
+rather than assumed.** codegraph already holds the graph. Tarjan's algorithm is
+textbook, and a rules config is a weekend's work. If enforcement ever serves
+their job, the technical barrier is approximately zero and the distribution gap
+(62.8k stars against 5) means they would arrive with an audience archy does not
+have.
+
+What protects archy today is that enforcement does not serve navigation and
+token reduction, which is the job they have measurably chosen (a reported 60%
+cost reduction across seven benchmark repos). That is a real and durable reason,
+but it is a decision on their side, not a wall on ours. **Treat any codegraph
+release note mentioning rules, policy, lint, or CI gating as the signal that
+this document needs redoing.**
 
 archy's own two nulls (#282 footprint, #289 brief) both measured **editing**
 and found zero headroom, which is consistent with this: archy was never good at

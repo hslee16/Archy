@@ -10,7 +10,7 @@
 [![Glama](https://glama.ai/mcp/servers/hslee16/archy/badges/score.svg)](https://glama.ai/mcp/servers/hslee16/archy)
 
 > **Your folders show your architecture. Your imports decide it.**
-> archy holds the structure you *declared* for a Python codebase (layers, forbidden edges, no cycles, a recorded score baseline) and checks the half you cannot see by looking: dependency direction, transitive reach, cycles.
+> archy is the one that *fails* when they disagree: dependency direction, transitive reach and cycles, checked against layers and forbidden edges you declared, every session and in CI.
 
 ## Read this first: I measured the premise, and it was wrong
 
@@ -83,7 +83,9 @@ Reproduce the example above on a checkout: add that import to `src/archy/parser.
 
 ![archy demo](docs/demo.gif)
 
-**What archy is not:** a code-navigation tool. It will not help an agent find and read code faster; that job belongs to symbol-level, multi-language graph tools like [codegraph](https://github.com/colbymchenry/codegraph), and they are better at it. archy answers the other question: *you declared this codebase should have these layers, no cycles, and this score; is the agent's edit about to break that, and has the trend been sliding for six weeks?* Nothing in a navigation graph carries that intent, because intent is not in the source, you supply it. The two are both local MCP servers and compose fine; run them together. See [`docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`](docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) for the full comparison, including where archy loses.
+**What archy is not:** a code-navigation tool. It will not help an agent find and read code faster; that job belongs to symbol-level, multi-language graph tools like [codegraph](https://github.com/colbymchenry/codegraph), and they are better at it. archy answers the other question: *you declared this codebase should have these layers, no cycles, and this score; is the agent's edit about to break that, and has the trend been sliding for six weeks?* Nothing in a navigation graph carries that intent, because intent is not in the source, you supply it.
+
+The sharp version, re-checked against codegraph on 2026-07-27: it ships no cycle detection, no config in which to declare layers or forbidden edges, and no command that exits non-zero on a violation. It will happily *show* you that `models` imports `repositories` if you ask the right question. It cannot tell you that is wrong, because wrongness needs a declaration and there is nowhere to put one. **Descriptive tools answer questions; archy makes an assertion that breaks the build.** The two are both local MCP servers and compose fine; run them together. See [`docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`](docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) for the full comparison, including where archy loses and why this distinction is a choice they made rather than a wall they hit.
 
 ## Start in one command
 
