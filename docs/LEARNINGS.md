@@ -336,6 +336,16 @@ clean pass.
    verifier, which pairs a dependency-direction rule with "at least 3 of 4
    canonical layers present as distinct directories".
 
+   **Then it was measured, and it never fires.** Across the 50 generated
+   backends in #369, *every* run produced all four layer directories; the
+   presence check caught nothing while the direction check caught every
+   failure. The paper's degenerate single-module solution did not occur once on
+   a 2026 model. Keep the floor for the case it is named for, but it is a
+   backstop and this repo should stop presenting it as half of the verifier.
+   The generalizable form: **a check built from a paper's failure mode is worth
+   a canary against a current model before it is treated as load-bearing**, or
+   you ship a gate for a failure that has stopped happening.
+
 Three technical gotchas from building them, each of which shipped a silently
 wrong result first:
 
