@@ -5,7 +5,8 @@
 > kept here because the design thinking is still worth reading and any of them can be reopened, but
 > **the tracker, not this file, is the source of truth for what is planned.** Read
 > [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) before picking one up. Distribution work (#322 and
-> children) and #369 are active.
+> children) is active; #369 was measured and closed (results in
+> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6 and `bench/greenfield_results.md`).
 
 
 Concrete things to build next, with rough order. Items in brackets cite where the idea came from. Items annotated `[RESEARCH_METRICS.md §N]` are validated against the survey in [`RESEARCH_METRICS.md`](research/RESEARCH_METRICS.md).

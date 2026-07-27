@@ -5,7 +5,8 @@
 > kept here because the design thinking is still worth reading and any of them can be reopened, but
 > **the tracker, not this file, is the source of truth for what is planned.** Read
 > [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) before picking one up. Distribution work (#322 and
-> children) and #369 are active.
+> children) is active; #369 was measured and closed (results in
+> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6 and `bench/greenfield_results.md`).
 
 
 Short, opinionated summary of where archy is going. The detailed item-by-item list (with shipped, in-flight, deferred, and rejected items, plus citations to the literature each idea came from) lives in [`FUTURE.md`](FUTURE.md). This page is the executive summary.
