@@ -218,10 +218,22 @@ MAX_BEHAVIORAL_REGRESSION_PP = 5.0
 #: to 75/arm, which is powered for WIN_DELTA_PP. There is no second expansion.
 EXPANSION_FRAMEWORKS = ("flask", "django")
 
-#: Arm B stops correcting after this many `archy check` cycles. Exceeding it is
-#: recorded on the row and the run is scored as it stands; it is not retried,
-#: because re-rolling a result selects for the runs that happened to converge.
-MAX_CORRECTION_ITERATIONS = 10
+#: Arm B's checker invocations are RECORDED PER RUN, not capped.
+#:
+#: This originally declared a cap of 10 cycles. It was never implemented, and
+#: the first live chunk showed 9 to 12 invocations per arm-B run, so the cap was
+#: describing behaviour the code did not have. Removed rather than enforced,
+#: before any scoring, for two reasons:
+#:
+#:   - cutting the agent off mid-correction would manufacture non-compliance
+#:     that is an artifact of the cap rather than a fact about the agent, and
+#:     the paper has no such cap to reproduce.
+#:   - the run is already bounded by `--max-wall`, which is the real limit.
+#:
+#: `archy_invocations` on every row is what makes this auditable: an arm B that
+#: never invoked the checker is arm A with extra steps, and that must be visible
+#: rather than assumed.
+CORRECTION_CYCLES_ARE_RECORDED_NOT_CAPPED = True
 
 Z = 1.959963984540054  # two-sided 95%
 

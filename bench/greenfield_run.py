@@ -165,11 +165,6 @@ ARCHY_BIN = REPO_ROOT / ".venv/bin/archy"
 
 ALLOWED_TOOLS = ("Read", "Write", "Edit", "Bash", "Grep", "Glob")
 
-#: Arm B stops after this many checker cycles; pre-registered, and exceeding it
-#: is recorded on the row rather than retried, because re-rolling a result
-#: selects for the runs that happened to converge.
-MAX_CORRECTION_ITERATIONS = 10
-
 #: The pre-registered N per arm. Read from the prereg rather than restated, so
 #: the runner cannot drift from the document that fixes it.
 TARGET_N_PER_ARM = greenfield_prereg.N_PER_ARM
@@ -374,10 +369,19 @@ def install_deps(tree: Path, timeout: float) -> tuple[bool, str]:
     if not requirements.exists():
         return False, "no requirements.txt"
     venv = tree / ".venv"
-    for cmd in (
-        ["uv", "venv", str(venv)],
-        ["uv", "pip", "install", "--python", str(venv / "bin/python"), "-r", str(requirements)],
-    ):
+
+    # REUSE AN EXISTING VENV RATHER THAN FAILING ON IT. Agents routinely run
+    # `uv venv` themselves while building, and `uv venv` over an existing one
+    # exits non-zero ("A virtual environment already exists"). The first live
+    # chunk scored 4 of 10 runs as "does not install" for exactly that reason,
+    # which is a HARNESS-caused behavioral zero on projects that may well have
+    # worked. Requirements are installed either way, so a venv the agent left
+    # half-built is still brought up to the stated dependencies.
+    cmds = [] if venv.is_dir() else [["uv", "venv", str(venv)]]
+    cmds.append(
+        ["uv", "pip", "install", "--python", str(venv / "bin/python"), "-r", str(requirements)]
+    )
+    for cmd in cmds:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False)
         if proc.returncode != 0:
             return False, f"{cmd[1]} failed: {proc.stderr[-300:]}"

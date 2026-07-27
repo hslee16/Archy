@@ -15,11 +15,13 @@ import contextlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 import textwrap
 import time
 from collections import Counter
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -213,6 +215,45 @@ def test_a_project_with_no_requirements_does_not_install(tmp_path):
     installed, why = greenfield_run.install_deps(tmp_path, timeout=30.0)
     assert installed is False
     assert "requirements" in why
+
+
+def test_a_venv_the_agent_already_made_is_reused_not_a_failure(tmp_path):
+    """Agents routinely run `uv venv` themselves, and `uv venv` over an existing
+    one exits non-zero. That scored 4 of the first 10 live runs as "does not
+    install", which is a HARNESS-caused behavioral zero on projects that may
+    well have worked, and it landed on 3 arm-A runs against 1 arm-B run: an
+    artifact biased toward the answer the study wants.
+    """
+    (tmp_path / "requirements.txt").write_text("")
+    (tmp_path / ".venv").mkdir()
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    with mock.patch.object(greenfield_run.subprocess, "run", fake_run):
+        installed, why = greenfield_run.install_deps(tmp_path, timeout=30.0)
+
+    assert installed is True, why
+    # No `uv venv` over the existing one, but requirements are still installed,
+    # so a venv the agent left half-built is brought up to the stated deps.
+    assert not any(cmd[:2] == ["uv", "venv"] for cmd in calls)
+    assert any(cmd[:3] == ["uv", "pip", "install"] for cmd in calls)
+
+
+def test_a_project_with_no_venv_still_gets_one(tmp_path):
+    (tmp_path / "requirements.txt").write_text("")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    with mock.patch.object(greenfield_run.subprocess, "run", fake_run):
+        assert greenfield_run.install_deps(tmp_path, timeout=30.0)[0] is True
+
+    assert any(cmd[:2] == ["uv", "venv"] for cmd in calls)
 
 
 def test_an_uninstallable_project_is_scored_zero_not_dropped(tmp_path, monkeypatch):
