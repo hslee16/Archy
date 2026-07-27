@@ -217,6 +217,21 @@ def test_a_project_with_no_requirements_does_not_install(tmp_path):
     assert "requirements" in why
 
 
+def _install_recording_commands(tree: Path) -> tuple[bool, str, list[list[str]]]:
+    """Run `install_deps` with every subprocess stubbed out, returning what it
+    would have executed. Which commands it chooses IS the behaviour under test,
+    so the real `uv` would only add minutes and a network dependency."""
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    with mock.patch.object(greenfield_run.subprocess, "run", fake_run):
+        installed, why = greenfield_run.install_deps(tree, timeout=30.0)
+    return installed, why, calls
+
+
 def test_a_venv_the_agent_already_made_is_reused_not_a_failure(tmp_path):
     """Agents routinely run `uv venv` themselves, and `uv venv` over an existing
     one exits non-zero. That scored 4 of the first 10 live runs as "does not
@@ -226,14 +241,8 @@ def test_a_venv_the_agent_already_made_is_reused_not_a_failure(tmp_path):
     """
     (tmp_path / "requirements.txt").write_text("")
     (tmp_path / ".venv").mkdir()
-    calls: list[list[str]] = []
 
-    def fake_run(cmd, **kwargs):
-        calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, "", "")
-
-    with mock.patch.object(greenfield_run.subprocess, "run", fake_run):
-        installed, why = greenfield_run.install_deps(tmp_path, timeout=30.0)
+    installed, why, calls = _install_recording_commands(tmp_path)
 
     assert installed is True, why
     # No `uv venv` over the existing one, but requirements are still installed,
@@ -244,15 +253,8 @@ def test_a_venv_the_agent_already_made_is_reused_not_a_failure(tmp_path):
 
 def test_a_project_with_no_venv_still_gets_one(tmp_path):
     (tmp_path / "requirements.txt").write_text("")
-    calls: list[list[str]] = []
-
-    def fake_run(cmd, **kwargs):
-        calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0, "", "")
-
-    with mock.patch.object(greenfield_run.subprocess, "run", fake_run):
-        assert greenfield_run.install_deps(tmp_path, timeout=30.0)[0] is True
-
+    installed, why, calls = _install_recording_commands(tmp_path)
+    assert installed is True, why
     assert any(cmd[:2] == ["uv", "venv"] for cmd in calls)
 
 
