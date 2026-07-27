@@ -1,0 +1,16 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "49a4a145276c",
+  "strategy": "manual-commit",
+  "branch": "alee/369-venv-artifact",
+  "checkpoints_count": 9,
+  "files_touched": [
+    "bench/greenfield_prereg.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/49/a4a145276c/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
