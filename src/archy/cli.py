@@ -89,6 +89,12 @@ def main() -> None:
     """archy - architectural sensor for Python codebases."""
 
 
+def _require(ok: bool, flag: str, constraint: str, value: object) -> None:
+    """Raise a uniform ClickException for a failed CLI option bound-check."""
+    if not ok:
+        raise click.ClickException(f"--{flag} must be {constraint}; got {value}")
+
+
 @main.command()
 @click.argument("path", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option(
@@ -150,8 +156,7 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
 )
 def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: bool) -> None:
     """Find import cycles in a Python project rooted at PATH."""
-    if min_size < 1:
-        raise click.ClickException(f"--min-size must be >= 1; got {min_size}")
+    _require(min_size >= 1, "min-size", ">= 1", min_size)
 
     g = _load_graph(path, internal_only=internal_only)
 
@@ -316,8 +321,12 @@ def score(
     strict_tolerance: float,
 ) -> None:
     """Compute the composite architecture quality score for PATH."""
-    if not 0.0 <= strict_tolerance <= 1.0:
-        raise click.ClickException(f"--strict-tolerance must be in [0, 1]; got {strict_tolerance}")
+    _require(
+        0.0 <= strict_tolerance <= 1.0,
+        "strict-tolerance",
+        "in [0, 1]",
+        strict_tolerance,
+    )
 
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
@@ -370,8 +379,7 @@ def score(
 )
 def trend(path: Path, last_n: int, fmt: str) -> None:
     """Show the archy score trend for PATH (reads .archy/history.jsonl)."""
-    if last_n < 1:
-        raise click.ClickException(f"--last must be >= 1; got {last_n}")
+    _require(last_n >= 1, "last", ">= 1", last_n)
 
     rows = read_history(path / ".archy" / "history.jsonl")
     if fmt == "json":
@@ -528,8 +536,7 @@ def affected(
     """
     if as_json and quiet:
         raise click.UsageError("--json and --quiet are mutually exclusive.")
-    if depth < 1:
-        raise click.ClickException(f"--depth must be >= 1; got {depth}")
+    _require(depth >= 1, "depth", ">= 1", depth)
 
     # Positional FILES and --stdin are intentionally MERGED, not exclusive:
     # a caller can name a few files and pipe the rest (the help text says so).
@@ -592,8 +599,7 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
     # Validate before any graph/git work so a bad --top fails fast and
     # consistently (a non-positive value otherwise silently truncated the
     # list: --top 0 showed nothing, --top -1 dropped the lowest-score row).
-    if top_n < 1:
-        raise click.ClickException(f"--top must be >= 1; got {top_n}")
+    _require(top_n >= 1, "top", ">= 1", top_n)
     g = _load_graph(path, internal_only=True)
     churn = git_churn(path, since=since)
     if churn is None:
@@ -677,12 +683,14 @@ def coupling(
     (never changes `archy score`); a pair means "check the other when you touch
     one," not "these must be merged." Needs git history.
     """
-    if top_n < 1:
-        raise click.ClickException(f"--top must be >= 1; got {top_n}")
-    if min_support < 1:
-        raise click.ClickException(f"--min-support must be >= 1; got {min_support}")
-    if not 0.0 < min_confidence <= 1.0:
-        raise click.ClickException(f"--min-confidence must be in (0, 1]; got {min_confidence}")
+    _require(top_n >= 1, "top", ">= 1", top_n)
+    _require(min_support >= 1, "min-support", ">= 1", min_support)
+    _require(
+        0.0 < min_confidence <= 1.0,
+        "min-confidence",
+        "in (0, 1]",
+        min_confidence,
+    )
     g = _load_graph(path, internal_only=True)
     module_paths = internal_module_paths(g)
     keep = frozenset(p for p in module_paths if include_tests or not is_test_path(p))
@@ -776,12 +784,9 @@ def duplicates(
     the reader's judgment. Trivial functions below `--min-nodes` are skipped.
     """
     # Validate before any parse work so bad flags fail fast and consistently.
-    if min_nodes < 1:
-        raise click.ClickException(f"--min-nodes must be >= 1; got {min_nodes}")
-    if top_n < 1:
-        raise click.ClickException(f"--top must be >= 1; got {top_n}")
-    if min_members < 2:
-        raise click.ClickException(f"--members must be >= 2; got {min_members}")
+    _require(min_nodes >= 1, "min-nodes", ">= 1", min_nodes)
+    _require(top_n >= 1, "top", ">= 1", top_n)
+    _require(min_members >= 2, "members", ">= 2", min_members)
     try:
         modules, parse_results = parse_project(
             path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path)
@@ -856,10 +861,8 @@ def what_to_refactor_next(
     ranking is structural-only. An empty list is a real answer: nothing is
     both complex+churned and nothing is central+fragile above --min-risk.
     """
-    if top_n <= 0:
-        raise click.ClickException(f"--top must be >= 1; got {top_n}")
-    if not 0.0 <= min_risk <= 1.0:
-        raise click.ClickException(f"--min-risk must be in [0, 1]; got {min_risk}")
+    _require(top_n >= 1, "top", ">= 1", top_n)
+    _require(0.0 <= min_risk <= 1.0, "min-risk", "in [0, 1]", min_risk)
     g = _load_graph(path, internal_only=True)
     churn = git_churn(path, since=since)
     rows = compute_refactor_priorities(g, churn=churn, min_risk=min_risk)
@@ -1140,10 +1143,8 @@ def dsm(
     `--package=<prefix>`, or use `--format=json` and let the agent
     consume the structured view.
     """
-    if focus_depth < 0:
-        raise click.ClickException(f"--focus-depth must be >= 0; got {focus_depth}")
-    if max_nodes < 1:
-        raise click.ClickException(f"--max-nodes must be >= 1; got {max_nodes}")
+    _require(focus_depth >= 0, "focus-depth", ">= 0", focus_depth)
+    _require(max_nodes >= 1, "max-nodes", ">= 1", max_nodes)
 
     from archy.dsm import (
         GroupBy,
@@ -1273,15 +1274,12 @@ def render(
     so it stays deferred (docs/SPEC_VISUALIZATION.md).
     """
     if view == "trend":
-        if last_n < 1:
-            raise click.ClickException(f"--last must be >= 1; got {last_n}")
+        _require(last_n >= 1, "last", ">= 1", last_n)
         rows = read_history(path / ".archy" / "history.jsonl")
         html = render_trend_html(rows, last_n=last_n)
     else:
-        if focus_depth < 0:
-            raise click.ClickException(f"--focus-depth must be >= 0; got {focus_depth}")
-        if max_nodes < 1:
-            raise click.ClickException(f"--max-nodes must be >= 1; got {max_nodes}")
+        _require(focus_depth >= 0, "focus-depth", ">= 0", focus_depth)
+        _require(max_nodes >= 1, "max-nodes", ">= 1", max_nodes)
 
         from archy.dsm import GroupBy, Weight, build_dsm
 
