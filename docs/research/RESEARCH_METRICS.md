@@ -1196,6 +1196,18 @@ Two implications for archy, both sharper than the earlier citations:
   under a specified architecture is unmeasured by anyone, and it is the
   one regime where the paper's numbers predict real headroom. See
   `docs/WHAT_DIDNT_WORK.md`.
+
+  **CORRECTION, 2026-07-27. It has now been measured, and "real headroom"
+  overstated it.** #369 put a checker in the loop for exactly this regime
+  (`claude-sonnet-5`, FastAPI, the paper's L1-Arch condition, 25 runs per
+  arm) and found structural compliance **88.0% -> 100.0%**, composite A%
+  69.7% -> 78.9%, a behavioral cost of -0.3 pp. The effect is real and it
+  is **capped at +12 pp by an 88% unaided baseline**, not by the ~40% this
+  section's framing implied, so the pre-registered reading is EXPAND rather
+  than a win. Headroom was the binding constraint for the fourth time
+  across #282, #289, #356 and this. All three unaided failures had 4 of 4
+  layers present and the dependency direction wrong. See
+  `bench/greenfield_results.md` and `docs/WHAT_DIDNT_WORK.md` Study 6.
 - The study's explicit gap, "no dynamic course-correction", is exactly
   archy's MCP loop. But it surfaces two capabilities archy does *not*
   yet have, both motivated directly. **Convention-based layer

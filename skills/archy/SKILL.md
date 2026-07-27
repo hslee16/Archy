@@ -13,6 +13,8 @@ metadata:
 
 Archy turns the structural health of a Python codebase into numbers and rule violations an agent can act on between edits. This skill explains when to reach for it and how to drive its MCP tools as a tight feedback loop.
 
+**What it is actually for.** A file tree shows you the layers. It does not show you dependency *direction*, transitive reach, or cycles, and those are where the mistakes land: measured across 25 agent-built backends, every unaided failure produced the four layer directories correctly and then imported upward, entities reaching into data access. Reading the config catches the local, visible cases; the multi-hop ones need the graph. Reach for `archy_check` and `archy_cycles` on direction, and `archy_impact` before an edit crosses modules.
+
 Archy keeps a persistent parse cache (`.archy/index.db`), kept warm by a background file watcher in `archy mcp`, so its tools stay cheap to call: warm graph builds take a few seconds even on 10k+ module repos because only files whose content changed are re-parsed. Lean on that. Consult archy on *each* edit to keep your working surface relevant (impact before, diff after), not only at the start and end of a task. Freshness is automatic (every tool re-syncs changed files on demand, so a result is never stale); the CLI `archy index status` reports the cache state if you ever want to confirm it out of band.
 
 ## Prerequisites

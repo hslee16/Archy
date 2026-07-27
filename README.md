@@ -9,7 +9,8 @@
 [![License](https://img.shields.io/pypi/l/archy.svg)](LICENSE)
 [![Glama](https://glama.ai/mcp/servers/hslee16/archy/badges/score.svg)](https://glama.ai/mcp/servers/hslee16/archy)
 
-> archy holds the structure you *declared* for a Python codebase (layers, forbidden edges, no cycles, a recorded score baseline) and tells you when an edit breaks it.
+> **Your folders show your architecture. Your imports decide it.**
+> archy is the one that *fails* when they disagree: dependency direction, transitive reach and cycles, checked against layers and forbidden edges you declared, every session and in CI.
 
 ## Read this first: I measured the premise, and it was wrong
 
@@ -21,14 +22,17 @@ I built archy after watching coding agents produce changes that passed review an
 | 1,072 human commits, 11 repos | cycles introduced | **0.5%** per commit |
 | 151 commit pairs in projects that declare an architecture | contract violations | **0.66%** per commit |
 | 107 samples of those same projects over time | rules going stale, coverage eroding | **null on all four pre-registered signals** |
+| 25 agents each building a backend to a specified architecture | wrong dependency direction | **12%**, and a checker in the loop took it to 0% |
 
 So: the problem is real (I have watched a developer's own architecture rule get broken in the wild), and it is **rare, for agents and humans alike**. "Agents will rot your import graph" is a claim I made and have retracted. Nobody has measured what one occurrence costs, so I cannot argue "rare but expensive" either.
 
-**What that means for the roadmap:** feature work premised on "agents will wreck your architecture" is off the table, because that premise is retracted. archy is maintained, bugs get fixed, and contributions are welcome; it is not being expanded on a thesis that failed its own tests.
+**The last row is the one that says what archy is for.** All 25 unaided agents produced the four layer directories correctly. Every failure was an import going the wrong way: entities reaching down into data access. They got the *layout* right and the *direction* wrong, and a directional rule caught all three cases at no cost to the API's behaviour.
+
+That is the shape of the whole thing. **Layout is visible in a file tree. Direction, transitive reach and cycles are visible nowhere**, at any zoom level, in any single file. And a separate study found that once one of these lands it is *never repaired*: zero violations were resolved across the sampled corpus, and 2 of 14 repositories sat on broken contracts indefinitely. Rare and permanent, not rare and self-healing.
+
+**What that means for the roadmap:** feature work premised on "agents will wreck your architecture" is still off the table, because that premise is retracted. What survives is narrower and now has a number behind it: directional rules, transitive contracts and cycle detection, checked every session. archy is maintained, bugs get fixed, and contributions are welcome.
 
 The full write-up, including the six measurement artifacts that nearly turned a failed study into a success story, is in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). If you only read one thing here, read that.
-
-What follows describes what archy does, which is unchanged and still true.
 
 ## The failure it catches
 
@@ -79,7 +83,9 @@ Reproduce the example above on a checkout: add that import to `src/archy/parser.
 
 ![archy demo](docs/demo.gif)
 
-**What archy is not:** a code-navigation tool. It will not help an agent find and read code faster; that job belongs to symbol-level, multi-language graph tools like [codegraph](https://github.com/colbymchenry/codegraph), and they are better at it. archy answers the other question: *you declared this codebase should have these layers, no cycles, and this score; is the agent's edit about to break that, and has the trend been sliding for six weeks?* Nothing in a navigation graph carries that intent, because intent is not in the source, you supply it. The two are both local MCP servers and compose fine; run them together. See [`docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`](docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) for the full comparison, including where archy loses.
+**What archy is not:** a code-navigation tool. It will not help an agent find and read code faster; that job belongs to symbol-level, multi-language graph tools like [codegraph](https://github.com/colbymchenry/codegraph), and they are better at it. archy answers the other question: *you declared this codebase should have these layers, no cycles, and this score; is the agent's edit about to break that, and has the trend been sliding for six weeks?* Nothing in a navigation graph carries that intent, because intent is not in the source, you supply it.
+
+The sharp version, re-checked against codegraph on 2026-07-27: it ships no cycle detection, no config in which to declare layers or forbidden edges, and no command that exits non-zero on a violation. It will happily *show* you that `models` imports `repositories` if you ask the right question. It cannot tell you that is wrong, because wrongness needs a declaration and there is nowhere to put one. **Descriptive tools answer questions; archy makes an assertion that breaks the build.** The two are both local MCP servers and compose fine; run them together. See [`docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`](docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) for the full comparison, including where archy loses and why this distinction is a choice they made rather than a wall they hit.
 
 ## Start in one command
 
@@ -130,6 +136,8 @@ The failure at the top of this page is the whole reason archy exists: I wanted a
 AI agents generate code at machine speed, and the reasoning went: without a feedback loop on *structural* health (module coupling, import cycles, layer violations), codebases drift architecturally even when every individual change looks fine in review.
 
 **That reasoning is the part I tested and could not support.** Twenty-five agent runs produced zero structural regressions, and human commits break their own declared rules on 0.66% of commits. The drift may still be real over long horizons, which is not what a per-edit measurement can see, but I have no evidence for it and I am not going to assert it. The rest of this section is the case as I originally made it, kept because the citations are accurate even where my inference from them was not.
+
+**Where a feedback loop did pay is narrower, and it is the moment code is written rather than the patrol afterwards.** Building a new backend to a specified architecture, 3 of 25 unaided agents got the dependency direction wrong; with a checker in the loop, none did, and the API behaved just as well. That is one model, one framework, and the mildest of the Constraint Decay paper's conditions, so it is not a general claim. It does say the loop is worth having at generation time, where the mistake is cheap to prevent and, per the decay study, never repaired afterwards.
 
 `archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
@@ -502,6 +510,8 @@ Empty declared layers are reported either way, because every rule naming one is 
 ```
 
 Unset by default, so existing configs keep their exit codes. The shape is taken from the Constraint Decay paper ([arxiv:2605.06445](https://arxiv.org/abs/2605.06445)), whose architecture verifier pairs a dependency-direction rule with exactly this presence floor ("at least 3 of the 4 canonical layers present as distinct directories"). `bench/fixtures/conduit_clean/` reproduces its three cases.
+
+**It is a backstop, not the main event, and the measurement says so.** Across 50 agent-generated backends, every single one produced all four layer directories: this check never fired once, while the direction check caught every failure. Keep it for the collapsed-into-one-module case it is named for, but if you are deciding where to spend effort in a config, spend it on `forbid` rules.
 
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 

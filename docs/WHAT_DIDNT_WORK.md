@@ -384,10 +384,60 @@ So: three claims, three nulls. The problem archy addresses is real, rare, and
 rare in every direction I have looked at it. I am not going to keep looking for
 the direction where it is common.
 
+## Study 6: the first thing that worked, and why it changes less than it sounds
+
+Everything above is a null. This one is not, and it belongs here anyway because
+the reason it is small is the same reason the others were null.
+
+The Constraint Decay paper's stated open question was whether *dynamic
+course-correction* during generation would help, since its agents "received
+static prompts describing the architecture but no dynamic course-correction on
+violations." Nobody had measured it. #369 did: 25 greenfield Conduit backends
+per arm, `claude-sonnet-5`, FastAPI, the paper's own architectural constraint,
+its own two-part verifier, thresholds fixed in advance.
+
+**A checker in the loop moved structural compliance from 88.0% to 100.0%, at a
+behavioral cost of -0.3 pp.** Full write-up: [`bench/greenfield_results.md`].
+
+Three things about that number.
+
+**The win condition was unreachable, and that is my error.** The pre-registered
+WIN threshold was +25 pp, set from a plausible unaided rate near 40% inferred
+from the paper. The real unaided rate was 88%, which caps the maximum possible
+delta at +12. The pre-registered reading is EXPAND and it stands unrevised, but
+it reads EXPAND because of the design, not because the effect is ambiguous. A
+five-run pilot would have shown 88% for about an hour of agent time, before the
+thresholds were frozen. **"Validate the measurement before spending agent time"
+applies to the design parameters, not just the harness.**
+
+**Headroom was the binding constraint for the fourth time.** #282 and #289 found
+no efficiency benefit, #356 found 0 of 25 agent edits damaged an existing
+architecture, and here 3 of 25 unaided runs got it wrong. Four studies, and each
+time the limit was how rarely the problem occurs, not whether archy detects it.
+The paper's own reception predicted this: its frontier models were not fully
+tested, for cost reasons, so its absolute numbers are directional. On a 2026
+model, the mildest architectural constraint is satisfied 88% of the time
+unaided.
+
+**The failures were more interesting than the rate.** All three had 4 of 4
+layers present and the dependency direction wrong, entities reaching into data
+access. Agents got the layout right and the direction wrong, and prose in a
+prompt did not prevent it. Combined with the decay study's finding that standing
+violations are *never resolved* (no violation in that corpus was ever fixed, and
+2 of 14 repositories sat on broken contracts indefinitely), the defensible claim
+is narrow and specific: a directional violation introduced at scaffolding time
+is cheap to prevent and evidently never repaired later.
+
+Whether a 12% birth-defect rate justifies a tool is a product judgment, not a
+measurement, and this study does not make it.
+
+[`bench/greenfield_results.md`]: ../bench/greenfield_results.md
+
 ## What survived, and why archy still exists
 
-Two nulls on agent-side benefit, one retracted premise, and a study saying the
-problem is rare did not kill the tool, but between them they have narrowed what
+Two nulls on agent-side benefit, one retracted premise, a study saying the
+problem is rare, and one modest positive whose size is set by how rarely the
+problem occurs did not kill the tool, but between them they have narrowed what
 I am allowed to claim about it almost to nothing. archy's README carries no
 token-savings number, and a rule in `RESEARCH_METRICS.md` §14c.7 forbids adding
 one. It carries no agent-safety number either, and after Experiment 3 it never
