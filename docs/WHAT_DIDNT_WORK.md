@@ -471,6 +471,47 @@ from anything the diff mentions and reading does not get you there. There is a
 [one-command reproduction of exactly that](WALKTHROUGH.md), and it is honest
 about the three archy surfaces that miss it.
 
+## What I decided, 2026-07-27: archy is finished, not abandoned
+
+Six studies. The tool works and I am no longer adding to it.
+
+**The argument, in one paragraph.** There were only ever two ways to justify
+building more: evidence that archy prevents something costly, or evidence that
+people want it. The first is now in and it is small: the problem is real and
+measured at 0.5% of human commits, 0.66% against declared contracts, 0 of 25
+agent edits, and 12% of greenfield generations, with the one positive capped by
+that last number rather than by the tool. The second I have chosen not to
+pursue. With both closed, there is no question left that another feature would
+answer, and continuing to add them would be motion rather than progress.
+
+**What "finished" means here, concretely.** CI runs on every push across five
+Python versions and three operating systems. Bugs get fixed. Pull requests get
+reviewed. The `good first issue` tickets stay open and several have already been
+landed by people who are not me. What stops is me driving new features, and the
+roadmap is marked closed rather than quietly left to rot.
+
+**What I am explicitly not claiming.** Not that archy is useless: it catches a
+real defect, and a separate study found that once one of these lands it is never
+repaired, so cheap prevention at the moment of writing is a coherent thing to
+want. Not that the category is dead: the descriptive tools in the adjacent space
+are thriving and solving a different, more frequent problem. And not that
+measurement decided this on its own. Measurement told me the effect is small.
+Deciding that small is not worth more of my evenings is a judgment, and I would
+rather label it as one than dress it up as a result.
+
+**The uncomfortable part, kept because removing it would be the same mistake
+this document exists to correct.** I built a tool, then spent longer measuring
+whether it was needed than building it, and the measurements kept saying "less
+than you thought." A reasonable person could read that as a case study in not
+validating an idea before building it. I would not argue with them. The reason
+the studies exist at all is that the alternative was to keep shipping features
+on a premise nobody had checked, and I would rather have four honest nulls and a
+capped positive than a roadmap built on a feeling.
+
+If you are deciding whether to use archy: it does what this page says, it is
+maintained, and nothing here is going to be quietly rewritten to sound better
+later.
+
 ## The raw work
 
 Everything above is summarized from [`docs/research/`](research/), which holds
@@ -480,7 +521,8 @@ the full studies including their correction logs:
 - [`../bench/agent_footprint_results.md`](../bench/agent_footprint_results.md) - the footprint null, full metric table
 - [`PATTERN_DETECTION_EMPIRICS.md`](research/PATTERN_DETECTION_EMPIRICS.md) - pattern inference, the tautology, the precision scoring
 - [`TOKEN_REDUCTION_CLAIMS.md`](research/TOKEN_REDUCTION_CLAIMS.md) - the survey and its 16-item correction log at §10
-- [`CODEGRAPH_COMPETITIVE_ANALYSIS.md`](research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) - descriptive vs normative
+- [`CODEGRAPH_COMPETITIVE_ANALYSIS.md`](research/CODEGRAPH_COMPETITIVE_ANALYSIS.md) - descriptive vs normative, re-verified 2026-07-27, including why that distinction is a choice the other project made rather than a wall it hit
+- [`../bench/greenfield_results.md`](../bench/greenfield_results.md) - the one positive, its unreachable win threshold, and the five harness defects found by running it
 - [`AXIS_REVIEW.md`](research/AXIS_REVIEW.md), [`DSM_EMPIRICS.md`](research/DSM_EMPIRICS.md), [`SCORE_SHAPE_REDESIGN_EMPIRICS.md`](research/SCORE_SHAPE_REDESIGN_EMPIRICS.md), [`TYPE_HINT_COVERAGE_EMPIRICS.md`](research/TYPE_HINT_COVERAGE_EMPIRICS.md), [`ACYCLICITY_DILUTION_EMPIRICS.md`](research/ACYCLICITY_DILUTION_EMPIRICS.md) - five more "we tested this and did not ship it"
 
 archy is MIT, Python-only, one maintainer, and does not phone home:
