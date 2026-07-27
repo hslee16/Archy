@@ -1,0 +1,103 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "1a7e319a5df4",
+  "session_id": "35c746bf-65af-4277-8fe6-7e3aa551c19d",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-27T15:35:49.66143Z",
+  "branch": "alee/369-results",
+  "checkpoints_count": 4,
+  "save_step_count": 1,
+  "files_touched": [
+    "docs/research/RESEARCH_METRICS.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5[1m]",
+  "turn_id": "06d800968929",
+  "token_usage": {
+    "input_tokens": 1501,
+    "cache_creation_tokens": 9946891,
+    "cache_read_tokens": 408410271,
+    "output_tokens": 509641,
+    "api_call_count": 805
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01Qi7U5SwNSt5NxEYbtNCsqg",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "06d800968929",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 501,
+        "end": 502,
+        "entry_ids": [
+          "2ba9ce75-ef6b-405e-a3bf-d34a9dc90abe"
+        ],
+        "tool_use_id": "toolu_01Qi7U5SwNSt5NxEYbtNCsqg"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Qi7U5SwNSt5NxEYbtNCsqg"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01ATbzV4DGQujbCrZyhdYU53",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "loop"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "06d800968929",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 2937,
+        "end": 2938,
+        "entry_ids": [
+          "630bb338-755f-4ed2-a584-cb10ed8e686f"
+        ],
+        "tool_use_id": "toolu_01ATbzV4DGQujbCrZyhdYU53"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01ATbzV4DGQujbCrZyhdYU53"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: loop",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 97
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-27T15:35:49.529285Z",
+    "agent_lines": 12,
+    "agent_removed": 0,
+    "human_added": 4,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 16,
+    "total_lines_changed": 18,
+    "agent_percentage": 66.66666666666666,
+    "metric_version": 2
+  }
+}
