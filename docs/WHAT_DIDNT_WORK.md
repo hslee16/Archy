@@ -484,7 +484,7 @@ that last number rather than by the tool. The second I have chosen not to
 pursue. With both closed, there is no question left that another feature would
 answer, and continuing to add them would be motion rather than progress.
 
-**What "finished" means here, concretely.** CI runs on every push across five
+**What "finished" means here, concretely.** CI runs on every push across three
 Python versions and three operating systems. Bugs get fixed. Pull requests get
 reviewed. The `good first issue` tickets stay open and several have already been
 landed by people who are not me. What stops is me driving new features, and the

@@ -15,7 +15,7 @@
 > [!IMPORTANT]
 > **Status, 2026-07-27: maintenance. Feature work has stopped, on purpose.**
 >
-> archy works, is tested on every push against five Python versions and three
+> archy works, is tested on every push across three Python versions and three
 > operating systems, and will keep working. Bugs get fixed. Pull requests get
 > reviewed. The `good first issue` tickets are real and deliberately left open.
 >
@@ -123,7 +123,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.42.0, working, installed and maintained; feature work is paused pending evidence anyone wants it (see the top of this page). Usable today via:
+**Status:** v0.42.0, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -581,11 +581,11 @@ uv run pytest              # the test now runs instead of being skipped
 
 ## Roadmap
 
-Executive summary below; [`docs/ROADMAP.md`](docs/ROADMAP.md) is the canonical Now / Next / Deferred / Rejected view, and [`docs/FUTURE.md`](docs/FUTURE.md) is the long-form list with citations to the literature each idea came from.
+**This roadmap is closed. Nothing below is planned.** See the status note at the top of this page; [`docs/ROADMAP.md`](docs/ROADMAP.md) and [`docs/FUTURE.md`](docs/FUTURE.md) carry the same closure and the reasoning behind it.
 
-Both phases of the index-and-install work have shipped (Phase 1 install-DX in v0.25.0 / v0.26.0, Phase 2 persistent index + watcher in v0.27.0). The core mission is built; the current frontier is adoption and validation, not new features.
+Both phases of the index-and-install work shipped (Phase 1 install-DX in v0.25.0 / v0.26.0, Phase 2 persistent index + watcher in v0.27.0). What follows is kept as a record of what was considered and why, not as a plan. Several items rest on a premise that has since been retracted, so read [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md) before picking one up. Anyone is welcome to.
 
-Next up (validated, queued, not yet started):
+Considered and never started:
 
 - **Per-module score breakdown** so an agent can ask "did my edit make *this module* worse?" rather than "did the project overall regress?". Pairs with `archy_diff`.
 - **Opt-in agent hooks (`archy install --hooks`)**: register a lifecycle hook in the agent client (Claude `Stop`, Cursor `afterFileEdit`, ...) that runs the archy gate automatically after edits, so the loop fires whether or not the agent remembers to call the tools. Spec: [`docs/SPEC_INSTALL_HOOKS.md`](docs/SPEC_INSTALL_HOOKS.md).
