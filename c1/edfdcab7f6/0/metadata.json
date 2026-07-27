@@ -1,0 +1,69 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c1edfdcab7f6",
+  "session_id": "58fd687d-bf2b-4ac2-9066-cdb0aef95a06",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-27T16:18:10.319668Z",
+  "branch": "alee/wind-down",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/WHAT_DIDNT_WORK.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "be7dbb41617d",
+  "token_usage": {
+    "input_tokens": 900,
+    "cache_creation_tokens": 5977328,
+    "cache_read_tokens": 171761522,
+    "output_tokens": 317521,
+    "api_call_count": 481
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01FM9PHdXkG88d8Rpg89Rifb",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "be7dbb41617d",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 128,
+        "end": 129,
+        "entry_ids": [
+          "55f204db-0546-4bb7-ab25-425e55209a90"
+        ],
+        "tool_use_id": "toolu_01FM9PHdXkG88d8Rpg89Rifb"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01FM9PHdXkG88d8Rpg89Rifb"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "initial_attribution": {
+    "calculated_at": "2026-07-27T16:18:10.265964Z",
+    "agent_lines": 6,
+    "agent_removed": 6,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 6,
+    "total_lines_changed": 12,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
