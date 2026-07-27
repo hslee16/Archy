@@ -118,6 +118,14 @@ them into the repository before running. `p_B <= 10%` and the four decay nulls
 were committed in advance, which is the only reason reading them afterwards was
 honest. **Do not reinterpret a threshold to keep a signal alive.**
 
+**Pilot the control arm before you fix a threshold against it.** #369 set its
+win condition at +25 pp from a control rate inferred from a paper. The measured
+control rate was 88%, which caps the largest possible effect at +12, so the win
+was arithmetically unreachable before the run started and the treatment scoring
+a perfect 100% still could not reach it. Five control runs would have shown that
+for about an hour of agent time. "Validate the measurement before spending agent
+time" covers the design parameters, not just the harness.
+
 **Audit results for artifact-shaped numbers before believing them.** A metric
 that is exactly `0.0000` for every repository, or an implausibly high count, is
 an artifact until proven otherwise. The decay study carried six such artifacts,
