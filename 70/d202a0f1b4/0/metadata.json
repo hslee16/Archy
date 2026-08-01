@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "70d202a0f1b4",
+  "session_id": "a3582e27-7a24-4b23-99af-671fde56bb29",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-01T16:38:18.400786Z",
+  "branch": "alee/required-reach-contracts",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/archy/cli.py",
+    "src/archy/graph.py",
+    "src/archy/mcp.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5[1m]",
+  "turn_id": "e6c99f6b48df",
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-01T16:38:18.400054Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 13,
+    "human_modified": 7,
+    "human_removed": 0,
+    "total_committed": 13,
+    "total_lines_changed": 20,
+    "agent_percentage": 0,
+    "metric_version": 2
+  }
+}

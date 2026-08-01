@@ -1,0 +1,19 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "70d202a0f1b4",
+  "strategy": "manual-commit",
+  "branch": "alee/required-reach-contracts",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/archy/cli.py",
+    "src/archy/graph.py",
+    "src/archy/mcp.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/70/d202a0f1b4/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
