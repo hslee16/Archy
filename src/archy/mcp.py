@@ -1,6 +1,8 @@
 """MCP server exposing archy's analysis as tools an AI agent can call.
 
-Built on the official Python `mcp` SDK using its FastMCP API. The 11
+Built on the official Python `mcp` SDK's ergonomic server class, imported via
+`archy.mcp_compat` so both SDK majors work (`FastMCP` on 1.x, `MCPServer` on
+2.x; see #391). The 11
 tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_impact`,
 `archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
@@ -22,13 +24,13 @@ See docs/LEARNINGS.md for the v0.36/v0.41 consolidations. The removed
 The server runs over stdio (the MCP convention for local tools); start
 it from the CLI via `archy mcp`.
 
-Tool returns are pydantic models; FastMCP serializes them to JSON for
+Tool returns are pydantic models; the SDK serializes them to JSON for
 the MCP client. The model shapes are the public wire contract for any
 agent calling these tools.
 
 ## Structured output (2025-06-18 spec)
 
-FastMCP derives an `outputSchema` (JSON Schema) from each tool's return
+The SDK derives an `outputSchema` (JSON Schema) from each tool's return
 annotation and attaches it to the `tools/list` entry, so every archy tool
 declares its result shape up front. Each `tools/call` then returns BOTH a
 machine-readable `structuredContent` (the JSON object, validated against
@@ -49,7 +51,7 @@ Two wrapping rules worth knowing:
   conforming member, so an in-band error result still validates.
 
 One benign edge: an *empty* sequence return yields `structuredContent`
-`{"result": []}` with no accompanying `TextContent` block (FastMCP emits one
+`{"result": []}` with no accompanying `TextContent` block (the SDK emits one
 content block per element). The structured form is unambiguous, so this is
 not a correctness gap. tests/test_mcp.py locks the whole contract.
 
@@ -58,7 +60,7 @@ not a correctness gap. tests/test_mcp.py locks the whole contract.
 archy maps failures onto MCP's two error mechanisms (2025-06-18 server spec)
 with one convention, so an agent has a single recovery contract:
 
-1. **Protocol error (JSON-RPC, FastMCP-handled):** unknown tool, or a missing
+1. **Protocol error (JSON-RPC, SDK-handled):** unknown tool, or a missing
    / mistyped required argument. The framework rejects the call; archy does
    nothing.
 2. **Usage error -> `isError:true` (raise):** an invalid argument *value* (e.g.
@@ -93,7 +95,6 @@ import threading
 from pathlib import Path
 from typing import cast
 
-from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict
 
@@ -164,6 +165,7 @@ from archy.layers import (
     find_violations,
     load_config,
 )
+from archy.mcp_compat import Server
 from archy.reach import compute_propagation_cost
 from archy.refactor import DEFAULT_MIN_RISK, compute_refactor_priorities
 from archy.risk import compute_edit_risk
@@ -632,14 +634,14 @@ class DuplicatesPayload(BaseModel):
     note: str | None
 
 
-def create_server() -> FastMCP:
-    server: FastMCP = FastMCP("archy")
+def create_server() -> Server:
+    server: Server = Server("archy")
     _register_tools(server)
     _register_prompts(server)
     return server
 
 
-def _register_prompts(server: FastMCP) -> None:
+def _register_prompts(server: Server) -> None:
     @server.prompt(
         name="loop",
         description=(
@@ -668,7 +670,7 @@ read-only *for the model's purposes*: the file is a cache/baseline the next
 call reads, not an external side effect, and re-running them is idempotent."""
 
 
-def _register_tools(server: FastMCP) -> None:
+def _register_tools(server: Server) -> None:
     @server.tool(
         name="archy_score",
         title="Score project structure",
