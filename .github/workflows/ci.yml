@@ -47,3 +47,40 @@ jobs:
         with:
           command: cycles
           strict: "true"
+
+  # The lockfile pins ONE mcp major, so every job above proves archy works on
+  # exactly the version a user installing from PyPI probably does not get. That
+  # gap shipped a broken MCP server in v0.42.0 (#391): `archy mcp` died on import
+  # under mcp 2.0 while CI stayed green on 1.28.1 from uv.lock. This job installs
+  # the OTHER major, deliberately outside the lock, and speaks real stdio to the
+  # server, so a future SDK break fails here instead of on a user's machine.
+  mcp-2x:
+    name: mcp 2.x compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install archy against mcp 2.x (no lockfile)
+        run: |
+          uv venv .venv-mcp2
+          uv pip install --python .venv-mcp2/bin/python -e ".[contracts]" "mcp>=2,<3" pytest pytest-snapshot
+
+      - name: Confirm the 2.x SDK is what got installed
+        run: |
+          .venv-mcp2/bin/python -c "
+          import importlib.metadata as m
+          from archy.mcp_compat import sdk_major
+          assert sdk_major() == 2, f'expected mcp 2.x, got {m.version(\"mcp\")}'
+          print('mcp', m.version('mcp'), '-> sdk_major', sdk_major())
+          "
+
+      - name: MCP suites (in-process + real stdio protocol)
+        run: .venv-mcp2/bin/python -m pytest tests/test_mcp.py tests/test_mcp_protocol.py -q

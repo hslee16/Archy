@@ -155,12 +155,15 @@ def test_all_tools_declare_read_only_annotations():
     tools = asyncio.run(server.list_tools())
     assert tools, "expected registered tools"
     for tool in tools:
-        ann = tool.annotations
+        # Read the wire form: mcp 2.0 renamed these attributes to snake_case
+        # while keeping the aliases, so `ann.readOnlyHint` breaks across the
+        # major but the emitted JSON does not.
+        ann = tool.model_dump(by_alias=True)["annotations"]
         assert ann is not None, f"{tool.name} has no annotations"
-        assert ann.readOnlyHint is True, f"{tool.name} not readOnlyHint"
-        assert ann.destructiveHint is False, f"{tool.name} not destructiveHint=False"
-        assert ann.idempotentHint is True, f"{tool.name} not idempotentHint"
-        assert ann.openWorldHint is False, f"{tool.name} not openWorldHint=False"
+        assert ann["readOnlyHint"] is True, f"{tool.name} not readOnlyHint"
+        assert ann["destructiveHint"] is False, f"{tool.name} not destructiveHint=False"
+        assert ann["idempotentHint"] is True, f"{tool.name} not idempotentHint"
+        assert ann["openWorldHint"] is False, f"{tool.name} not openWorldHint=False"
 
 
 def test_all_tools_declare_human_friendly_title():
@@ -174,8 +177,39 @@ def test_all_tools_declare_human_friendly_title():
         assert tool.title != tool.name, f"{tool.name} title duplicates the name"
 
 
+def _call_tool(server, name: str, args: dict) -> tuple[list, dict | None]:
+    """Call a tool in-process and return `(content, structured)` on either SDK major.
+
+    mcp 1.x returns that pair directly; 2.0 returns a `CallToolResult` instead.
+    Normalized here rather than at each call site, and `structuredContent` is read
+    from the wire form because 2.0 also renamed the attribute (see
+    `archy.mcp_compat`).
+
+    These in-process calls poke the SDK's own surface, which is why they are the
+    only part of this file a major bump touches. The protocol-level contract is
+    covered by `tests/test_mcp_protocol.py`, which speaks stdio and passes
+    unchanged on both majors.
+    """
+    result = asyncio.run(server.call_tool(name, args))
+    if isinstance(result, tuple):  # mcp 1.x
+        return result
+    return result.content, result.model_dump(by_alias=True).get("structuredContent")
+
+
+def _output_schema(tool) -> dict | None:
+    """Read `outputSchema` from the wire form, not the Python attribute.
+
+    mcp 2.0 renamed every model attribute to snake_case (`outputSchema` ->
+    `output_schema`) while keeping the serialization aliases identical, so
+    attribute access breaks across the major and the protocol does not. Dumping
+    by alias is both version-agnostic and closer to what a client actually
+    parses. See `archy.mcp_compat`.
+    """
+    return tool.model_dump(by_alias=True).get("outputSchema")
+
+
 def test_all_tools_declare_output_schema():
-    # 2025-06-18 structured output: FastMCP derives an `outputSchema` (JSON
+    # 2025-06-18 structured output: the SDK derives an `outputSchema` (JSON
     # Schema) from each tool's return annotation. Assert every tool declares
     # one and it is an object schema, since `structuredContent` must be a JSON
     # object (sequence/union returns are wrapped under a `result` key to honor
@@ -183,7 +217,7 @@ def test_all_tools_declare_output_schema():
     server = create_server()
     tools = asyncio.run(server.list_tools())
     for tool in tools:
-        schema = tool.outputSchema
+        schema = _output_schema(tool)
         assert schema is not None, f"{tool.name} has no outputSchema"
         assert schema.get("type") == "object", f"{tool.name} outputSchema is not an object"
 
@@ -223,10 +257,8 @@ def test_tool_result_conforms_to_output_schema(
     from jsonschema import Draft202012Validator
 
     server = create_server()
-    schema = {t.name: t.outputSchema for t in asyncio.run(server.list_tools())}[name]
-    content, structured = asyncio.run(
-        server.call_tool(name, {"path": str(acyclic_project), **extra_args})
-    )
+    schema = {t.name: _output_schema(t) for t in asyncio.run(server.list_tools())}[name]
+    content, structured = _call_tool(server, name, {"path": str(acyclic_project), **extra_args})
     assert isinstance(structured, dict)
     errors = sorted(
         Draft202012Validator(schema).iter_errors(structured), key=lambda e: list(e.path)
@@ -241,20 +273,20 @@ def test_error_model_tier2_raises_tier3_returns_in_band(acyclic_project: Path):
     # argument value) surfaces as isError (call_tool raises ToolError), while a
     # tier-3 recoverable condition (no archy.yaml, no baseline) comes back as a
     # normal in-band result the agent branches on.
-    from mcp.server.fastmcp.exceptions import ToolError
+    from archy.mcp_compat import ToolError
 
     server = create_server()
     path = str(acyclic_project)
 
     # Tier 2: bad argument value -> isError.
     with pytest.raises(ToolError):
-        asyncio.run(server.call_tool("archy_graph", {"path": path, "response_format": "xml"}))
+        _call_tool(server, "archy_graph", {"path": path, "response_format": "xml"})
     with pytest.raises(ToolError):
-        asyncio.run(server.call_tool("archy_score", {"path": path, "view": "sideways"}))
+        _call_tool(server, "archy_score", {"path": path, "view": "sideways"})
 
     # Tier 3: recoverable preconditions -> in-band result (no raise).
     for name in ("archy_check", "archy_diff"):
-        _content, structured = asyncio.run(server.call_tool(name, {"path": path}))
+        _content, structured = _call_tool(server, name, {"path": path})
         assert isinstance(structured, dict)
         inner = structured.get("result", structured)
         assert "error" in inner, f"{name} tier-3 result should carry an in-band error field"
@@ -580,12 +612,12 @@ def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
 
     # CheckPayload | CheckErrorPayload is a union return, so FastMCP wraps it
     # under a top-level `result` key (see the module docstring's wrapping rules).
-    _c, plain = asyncio.run(server.call_tool("archy_check", {"path": path}))
+    _c, plain = _call_tool(server, "archy_check", {"path": path})
     assert isinstance(plain, dict)
     assert plain["result"]["passed"] is True
     assert plain["result"]["contracts"] is None
 
-    _c2, withc = asyncio.run(server.call_tool("archy_check", {"path": path, "contracts": True}))
+    _c2, withc = _call_tool(server, "archy_check", {"path": path, "contracts": True})
     assert isinstance(withc, dict)
     result = withc["result"]
     assert result["passed"] is True
@@ -669,9 +701,9 @@ def test_score_view_history_routes_to_trend(acyclic_project: Path):
     # tool (wrapped under {"result": [...]} like any bare-sequence return).
     server = create_server()
     path = str(acyclic_project)
-    asyncio.run(server.call_tool("archy_score", {"path": path, "record": True}))
-    _content, structured = asyncio.run(
-        server.call_tool("archy_score", {"path": path, "view": "history", "last_n": 5})
+    _call_tool(server, "archy_score", {"path": path, "record": True})
+    _content, structured = _call_tool(
+        server, "archy_score", {"path": path, "view": "history", "last_n": 5}
     )
     assert isinstance(structured, dict)
     [row] = structured["result"]
@@ -781,7 +813,7 @@ def test_simulate_tool_input_schema_uses_from_to_aliases():
     server = create_server()
     tools = asyncio.run(server.list_tools())
     tool = next(t for t in tools if t.name == "archy_simulate")
-    edge_spec = tool.inputSchema["$defs"]["EdgeSpec"]["properties"]
+    edge_spec = tool.model_dump(by_alias=True)["inputSchema"]["$defs"]["EdgeSpec"]["properties"]
     # The wire contract the agent sees must be {from, to}, not {from_, to}.
     assert set(edge_spec) == {"from", "to"}
 
@@ -1136,15 +1168,14 @@ def test_impact_mode_affected_returns_test_split(tmp_path: Path):
 
 
 def test_impact_tool_validates_mode(acyclic_project: Path):
-    from mcp.server.fastmcp.exceptions import ToolError
+    from archy.mcp_compat import ToolError
 
     server = create_server()
     with pytest.raises(ToolError):
-        asyncio.run(
-            server.call_tool(
-                "archy_impact",
-                {"path": str(acyclic_project), "files": ["pkg/a.py"], "mode": "sideways"},
-            )
+        _call_tool(
+            server,
+            "archy_impact",
+            {"path": str(acyclic_project), "files": ["pkg/a.py"], "mode": "sideways"},
         )
 
 
