@@ -12,6 +12,7 @@ from archy.graph import (
     graph_to_dict,
     resolve_modules,
 )
+from archy.reach import package_init_edges, with_package_init_edges
 
 
 @pytest.fixture
@@ -42,6 +43,59 @@ def project(tmp_path: Path) -> Path:
     (sub / "__init__.py").write_text("")
     (sub / "leaf.py").write_text("from ..utils import helper\nimport json\n")
     return tmp_path
+
+
+def test_package_init_edges_are_not_in_the_built_graph(project: Path):
+    """The built graph records written imports only. Pinned because the reach
+    feature depends on this being false, and a later change that started adding
+    these edges to `build_graph` would move every metric silently."""
+    g = build_graph(project)
+
+    assert not g.has_edge("myapp.sub.leaf", "myapp.sub")
+    assert not g.has_edge("myapp.core", "myapp")
+
+
+def test_package_init_edges_point_submodules_at_their_packages(project: Path):
+    g = build_graph(project)
+
+    edges = set(package_init_edges(g))
+
+    assert ("myapp.sub.leaf", "myapp.sub") in edges
+    assert ("myapp.sub.leaf", "myapp") in edges  # every ancestor, not just the parent
+    assert ("myapp.core", "myapp") in edges
+
+
+def test_package_init_edges_skip_external_nodes(project: Path):
+    """`requests` is external and `_external_target` already collapsed it, so
+    there is no parent to point at and no claim to make about its contents."""
+    g = build_graph(project)
+
+    assert not any(src == "requests" or dst == "requests" for src, dst in package_init_edges(g))
+
+
+def test_with_package_init_edges_leaves_the_original_untouched(project: Path):
+    g = build_graph(project)
+    before = (g.number_of_nodes(), g.number_of_edges())
+
+    augmented = with_package_init_edges(g)
+
+    assert (g.number_of_nodes(), g.number_of_edges()) == before
+    assert augmented.number_of_edges() > before[1]
+    assert augmented["myapp.sub.leaf"]["myapp.sub"]["implicit"] == "package_init"
+
+
+def test_with_package_init_edges_preserves_a_real_edge(tmp_path: Path):
+    """A written `from . import x` edge must keep its line numbers, not be
+    overwritten by an implicit one that happens to connect the same pair."""
+    pkg_dir = tmp_path / "pkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("")
+    (pkg_dir / "child.py").write_text("import pkg\n")
+
+    augmented = with_package_init_edges(build_graph(tmp_path))
+
+    assert augmented["pkg.child"]["pkg"]["lines"] == (1,)
+    assert "implicit" not in augmented["pkg.child"]["pkg"]
 
 
 def test_discovers_internal_modules(project: Path):

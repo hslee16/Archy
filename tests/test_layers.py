@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import networkx as nx
@@ -10,8 +11,10 @@ from archy.layers import (
     LayerConfig,
     LayerConfigError,
     LayerSpec,
+    RequiredRule,
     compute_coverage,
     discover_config,
+    find_reach_violations,
     find_violations,
     load_config,
     match_layer,
@@ -420,6 +423,229 @@ def test_min_layers_present_rejects_a_floor_above_the_declared_count(tmp_path: P
 def test_min_layers_present_defaults_to_no_gate(tmp_path: Path):
     config = _cfg(tmp_path, "layers:\n  a:\n    modules: ['a.**']\nforbid: []\n")
     assert config.min_layers_present is None
+
+
+def _reach_graph(*edges: tuple[str, str], nodes: tuple[str, ...] = ()) -> nx.DiGraph:
+    """A graph whose nodes carry the `external=False` marker real scans set."""
+    g: nx.DiGraph = nx.DiGraph()
+    for node in nodes:
+        g.add_node(node, external=False)
+    for u, v in edges:
+        g.add_node(u, external=False)
+        g.add_node(v, external=False)
+        g.add_edge(u, v, lines=(1,))
+    return g
+
+
+_REGISTRY_CONFIG = (
+    "layers: {}\nforbid: []\n"
+    "required:\n"
+    "  - source: 'commands.**'\n"
+    "    must_reach: core.database.model_registry\n"
+    "    reason: standalone entrypoints need the full mapper registry\n"
+)
+
+
+def test_required_reach_bootstrap_import_is_load_bearing(tmp_path: Path):
+    """Negative control: the SAME graph, with only the bootstrap edge removed.
+
+    Asked for by the incident reporter, who shipped a guard for this exact bug
+    that passed with the fix REVERTED -- it asserted `configure_mappers()`
+    succeeds, and with no models imported there are no mappers to configure. The
+    generalizable failure is that a reach assertion over an under-connected
+    graph passes vacuously, and an under-connected graph is what archy had
+    before `package_init_edges`. A test that only asserts the clean case cannot
+    tell "the rule is satisfied" from "the rule never fired".
+
+    So both halves are pinned here, on one fixture, with one edge between them.
+    """
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+    satisfied = _reach_graph(
+        ("commands", "core.database.model_registry"),
+        nodes=("commands.setup_user", "commands.backfill", "core.database"),
+    )
+
+    assert find_reach_violations(satisfied, config) == []
+
+    # Nothing else changes: drop the one import in `commands/__init__.py`.
+    reverted = satisfied.copy()
+    reverted.remove_edge("commands", "core.database.model_registry")
+
+    assert [v.module for v in find_reach_violations(reverted, config)] == [
+        "commands",
+        "commands.backfill",
+        "commands.setup_user",
+    ]
+
+
+def test_required_reach_submodule_needs_no_import_of_its_own(tmp_path: Path):
+    """A command module with ZERO imports still satisfies a bootstrapped package.
+
+    Surprising enough to pin: `commands.orphan` is an isolated node, yet Python
+    runs `commands/__init__.py` before it, so the reach is real. This is the
+    incident's fix stated at its limit, and it is what makes the rule usable at
+    all -- otherwise every one of the 34 command modules would need its own
+    import of the registry.
+    """
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+    graph = _reach_graph(
+        ("commands", "core.database.model_registry"),
+        nodes=("commands.orphan",),
+    )
+
+    assert find_reach_violations(graph, config) == []
+
+
+def test_required_reach_does_not_pass_vacuously_on_an_empty_scan(tmp_path: Path):
+    """The vacuity case that survives: nothing scanned, so nothing to reach.
+
+    An empty or misrooted scan makes every reach question trivially unanswerable,
+    and silence would read as "all rules hold". Same failure as a coverage report
+    saying "0 of 0 modules (100%)".
+    """
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+
+    violations = find_reach_violations(nx.DiGraph(), config)
+
+    assert [v.module for v in violations] == [None]
+    assert "`must_reach` pattern" in violations[0].detail
+
+
+def test_required_reach_flags_the_module_that_cannot_reach_it(tmp_path: Path):
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+    graph = _reach_graph(
+        ("commands.setup_user", "core.database.model_registry"),
+        nodes=("commands", "commands.backfill"),
+    )
+
+    violations = find_reach_violations(graph, config)
+
+    # `commands` is listed too, and correctly: `pkg.**` covers the package
+    # module itself, and this fixture's `commands/__init__.py` imports nothing.
+    assert [v.module for v in violations] == ["commands", "commands.backfill"]
+    assert "does not transitively reach" in violations[1].detail
+    assert violations[1].rule.reason.startswith("standalone entrypoints")
+
+
+def test_required_reach_counts_indirect_paths(tmp_path: Path):
+    """Transitive, not direct: a hop through a bootstrap module still satisfies."""
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+    graph = _reach_graph(
+        ("commands.setup_user", "commands.bootstrap"),
+        ("commands.bootstrap", "core.database.model_registry"),
+        ("commands", "commands.bootstrap"),
+    )
+
+    assert [v.module for v in find_reach_violations(graph, config)] == []
+
+
+def test_required_reach_source_pattern_can_exclude_the_package_itself(tmp_path: Path):
+    """`pkg.*` scopes the rule to submodules; `pkg.**` includes `pkg/__init__.py`.
+
+    Worth pinning because the two read alike and the choice decides whether an
+    empty `__init__.py` is a violation. A package that only *forwards* to the
+    registry for its submodules has no reason to reach it itself.
+    """
+    config = _cfg(
+        tmp_path,
+        "layers: {}\nforbid: []\n"
+        "required:\n  - source: 'commands.*'\n    must_reach: core.registry\n",
+    )
+    graph = _reach_graph(
+        ("commands.setup_user", "core.registry"),
+        nodes=("commands",),  # the package itself reaches nothing
+    )
+
+    assert find_reach_violations(graph, config) == []
+
+
+def test_required_reach_reports_a_rule_that_cannot_fire(tmp_path: Path):
+    """A dead rule must not read as a clean pass (the #355 failure, inverted).
+
+    `commands` (no `.**`) matches one exact module, so a config that meant the
+    package governs nothing. Silence here would be indistinguishable from 34
+    modules all satisfying the rule.
+    """
+    config = _cfg(
+        tmp_path,
+        "layers: {}\nforbid: []\nrequired:\n  - source: commands\n    must_reach: core.registry\n",
+    )
+    graph = _reach_graph(("commands.setup_user", "core.registry"))
+
+    violations = find_reach_violations(graph, config)
+
+    assert [v.module for v in violations] == [None]
+    assert "cannot fire" in violations[0].detail
+    assert "`source` pattern" in violations[0].detail
+
+
+def test_required_reach_reports_an_unmatched_target(tmp_path: Path):
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+    graph = _reach_graph(("commands.setup_user", "core.database.models"))
+
+    violations = find_reach_violations(graph, config)
+
+    assert [v.module for v in violations] == [None]
+    assert "`must_reach` pattern" in violations[0].detail
+    assert "no module imports it any more" in violations[0].detail
+
+
+def test_required_reach_allows_an_external_target(tmp_path: Path):
+    config = _cfg(
+        tmp_path,
+        "layers: {}\nforbid: []\n"
+        "required:\n  - source: 'commands.**'\n    must_reach: sqlalchemy\n",
+    )
+    graph = _reach_graph(nodes=("commands.setup_user",))
+    graph.add_node("sqlalchemy", external=True)
+    graph.add_edge("commands.setup_user", "sqlalchemy", lines=(1,))
+
+    assert find_reach_violations(graph, config) == []
+
+
+def test_required_reach_is_absent_by_default(tmp_path: Path):
+    """Configs predating the feature keep their exit codes exactly."""
+    config = _cfg(tmp_path, "layers:\n  a:\n    modules: ['a.**']\nforbid: []\n")
+
+    assert config.required == ()
+    assert find_reach_violations(_reach_graph(nodes=("a.b",)), config) == []
+
+
+def test_required_reach_parses_the_rule(tmp_path: Path):
+    config = _cfg(tmp_path, _REGISTRY_CONFIG)
+
+    assert config.required == (
+        RequiredRule(
+            source="commands.**",
+            must_reach="core.database.model_registry",
+            reason="standalone entrypoints need the full mapper registry",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("required:\n  - must_reach: core.registry\n", "missing required key 'source'"),
+        ("required:\n  - source: 'commands.**'\n", "missing required key 'must_reach'"),
+        ("required: 'commands.**'\n", "`required` must be a list"),
+        (
+            "required:\n  - source: '**'\n    must_reach: core.registry\n",
+            "invalid `source` pattern",
+        ),
+        (
+            "required:\n  - source: 'commands.**'\n    must_reach: 'core..registry'\n",
+            "invalid `must_reach` pattern",
+        ),
+        (
+            "required:\n  - source: 'commands.**'\n    must_reach: core.registry\n    reason: 3\n",
+            "`reason` must be a string",
+        ),
+    ],
+)
+def test_required_rejects_malformed_config(tmp_path: Path, body: str, message: str):
+    with pytest.raises(LayerConfigError, match=re.escape(message)):
+        _cfg(tmp_path, f"layers: {{}}\nforbid: []\n{body}")
 
 
 @pytest.mark.parametrize("value", ["-1", "'three'", "true"])

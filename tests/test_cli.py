@@ -226,6 +226,190 @@ def test_check_json_output(tmp_path: Path):
     assert payload["sdp_violations"] == []
 
 
+def _make_registry_project(tmp_path: Path, *, bootstrap: str) -> Path:
+    """The reported incident, reduced: `commands/` modules run standalone, and
+    each needs `core.database.model_registry` imported before the ORM configures
+    its mappers. `bootstrap` is what `commands/__init__.py` contains.
+    """
+    app = tmp_path / "app"
+    (app / "core" / "database").mkdir(parents=True)
+    (app / "commands").mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "core" / "__init__.py").write_text("")
+    (app / "core" / "database" / "__init__.py").write_text("")
+    (app / "core" / "database" / "model_registry.py").write_text("REGISTRY = {}\n")
+    (app / "commands" / "__init__.py").write_text(bootstrap)
+    (app / "commands" / "setup_user.py").write_text("x = 1\n")
+    (app / "commands" / "backfill.py").write_text("x = 2\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: 'app.commands.*'\n"
+        "    must_reach: app.core.database.model_registry\n"
+        "    reason: standalone entrypoints need the full mapper registry\n"
+    )
+    return tmp_path
+
+
+def test_check_required_reach_satisfied_through_the_package_init(tmp_path: Path):
+    """One import in `commands/__init__.py` covers every command module.
+
+    The whole point of transitive reach: this is the correct fix, and a
+    direct-import rule would report both command modules as violations here.
+
+    The exit-0 half of a negative-control pair; `..._exit_code_tracks_the_one_import`
+    below removes that single line and requires exit 1. An exit 0 asserted on its
+    own cannot distinguish a satisfied rule from a rule that never fired.
+    """
+    project = _make_registry_project(
+        tmp_path, bootstrap="from app.core.database import model_registry\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 0
+    assert "No required-reach violations (1 rule(s) checked, transitively)" in result.output
+
+
+def test_check_required_reach_exit_code_tracks_the_one_import(tmp_path: Path):
+    """End-to-end negative control, on real files rather than a built graph.
+
+    Same project twice; the only difference is one line in `commands/__init__.py`.
+    If the exit code does not move, the gate is decorative.
+    """
+    bootstrap = "from app.core.database import model_registry\n"
+    with_import = _make_registry_project(tmp_path / "with_import", bootstrap=bootstrap)
+    without = _make_registry_project(tmp_path / "without", bootstrap="")
+
+    assert CliRunner().invoke(main, ["check", str(with_import)]).exit_code == 0
+    assert CliRunner().invoke(main, ["check", str(without)]).exit_code == 1
+
+
+def test_check_required_reach_fails_and_names_the_modules(tmp_path: Path):
+    project = _make_registry_project(tmp_path, bootstrap="")
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 1
+    assert "2 required-reach violation(s)" in result.output
+    assert "app.commands.* must reach app.core.database.model_registry" in result.output
+    assert "reason: standalone entrypoints need the full mapper registry" in result.output
+    assert "app.commands.backfill does not transitively reach" in result.output
+    assert "app.commands.setup_user does not transitively reach" in result.output
+
+
+def test_check_json_explains_a_required_reach_failure(tmp_path: Path):
+    """A JSON consumer has no text to fall back on, so the payload says why."""
+    project = _make_registry_project(tmp_path, bootstrap="")
+    result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
+    assert result.exit_code == 1
+    payload = json.loads(result.output)
+    assert payload["violations"] == []  # no forbidden edge exists; the gate failed anyway
+    modules = [v["module"] for v in payload["required_violations"]]
+    assert modules == ["app.commands.backfill", "app.commands.setup_user"]
+    first = payload["required_violations"][0]
+    assert first["rule"]["must_reach"] == "app.core.database.model_registry"
+    assert first["rule"]["reason"] == "standalone entrypoints need the full mapper registry"
+    assert "does not transitively reach" in first["detail"]
+
+
+def test_check_json_carries_required_violations_when_clean(tmp_path: Path):
+    project = _make_registry_project(
+        tmp_path, bootstrap="from app.core.database import model_registry\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    assert json.loads(result.output)["required_violations"] == []
+
+
+def test_check_stays_silent_about_required_reach_when_none_declared(tmp_path: Path):
+    """No `required:` in the config means no line about it, and no exit-code change."""
+    project = _make_layered_project(tmp_path, with_violation=False)
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 0
+    assert "required-reach" not in result.output
+
+
+def test_check_fails_on_a_required_rule_that_cannot_fire(tmp_path: Path):
+    """A typo'd pattern must not read as "every module satisfies it"."""
+    project = _make_registry_project(tmp_path, bootstrap="")
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: 'app.commands.*'\n"
+        "    must_reach: app.core.database.registry\n"  # no such module
+    )
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 1
+    assert "nothing matches the `must_reach` pattern" in result.output
+    assert "either the pattern is wrong" in result.output
+
+
+def _make_external_target_project(tmp_path: Path, *, bootstrap: str) -> Path:
+    """A `required:` rule whose `must_reach` is an EXTERNAL package."""
+    app = tmp_path / "app"
+    (app / "commands").mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "commands" / "__init__.py").write_text(bootstrap)
+    (app / "commands" / "setup_user.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n  - source: 'app.commands.*'\n    must_reach: sqlalchemy\n"
+    )
+    return tmp_path
+
+
+def test_snapshot_agrees_with_check_on_an_external_target(tmp_path: Path):
+    """`check` and `snapshot` must not disagree about the same tree.
+
+    They did: `check` keeps external nodes, but the snapshot path stripped them
+    before the reach check ran, so `must_reach: sqlalchemy` reported as a dead
+    rule ("cannot fire") while `check` reported it satisfied.
+    """
+    project = _make_external_target_project(tmp_path, bootstrap="import sqlalchemy\n")
+
+    assert CliRunner().invoke(main, ["check", str(project)]).exit_code == 0
+    assert CliRunner().invoke(main, ["snapshot", str(project)]).exit_code == 0
+
+    baseline = json.loads((project / ".archy" / "baseline.json").read_text())
+    assert baseline["required_violations"] == []
+
+
+def test_diff_catches_a_removed_external_bootstrap_import(tmp_path: Path):
+    """The masking this caused was worse than the wrong verdict.
+
+    A false "dead rule" landed on BOTH sides of the diff, so deleting the
+    bootstrap import could never surface as a regression -- the exact ratchet
+    the feature exists to provide, silently disabled for external targets.
+    """
+    project = _make_external_target_project(tmp_path, bootstrap="import sqlalchemy\n")
+    assert CliRunner().invoke(main, ["snapshot", str(project)]).exit_code == 0
+
+    (project / "app" / "commands" / "__init__.py").write_text("")
+    result = CliRunner().invoke(main, ["diff", str(project)])
+
+    assert "required-reach: +1 added" in result.output
+    # For an external target, "nothing matches it" IS the failure: the import
+    # that satisfied the rule is gone, so the node left the graph with it.
+    assert "no module imports it any more" in result.output
+
+
+def test_simulate_lists_required_reach_violations_outside_the_ranked_summary(tmp_path: Path):
+    """`simulate` has no --top-n, so a reach item must not depend on the top-5."""
+    project = _make_registry_project(
+        tmp_path, bootstrap="from app.core.database import model_registry\n"
+    )
+    result = CliRunner().invoke(
+        main,
+        [
+            "simulate",
+            str(project),
+            "--remove",
+            "app.commands:app.core.database.model_registry",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "# new required-reach violations (+2):" in result.output
+    assert "app.commands.setup_user does not transitively reach" in result.output
+
+
 def _make_sdp_violating_project(tmp_path: Path) -> Path:
     # See test_run_check_reports_sdp_violations_when_enabled in test_mcp.py
     # for the I calculation; the a -> b edge is the SDP violation.

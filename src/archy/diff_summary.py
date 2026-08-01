@@ -11,6 +11,8 @@ Item kinds:
 * ``cycle_added`` / ``cycle_resolved`` - risk = max edit_risk over cycle members
 * ``violation_added`` / ``violation_resolved`` - risk = max(source, target)
 * ``sdp_violation_added`` / ``sdp_violation_resolved`` - same as violation
+* ``required_reach_violation_added`` / ``..._resolved`` - risk = the offending
+  module's edit_risk (0.0 for a whole-rule item, which names no module)
 * ``score_component_drop`` / ``score_component_gain`` - risk = clamp(|delta| * 5, 0, 1)
 
 Score-component items use magnitude rather than module risk because they're
@@ -107,6 +109,42 @@ def _sdp_added_prompt(
     )
 
 
+def _reach_added_prompt(module: str, must_reach: str, reason: str, hypothetical: bool) -> str:
+    """The one prompt that must carry the config author's `reason`.
+
+    The others describe a structure the reviewer can see for themselves. This
+    one reports an ABSENCE: the module stopped reaching something, and nothing
+    in the diff shows why that mattered. Without the reason, the cheapest way to
+    make the question go away is to delete the rule.
+    """
+    why = f" ({reason})" if reason else ""
+    if hypothetical:
+        return (
+            f"{module} would stop reaching {must_reach}{why}. "
+            "Proceed, or keep the import path that satisfies the rule?"
+        )
+    return (
+        f"{module} no longer reaches {must_reach}{why}. "
+        "Intended, or was a bootstrap import removed as unused?"
+    )
+
+
+def _reach_resolved_prompt(module: str, must_reach: str, hypothetical: bool) -> str:
+    if hypothetical:
+        return f"{module} would reach {must_reach}. Confirm that is the intended bootstrap path."
+    return f"{module} now reaches {must_reach}. Confirm that is the intended bootstrap path."
+
+
+def _reach_modules(module: str | None) -> tuple[str, ...]:
+    """A reach violation names one module, or none when the whole rule is dead.
+
+    Takes the module rather than the violation so this file needs no import of
+    `archy.layers`: one more hop on the longest import chain, for a type
+    annotation.
+    """
+    return (module,) if module else ()
+
+
 def _score_drop_prompt(name: str, delta: float, hypothetical: bool) -> str:
     if hypothetical:
         return f"{name} would drop {delta:+.3f}. Acceptable, or pick a different approach?"
@@ -185,6 +223,22 @@ def _collect_regressions(
                 ),
             )
         )
+    for v in diff.required_violations.added:
+        modules = _reach_modules(v.module)
+        items.append(
+            DiffSummaryItem(
+                kind="required_reach_violation_added",
+                risk=_max_module_risk(modules, risk),
+                modules=modules,
+                description=(
+                    f"new required-reach violation: {v.module or v.rule.source} no longer "
+                    f"reaches {v.rule.must_reach}"
+                ),
+                prompt=_reach_added_prompt(
+                    v.module or v.rule.source, v.rule.must_reach, v.rule.reason, hypothetical
+                ),
+            )
+        )
     for name in _COMPONENT_NAMES:
         delta = getattr(diff.score_delta, name)
         if delta < 0:
@@ -234,6 +288,22 @@ def _collect_improvements(
                 modules=(v.source, v.target),
                 description=f"SDP violation resolved: {v.source} -> {v.target}",
                 prompt=_sdp_resolved_prompt(v.source, v.target, hypothetical),
+            )
+        )
+    for v in diff.required_violations.resolved:
+        modules = _reach_modules(v.module)
+        items.append(
+            DiffSummaryItem(
+                kind="required_reach_violation_resolved",
+                risk=_max_module_risk(modules, risk),
+                modules=modules,
+                description=(
+                    f"required-reach violation resolved: {v.module or v.rule.source} now "
+                    f"reaches {v.rule.must_reach}"
+                ),
+                prompt=_reach_resolved_prompt(
+                    v.module or v.rule.source, v.rule.must_reach, hypothetical
+                ),
             )
         )
     for name in _COMPONENT_NAMES:
@@ -286,8 +356,16 @@ def _make_headline(diff: DiffReport) -> str:
             drivers.append(f"{name} {delta:+.2f}")
     cycles_added = len(diff.cycles.added)
     cycles_resolved = len(diff.cycles.resolved)
-    violations_added = len(diff.violations.added) + len(diff.sdp_violations.added)
-    violations_resolved = len(diff.violations.resolved) + len(diff.sdp_violations.resolved)
+    violations_added = (
+        len(diff.violations.added)
+        + len(diff.sdp_violations.added)
+        + len(diff.required_violations.added)
+    )
+    violations_resolved = (
+        len(diff.violations.resolved)
+        + len(diff.sdp_violations.resolved)
+        + len(diff.required_violations.resolved)
+    )
     parts = [f"overall {overall:+.3f}"]
     if drivers:
         parts.append("driven by " + ", ".join(drivers[:3]))

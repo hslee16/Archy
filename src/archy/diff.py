@@ -24,9 +24,12 @@ from archy.cycles import Cycle, CycleEdge, find_cycles
 from archy.layers import (
     ForbidRule,
     LayerConfig,
+    ReachViolation,
+    RequiredRule,
     SdpViolation,
     Violation,
     discover_config,
+    find_reach_violations,
     find_sdp_violations,
     find_violations,
     load_config,
@@ -41,6 +44,7 @@ class Snapshot(BaseModel):
     cycles: tuple[Cycle, ...]
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
+    required_violations: tuple[ReachViolation, ...] = ()
 
 
 class ScoreDelta(BaseModel):
@@ -75,6 +79,22 @@ class SdpViolationSetDiff(BaseModel):
     resolved: tuple[SdpViolation, ...] = ()
 
 
+class ReachViolationSetDiff(BaseModel):
+    """Required-reach failures that appeared or were fixed since the baseline.
+
+    This is the ratchet the feature is actually for. Nothing static derives
+    "these entrypoints need the model registry" on its own; once a human writes
+    the rule, this is what stops the next edit from quietly undoing it. An
+    `added` entry here typically means a bootstrap import was deleted as unused,
+    which is exactly what it looks like to a linter and to an agent.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    added: tuple[ReachViolation, ...] = ()
+    resolved: tuple[ReachViolation, ...] = ()
+
+
 class DiffSummaryItem(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -104,21 +124,40 @@ class DiffReport(BaseModel):
     cycles: CycleSetDiff
     violations: ViolationSetDiff
     sdp_violations: SdpViolationSetDiff = SdpViolationSetDiff()
+    required_violations: ReachViolationSetDiff = ReachViolationSetDiff()
     # Populated by callers via `diff_summary.summarize_diff(report, graph)`;
     # left None for the pure `compute_diff` path so the function stays
     # graph-free.
     summary: DiffSummary | None = None
 
 
-def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
-    """Capture score, cycles, layer violations, and SDP violations from a graph."""
+def take_snapshot(graph, config_path: Path | None = None, *, reach_graph=None) -> Snapshot:
+    """Capture score, cycles, layer, SDP, and required-reach violations from a graph.
+
+    `graph` is expected to be internal-only: that is what `compute_score` and
+    `find_cycles` want, and every caller strips external nodes before calling.
+
+    `reach_graph` exists because required-reach rules are the one check that
+    needs those external nodes. `must_reach: sqlalchemy` is a legitimate rule,
+    and against an internal-only graph the target matches nothing, so the rule
+    reports as dead. That is not a cosmetic difference: `archy check` (which
+    keeps externals) called it satisfied while `snapshot` called it dead on the
+    same tree, and because the false "dead rule" appeared on BOTH sides of a
+    diff, deleting the bootstrap import could never surface as a regression.
+    Pass the graph that still has external nodes; defaults to `graph`, which
+    keeps the old behavior for callers that have no externals to give.
+    """
     score = compute_score(graph)
     cycles = tuple(find_cycles(graph, min_size=2))
     violations: tuple[Violation, ...] = ()
     sdp_violations: tuple[SdpViolation, ...] = ()
+    reach_violations: tuple[ReachViolation, ...] = ()
     config = _load_config_if_present(config_path)
     if config is not None:
         violations = tuple(find_violations(graph, config))
+        reach_violations = tuple(
+            find_reach_violations(graph if reach_graph is None else reach_graph, config)
+        )
         if config.sdp.enabled:
             sdp_violations = tuple(find_sdp_violations(graph, tolerance=config.sdp.tolerance))
     return Snapshot(
@@ -126,6 +165,7 @@ def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
         cycles=cycles,
         violations=violations,
         sdp_violations=sdp_violations,
+        required_violations=reach_violations,
     )
 
 
@@ -141,6 +181,7 @@ def snapshot_to_dict(snap: Snapshot) -> dict[str, object]:
         "cycles": [_cycle_to_dict(c) for c in snap.cycles],
         "violations": [_violation_to_dict(v) for v in snap.violations],
         "sdp_violations": [_sdp_violation_to_dict(v) for v in snap.sdp_violations],
+        "required_violations": [_reach_violation_to_dict(v) for v in snap.required_violations],
     }
 
 
@@ -169,6 +210,9 @@ def compute_diff(baseline: Snapshot, current: Snapshot) -> DiffReport:
         cycles=_cycle_set_diff(baseline.cycles, current.cycles),
         violations=_violation_set_diff(baseline.violations, current.violations),
         sdp_violations=_sdp_violation_set_diff(baseline.sdp_violations, current.sdp_violations),
+        required_violations=_reach_violation_set_diff(
+            baseline.required_violations, current.required_violations
+        ),
     )
 
 
@@ -204,6 +248,18 @@ def _violation_to_dict(v: Violation) -> dict[str, object]:
         "source": v.source,
         "target": v.target,
         "lines": list(v.lines),
+    }
+
+
+def _reach_violation_to_dict(v: ReachViolation) -> dict[str, object]:
+    return {
+        "rule": {
+            "source": v.rule.source,
+            "must_reach": v.rule.must_reach,
+            "reason": v.rule.reason,
+        },
+        "module": v.module,
+        "detail": v.detail,
     }
 
 
@@ -269,11 +325,21 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
         _sdp_violation_from_dict(_expect_dict(v))
         for v in _expect_list(payload.get("sdp_violations", []))
     )
+    # `required_violations` postdates the first baseline format; an older
+    # `.archy/baseline.json` simply has none, which reads as "no required-reach
+    # failures at baseline" and makes any current failure show up as `added`.
+    # That is the safe direction: a stale baseline over-reports a regression
+    # rather than hiding one.
+    reach_violations = tuple(
+        _reach_violation_from_dict(_expect_dict(v))
+        for v in _expect_list(payload.get("required_violations", []))
+    )
     return Snapshot(
         score=score,
         cycles=cycles,
         violations=violations,
         sdp_violations=sdp_violations,
+        required_violations=reach_violations,
     )
 
 
@@ -296,6 +362,20 @@ def _violation_from_dict(d: dict[str, object]) -> Violation:
         source=str(d["source"]),
         target=str(d["target"]),
         lines=tuple(_expect_int(x) for x in _expect_list(d["lines"])),
+    )
+
+
+def _reach_violation_from_dict(d: dict[str, object]) -> ReachViolation:
+    rule = _expect_dict(d["rule"])
+    module = d.get("module")
+    return ReachViolation(
+        rule=RequiredRule(
+            source=str(rule["source"]),
+            must_reach=str(rule["must_reach"]),
+            reason=str(rule.get("reason", "")),
+        ),
+        module=None if module is None else str(module),
+        detail=str(d["detail"]),
     )
 
 
@@ -338,6 +418,22 @@ def _violation_set_diff(
     baseline_keys = {_key(v) for v in baseline}
     current_keys = {_key(v) for v in current}
     return ViolationSetDiff(
+        added=tuple(v for v in current if _key(v) not in baseline_keys),
+        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
+    )
+
+
+def _reach_violation_set_diff(
+    baseline: tuple[ReachViolation, ...], current: tuple[ReachViolation, ...]
+) -> ReachViolationSetDiff:
+    # Identity is (rule, offending module). `detail` is derived text, so keying
+    # on it would make a reworded message read as resolved-plus-added.
+    def _key(v: ReachViolation) -> tuple[str, str, str]:
+        return (v.rule.source, v.rule.must_reach, v.module or "")
+
+    baseline_keys = {_key(v) for v in baseline}
+    current_keys = {_key(v) for v in current}
+    return ReachViolationSetDiff(
         added=tuple(v for v in current if _key(v) not in baseline_keys),
         resolved=tuple(v for v in baseline if _key(v) not in current_keys),
     )
