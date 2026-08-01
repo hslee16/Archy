@@ -123,7 +123,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.42.0, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
+**Status:** v0.43.0, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -429,7 +429,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.42.0
+- uses: hslee16/archy@v0.43.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -455,7 +455,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.42.0
+    rev: v0.43.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -646,6 +646,7 @@ Shipped:
 - **v0.22, `archy dsm`** (Design Structure Matrix): CLI + `archy_dsm` MCP tool with `--group=community|layer|topological`, `--weight=imports|calls`, `--focus`/`--package`, and `--diff` for back-edge regression detection. Visualization-only per [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md): no DSM-derived score axis or diagnostic scalar.
 
 - **v0.42, `archy render`** ([#284](https://github.com/hslee16/archy/issues/284)): static HTML export for the human governor, `--view dsm|trend`. Self-contained (inline SVG + CSS, no JS, no CDN, no server) and byte-stable for a fixed input. CLI-only by design: no MCP tool, and the `graph` view stays deferred behind a usage signal ([`docs/SPEC_VISUALIZATION.md`](docs/SPEC_VISUALIZATION.md) §3a, §6.3).
+- **v0.43, `required:` reach contracts** ([#387](https://github.com/hslee16/archy/issues/387)): the inverse of `forbid:`. Every module matching `source` must *transitively* reach `must_reach`, counting the implicit package-`__init__` import Python guarantees. From a reported production incident where 34 standalone entrypoints each needed a model registry imported before the ORM configured itself: 21 crashed, and 2 passed only by reaching it through unrelated imports, which is why the rule is defined over reach and not direct imports. Opt-in, gates `archy check`, and carries the author's `reason` to every surface. Honest limit: archy cannot *derive* such a rule (that is framework semantics), so this is a ratchet that catches the rest and prevents regression, not a detector.
 
 **Install / distribution**
 

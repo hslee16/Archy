@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "archy"
-version = "0.42.0"
+version = "0.43.0"
 description = "Architectural sensor for Python codebases"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -24,7 +24,13 @@ dependencies = [
     "networkx>=3.2",
     "pyyaml>=6.0",
     "click>=8.1",
-    "mcp>=1.28.1",
+    # Upper-bounded at 2.0. mcp 2.0.0 removed `mcp.server.fastmcp`, which
+    # `archy.mcp` imports at module scope, so an unbounded floor lets a fresh
+    # `pip install archy` resolve a version where `archy mcp` dies on import.
+    # The lockfile hid this from CI: local runs and CI both resolve 1.28.1 from
+    # uv.lock, while a user installing from PyPI gets whatever satisfies the
+    # range. Migrating to the 2.x API is tracked separately.
+    "mcp>=1.28.1,<2",
     # Pydantic is already pulled in transitively by `mcp`; declared
     # explicitly because all archy value types are pydantic models.
     "pydantic>=2.0",
