@@ -1,0 +1,16 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "014d190322de",
+  "strategy": "manual-commit",
+  "branch": "alee/mcp-2x-compat",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "tests/test_mcp.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/01/4d190322de/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
