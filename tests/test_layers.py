@@ -508,7 +508,7 @@ def test_required_reach_does_not_pass_vacuously_on_an_empty_scan(tmp_path: Path)
     violations = find_reach_violations(nx.DiGraph(), config)
 
     assert [v.module for v in violations] == [None]
-    assert "cannot fire" in violations[0].detail
+    assert "`must_reach` pattern" in violations[0].detail
 
 
 def test_required_reach_flags_the_module_that_cannot_reach_it(tmp_path: Path):
@@ -587,6 +587,7 @@ def test_required_reach_reports_an_unmatched_target(tmp_path: Path):
 
     assert [v.module for v in violations] == [None]
     assert "`must_reach` pattern" in violations[0].detail
+    assert "no module imports it any more" in violations[0].detail
 
 
 def test_required_reach_allows_an_external_target(tmp_path: Path):

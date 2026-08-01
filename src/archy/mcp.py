@@ -1271,9 +1271,9 @@ def _build_invariant_brief(
 
 
 def _run_snapshot(path: Path) -> SnapshotPayload:
-    graph = _load_graph(path, internal_only=True)
+    graph, full = _load_graph_pair(path)
     config_path = discover_config(path)
-    snap = take_snapshot(graph, config_path=config_path)
+    snap = take_snapshot(graph, config_path=config_path, reach_graph=full)
     target = path / ".archy" / "baseline.json"
     write_snapshot(snap, target)
     return SnapshotPayload(
@@ -1294,20 +1294,21 @@ def _run_diff(path: Path) -> DiffReport | DiffErrorPayload:
         return DiffErrorPayload(
             error=f"no baseline at {target}; call archy_snapshot first to capture one."
         )
-    graph = _load_graph(path, internal_only=True)
-    current = take_snapshot(graph, config_path=discover_config(path))
+    graph, full = _load_graph_pair(path)
+    current = take_snapshot(graph, config_path=discover_config(path), reach_graph=full)
     report = compute_diff(baseline, current)
     return report.model_copy(update={"summary": summarize_diff(report, graph)})
 
 
 def _run_simulate(path: Path, *, add: list[EdgeSpec], remove: list[EdgeSpec]) -> SimulateReport:
-    graph = _load_graph(path, internal_only=True)
+    graph, full = _load_graph_pair(path)
     return find_simulate(
         graph,
         add=[e.as_pair() for e in add],
         remove=[e.as_pair() for e in remove],
         config_path=discover_config(path),
         project_root=path,
+        reach_graph=full,
     )
 
 
@@ -2002,6 +2003,18 @@ def _load_graph(path: Path, *, internal_only: bool):
         external = {n for n, d in graph.nodes(data=True) if d.get("external")}
         graph.remove_nodes_from(external)
     return graph
+
+
+def _load_graph_pair(path: Path):
+    """Return `(internal_only, full)` from ONE scan. Mirrors cli._load_graph_pair.
+
+    Score and cycles want the internal-only graph; required-reach rules need the
+    full one, because `must_reach` may name an external package.
+    """
+    full = _load_graph(path, internal_only=False)
+    internal = full.copy()
+    internal.remove_nodes_from([n for n, d in full.nodes(data=True) if d.get("external")])
+    return internal, full
 
 
 def _graph_kwargs(path: Path) -> dict:

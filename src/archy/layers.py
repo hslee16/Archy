@@ -497,8 +497,10 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
                     rule=rule,
                     module=None,
                     detail=(
-                        f"rule cannot fire: `must_reach` pattern {rule.must_reach!r} matches no "
-                        "module in the scanned tree."
+                        f"nothing matches the `must_reach` pattern {rule.must_reach!r} in the "
+                        "scanned tree: either the pattern is wrong, or -- for an external "
+                        "package -- no module imports it any more, which is itself the "
+                        "failure the rule is about."
                     ),
                 )
             )

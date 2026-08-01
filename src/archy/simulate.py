@@ -120,25 +120,38 @@ def find_simulate(
     remove: list[tuple[str, str]],
     config_path: Path | None = None,
     project_root: Path | None = None,
+    reach_graph: nx.DiGraph | None = None,
 ) -> SimulateReport:
     """Apply `add`/`remove` edge specs to a copy of `graph` and report the diff.
 
     `add` / `remove` are `(source, target)` pairs of qualnames or file paths.
     `graph` should be the internal-only graph (the same one `archy_diff` uses),
     so the result is directly comparable to a post-edit diff.
+
+    `reach_graph` is that same project graph WITH external nodes, needed only by
+    required-reach rules whose `must_reach` names an external package (see
+    `diff.take_snapshot`). The simulated delta is applied to it too, so removing
+    an edge is evaluated against the same hypothetical. Omitting it degrades
+    exactly one case -- external-target rules read as dead on both sides, so
+    they produce no false regression, only a missed one.
     """
     applied = _resolve_delta(graph, add=add, remove=remove, project_root=project_root)
 
-    hypo = graph.copy()
-    for edge in applied.added_edges:
-        if not hypo.has_edge(edge.source, edge.target):
-            hypo.add_edge(edge.source, edge.target, kinds=("import",), lines=())
-    for edge in applied.removed_edges:
-        if hypo.has_edge(edge.source, edge.target):
-            hypo.remove_edge(edge.source, edge.target)
+    def _apply(target: nx.DiGraph) -> nx.DiGraph:
+        out = target.copy()
+        for edge in applied.added_edges:
+            if not out.has_edge(edge.source, edge.target):
+                out.add_edge(edge.source, edge.target, kinds=("import",), lines=())
+        for edge in applied.removed_edges:
+            if out.has_edge(edge.source, edge.target):
+                out.remove_edge(edge.source, edge.target)
+        return out
 
-    before = take_snapshot(graph, config_path=config_path)
-    after = take_snapshot(hypo, config_path=config_path)
+    hypo = _apply(graph)
+    hypo_reach = None if reach_graph is None else _apply(reach_graph)
+
+    before = take_snapshot(graph, config_path=config_path, reach_graph=reach_graph)
+    after = take_snapshot(hypo, config_path=config_path, reach_graph=hypo_reach)
     report = compute_diff(before, after)
     summary = summarize_diff(report, hypo, hypothetical=True)
 

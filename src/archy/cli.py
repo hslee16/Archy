@@ -907,8 +907,8 @@ def what_to_refactor_next(
 )
 def snapshot(path: Path, out_path: Path | None) -> None:
     """Capture score, cycles, and layer violations as a baseline for `archy diff`."""
-    g = _load_graph(path, internal_only=True)
-    snap = take_snapshot(g, config_path=discover_config(path))
+    g, full = _load_graph_pair(path)
+    snap = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
     target = out_path or (path / ".archy" / "baseline.json")
     write_snapshot(snap, target)
     click.echo(f"# baseline written to {target}")
@@ -953,8 +953,8 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int) -> None:
     baseline = read_snapshot(target)
     if baseline is None:
         raise click.ClickException(f"no baseline at {target}; run `archy snapshot {path}` first.")
-    g = _load_graph(path, internal_only=True)
-    current = take_snapshot(g, config_path=discover_config(path))
+    g, full = _load_graph_pair(path)
+    current = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
     result = compute_diff(baseline, current)
     result = result.model_copy(update={"summary": summarize_diff(result, g, top_n=top_n)})
     if fmt == "json":
@@ -1012,13 +1012,14 @@ def simulate(
     of the graph and report the new/resolved cycles, new back-edges, new layer
     rules broken, per-axis score delta, and blast-radius change, before you edit.
     """
-    g = _load_graph(path, internal_only=True)
+    g, full = _load_graph_pair(path)
     result = find_simulate(
         g,
         add=[_parse_edge_spec(s) for s in add_specs],
         remove=[_parse_edge_spec(s) for s in remove_specs],
         config_path=discover_config(path),
         project_root=path,
+        reach_graph=full,
     )
     if fmt == "json":
         click.echo(result.model_dump_json(indent=2))
@@ -1633,6 +1634,19 @@ def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     return g
 
 
+def _load_graph_pair(path: Path) -> tuple[nx.DiGraph, nx.DiGraph]:
+    """Return `(internal_only, full)` from ONE scan, for the snapshot paths.
+
+    Score and cycles want the internal-only graph; required-reach rules need the
+    full one, because `must_reach` may name an external package. Built once and
+    copied rather than scanned twice.
+    """
+    full = _load_graph(path, internal_only=False)
+    internal = full.copy()
+    internal.remove_nodes_from([n for n, d in full.nodes(data=True) if d.get("external")])
+    return internal, full
+
+
 def _effective_max_modules(config: LayerConfig | None) -> int | None:
     return effective_max_modules(config.max_modules if config is not None else None)
 
@@ -2060,6 +2074,17 @@ def _simulate_to_text(result: SimulateReport) -> str:
             lines.append(
                 f"  + {v.source} -> {v.target}  ({v.rule.from_layer} -> {v.rule.to_layer})"
             )
+    # Listed unconditionally, like the block above, NOT left to the ranked
+    # summary. `simulate` has no --top-n and takes the default cap of 5, and a
+    # whole-rule reach item carries risk 0.0 (it names no module to weight), so
+    # it is the first thing evicted from the top-5 exactly when a simulation has
+    # a lot going on. "Would removing this import break a required-reach rule?"
+    # is a question simulate exists to answer; it must not depend on ranking.
+    if result.required_violations.added:
+        lines.append("")
+        lines.append(f"# new required-reach violations (+{len(result.required_violations.added)}):")
+        for v in result.required_violations.added:
+            lines.append(f"  + {v.detail}")
     return "\n".join(lines)
 
 

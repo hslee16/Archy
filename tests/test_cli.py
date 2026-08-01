@@ -337,8 +337,77 @@ def test_check_fails_on_a_required_rule_that_cannot_fire(tmp_path: Path):
     )
     result = CliRunner().invoke(main, ["check", str(project)])
     assert result.exit_code == 1
-    assert "cannot fire" in result.output
-    assert "matches no module in the scanned tree" in result.output
+    assert "nothing matches the `must_reach` pattern" in result.output
+    assert "either the pattern is wrong" in result.output
+
+
+def _make_external_target_project(tmp_path: Path, *, bootstrap: str) -> Path:
+    """A `required:` rule whose `must_reach` is an EXTERNAL package."""
+    app = tmp_path / "app"
+    (app / "commands").mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "commands" / "__init__.py").write_text(bootstrap)
+    (app / "commands" / "setup_user.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n  - source: 'app.commands.*'\n    must_reach: sqlalchemy\n"
+    )
+    return tmp_path
+
+
+def test_snapshot_agrees_with_check_on_an_external_target(tmp_path: Path):
+    """`check` and `snapshot` must not disagree about the same tree.
+
+    They did: `check` keeps external nodes, but the snapshot path stripped them
+    before the reach check ran, so `must_reach: sqlalchemy` reported as a dead
+    rule ("cannot fire") while `check` reported it satisfied.
+    """
+    project = _make_external_target_project(tmp_path, bootstrap="import sqlalchemy\n")
+
+    assert CliRunner().invoke(main, ["check", str(project)]).exit_code == 0
+    assert CliRunner().invoke(main, ["snapshot", str(project)]).exit_code == 0
+
+    baseline = json.loads((project / ".archy" / "baseline.json").read_text())
+    assert baseline["required_violations"] == []
+
+
+def test_diff_catches_a_removed_external_bootstrap_import(tmp_path: Path):
+    """The masking this caused was worse than the wrong verdict.
+
+    A false "dead rule" landed on BOTH sides of the diff, so deleting the
+    bootstrap import could never surface as a regression -- the exact ratchet
+    the feature exists to provide, silently disabled for external targets.
+    """
+    project = _make_external_target_project(tmp_path, bootstrap="import sqlalchemy\n")
+    assert CliRunner().invoke(main, ["snapshot", str(project)]).exit_code == 0
+
+    (project / "app" / "commands" / "__init__.py").write_text("")
+    result = CliRunner().invoke(main, ["diff", str(project)])
+
+    assert "required-reach: +1 added" in result.output
+    # For an external target, "nothing matches it" IS the failure: the import
+    # that satisfied the rule is gone, so the node left the graph with it.
+    assert "no module imports it any more" in result.output
+
+
+def test_simulate_lists_required_reach_violations_outside_the_ranked_summary(tmp_path: Path):
+    """`simulate` has no --top-n, so a reach item must not depend on the top-5."""
+    project = _make_registry_project(
+        tmp_path, bootstrap="from app.core.database import model_registry\n"
+    )
+    result = CliRunner().invoke(
+        main,
+        [
+            "simulate",
+            str(project),
+            "--remove",
+            "app.commands:app.core.database.model_registry",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "# new required-reach violations (+2):" in result.output
+    assert "app.commands.setup_user does not transitively reach" in result.output
 
 
 def _make_sdp_violating_project(tmp_path: Path) -> Path:

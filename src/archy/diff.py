@@ -131,8 +131,22 @@ class DiffReport(BaseModel):
     summary: DiffSummary | None = None
 
 
-def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
-    """Capture score, cycles, layer, SDP, and required-reach violations from a graph."""
+def take_snapshot(graph, config_path: Path | None = None, *, reach_graph=None) -> Snapshot:
+    """Capture score, cycles, layer, SDP, and required-reach violations from a graph.
+
+    `graph` is expected to be internal-only: that is what `compute_score` and
+    `find_cycles` want, and every caller strips external nodes before calling.
+
+    `reach_graph` exists because required-reach rules are the one check that
+    needs those external nodes. `must_reach: sqlalchemy` is a legitimate rule,
+    and against an internal-only graph the target matches nothing, so the rule
+    reports as dead. That is not a cosmetic difference: `archy check` (which
+    keeps externals) called it satisfied while `snapshot` called it dead on the
+    same tree, and because the false "dead rule" appeared on BOTH sides of a
+    diff, deleting the bootstrap import could never surface as a regression.
+    Pass the graph that still has external nodes; defaults to `graph`, which
+    keeps the old behavior for callers that have no externals to give.
+    """
     score = compute_score(graph)
     cycles = tuple(find_cycles(graph, min_size=2))
     violations: tuple[Violation, ...] = ()
@@ -141,7 +155,9 @@ def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
     config = _load_config_if_present(config_path)
     if config is not None:
         violations = tuple(find_violations(graph, config))
-        reach_violations = tuple(find_reach_violations(graph, config))
+        reach_violations = tuple(
+            find_reach_violations(graph if reach_graph is None else reach_graph, config)
+        )
         if config.sdp.enabled:
             sdp_violations = tuple(find_sdp_violations(graph, tolerance=config.sdp.tolerance))
     return Snapshot(
