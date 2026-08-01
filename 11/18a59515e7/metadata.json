@@ -1,0 +1,16 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "1118a59515e7",
+  "strategy": "manual-commit",
+  "branch": "alee/release-v0.43.0",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "README.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/11/18a59515e7/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
