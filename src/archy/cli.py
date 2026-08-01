@@ -52,6 +52,7 @@ from archy.graph import (
     discover_modules,
     effective_max_modules,
     graph_to_dict,
+    internal_subgraph,
     parse_project,
 )
 from archy.history import append as append_history
@@ -1642,9 +1643,7 @@ def _load_graph_pair(path: Path) -> tuple[nx.DiGraph, nx.DiGraph]:
     copied rather than scanned twice.
     """
     full = _load_graph(path, internal_only=False)
-    internal = full.copy()
-    internal.remove_nodes_from([n for n, d in full.nodes(data=True) if d.get("external")])
-    return internal, full
+    return internal_subgraph(full), full
 
 
 def _effective_max_modules(config: LayerConfig | None) -> int | None:

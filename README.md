@@ -247,7 +247,7 @@ archy contracts path/to/project --format json
 
 Two configs, one concern each:
 
-- **`archy.yaml`** owns layer definitions, direct-edge gating (`archy check`), `sdp:`, `exclude:`, and `roots:`.
+- **`archy.yaml`** owns layer definitions, direct-edge gating (`archy check`), required-reach rules (`required:`), `sdp:`, `exclude:`, and `roots:`.
 - **`.importlinter`** owns transitive contracts: all five contract types (Forbidden, Layers, Independence, Protected, AcyclicSiblings) and `ignore_imports` whitelists.
 
 Reach for `.importlinter` as soon as you need transitive enforcement at all; the archy.yaml fallback is a zero-config onramp, not a feature target. See [`.importlinter`](.importlinter) in this repo for a real-world example, and the [import-linter contract types reference](https://import-linter.readthedocs.io/en/stable/contract_types.html) for the full grammar.

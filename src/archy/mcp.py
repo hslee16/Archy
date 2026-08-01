@@ -142,6 +142,7 @@ from archy.graph import (
     discover_modules,
     effective_max_modules,
     graph_to_dict,
+    internal_subgraph,
     parse_project,
     resolve_modules,
 )
@@ -2012,9 +2013,7 @@ def _load_graph_pair(path: Path):
     full one, because `must_reach` may name an external package.
     """
     full = _load_graph(path, internal_only=False)
-    internal = full.copy()
-    internal.remove_nodes_from([n for n, d in full.nodes(data=True) if d.get("external")])
-    return internal, full
+    return internal_subgraph(full), full
 
 
 def _graph_kwargs(path: Path) -> dict:

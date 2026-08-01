@@ -273,6 +273,21 @@ def graph_to_dict(graph: nx.DiGraph) -> dict:
     }
 
 
+def internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:
+    """A copy of `graph` with external nodes removed.
+
+    Score, cycles and the DSM all want internal-only input, and the CLI and MCP
+    boundaries each need to derive one alongside the full graph (required-reach
+    rules may name an external package, so the externals have to survive
+    somewhere). Shared so the definition of "external" lives in one place: both
+    boundaries strip on the same rule, and a future change to how nodes are
+    classified cannot land in one and miss the other.
+    """
+    internal = graph.copy()
+    internal.remove_nodes_from([n for n, d in graph.nodes(data=True) if d.get("external")])
+    return internal
+
+
 def resolve_modules(
     graph: nx.DiGraph,
     refs: Iterable[str],
