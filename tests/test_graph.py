@@ -10,10 +10,9 @@ from archy.graph import (
     build_graph,
     effective_max_modules,
     graph_to_dict,
-    package_init_edges,
     resolve_modules,
-    with_package_init_edges,
 )
+from archy.reach import package_init_edges, with_package_init_edges
 
 
 @pytest.fixture

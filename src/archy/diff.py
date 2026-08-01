@@ -132,7 +132,7 @@ class DiffReport(BaseModel):
 
 
 def take_snapshot(graph, config_path: Path | None = None) -> Snapshot:
-    """Capture score, cycles, layer violations, and SDP violations from a graph."""
+    """Capture score, cycles, layer, SDP, and required-reach violations from a graph."""
     score = compute_score(graph)
     cycles = tuple(find_cycles(graph, min_size=2))
     violations: tuple[Violation, ...] = ()

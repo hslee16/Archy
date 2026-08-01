@@ -15,8 +15,6 @@ import networkx as nx
 import yaml
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.graph import with_package_init_edges
-
 
 class LayerSpec(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -471,6 +469,17 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
     """
     if not config.required:
         return []
+
+    # `archy.reach`, NOT `archy.graph`, which is where this helper first lived.
+    # graph pulls in parser/complexity/risk behind it, so importing it here put
+    # policy 4 hops from a leaf and cost 2 on max import depth. Both spellings
+    # pass `archy check` (policy -> graph is permitted) and both type-check; the
+    # depth axis is what caught it, and archy's own `LayerConfig.max_modules`
+    # comment already recorded the intent that policy not depend on graph.
+    # A function-local import would NOT have helped: archy records function-local
+    # imports as graph edges (tests/test_graph.py pins that), so the edge and the
+    # depth cost are identical either way.
+    from archy.reach import with_package_init_edges
 
     augmented = with_package_init_edges(graph)
     all_nodes = list(graph.nodes)

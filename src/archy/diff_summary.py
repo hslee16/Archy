@@ -129,6 +129,22 @@ def _reach_added_prompt(module: str, must_reach: str, reason: str, hypothetical:
     )
 
 
+def _reach_resolved_prompt(module: str, must_reach: str, hypothetical: bool) -> str:
+    if hypothetical:
+        return f"{module} would reach {must_reach}. Confirm that is the intended bootstrap path."
+    return f"{module} now reaches {must_reach}. Confirm that is the intended bootstrap path."
+
+
+def _reach_modules(module: str | None) -> tuple[str, ...]:
+    """A reach violation names one module, or none when the whole rule is dead.
+
+    Takes the module rather than the violation so this file needs no import of
+    `archy.layers`: one more hop on the longest import chain, for a type
+    annotation.
+    """
+    return (module,) if module else ()
+
+
 def _score_drop_prompt(name: str, delta: float, hypothetical: bool) -> str:
     if hypothetical:
         return f"{name} would drop {delta:+.3f}. Acceptable, or pick a different approach?"
@@ -208,7 +224,7 @@ def _collect_regressions(
             )
         )
     for v in diff.required_violations.added:
-        modules = (v.module,) if v.module else ()
+        modules = _reach_modules(v.module)
         items.append(
             DiffSummaryItem(
                 kind="required_reach_violation_added",
@@ -275,7 +291,7 @@ def _collect_improvements(
             )
         )
     for v in diff.required_violations.resolved:
-        modules = (v.module,) if v.module else ()
+        modules = _reach_modules(v.module)
         items.append(
             DiffSummaryItem(
                 kind="required_reach_violation_resolved",
@@ -285,9 +301,8 @@ def _collect_improvements(
                     f"required-reach violation resolved: {v.module or v.rule.source} now "
                     f"reaches {v.rule.must_reach}"
                 ),
-                prompt=(
-                    f"{v.module or v.rule.source} now reaches {v.rule.must_reach}. "
-                    "Confirm that is the intended bootstrap path."
+                prompt=_reach_resolved_prompt(
+                    v.module or v.rule.source, v.rule.must_reach, hypothetical
                 ),
             )
         )

@@ -273,59 +273,6 @@ def graph_to_dict(graph: nx.DiGraph) -> dict:
     }
 
 
-def package_init_edges(graph: nx.DiGraph) -> list[tuple[str, str]]:
-    """The implicit `submodule -> parent package` edges Python guarantees.
-
-    Importing `a.b.c` executes `a/__init__.py` and `a/b/__init__.py` first, so
-    whatever those packages import is reachable from `a.b.c` even though no
-    import statement in `a/b/c.py` says so. `build_graph` records only written
-    import statements, so these edges are absent from the graph it returns.
-
-    That absence is invisible to most of archy (direct-edge layer checks and the
-    metrics do not ask reach questions) but it is fatal to `required:` rules: the
-    idiomatic way to guarantee a submodule reaches a registry is to import it
-    from the package `__init__.py` once, and without these edges every submodule
-    in such a package looks unreachable to its own bootstrap.
-
-    Returned as a list rather than added to the graph on purpose. Adding them
-    unconditionally would move edge counts, the DSM, propagation cost, Martin's
-    I, and possibly cycle detection on every codebase archy has ever scored, for
-    the benefit of one feature. Callers that need reach semantics opt in via
-    `with_package_init_edges`; everything else keeps the graph it always had.
-
-    External nodes are skipped: `_external_target` already collapses them to a
-    single top-level node, so they have no parents in the graph to speak of.
-    """
-    edges: list[tuple[str, str]] = []
-    for node, data in graph.nodes(data=True):
-        if data.get("external"):
-            continue
-        parts = node.split(".")
-        for i in range(1, len(parts)):
-            parent = ".".join(parts[:i])
-            if parent == node:
-                continue
-            parent_data = graph.nodes.get(parent)
-            if parent_data is None or parent_data.get("external"):
-                continue
-            edges.append((node, parent))
-    edges.sort()
-    return edges
-
-
-def with_package_init_edges(graph: nx.DiGraph) -> nx.DiGraph:
-    """A copy of `graph` carrying `package_init_edges`, for reach queries only.
-
-    The added edges are tagged `implicit="package_init"` so a consumer that
-    renders a path can say which hops the source code does not literally state.
-    """
-    augmented = graph.copy()
-    for source, target in package_init_edges(graph):
-        if not augmented.has_edge(source, target):
-            augmented.add_edge(source, target, implicit="package_init", lines=())
-    return augmented
-
-
 def resolve_modules(
     graph: nx.DiGraph,
     refs: Iterable[str],
