@@ -31,7 +31,7 @@ class ForbidRule(BaseModel):
 
 
 class RequiredRule(BaseModel):
-    """ "Every module matching `source` must transitively reach `must_reach`."
+    """Every module matching `source` must transitively reach `must_reach`.
 
     The inverse of a `ForbidRule`, and the two answer different questions. A
     forbid rule catches an edge that should not exist; this catches an edge that
