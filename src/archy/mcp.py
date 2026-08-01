@@ -1466,26 +1466,26 @@ def _run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
     internal = [n for n, d in graph.nodes(data=True) if not d.get("external")]
     internal_set = set(internal)
 
-    internal_subgraph = graph.subgraph(internal)
-    instability = compute_instability(internal_subgraph)
-    _, propagation_cost = compute_propagation_cost(internal_subgraph)
-    edit_risk = compute_edit_risk(internal_subgraph)
+    internal_view = graph.subgraph(internal)
+    instability = compute_instability(internal_view)
+    _, propagation_cost = compute_propagation_cost(internal_view)
+    edit_risk = compute_edit_risk(internal_view)
 
-    internal_edge_count = internal_subgraph.number_of_edges()
+    internal_edge_count = internal_view.number_of_edges()
     external_edge_count = sum(
         1 for u, v in graph.edges() if u in internal_set and v not in internal_set
     )
 
     fan_in = sorted(
-        ((n, internal_subgraph.in_degree(n)) for n in internal),
+        ((n, internal_view.in_degree(n)) for n in internal),
         key=lambda t: (-t[1], t[0]),
     )
     fan_out = sorted(
-        ((n, internal_subgraph.out_degree(n)) for n in internal),
+        ((n, internal_view.out_degree(n)) for n in internal),
         key=lambda t: (-t[1], t[0]),
     )
 
-    pagerank = _pagerank(internal_subgraph)
+    pagerank = _pagerank(internal_view)
     pr_sorted = sorted(pagerank.items(), key=lambda t: (-t[1], t[0]))
 
     risk_sorted = sorted(edit_risk.items(), key=lambda t: (-t[1], t[0]))
