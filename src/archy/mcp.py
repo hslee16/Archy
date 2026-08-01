@@ -153,10 +153,12 @@ from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
     LayerCoverage,
+    ReachViolation,
     SdpViolation,
     Violation,
     compute_coverage,
     discover_config,
+    find_reach_violations,
     find_sdp_violations,
     find_violations,
     load_config,
@@ -308,6 +310,11 @@ class CheckPayload(BaseModel):
     config_path: str
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
+    # Unsatisfied `required:` rules: a module that must transitively reach
+    # another and does not. Each carries its own `detail`, because the agent
+    # receiving this cannot see the config and "passed=false" with an empty
+    # `violations` list is indistinguishable from a bug in archy.
+    required_violations: tuple[ReachViolation, ...] = ()
     passed: bool
     # How much of the declared roots the rules actually reach. Present on a PASS
     # too, deliberately: `passed=True` is exactly when an agent needs to know
@@ -355,6 +362,23 @@ class ForbiddenEdge(BaseModel):
     to_layer: str
 
 
+class RequiredReach(BaseModel):
+    """A declared `required:` rule, as stated in archy.yaml.
+
+    `reason` is carried because the rule is a runtime fact the graph cannot
+    explain: "commands.** must reach the model registry" is enforceable, but
+    only the author can say it is about SQLAlchemy mapper configuration. An
+    agent told the rule without the reason will satisfy it by the cheapest edge
+    it can find, which may not be the one the constraint was about.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    must_reach: str
+    reason: str = ""
+
+
 class LoadBearingModule(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -377,6 +401,10 @@ class InvariantBrief(BaseModel):
 
     layers: tuple[BriefLayer, ...]
     forbidden_edges: tuple[ForbiddenEdge, ...]
+    # Declared required-reach rules. Prevention is the whole point of this
+    # object, and this is the one constraint class an agent cannot infer by
+    # reading the code: a missing import looks like nothing at all.
+    required_reach: tuple[RequiredReach, ...] = ()
     acyclic: bool
     overall: float
     components: ScoreComponents
@@ -390,6 +418,7 @@ class SnapshotPayload(BaseModel):
     cycles: tuple[Cycle, ...]
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
+    required_violations: tuple[ReachViolation, ...] = ()
     baseline_path: str
     invariant_brief: InvariantBrief
 
@@ -704,7 +733,17 @@ def _register_tools(server: FastMCP) -> None:
             "declared in archy.yaml under `violations`, plus Stable Dependencies "
             "Principle violations (when `sdp.enabled: true` in archy.yaml) under "
             "`sdp_violations`. Empty lists on both mean no direct boundary "
-            "crossings. Pass `contracts=True` to ALSO run the transitive "
+            "crossings. `required_violations` reports the INVERSE constraint: "
+            "`required:` rules in archy.yaml declare that every module matching "
+            "`source` must TRANSITIVELY reach `must_reach` (e.g. every standalone "
+            "entrypoint must reach a model registry that has to be imported "
+            "before the framework configures itself). Reach counts indirect "
+            "paths and the implicit package-`__init__` import, so satisfying "
+            "such a rule once in a package `__init__.py` covers its submodules; "
+            "each violation carries a `detail` saying which module fails and "
+            "why, and a rule whose patterns match nothing is reported as a "
+            "violation rather than passing silently. Fix by adding the missing "
+            "import, not by deleting the rule. Pass `contracts=True` to ALSO run the transitive "
             "(multi-hop) import-linter contracts (Layers, Forbidden, "
             "Independence, Protected, AcyclicSiblings) - stricter than the direct "
             "archy.yaml edges - nested under the `contracts` field; a failed "
@@ -1130,6 +1169,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
         max_modules=effective_max_modules(config.max_modules),
     )
     violations = find_violations(graph, config)
+    reach_violations = find_reach_violations(graph, config)
     sdp_violations: list[SdpViolation] = []
     if config.sdp.enabled:
         sdp_violations = find_sdp_violations(graph, tolerance=config.sdp.tolerance)
@@ -1148,7 +1188,10 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
         config_path=str(config_path),
         violations=tuple(violations),
         sdp_violations=tuple(sdp_violations),
-        passed=not violations and not sdp_fails_gate and not presence_fails,
+        required_violations=tuple(reach_violations),
+        passed=(
+            not violations and not reach_violations and not sdp_fails_gate and not presence_fails
+        ),
         coverage=coverage,
         presence_fails=presence_fails,
         min_layers_present=config.min_layers_present,
@@ -1195,6 +1238,7 @@ def _build_invariant_brief(
     """
     layers: tuple[BriefLayer, ...] = ()
     forbidden: tuple[ForbiddenEdge, ...] = ()
+    required: tuple[RequiredReach, ...] = ()
     if config_path is not None:
         config = load_config(config_path)
         layers = tuple(
@@ -1203,6 +1247,10 @@ def _build_invariant_brief(
         forbidden = tuple(
             ForbiddenEdge(from_layer=rule.from_layer, to_layer=rule.to_layer)
             for rule in config.forbid
+        )
+        required = tuple(
+            RequiredReach(source=rule.source, must_reach=rule.must_reach, reason=rule.reason)
+            for rule in config.required
         )
 
     ranked = sorted(compute_edit_risk(graph).items(), key=lambda t: (-t[1], t[0]))
@@ -1214,6 +1262,7 @@ def _build_invariant_brief(
     return InvariantBrief(
         layers=layers,
         forbidden_edges=forbidden,
+        required_reach=required,
         acyclic=not cycles,
         overall=score.overall,
         components=_score_components(score),
@@ -1232,6 +1281,7 @@ def _run_snapshot(path: Path) -> SnapshotPayload:
         cycles=snap.cycles,
         violations=snap.violations,
         sdp_violations=snap.sdp_violations,
+        required_violations=snap.required_violations,
         baseline_path=str(target),
         invariant_brief=_build_invariant_brief(graph, config_path, snap.score, snap.cycles),
     )

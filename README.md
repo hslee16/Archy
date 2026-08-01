@@ -489,6 +489,23 @@ forbid:
 
 **Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. Modules must belong to at most one layer.
 
+**Required reach (`required:`).** The inverse of `forbid:`. A forbid rule catches an edge that should not exist; a required rule catches one that should exist and does not, which forbidding cannot express:
+
+```yaml
+required:
+  - source: "app.commands.*"
+    must_reach: app.core.database.model_registry
+    reason: standalone entrypoints need the full mapper registry
+```
+
+Every module matching `source` must **transitively** reach `must_reach`, counting the implicit package-`__init__` import Python guarantees (importing `a.b.c` runs `a/b/__init__.py` first). So one import in `app/commands/__init__.py` satisfies the rule for every command module, which is usually the correct fix -- a direct-import rule would report all of them as violations *after* that fix.
+
+This came from a production incident: 34 command modules run standalone, each needing a SQLAlchemy model registry imported before first mapper configuration. 11 imported it, 21 crashed at runtime, and 2 passed only because they happened to reach it through unrelated imports. Those 2 are why the rule is defined over reach rather than imports.
+
+`reason` is carried into every output surface, because "X does not reach Y" is a fact about the graph and not an explanation, and a rule nobody can justify gets deleted rather than satisfied. A rule whose patterns match nothing is reported as a violation, not passed over. Note `pkg.**` includes `pkg/__init__.py` itself; use `pkg.*` to scope the rule to submodules.
+
+Be honest about what this does: archy cannot *derive* such a requirement (that is framework semantics, not graph structure). Someone has to know the constraint and write it down. What the rule then does is find every other module that violates it and stop the next edit from undoing the fix -- a ratchet, not a detector.
+
 **Excluding directories.** Add an optional `exclude:` list of directory basenames to skip codegen output, vendored code, etc. Each name is matched anywhere in the project tree (same mechanism as the built-in skips for `.venv`, `node_modules`, `__pycache__`):
 
 ```yaml

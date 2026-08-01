@@ -479,6 +479,65 @@ def test_run_check_payload_shape(tmp_path: Path):
     assert violation.rule.to_layer == "cli"
 
 
+def _write_registry_project(tmp_path: Path, *, bootstrap: str) -> Path:
+    """The reported incident, reduced. See test_cli.py::_make_registry_project."""
+    app = tmp_path / "app"
+    (app / "core").mkdir(parents=True)
+    (app / "commands").mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "core" / "__init__.py").write_text("")
+    (app / "core" / "model_registry.py").write_text("REGISTRY = {}\n")
+    (app / "commands" / "__init__.py").write_text(bootstrap)
+    (app / "commands" / "setup_user.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: 'app.commands.*'\n"
+        "    must_reach: app.core.model_registry\n"
+        "    reason: standalone entrypoints need the full mapper registry\n"
+    )
+    return tmp_path
+
+
+def test_run_check_fails_the_gate_on_a_required_reach_violation(tmp_path: Path):
+    """The agent-facing surface must not report passed=true here.
+
+    Wiring a gate to the CLI alone and not to MCP is the failure #371 hit three
+    review rounds in a row: the surface agents actually call kept saying the
+    codebase was fine for the exact case the check exists to catch.
+    """
+    result = _run_check(_write_registry_project(tmp_path, bootstrap=""), config_path=None)
+    assert isinstance(result, CheckPayload)
+    assert result.passed is False
+    assert result.violations == ()  # nothing forbidden; the gate failed on reach alone
+    [violation] = result.required_violations
+    assert violation.module == "app.commands.setup_user"
+
+
+def test_run_check_required_reach_survives_model_dump(tmp_path: Path):
+    """FastMCP sends `model_dump()`, so the reason has to be in the wire form.
+
+    Asserting on the attribute would pass while the agent received `passed:
+    false` with no explanation of what to fix.
+    """
+    result = _run_check(_write_registry_project(tmp_path, bootstrap=""), config_path=None)
+    assert isinstance(result, CheckPayload)
+    dumped = result.model_dump()
+    assert dumped["passed"] is False
+    [violation] = dumped["required_violations"]
+    assert violation["module"] == "app.commands.setup_user"
+    assert "does not transitively reach" in violation["detail"]
+    assert violation["rule"]["reason"] == "standalone entrypoints need the full mapper registry"
+
+
+def test_run_check_required_reach_passes_through_the_package_init(tmp_path: Path):
+    project = _write_registry_project(tmp_path, bootstrap="from app.core import model_registry\n")
+    result = _run_check(project, config_path=None)
+    assert isinstance(result, CheckPayload)
+    assert result.passed is True
+    assert result.required_violations == ()
+
+
 def test_run_check_missing_config_returns_in_band(tmp_path: Path):
     # Tier-3 recoverable precondition: no archy.yaml -> in-band CheckErrorPayload
     # (isError:false), NOT a raise, so the agent can branch and create a config.
@@ -687,6 +746,22 @@ def test_snapshot_brief_no_config_has_empty_layers(acyclic_project: Path):
     brief = _run_snapshot(acyclic_project).invariant_brief
     assert brief.layers == ()
     assert brief.forbidden_edges == ()
+    assert brief.required_reach == ()
+
+
+def test_snapshot_brief_reports_required_reach_rules(tmp_path: Path):
+    """Prevention, not correction: a missing import looks like nothing at all,
+    so an agent that is not told the rule up front cannot infer it from code."""
+    project = _write_registry_project(tmp_path, bootstrap="")
+    brief = _run_snapshot(project).invariant_brief
+    dumped = brief.model_dump()["required_reach"]
+    assert dumped == (
+        {
+            "source": "app.commands.*",
+            "must_reach": "app.core.model_registry",
+            "reason": "standalone entrypoints need the full mapper registry",
+        },
+    )
 
 
 def test_run_simulate_parses_from_alias(acyclic_project: Path):

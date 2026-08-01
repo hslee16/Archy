@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from archy.diff import (
     CycleSetDiff,
+    ReachViolationSetDiff,
     ScoreDelta,
     SdpViolationSetDiff,
     ViolationSetDiff,
@@ -103,6 +104,10 @@ class SimulateReport(BaseModel):
     cycles: CycleSetDiff
     violations: ViolationSetDiff
     sdp_violations: SdpViolationSetDiff
+    # "Would removing this import break a required-reach rule?" is one of the
+    # few questions simulate can answer that reading the diff cannot: deleting a
+    # seemingly-unused bootstrap import is invisible in every other view.
+    required_violations: ReachViolationSetDiff = ReachViolationSetDiff()
     new_back_edges: tuple[EdgeRef, ...]
     propagation_cost: PropagationDelta
     summary: DiffSummary
@@ -146,6 +151,7 @@ def find_simulate(
         cycles=report.cycles,
         violations=report.violations,
         sdp_violations=report.sdp_violations,
+        required_violations=report.required_violations,
         new_back_edges=_new_back_edges(graph, hypo),
         propagation_cost=PropagationDelta(
             before=prop_before,

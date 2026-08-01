@@ -63,10 +63,13 @@ from archy.layers import (
     LayerConfig,
     LayerConfigError,
     LayerCoverage,
+    ReachViolation,
+    RequiredRule,
     SdpViolation,
     Violation,
     compute_coverage,
     discover_config,
+    find_reach_violations,
     find_sdp_violations,
     find_violations,
     load_config,
@@ -226,6 +229,7 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
         raise click.ClickException(str(exc)) from exc
     try:
         violations = find_violations(g, config)
+        reach_violations = find_reach_violations(g, config)
     except LayerConfigError as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -243,6 +247,7 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
     if fmt == "json":
         payload = {
             "violations": _violations_to_json(violations),
+            "required_violations": _reach_violations_to_json(reach_violations),
             "sdp_violations": _sdp_violations_to_json(sdp_violations),
             "sdp_mode": config.sdp.mode,
             "coverage": _coverage_to_json(coverage),
@@ -252,6 +257,8 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_violations_to_text(violations, config_path))
+        if config.required:
+            click.echo(_reach_violations_to_text(reach_violations, config.required))
         click.echo(_coverage_to_text(coverage))
         presence = _presence_to_text(coverage, config.min_layers_present)
         if presence:
@@ -266,11 +273,15 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
                 click.echo("# (sdp.mode=warn; not failing the gate)")
 
     sdp_fails = bool(sdp_violations) and config.sdp.mode == "error"
+    # Required-reach failures gate like forbid violations do. They are opt-in
+    # (`required:` is absent from every config that predates the feature), so
+    # nothing that passed before can start failing.
+    reach_fails = bool(reach_violations)
     # A presence shortfall fails the gate like a violation does. Forbidding
     # edges between layers says nothing about whether the layers exist, and a
     # codebase that collapsed them into one module satisfies every forbid rule
     # by having no cross-layer edges at all.
-    if violations or sdp_fails or presence_fails:
+    if violations or reach_fails or sdp_fails or presence_fails:
         sys.exit(1)
 
 
@@ -1778,6 +1789,45 @@ def _violations_to_json(violations: list[Violation]) -> list[dict]:
     ]
 
 
+def _reach_violations_to_json(violations: list[ReachViolation]) -> list[dict]:
+    return [
+        {
+            "rule": {
+                "source": v.rule.source,
+                "must_reach": v.rule.must_reach,
+                "reason": v.rule.reason,
+            },
+            "module": v.module,
+            "detail": v.detail,
+        }
+        for v in violations
+    ]
+
+
+def _reach_violations_to_text(
+    violations: list[ReachViolation], rules: tuple[RequiredRule, ...]
+) -> str:
+    """Render `required:` results. Called only when the config declares rules.
+
+    The clean line names the rule count on purpose: "no required-reach
+    violations" without it reads the same whether one rule passed or twenty did.
+    """
+    if not violations:
+        return f"# No required-reach violations ({len(rules)} rule(s) checked, transitively)."
+    lines = [f"# {len(violations)} required-reach violation(s)"]
+    current: tuple[str, str] | None = None
+    for v in violations:
+        pair = (v.rule.source, v.rule.must_reach)
+        if pair != current:
+            header = f"\n{v.rule.source} must reach {v.rule.must_reach}:"
+            if v.rule.reason:
+                header += f"\n  reason: {v.rule.reason}"
+            lines.append(header)
+            current = pair
+        lines.append(f"  {v.detail}")
+    return "\n".join(lines)
+
+
 def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
     if not violations:
         return f"# No layer violations (config: {config_path})."
@@ -1934,6 +1984,18 @@ def _diff_to_text(result: DiffReport) -> str:
     for v in violations.resolved:
         rule = f"{v.rule.from_layer} -> {v.rule.to_layer}"
         lines.append(f"  - {v.source} -> {v.target}  resolved ({rule})")
+    reach = result.required_violations
+    # Only printed when there is something to say: a diff on a project with no
+    # `required:` rules should not grow a permanent zero line.
+    if reach.added or reach.resolved:
+        lines.append("")
+        lines.append(
+            f"# required-reach: +{len(reach.added)} added, -{len(reach.resolved)} resolved"
+        )
+        for v in reach.added:
+            lines.append(f"  + {v.detail}")
+        for v in reach.resolved:
+            lines.append(f"  - {v.module or v.rule.source} now reaches {v.rule.must_reach}")
     return "\n".join(lines)
 
 

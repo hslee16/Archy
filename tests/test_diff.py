@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from archy.diff import compute_diff, read_snapshot, take_snapshot, write_snapshot
@@ -144,3 +145,95 @@ def test_diff_flags_newly_introduced_violation(tmp_path: Path):
     assert added.rule.from_layer == "core"
     assert added.rule.to_layer == "cli"
     assert result.violations.resolved == ()
+
+
+def _make_registry_project(tmp_path: Path, *, bootstrap: str) -> Path:
+    app = tmp_path / "app"
+    (app / "core").mkdir(parents=True)
+    (app / "commands").mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "core" / "__init__.py").write_text("")
+    (app / "core" / "model_registry.py").write_text("REGISTRY = {}\n")
+    (app / "commands" / "__init__.py").write_text(bootstrap)
+    (app / "commands" / "setup_user.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: 'app.commands.*'\n"
+        "    must_reach: app.core.model_registry\n"
+        "    reason: standalone entrypoints need the full mapper registry\n"
+    )
+    return tmp_path
+
+
+def test_diff_flags_a_removed_bootstrap_import(tmp_path: Path):
+    """The ratchet: deleting a seemingly-unused import must show as a regression.
+
+    This is the shape the feature exists to catch on the second pass. To every
+    other tool -- and to an agent tidying imports -- that line is dead code.
+    """
+    bootstrap = "from app.core import model_registry\n"
+    project = _make_registry_project(tmp_path, bootstrap=bootstrap)
+    config_path = project / "archy.yaml"
+    baseline = take_snapshot(build_graph(project), config_path=config_path)
+    assert baseline.required_violations == ()
+
+    (project / "app" / "commands" / "__init__.py").write_text("")
+    current = take_snapshot(build_graph(project), config_path=config_path)
+
+    result = compute_diff(baseline, current)
+    [added] = result.required_violations.added
+    assert added.module == "app.commands.setup_user"
+    assert added.rule.reason == "standalone entrypoints need the full mapper registry"
+    assert result.required_violations.resolved == ()
+
+
+def test_diff_flags_a_restored_bootstrap_import_as_resolved(tmp_path: Path):
+    project = _make_registry_project(tmp_path, bootstrap="")
+    config_path = project / "archy.yaml"
+    baseline = take_snapshot(build_graph(project), config_path=config_path)
+    assert len(baseline.required_violations) == 1
+
+    (project / "app" / "commands" / "__init__.py").write_text(
+        "from app.core import model_registry\n"
+    )
+    current = take_snapshot(build_graph(project), config_path=config_path)
+
+    result = compute_diff(baseline, current)
+    assert result.required_violations.added == ()
+    assert [v.module for v in result.required_violations.resolved] == ["app.commands.setup_user"]
+
+
+def test_snapshot_roundtrips_required_violations(tmp_path: Path):
+    """The baseline is written to disk and read back by a later process."""
+    project = _make_registry_project(tmp_path, bootstrap="")
+    snap = take_snapshot(build_graph(project), config_path=project / "archy.yaml")
+    target = tmp_path / ".archy" / "baseline.json"
+    write_snapshot(snap, target)
+
+    restored = read_snapshot(target)
+
+    assert restored is not None
+    assert restored.required_violations == snap.required_violations
+
+
+def test_snapshot_reads_a_baseline_written_before_required_reach_existed(tmp_path: Path):
+    """An old baseline.json has no `required_violations` key at all.
+
+    It must load rather than raise, and read as "none at baseline" so a current
+    failure surfaces as `added`. Over-reporting a regression is the safe
+    direction; silently dropping one is not.
+    """
+    project = _make_registry_project(tmp_path, bootstrap="")
+    snap = take_snapshot(build_graph(project), config_path=project / "archy.yaml")
+    target = tmp_path / ".archy" / "baseline.json"
+    write_snapshot(snap, target)
+    payload = json.loads(target.read_text())
+    del payload["required_violations"]
+    target.write_text(json.dumps(payload))
+
+    restored = read_snapshot(target)
+
+    assert restored is not None
+    assert restored.required_violations == ()
+    assert len(compute_diff(restored, snap).required_violations.added) == 1

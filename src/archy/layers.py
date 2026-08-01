@@ -15,6 +15,8 @@ import networkx as nx
 import yaml
 from pydantic import BaseModel, ConfigDict, computed_field
 
+from archy.graph import with_package_init_edges
+
 
 class LayerSpec(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -28,6 +30,68 @@ class ForbidRule(BaseModel):
 
     from_layer: str
     to_layer: str
+
+
+class RequiredRule(BaseModel):
+    """ "Every module matching `source` must transitively reach `must_reach`."
+
+    The inverse of a `ForbidRule`, and the two answer different questions. A
+    forbid rule catches an edge that should not exist; this catches an edge that
+    should exist and does not, which no amount of forbidding can express.
+
+    The motivating failure: a Django-style `commands/` package where each module
+    is run standalone (`python -m commands.setup_user`) and every one of them
+    needs the SQLAlchemy model registry imported before first mapper
+    configuration, or string-based relationship resolution fails at runtime.
+    Verified by importing each of the 34 command modules in a fresh subprocess:
+    11 imported the registry directly, 21 failed mapper configuration, and 2
+    passed WITHOUT a direct import because they happened to reach the registry
+    through unrelated application imports. Nothing in a forbid-only config can
+    state that requirement.
+
+    Those 2 are why this is defined over reach and not imports. A rule counting
+    direct imports would report 23 failures where 21 existed: on the one real
+    sample available, direct-import matching carries an 8.7% false-positive rate
+    that transitive reach removes entirely.
+
+    `reason` is not decoration. A required-reach failure says "this module does
+    not reach that one", which is a fact about the graph and not an explanation;
+    without the author's reason the reader cannot tell an intentional constraint
+    from an accident, so it is carried through to every output surface.
+
+    Reach is TRANSITIVE and includes the implicit package-`__init__` edges (see
+    `graph.package_init_edges`). Both are load-bearing: the idiomatic fix for
+    the case above is one import in `commands/__init__.py`, which satisfies all
+    34 modules indirectly. A direct-import rule would report all 34 as
+    violations *after* a correct fix, which is worse than having no rule.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    must_reach: str
+    reason: str = ""
+
+
+class ReachViolation(BaseModel):
+    """A `required:` rule that is not satisfied, or that cannot fire at all.
+
+    `module` is the offending source module, or None when the rule itself is
+    dead (its `source` or `must_reach` pattern matches nothing in the tree). A
+    dead rule is reported as a violation rather than skipped because a rule that
+    cannot fire is indistinguishable from a rule that passes, which is the exact
+    failure `LayerCoverage` exists to prevent for `forbid:` rules. Two shipped
+    bench configs were silently dead for weeks (#355).
+
+    `detail` states why in one sentence, so no surface has to reconstruct it
+    from the fields: a verdict without a reason is not actionable.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    rule: RequiredRule
+    module: str | None
+    detail: str
 
 
 class SdpConfig(BaseModel):
@@ -60,6 +124,9 @@ class LayerConfig(BaseModel):
 
     layers: tuple[LayerSpec, ...]
     forbid: tuple[ForbidRule, ...]
+    # Required-reach rules. Empty by default, so a config that never declared
+    # any keeps its old exit codes exactly.
+    required: tuple[RequiredRule, ...] = ()
     exclude: tuple[str, ...] = ()
     roots: tuple[str, ...] = ()
     sdp: SdpConfig = SdpConfig()
@@ -272,6 +339,7 @@ def load_config(path: Path) -> LayerConfig:
 
     layers = _parse_layers(raw.get("layers", {}), path)
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
+    required = _parse_required(raw.get("required", []), path)
     exclude = _parse_str_list(raw.get("exclude", []), "exclude", path)
     roots = _parse_str_list(raw.get("roots", []), "roots", path)
     sdp = _parse_sdp(raw.get("sdp"), path)
@@ -280,6 +348,7 @@ def load_config(path: Path) -> LayerConfig:
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
+        required=tuple(required),
         exclude=tuple(exclude),
         roots=tuple(roots),
         sdp=sdp,
@@ -382,6 +451,81 @@ def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
     return violations
 
 
+def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachViolation]:
+    """Every `required:` rule that a module fails to satisfy.
+
+    Reach is transitive and computed over `graph.with_package_init_edges`, so a
+    package that imports the target once in its `__init__.py` satisfies the rule
+    for all of its submodules. A module trivially satisfies a rule it matches on
+    both sides (it reaches itself).
+
+    Rules that cannot fire are reported here too, as violations with
+    `module=None`. Skipping them would reproduce the failure that motivated
+    layer coverage: a typo'd pattern matching nothing looks exactly like a
+    codebase that satisfies the rule everywhere.
+
+    Cost is one `nx.descendants` per matching source module. Fine for the shapes
+    this targets (a `commands.**` package, a handful of entrypoints); a rule
+    whose `source` is a bare `**`-rooted pattern over a very large tree pays for
+    the breadth it asked for.
+    """
+    if not config.required:
+        return []
+
+    augmented = with_package_init_edges(graph)
+    all_nodes = list(graph.nodes)
+    internal = [n for n, d in graph.nodes(data=True) if not d.get("external")]
+
+    violations: list[ReachViolation] = []
+    for rule in config.required:
+        # Targets may be external: "every entrypoint must reach `sqlalchemy`" is
+        # a legitimate thing to require, and external nodes are real nodes here.
+        targets = {n for n in all_nodes if _qualname_matches_any(n, (rule.must_reach,))}
+        sources = sorted(n for n in internal if _qualname_matches_any(n, (rule.source,)))
+        if not targets:
+            violations.append(
+                ReachViolation(
+                    rule=rule,
+                    module=None,
+                    detail=(
+                        f"rule cannot fire: `must_reach` pattern {rule.must_reach!r} matches no "
+                        "module in the scanned tree."
+                    ),
+                )
+            )
+            continue
+        if not sources:
+            violations.append(
+                ReachViolation(
+                    rule=rule,
+                    module=None,
+                    detail=(
+                        f"rule cannot fire: `source` pattern {rule.source!r} matches no internal "
+                        'module (patterns are dotted-name globs -- "pkg.**" matches a package and '
+                        'its descendants, "pkg" only that exact module).'
+                    ),
+                )
+            )
+            continue
+        for module in sources:
+            if module in targets:
+                continue
+            if nx.descendants(augmented, module) & targets:
+                continue
+            violations.append(
+                ReachViolation(
+                    rule=rule,
+                    module=module,
+                    detail=(
+                        f"{module} does not transitively reach {rule.must_reach!r} "
+                        "(package __init__ imports included)."
+                    ),
+                )
+            )
+    violations.sort(key=lambda v: (v.rule.source, v.rule.must_reach, v.module or ""))
+    return violations
+
+
 def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[SdpViolation]:
     """Edges where the target is strictly less stable than the source.
 
@@ -440,6 +584,10 @@ def _parse_layers(raw: object, path: Path) -> list[LayerSpec]:
 
 
 def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
+    _validate_pattern(pattern, f"layer {layer_name!r} has an invalid module pattern", path)
+
+
+def _validate_pattern(pattern: str, prefix: str, path: Path) -> None:
     """Reject malformed dotted-name globs at config load with a clear error.
 
     A pattern is a dotted-name glob: a leading valid-identifier root package,
@@ -448,11 +596,15 @@ def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
     ``*foo`` fails fast and legibly, instead of later surfacing as a cryptic
     import-linter ``ModuleNotFoundError`` (the contracts fallback derives the
     root package from the first segment) or a silently-wrong match regex.
+
+    `prefix` names the offending config entry, so the same rules serve both
+    `layers:` patterns and `required:` rule patterns without either borrowing
+    the other's error wording.
     """
     segments = pattern.split(".")
     if any(seg == "" for seg in segments):
         raise LayerConfigError(
-            f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
+            f"{prefix} {pattern!r} in {path}: "
             "empty path segment (no leading, trailing, or doubled dots)."
         )
     # A package-name segment must be an identifier that is not a Python keyword:
@@ -461,14 +613,14 @@ def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
     # the clean message this validation exists to give.
     if not _is_package_segment(segments[0]):
         raise LayerConfigError(
-            f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
+            f"{prefix} {pattern!r} in {path}: "
             f"must start with a Python package name, not {segments[0]!r} "
             '(e.g. "myapp.domain.**", not "**").'
         )
     for seg in segments[1:]:
         if seg not in ("*", "**") and not _is_package_segment(seg):
             raise LayerConfigError(
-                f"layer {layer_name!r} has an invalid module pattern {pattern!r} in {path}: "
+                f"{prefix} {pattern!r} in {path}: "
                 f"segment {seg!r} must be a package name, '*' (one segment), "
                 "or '**' (zero or more segments)."
             )
@@ -496,6 +648,40 @@ def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[Forbi
         _check_known_layer(src_raw, "from", known_layers, path)
         _check_known_layer(tgt_raw, "to", known_layers, path)
         out.append(ForbidRule(from_layer=src_raw, to_layer=tgt_raw))
+    return out
+
+
+def _parse_required(raw: object, path: Path) -> list[RequiredRule]:
+    """Validate `required:`. Absent or empty -> no required-reach rules.
+
+    Both patterns are validated as dotted-name globs at load time for the same
+    reason layer patterns are: `commands` matches one exact module while
+    `commands.**` matches the package and its descendants, and a config that
+    meant the latter and wrote the former produces a dead rule that reads as a
+    clean pass.
+    """
+    if not raw:
+        return []
+    if not isinstance(raw, list):
+        raise LayerConfigError(f"`required` must be a list in {path}")
+    out: list[RequiredRule] = []
+    for entry_raw in raw:
+        entry = _as_str_dict(entry_raw, "required entry", path)
+        for key in ("source", "must_reach"):
+            if key not in entry:
+                raise LayerConfigError(f"required entry is missing required key {key!r} in {path}")
+        source = entry["source"]
+        must_reach = entry["must_reach"]
+        reason = entry.get("reason", "")
+        if not isinstance(source, str) or not isinstance(must_reach, str):
+            raise LayerConfigError(
+                f"required `source`/`must_reach` values must be strings in {path}"
+            )
+        if not isinstance(reason, str):
+            raise LayerConfigError(f"required `reason` must be a string in {path}")
+        _validate_pattern(source, "required rule has an invalid `source` pattern", path)
+        _validate_pattern(must_reach, "required rule has an invalid `must_reach` pattern", path)
+        out.append(RequiredRule(source=source, must_reach=must_reach, reason=reason))
     return out
 
 
