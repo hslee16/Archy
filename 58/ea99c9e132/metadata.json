@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "58ea99c9e132",
+  "strategy": "manual-commit",
+  "branch": "alee/required-reach-contracts",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/archy/diff.py",
+    "src/archy/diff_summary.py",
+    "src/archy/graph.py",
+    "src/archy/layers.py",
+    "tests/test_graph.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/58/ea99c9e132/0/metadata.json",
+      "transcript": "/58/ea99c9e132/0/full.jsonl",
+      "content_hash": "/58/ea99c9e132/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 285,
+    "cache_creation_tokens": 508399,
+    "cache_read_tokens": 19364627,
+    "output_tokens": 65824,
+    "api_call_count": 151
+  }
+}
