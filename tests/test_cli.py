@@ -898,6 +898,14 @@ def _make_app_with_test_module(tmp_path: Path) -> None:
     (tests / "test_core.py").write_text("from app.core import x\n")
 
 
+def _make_app_with_core_module(tmp_path: Path) -> Path:
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("")
+    return pkg
+
+
 def test_affected_quiet_emits_test_file_paths(tmp_path: Path):
     _make_app_with_test_module(tmp_path)
     args = ["affected", str(tmp_path), "app/core.py", "--quiet"]
@@ -918,10 +926,7 @@ def test_affected_stdin_reads_paths(tmp_path: Path):
 
 
 def test_affected_json_and_quiet_mutually_exclusive(tmp_path: Path):
-    pkg = tmp_path / "app"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "core.py").write_text("")
+    _make_app_with_core_module(tmp_path)
 
     args = ["affected", str(tmp_path), "app/core.py", "--json", "--quiet"]
     result = CliRunner().invoke(main, args)
@@ -954,10 +959,7 @@ def test_affected_filter_with_regex_metachars_does_not_crash(tmp_path: Path):
 def test_affected_merges_stdin_and_positional_files(tmp_path: Path):
     # Regression for #170 (F9): --stdin and positional FILES are merged, not
     # mutually exclusive. Both sources should appear in `changed`.
-    pkg = tmp_path / "app"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "core.py").write_text("")
+    pkg = _make_app_with_core_module(tmp_path)
     (pkg / "other.py").write_text("")
 
     args = ["affected", str(tmp_path), "app/core.py", "--stdin", "--json"]
