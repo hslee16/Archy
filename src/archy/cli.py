@@ -1651,28 +1651,43 @@ def uninstall(
     help="Minimum members before a naming family or mirrored set is reported.",
 )
 @click.option(
+    "--include-tests",
+    "include_tests",
+    is_flag=True,
+    default=False,
+    help="Census test modules too. Off by default: test fixtures outnumber the "
+    "code they exercise and win any count they are entered in.",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["text", "json"]),
     default="text",
     help="Output format.",
 )
-def conventions(path: Path, top_n: int, min_family: int, fmt: str) -> None:
+def conventions(path: Path, top_n: int, min_family: int, include_tests: bool, fmt: str) -> None:
     """Report the project's own house style, derived from its source.
 
     Answers the four questions an agent otherwise re-derives by reading:
-    what do I name a new class and where does it live (naming families),
-    how many parallel surfaces must a new field be wired through
-    (surfaces), does a new finding fail the build or only warn (gates,
-    with the flag or config field that controls each), and what shape are
-    the value types (models).
+    what is a new thing a kind of and where does it live (kinds, naming,
+    registries), how many parallel surfaces must it be wired through
+    (surfaces, export gaps, doc gaps), does a new finding fail the build or only
+    warn (gates, plus the constants and keyword defaults a family
+    declares), and what shape are the value types (models).
+
+    Test modules are set aside by default -- fixtures outnumber the code
+    they exercise -- as are subtrees that duplicate their own parent, such
+    as a vendored copy of a previous major version. The header says what
+    was set aside and why. Pass `--include-tests` to census them too.
 
     Advisory, never a gate: it reports and always exits 0. Only `check`,
     `contracts` and the `--strict` variants fail a build.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     _require(min_family >= 2, "min-family", ">= 2", min_family)
-    report = compute_conventions(path, **_graph_kwargs(path), min_family=min_family)
+    report = compute_conventions(
+        path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
+    )
     if fmt == "json":
         click.echo(json.dumps(_conventions_to_dict(report, top_n=top_n), indent=2, sort_keys=True))
     else:
@@ -2690,11 +2705,25 @@ def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
     payload["surfaces"] = [s.model_dump() for s in report.surfaces[:top_n]]
     payload["gates"] = [g.model_dump() for g in report.gates]
     payload["errors"] = [g.model_dump() for g in report.errors]
+    payload["bases"] = [b.model_dump() for b in report.bases[:top_n]]
+    payload["registries"] = [
+        {**r.model_dump(), "literal_names": list(r.literal_names[:6])}
+        for r in report.registries[:top_n]
+    ]
+    # Export gaps are never truncated: the section exists to be complete, for
+    # the same reason gates are. A truncated list of "things you forgot to
+    # wire up" is worse than none, because it reads as a finished checklist.
+    payload["export_gaps"] = [g.model_dump() for g in report.export_gaps]
+    payload["doc_gaps"] = [g.model_dump() for g in report.doc_gaps]
     payload["totals"] = {
         "naming": len(report.naming),
         "surfaces": len(report.surfaces),
         "gates": len(report.gates),
         "errors": len(report.errors),
+        "bases": len(report.bases),
+        "registries": len(report.registries),
+        "export_gaps": len(report.export_gaps),
+        "doc_gaps": len(report.doc_gaps),
     }
     return payload
 
@@ -2712,7 +2741,30 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     m = report.models
     lines = [
         f"# {report.root}: {report.modules_scanned} module(s) parsed"
-        + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else ""),
+        + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else "")
+        + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else ""),
+        *(
+            [
+                "# set aside: "
+                + ", ".join(
+                    part
+                    for part in (
+                        f"{report.partition.tests} test" if report.partition.tests else "",
+                        f"{report.partition.nonsource} non-source"
+                        if report.partition.nonsource
+                        else "",
+                        f"{report.partition.shadowed} in {', '.join(report.partition.shadow_roots)}"
+                        " (duplicates its parent)"
+                        if report.partition.shadowed
+                        else "",
+                    )
+                    if part
+                )
+            ]
+            if report.partition
+            and (report.partition.tests or report.partition.shadowed or report.partition.nonsource)
+            else []
+        ),
         "",
         f"## naming - by home module ({len(report.naming)} module(s); showing "
         f"{min(top_n, len(report.naming))})",
@@ -2724,6 +2776,72 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         lines.append(f"  {home.module:<34} {home.total:>3}  {families}")
         top = home.families[0]
         lines.append(f"  {'':<34}      e.g. {', '.join(top.examples)}")
+
+    # Kinds before names. A base family answers "what is it a kind of", which is
+    # the question a suffix census silently fails when the two disagree -- and
+    # they disagree in most projects, so this section leads.
+    lines += [
+        "",
+        f"## kinds - classes grouped by what they derive from "
+        f"({len(report.bases)}; showing {min(top_n, len(report.bases))})",
+    ]
+    if not report.bases:
+        lines.append("  (none: no base defined in this project has enough subclasses)")
+    for b in report.bases[:top_n]:
+        agree = f"{b.suffix_agreement:.0%}"
+        note = (
+            ""
+            if b.suffix_agreement >= 0.8
+            else f"  <- name is NOT the rule ({agree} share a suffix)"
+        )
+        lines.append(f"  {b.base:<28} {b.count:>3} @ {b.home_module}{note}")
+        lines.append(f"  {'':<28}     e.g. {', '.join(b.members[:5])}")
+        for c in b.shared_constants[:3]:
+            dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
+            lines.append(f"  {'':<28}     {c.name} = {dist}  ({c.setters} of {b.count} set it)")
+
+    lines += [
+        "",
+        f"## registries - values declared by repeated construction "
+        f"({len(report.registries)}; showing {min(top_n, len(report.registries))})",
+    ]
+    if not report.registries:
+        lines.append("  (none)")
+    for r in report.registries[:top_n]:
+        lines.append(f"  {r.constructor:<28} {r.count:>3} @ {r.home_module} ({r.home_count})")
+        if r.literal_names:
+            shown = ", ".join(r.literal_names[:6])
+            more = f" (+{len(r.literal_names) - 6})" if len(r.literal_names) > 6 else ""
+            lines.append(f"  {'':<28}     names: {shown}{more}")
+        for c in r.keyword_defaults[:3]:
+            dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
+            # "13 of 80 pass it" is the fact; a bare distribution reads as if the
+            # whole family were declared that way, which inverts the meaning of
+            # an argument that is usually left at its default.
+            lines.append(f"  {'':<28}     {c.name} = {dist}  ({c.setters} of {r.count} pass it)")
+
+    if report.export_gaps:
+        lines += [
+            "",
+            f"## export gaps ({len(report.export_gaps)}) - defined but not re-exported "
+            "beside their siblings",
+        ]
+        for g in report.export_gaps:
+            lines.append(
+                f"  {g.export_module:<28} {g.family}: {g.exported}/{g.defined}"
+                f"  missing {', '.join(g.missing)}"
+            )
+
+    if report.doc_gaps:
+        lines += [
+            "",
+            f"## doc gaps ({len(report.doc_gaps)}) - public members their own docs do not name",
+        ]
+        for g in report.doc_gaps:
+            lines.append(
+                f"  {g.doc_root + '/':<28} {g.family}: {g.documented}/{g.defined}"
+                f"  missing {', '.join(g.missing)}"
+            )
 
     lines += [
         "",
