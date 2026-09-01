@@ -10,7 +10,7 @@
 
 THE GENERATION HALF. The measurement half is `bench/greenfield_eval.py` and the
 thresholds are `bench/greenfield_prereg.py`, both of which exist and are
-validated first, per `CLAUDE.md`: every harness bug found during a paid run is a
+validated first, per `AGENTS.md`: every harness bug found during a paid run is a
 run wasted. Running the evaluator against a live server found three defects that
 would each have invalidated the whole batch (PR #376), which is the argument for
 this ordering, not a hypothetical.
