@@ -171,6 +171,37 @@ class SdpViolation(BaseModel):
     lines: tuple[int, ...]
 
 
+class ExactPatternHint(BaseModel):
+    """A bare-qualname layer pattern whose descendant modules fall outside it.
+
+    `_translate_pattern` matches a pattern with no glob metacharacter EXACTLY,
+    so `modules: ["shipping.store"]` covers `shipping.store` and not
+    `shipping.store.repository`. import-linter (behind `archy contracts`)
+    matches the same string by PACKAGE, so the two tools answer different
+    questions about a byte-identical config -- and the layer config is the one
+    that silently governs almost nothing.
+
+    This is the single most common reason coverage is degenerate, and it is
+    invisible in the verdict: the config looks like it names the right
+    packages. Reported as a hint rather than an error because a bare qualname
+    is legal and occasionally intended (archy's own `archy.yaml` uses bare
+    patterns for flat modules that have no descendants, and correctly produces
+    no hint). The trigger is not "the pattern is bare" but "the pattern is bare
+    AND at least one descendant of it is unlayered", which is the state that
+    cannot be intentional.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    layer: str
+    pattern: str
+    # Unlayered modules under `pattern`. Sorted, and carried in full rather
+    # than as a count: naming the module is what makes the hint actionable.
+    unlayered_descendants: tuple[str, ...]
+    # The pattern that would cover the package and its descendants.
+    suggestion: str
+
+
 class LayerCoverage(BaseModel):
     """How much of a codebase the declared layers actually reach.
 
@@ -212,6 +243,11 @@ class LayerCoverage(BaseModel):
     # with scripts beside its package look uncovered, which is a fact about the
     # scan path and not about the config. Reported so the exclusion is visible.
     modules_outside_declared_roots: int = 0
+    # Bare-qualname patterns with unlayered descendants. See `ExactPatternHint`:
+    # this names the CAUSE of a degenerate `edge_ratio`, where the ratios only
+    # report the symptom. Defaulted so every existing construction site keeps
+    # working unchanged.
+    exact_pattern_hints: tuple[ExactPatternHint, ...] = ()
 
     # An empty scope reports 0.0, not 1.0. "0 of 0 modules (100%)" is the exact
     # failure this class exists to prevent, reproduced inside it: a config whose
@@ -232,6 +268,26 @@ class LayerCoverage(BaseModel):
     @property
     def edge_ratio(self) -> float:
         return self.edges_governed / self.edges_total if self.edges_total else 0.0
+
+    @computed_field
+    @property
+    def governs_no_edges(self) -> bool:
+        """No import edge in the tree can be subject to any `forbid` rule.
+
+        True both when internal edges exist and none has two layered endpoints,
+        and when there are no internal edges at all. Either way every `forbid`
+        rule is unfireable, so a clean verdict carries no information -- which
+        is precisely what the verdict must say out loud.
+
+        The threshold is exactly zero, not a percentage. Any other number is a
+        policy choice about how much governance is "enough", which this module
+        has no basis to pick; zero is the one value where "no violations found"
+        is provably vacuous rather than merely thin.
+
+        `computed_field`, not a property: `model_dump()` drops properties, and
+        the MCP surface returns this object through `model_dump()`.
+        """
+        return self.edges_governed == 0
 
     @computed_field
     @property
@@ -310,6 +366,7 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
     ]
 
     return LayerCoverage(
+        exact_pattern_hints=_exact_pattern_hints(config, unlayered),
         modules_total=len(layer_of),
         modules_matched=len(matched),
         modules_in_ruled_layer=len(in_ruled),
@@ -319,6 +376,36 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         modules_outside_declared_roots=outside,
         layer_sizes=tuple((layer.name, sizes[layer.name]) for layer in config.layers),
     )
+
+
+def _exact_pattern_hints(config: LayerConfig, unlayered: list[str]) -> tuple[ExactPatternHint, ...]:
+    """Find bare-qualname patterns that left descendants unlayered.
+
+    Scoped to `unlayered`, which is already restricted to the config's own
+    declared roots, so a package outside them cannot raise a hint.
+
+    A pattern containing any `*` is skipped: the author reached for a glob and
+    got what globbing gives. Only the metacharacter-free form silently means
+    "this one module".
+    """
+    hints: list[ExactPatternHint] = []
+    for layer in config.layers:
+        for pattern in layer.patterns:
+            if "*" in pattern:
+                continue
+            prefix = f"{pattern}."
+            descendants = tuple(sorted(m for m in unlayered if m.startswith(prefix)))
+            if not descendants:
+                continue
+            hints.append(
+                ExactPatternHint(
+                    layer=layer.name,
+                    pattern=pattern,
+                    unlayered_descendants=descendants,
+                    suggestion=f"{pattern}.**",
+                )
+            )
+    return tuple(hints)
 
 
 class LayerConfigError(Exception):

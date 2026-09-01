@@ -1411,3 +1411,61 @@ def test_conventions_separates_gates_from_user_error_exits(tmp_path: Path):
     assert "1 user-error exit(s)" in result.output
     assert "exit code(s): 1" in result.output
     assert "ClickException=1" in result.output
+
+
+def _make_bare_pattern_project(tmp_path: Path) -> Path:
+    """The walkthrough shape: bare `modules:` qualnames over a nested tree."""
+    app = tmp_path / "app"
+    (app / "store").mkdir(parents=True)
+    (app / "api").mkdir()
+    (app / "__init__.py").write_text("")
+    (app / "store" / "__init__.py").write_text("")
+    (app / "api" / "__init__.py").write_text("")
+    (app / "api" / "context.py").write_text("")
+    (app / "store" / "repository.py").write_text("from app.api.context import ctx\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  store:\n    modules: ['app.store']\n"
+        "  api:\n    modules: ['app.api']\n"
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+    return tmp_path
+
+
+def test_check_verdict_names_degenerate_coverage(tmp_path: Path):
+    """A clean verdict must say nothing was LOOKED AT, not just nothing found."""
+    project = _make_bare_pattern_project(tmp_path)
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code == 0
+    headline = result.output.splitlines()[0]
+    # The substring the walkthrough and the other CLI tests assert on survives.
+    assert "No layer violations" in headline
+    assert "governs 0 of 1 internal edges (0%)" in headline
+
+
+def test_check_verdict_hints_at_the_bare_pattern(tmp_path: Path):
+    project = _make_bare_pattern_project(tmp_path)
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert "layer 'store' matches app.store exactly" in result.output
+    assert "app.store.repository" in result.output
+    assert 'Did you mean "app.store.**"?' in result.output
+
+
+def test_check_json_carries_hints_and_the_degenerate_flag(tmp_path: Path):
+    project = _make_bare_pattern_project(tmp_path)
+    result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["coverage"]["governs_no_edges"] is True
+    hints = {h["layer"]: h for h in payload["coverage"]["exact_pattern_hints"]}
+    assert hints["store"]["suggestion"] == "app.store.**"
+    assert hints["store"]["unlayered_descendants"] == ["app.store.repository"]
+
+
+def test_check_verdict_unqualified_when_coverage_is_real(tmp_path: Path):
+    """The clause must not fire on a config that governs its edges."""
+    project = _make_layered_project(tmp_path, with_violation=False)
+    result = CliRunner().invoke(main, ["check", str(project)])
+    headline = result.output.splitlines()[0]
+    assert headline.startswith("# No layer violations (config:")
+    assert "Did you mean" not in result.output

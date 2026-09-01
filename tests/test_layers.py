@@ -10,6 +10,7 @@ from archy.layers import (
     ForbidRule,
     LayerConfig,
     LayerConfigError,
+    LayerCoverage,
     LayerSpec,
     RequiredRule,
     compute_coverage,
@@ -657,3 +658,92 @@ def test_min_layers_present_rejects_invalid(tmp_path: Path, value: str):
             "layers:\n  a:\n    modules: ['a.**']\n  b:\n    modules: ['b.**']\n"
             "  c:\n    modules: ['c.**']\n  d:\n    modules: ['d.**']\nforbid: []\n",
         )
+
+
+def test_bare_qualname_pattern_hints_at_unlayered_descendants(tmp_path: Path):
+    """The walkthrough's own config shape: `modules: ["shipping.store"]`.
+
+    `_translate_pattern` matches that exactly, so every submodule is unlayered
+    and no forbid rule can fire -- while import-linter, matching the identical
+    string by package, governs the whole subtree.
+    """
+    config = _cfg(
+        tmp_path,
+        "layers:\n"
+        "  store:\n"
+        "    modules: ['shipping.store']\n"
+        "  api:\n"
+        "    modules: ['shipping.api']\n"
+        "forbid:\n"
+        "  - {from: store, to: api}\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(
+        ["shipping.store", "shipping.store.repository", "shipping.api", "shipping.api.context"]
+    )
+    graph.add_edges_from([("shipping.store.repository", "shipping.api.context")])
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.governs_no_edges is True
+    hints = {hint.layer: hint for hint in coverage.exact_pattern_hints}
+    assert set(hints) == {"store", "api"}
+    assert hints["store"].pattern == "shipping.store"
+    assert hints["store"].unlayered_descendants == ("shipping.store.repository",)
+    assert hints["store"].suggestion == "shipping.store.**"
+
+
+def test_no_hint_when_a_bare_pattern_has_no_descendants(tmp_path: Path):
+    """archy's own archy.yaml is bare-patterned over flat modules.
+
+    A bare pattern is legal, so the hint must key on unlayered descendants
+    existing, not on the pattern's shape. Otherwise it fires on this repo.
+    """
+    config = _cfg(
+        tmp_path,
+        "layers:\n"
+        "  parser:\n"
+        "    modules: ['app.parser']\n"
+        "  cli:\n"
+        "    modules: ['app.cli']\n"
+        "forbid:\n"
+        "  - {from: parser, to: cli}\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["app.parser", "app.cli"])
+    graph.add_edges_from([("app.cli", "app.parser")])
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.exact_pattern_hints == ()
+    assert coverage.governs_no_edges is False
+
+
+def test_glob_patterns_never_hint(tmp_path: Path):
+    """`pkg.**` already covers descendants; anything unlayered under it is
+    a different problem and this hint would be a false positive."""
+    config = _cfg(
+        tmp_path,
+        "layers:\n  store:\n    modules: ['shipping.store.**']\nforbid: []\n",
+    )
+    graph = nx.DiGraph()
+    graph.add_nodes_from(["shipping.store", "shipping.store.repository"])
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.exact_pattern_hints == ()
+
+
+def test_governs_no_edges_survives_model_dump():
+    """MCP serializes coverage with `model_dump()`, which drops properties."""
+    coverage = LayerCoverage(
+        modules_total=2,
+        modules_matched=1,
+        modules_in_ruled_layer=0,
+        edges_total=1,
+        edges_governed=0,
+        unlayered_modules=("app.b",),
+    )
+    dumped = coverage.model_dump()
+    assert dumped["governs_no_edges"] is True
+    assert dumped["exact_pattern_hints"] == ()
