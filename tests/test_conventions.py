@@ -712,3 +712,43 @@ def test_cross_module_families_outrank_larger_same_module_ones():
     big = next(s for s in report.surfaces if s.stem == "_run")
     small = next(s for s in report.surfaces if s.kind == "consumer" and s.stem == "render")
     assert big.surface_count > small.surface_count  # and still ranks below it
+
+
+def test_truncated_sections_say_how_to_see_the_rest(tmp_path: Path):
+    """A reader told "showing 12" and not told how to reach the other 138 cannot
+    tell a missing fact from an unranked one. Measured: 24 pieces of real agent
+    reasoning, every one chosen because this command could in principle answer
+    it, scored zero -- and both blind readers named truncation rather than the
+    analysis. The number was computed and then withheld."""
+    from archy.cli import _conventions_to_text
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # one distinct suffix family per module, so there are many homes to truncate
+    for i in range(8):
+        (pkg / f"m{i}.py").write_text(f"class AlphaKind{i}: pass\nclass BetaKind{i}: pass\n")
+    report = compute_conventions(tmp_path)
+    text = _conventions_to_text(report, top_n=2)
+    assert "--top" in text, "a truncated section must name the flag that widens it"
+    # and an untruncated section must not nag
+    wide = _conventions_to_text(report, top_n=500)
+    assert "--top" not in wide
+
+
+def test_setting_tests_aside_says_how_to_include_them(tmp_path: Path):
+    """Setting tests aside is right when a fixture pile would win every count and
+    wrong when the question IS about tests -- "where do helpers live in this test
+    file and what are they called" is a real convention. One of the 24 scored
+    derivations asked exactly that, and the report could not answer it."""
+    from archy.cli import _conventions_to_text
+
+    pkg = tmp_path / "pkg"
+    (pkg / "tests").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "tests" / "__init__.py").write_text("")
+    (pkg / "tests" / "test_it.py").write_text("def test_x(): ...\n")
+    (pkg / "real.py").write_text("class Thing: pass\n")
+    report = compute_conventions(tmp_path)
+    assert report.partition is not None and report.partition.tests > 0
+    assert "--include-tests" in _conventions_to_text(report, top_n=12)
