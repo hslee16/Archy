@@ -7,6 +7,11 @@ Everything here was learned by getting it wrong. Each rule names the failure it
 came from, so you can judge whether it applies to what you are doing rather than
 following it blindly.
 
+Two rules in [Git and GitHub](#git-and-github) are worth reading before you
+touch anything, because both fail quietly: never push to `main` (branch and open
+a PR instead), and use `gh api` REST, because `gh pr edit` and `--json` go
+through GraphQL, which can fail while still exiting 0.
+
 ## Before you push: run what CI runs
 
 ```bash
@@ -23,15 +28,16 @@ command and will pass while CI fails: a fixture directory with deliberately
 unused imports broke the build twice in one session because it was only ever
 linted per-file.
 
-**The last two matter as much as the first four.** archy gates itself, so a new
-fixture tree or bench sample can introduce a real cycle or layer violation in a
-directory that is not archy's code. Add such trees to `exclude:` in `archy.yaml`
+**`archy check` and `archy cycles` matter as much as `ruff check`, `ruff
+format`, `ty` and `pytest`.** archy gates itself, so a new fixture tree or bench
+sample can introduce a real cycle or layer violation in a directory that is not
+archy's code. Add such trees to `exclude:` in `archy.yaml`
 with the reason, rather than weakening a rule.
 
 **Some failures only appear in CI's environment.** The bench caches under
 `bench/cache/` are gitignored, so a test that depends on one passes locally and
-fails on the runner. Move the cache aside and re-run before pushing a test that
-touches it. Assert the invariant, not the message: a test that checks *which*
+fails on the runner. Before pushing a test that touches one, run
+`mv bench/cache /tmp/bench-cache-aside`, re-run the test, then move it back. Assert the invariant, not the message: a test that checks *which*
 precondition failed is asserting a fact about your laptop.
 
 **Open the failing check, never the tally.** A summary line saying "1 failed"
@@ -40,9 +46,12 @@ Fetch the job's failing *step*, then its log.
 
 ## Adding a gate or a payload field
 
-**Wire it to every surface in one change.** Three at the time of writing, and
-worth confirming that is still current: the CLI's text output, the CLI's
-`--format json`, and the MCP payload. A presence check shipped to the CLI alone
+**Wire it to every surface in one change.** Three at the time of writing: the
+CLI's text output, the CLI's `--format json`, and the MCP payload. Confirm that
+is still current by picking an existing gate and grepping for every site that
+renders it: its `_<cmd>_to_text` helper and `_<cmd>_to_dict` payload in
+`src/archy/cli.py`, and its tool's return model in `src/archy/mcp.py`. A fourth
+surface would show up as a site that none of those three patterns match. A presence check shipped to the CLI alone
 left the MCP surface, the one agents actually call, reporting `passed=true` for
 the exact case the check existed to catch. Three consecutive review rounds each
 found one more surface it had been omitted from.

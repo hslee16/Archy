@@ -452,20 +452,22 @@ def _pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value * 100:.1f}%"
 
 
+def _row(label: str, a: object, b: object) -> str:
+    """One label-plus-two-arms line, so the column widths live in one place."""
+    return f"{label:22} {a:>16} {b:>16}"
+
+
 def render(arm_a: ArmSummary, arm_b: ArmSummary, result: Verdict) -> str:
     lines = [
         f"Greenfield compliance A/B (#369) - {MODEL}, {FRAMEWORK}, {CONDITION}",
         "",
-        f"{'':22} {'arm A (static)':>16} {'arm B (archy)':>16}",
-        f"{'rows (status=ok)':22} {arm_a.n_rows:>16} {arm_b.n_rows:>16}",
-        f"{'structurally evaluable':22} {arm_a.n_structural_evaluable:>16}"
-        f" {arm_b.n_structural_evaluable:>16}",
-        f"{'compliant':22} {arm_a.n_compliant:>16} {arm_b.n_compliant:>16}",
-        f"{'compliance rate':22} {_pct(arm_a.compliance_rate):>16}"
-        f" {_pct(arm_b.compliance_rate):>16}",
-        f"{'behavioral (compliant)':22} {_pct(arm_a.behavioral_mean):>16}"
-        f" {_pct(arm_b.behavioral_mean):>16}",
-        f"{'composite A%':22} {_pct(arm_a.composite_mean):>16} {_pct(arm_b.composite_mean):>16}",
+        _row("", "arm A (static)", "arm B (archy)"),
+        _row("rows (status=ok)", arm_a.n_rows, arm_b.n_rows),
+        _row("structurally evaluable", arm_a.n_structural_evaluable, arm_b.n_structural_evaluable),
+        _row("compliant", arm_a.n_compliant, arm_b.n_compliant),
+        _row("compliance rate", _pct(arm_a.compliance_rate), _pct(arm_b.compliance_rate)),
+        _row("behavioral (compliant)", _pct(arm_a.behavioral_mean), _pct(arm_b.behavioral_mean)),
+        _row("composite A%", _pct(arm_a.composite_mean), _pct(arm_b.composite_mean)),
         "",
         f"VERDICT: {result.verdict}",
         f"  {result.reason}",
