@@ -161,11 +161,10 @@ repos:
 
   - name: requests
     set: heldout
-    project:
-      name: requests
-      repo: psf/requests
-      sha: "d64b9ad"
-      src_dir: src/requests
+    # No inline `project:`: the pin comes from projects.yaml, so there is one
+    # source of truth for it. A duplicate here takes precedence silently, so a
+    # later bump to the manifest would move every other repo and leave this one
+    # scoring at a stale SHA.
     questions:
       - id: q2_naming
         kind: kind_family

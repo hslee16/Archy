@@ -1,4 +1,4 @@
-# `archy conventions` — scored against a hand-written key
+# `archy conventions`, scored against a hand-written key
 
 Run: `uv run python bench/conventions_bench.py`. Key: `bench/conventions_key.yaml`.
 SHAs from `bench/projects.yaml`, or inline where the project is not in the manifest.
@@ -32,14 +32,14 @@ the SHAs pinned here. Only then was the bench run. A key written after seeing th
 output measures nothing.
 
 **Held-out holds at 92%.** The heuristics are not fitted to the four projects they
-were written against — which was the open worry, and it is now answered rather than
+were written against (which was the open worry), and it is now answered rather than
 asserted.
 
 ## What the held-out set actually tests
 
 It is a harder set than the development four, on purpose:
 
-- **`httpx` is a silence test.** All four of its surfaces are complete — 28/28 in
+- **`httpx` is a silence test.** All four of its surfaces are complete: 28/28 in
   `__all__` and in `docs/exceptions.md`, with `tests/test_exported_members.py`
   asserting the export list. Any gap reported here is a **false positive**, the one
   thing this section must never emit. Archy stays silent. ✅
@@ -58,16 +58,16 @@ as dishonest as scoring it for inventing one.
 
 ## 🔴 The held-out failure, and why it is not being fixed here
 
-`requests` q4_surfaces **FAILS**. It has the largest export gap in the whole set —
-25 exception classes defined, 11 re-exported, 9 in `__all__`, 8 documented — and
+`requests` q4_surfaces **FAILS**. It has the largest export gap in the whole set:
+25 exception classes defined, 11 re-exported, 9 in `__all__`, 8 documented, and
 archy reports nothing.
 
 Cause, measured: `_export_gaps` only reports where the export list already governs
 **≥50%** of a family. `requests.__all__` lists **9 of 22** `RequestException`
 descendants = **0.41**, so the guard suppresses it.
 
-That guard exists for a good reason — one member mentioned in passing is not a promise
-to document the rest — but `requests` is the opposite case: a large family with a
+That guard exists for a good reason (one member mentioned in passing is not a promise
+to document the rest), but `requests` is the opposite case: a large family with a
 partially-maintained export list, which is precisely what the section should catch.
 
 **Lowering the threshold would fix this row and invalidate the held-out set.** Tuning
@@ -93,7 +93,7 @@ excuse. Tools in the neighbourhood do a different job:
 - **Linters** (ruff, pylint naming rules, import-linter) *enforce* conventions you have
   already declared. They do not derive one from source; that is the whole gap here.
 - **Code-graph / MCP indexers** (codegraph, code-review-graph) build symbol and edge
-  graphs and answer *navigation* — measured at **6.7%** of an agent's deliberation
+  graphs and answer *navigation*, measured at **6.7%** of an agent's deliberation
   against design judgement's ~31%. Neither indexes third-party packages, and neither
   reports naming, gating or surface conventions at all.
 - **Editor rule files** (`.cursorrules`, `AGENTS.md`, `CLAUDE.md`) are *human-authored*.
@@ -101,7 +101,7 @@ excuse. Tools in the neighbourhood do a different job:
   None of the eight projects here ships one.
 
 **The meaningful comparator is the unaided model**, because that is what happens today
-— and it is not less accurate. Every key in this file was produced by a model reading
+and it is not less accurate. Every key in this file was produced by a model reading
 the repo with no archy, and those keys are correct; that is why they can score archy at
 all. The difference is **cost**, not correctness:
 
@@ -113,9 +113,17 @@ all. The difference is **cost**, not correctness:
 | pytest | ~9 total |
 | mypy | ~12 total |
 
-plus, in every case, the judgement to *design* a multi-instance consistency check —
+plus, in every case, the judgement to *design* a multi-instance consistency check:
 grep every file mentioning each member, then decide whether 12 of 13 is a convention or
 a drift. Archy answers in one command.
+
+⚠️ **The keys were not independently validated**, and that limits the accuracy half of
+this comparison. They are the ground truth by construction, so a key that is wrong makes
+archy wrong for being right, and the "not less accurate" claim inherits the same error it
+would need to detect. The keys were read from source with care and the held-out ones were
+written before the bench ran, which is what makes them worth using; a second independent
+reader per row would be what makes the accuracy claim measurable. **The cost claim below
+does not depend on this** and stands on its own.
 
 So the claim this bench supports is **"one command returns what costs a model 2-12
 targeted reads and a consistency check it has to invent"**. The claim it does not
