@@ -1743,7 +1743,7 @@ def _run_duplicates(
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
 
-    def shape(groups: list[DuplicateGroup]):
+    def _shape(groups: list[DuplicateGroup]):
         top = groups[:top_n]
         if response_format == "full":
             return tuple(top)
@@ -1768,9 +1768,9 @@ def _run_duplicates(
         near_total=len(near),
         shown=min(top_n, len(dups)),
         duplicated_functions=sum(g.member_count for g in dups),
-        duplicates=shape(dups),
-        variants=shape(variants),
-        near_miss=shape(near),
+        duplicates=_shape(dups),
+        variants=_shape(variants),
+        near_miss=_shape(near),
         note=note,
     )
 
@@ -1855,7 +1855,7 @@ def _refactor_note(
             f"No module is central and fragile above min_risk={min_risk}. Lower "
             "min_risk (pass 0 to surface every module) to widen the lens."
         )
-    # fused
+    # fused: the only lens left once behavioral and structural have returned
     if git_available:
         return (
             "No refactoring priorities surfaced: no file is both complex and "

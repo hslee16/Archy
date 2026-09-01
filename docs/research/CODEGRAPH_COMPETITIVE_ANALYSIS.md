@@ -25,7 +25,7 @@ thing that decides whether archy is worth working on.**
   cycle analysis, no history, and no counterfactual check**. That is not an
   oversight on their part; it is a different product.
 - Where the two **do** overlap, archy loses on the merits, and the overlap is
-  narrow: 2 of archy's 11 MCP tools (3 CLI commands), and none of the 9 that
+  narrow: 2 of archy's 12 MCP tools (3 CLI commands), and none of the 10 that
   carry its actual thesis.
 - **Multi-language: still no** (C1), but the honest reason changed. Not "wrong
   axis"; "the axis where a funded, viral competitor wins and archy would spend
@@ -48,7 +48,7 @@ thing that decides whether archy is worth working on.**
 | Edges | calls, imports, extends, implements, framework routes, dynamic dispatch | imports, calls (`call_count` on the module edge) |
 | Languages | **20 native (Rust kernel) + ~14 more portable** | **Python only** |
 | Engine | Rust kernel, tree-sitter, SQLite + FTS5 | Python, tree-sitter, SQLite index |
-| MCP surface | **1 listed tool** (`codegraph_explore`), 7 unlisted | **11 tools** |
+| MCP surface | **1 listed tool** (`codegraph_explore`), 7 unlisted | **12 tools** |
 | Freshness | native OS file events, 2s debounce, auto-sync | `watcher.py`, 2s debounce, cached graph |
 | Scale claim | Linux kernel (70k files, 2M symbols) under 12 min on a 2-core VPS | 10k+ modules, warm graph in seconds |
 | Distribution | npx installer, 8 agent integrations, signed/attested builds, telemetry | pip, plugin, `archy install` for 5 clients, no telemetry |
@@ -96,8 +96,8 @@ Archy's navigation-shaped surfaces sit in codegraph's job:
 | `archy_impact`, `mode="affected"` (CI test selection; CLI `archy affected`) | `codegraph affected` (same flag shape, `--stdin --quiet`) | codegraph wins on the same axis |
 | `archy_graph(focus=)` (bounded subgraph) | `codegraph_explore` | codegraph wins: returns source, not structure |
 
-**At MCP-tool granularity that is 2 of 11** (`archy_impact`, whose two modes
-both land here, and `archy_graph`), leaving **9 with no codegraph counterpart
+**At MCP-tool granularity that is 2 of 12** (`archy_impact`, whose two modes
+both land here, and `archy_graph`), leaving **10 with no codegraph counterpart
 at all**. At CLI granularity it is 3 commands (`archy impact`, `archy
 affected`, `archy graph`), since `archy affected` is a separate command over
 the same logic that `archy_impact(mode="affected")` serves; `archy_affected`
@@ -294,7 +294,7 @@ Falsifiable three ways, and worth re-checking on any revisit:
 
 Separate two questions that keep getting merged.
 
-**Is archy differentiated? Yes, and more cleanly than expected.** 9 of 11 MCP
+**Is archy differentiated? Yes, and more cleanly than expected.** 10 of 12 MCP
 tools have no counterpart in the most successful tool in the adjacent category. The
 normative job is real, unoccupied, and structurally hard for a
 navigation-first tool to enter, because it needs user-supplied intent rather
