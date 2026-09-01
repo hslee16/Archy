@@ -366,6 +366,37 @@ class DocGap(BaseModel):
     missing: tuple[str, ...]
 
 
+class ModuleView(BaseModel):
+    """Everything the census knows about ONE module, complete and unranked.
+
+    🔴 THIS EXISTS TO ANSWER NEGATIVES, WHICH A RANKED DIGEST CANNOT.
+    Twenty-four pieces of real agent reasoning were scored against the ordinary
+    report -- every one chosen because a census could in principle answer it --
+    and it scored zero. Both blind readers gave the same reason: the report says
+    `150; showing 12`, so absence from the list proves nothing. The questions
+    being asked were of the form "does `risk` import `hotspots`" and "does ANY
+    of graph/cycles/score reach `layers`", and a top-N ranking is the wrong
+    shape for both.
+
+    So every list here is COMPLETE for the module named, and truncating any of
+    them would defeat the point. `status` matters for the same reason: a module
+    that was set aside must say so, or its absence reads as "nothing to report"
+    when the truth is "not looked at".
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    status: str
+    classes: tuple[str, ...]
+    functions: tuple[str, ...]
+    imports_internal: tuple[str, ...]
+    imported_by: tuple[str, ...]
+    exports: tuple[str, ...] | None
+    suffix_families: tuple[str, ...]
+    gates: tuple[Gate, ...]
+
+
 class ModulePartition(BaseModel):
     """What was censused and what was set aside, with the reason.
 
@@ -458,6 +489,13 @@ class _ModuleFacts:
         # need it, and one that is not must not be guessed at. See
         # `_surface_families`.
         self.internal_imports: set[tuple[str, str]] = set()
+        # The MODULES this one imports, dotted and absolute, with relative form
+        # resolved. Deliberately separate from `internal_imports` above, which
+        # holds SYMBOLS and leaves `from . import x` unresolved on purpose:
+        # "does `risk` import `hotspots`" is a question about modules, and
+        # answering it from symbols alone would miss both `import pkg.mod` and
+        # every relative import in the project.
+        self.imported_modules: set[str] = set()
 
 
 def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
@@ -467,12 +505,29 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
             facts.classes.append(node)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             facts.functions.append(node)
+    pkg = qualname.rsplit(".", 1)[0] if "." in qualname else ""
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                facts.imported_modules.add(alias.name)
+        elif isinstance(node, ast.ImportFrom):
             source = "" if node.level else (node.module or "")
             for alias in node.names:
                 if alias.name != "*":
                     facts.internal_imports.add((source, alias.name))
+            base = _resolve_relative(node.module, node.level, pkg)
+            if base:
+                # `from . import sibling` means "import the sibling", not
+                # "depend on the containing package", so the bare package is
+                # recorded only when the statement actually names a module.
+                if node.module:
+                    facts.imported_modules.add(base)
+                # `from pkg import mod` names a module when the target is one;
+                # record the candidate and let the caller intersect it with what
+                # the project actually defines rather than guessing here.
+                for alias in node.names:
+                    if alias.name != "*":
+                        facts.imported_modules.add(f"{base}.{alias.name}")
     for node in tree.body:
         if isinstance(node, ast.Assign | ast.AnnAssign):
             facts.body_assignments.append(node)
@@ -497,6 +552,25 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
         if reexports:
             facts.exports = frozenset(reexports)
     return facts
+
+
+def _resolve_relative(module: str | None, level: int, pkg: str) -> str:
+    """Turn `from . import x` / `from ..y import z` into an absolute dotted name.
+
+    A relative import is invisible to a plain name match, so a module census
+    that skipped it would report "no, it does not import that" for a module
+    that plainly does -- the worst possible error for a lookup whose whole
+    purpose is answering negatives.
+    """
+    if not level:
+        return module or ""
+    parts = pkg.split(".") if pkg else []
+    # level 1 is the containing package, each extra level walks one further up
+    up = level - 1
+    base = ".".join(parts[: len(parts) - up]) if up <= len(parts) else ""
+    if not base:
+        return module or ""
+    return f"{base}.{module}" if module else base
 
 
 def _string_literals(node: ast.expr | None) -> frozenset[str]:
@@ -1378,4 +1452,72 @@ def compute_conventions(
             nonsource=n_nonsource,
             shadow_roots=tuple(sorted(shadows)),
         ),
+    )
+
+
+def compute_module_view(
+    root: Path,
+    module: str,
+    *,
+    ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
+    extra_roots: Iterable[str] = (),
+    include_tests: bool = False,
+) -> ModuleView:
+    """The complete, unranked picture of one module. See ModuleView.
+
+    Note that this parses EVERY module regardless of `include_tests`, because
+    "who imports me" is a question about the whole project: a module imported
+    only by tests is imported, and reporting it as unused because tests were set
+    aside would be a false negative of exactly the kind this function exists to
+    prevent. `include_tests` decides `status`, not the search.
+    """
+    modules = list(discover_modules(root, ignored_dirs=ignored_dirs, extra_roots=extra_roots))
+    shadows = _shadow_roots(m.qualname for m in modules)
+
+    def status_of(q: str) -> str:
+        if _is_nonsource_module(q):
+            return "set aside: under a dot-directory, not library source"
+        if any(q == sh or q.startswith(sh + ".") for sh in shadows):
+            root_of = next(sh for sh in shadows if q == sh or q.startswith(sh + "."))
+            return f"set aside: in {root_of}, which duplicates its parent"
+        if _is_test_module(q):
+            return (
+                "censused"
+                if include_tests
+                else "set aside: a test module -- pass --include-tests to census it"
+            )
+        return "censused"
+
+    facts: dict[str, _ModuleFacts] = {}
+    for m in modules:
+        try:
+            facts[m.qualname] = _collect(ast.parse(m.path.read_text(encoding="utf-8")), m.qualname)
+        except (OSError, SyntaxError, ValueError, UnicodeDecodeError):
+            continue
+
+    if module not in facts:
+        near = sorted(q for q in facts if module in q or q.endswith("." + module))
+        raise LookupError(
+            f"no module {module!r} under {root}"
+            + (f"; did you mean {', '.join(near[:5])}?" if near else "")
+        )
+
+    f = facts[module]
+    known = set(facts)
+    # Complete on both sides. A "does X import Y" question is answered by the
+    # presence or ABSENCE of Y here, so a partial list is worse than none.
+    imports = sorted({m for m in f.imported_modules if m in known and m != module})
+    by = sorted(q for q, g in facts.items() if q != module and module in g.imported_modules)
+    fams = sorted({camel_suffix(c.name) for c in f.classes})
+    gates, errors = _gates([f])
+    return ModuleView(
+        module=module,
+        status=status_of(module),
+        classes=tuple(sorted(c.name for c in f.classes)),
+        functions=tuple(sorted(fn.name for fn in f.functions)),
+        imports_internal=tuple(imports),
+        imported_by=tuple(by),
+        exports=tuple(sorted(f.exports)) if f.exports is not None else None,
+        suffix_families=tuple(fams),
+        gates=tuple(gates) + tuple(errors),
     )

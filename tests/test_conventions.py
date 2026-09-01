@@ -806,3 +806,94 @@ def test_setting_tests_aside_says_how_to_include_them(tmp_path: Path):
     report = compute_conventions(tmp_path)
     assert report.partition is not None and report.partition.tests > 0
     assert "--include-tests" in _conventions_to_text(report, top_n=12)
+
+
+def _pkg(tmp_path: Path, files: dict[str, str]) -> Path:
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for name, src in files.items():
+        target = pkg / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(src)
+    return tmp_path
+
+
+def test_module_view_answers_a_negative(tmp_path: Path):
+    """The whole point. "Does `risk` import `hotspots`?" is answered by the
+    ABSENCE of hotspots from a complete list; against the ranked report the same
+    question scored zero, because `150; showing 12` makes absence meaningless."""
+    from archy.conventions import compute_module_view
+
+    root = _pkg(
+        tmp_path,
+        {
+            "risk.py": "from pkg.instability import inst\n",
+            "instability.py": "def inst(): ...\n",
+            "hotspots.py": "def hot(): ...\n",
+        },
+    )
+    view = compute_module_view(root, "pkg.risk")
+    assert view.imports_internal == ("pkg.instability",)
+    assert "pkg.hotspots" not in view.imports_internal
+
+
+def test_module_view_resolves_relative_imports(tmp_path: Path):
+    """A relative import is invisible to a plain name match, so an unresolved one
+    would answer "no, it does not import that" about a module that plainly
+    does -- the worst error a negative-answering lookup can make."""
+    from archy.conventions import compute_module_view
+
+    root = _pkg(
+        tmp_path,
+        {
+            "a.py": "from . import b\nfrom .c import thing\n",
+            "b.py": "",
+            "c.py": "def thing(): ...\n",
+        },
+    )
+    view = compute_module_view(root, "pkg.a")
+    assert set(view.imports_internal) == {"pkg.b", "pkg.c"}
+
+
+def test_module_view_sees_plain_import_statements(tmp_path: Path):
+    from archy.conventions import compute_module_view
+
+    root = _pkg(tmp_path, {"a.py": "import pkg.b\n", "b.py": ""})
+    assert compute_module_view(root, "pkg.a").imports_internal == ("pkg.b",)
+
+
+def test_module_view_says_why_a_module_was_set_aside(tmp_path: Path):
+    """A set-aside module must say so. Otherwise its emptiness reads as
+    "nothing to report" when the truth is "not looked at"."""
+    from archy.conventions import compute_module_view
+
+    root = _pkg(tmp_path, {"tests/__init__.py": "", "tests/test_it.py": "def test_x(): ...\n"})
+    assert "--include-tests" in compute_module_view(root, "pkg.tests.test_it").status
+    assert compute_module_view(root, "pkg.tests.test_it", include_tests=True).status == "censused"
+
+
+def test_module_view_counts_test_importers_even_when_tests_are_set_aside(tmp_path: Path):
+    """ "Who imports me" is a question about the whole project. A module imported
+    only by tests IS imported, and reporting it as unused because tests were set
+    aside would be a false negative of exactly the kind this view prevents."""
+    from archy.conventions import compute_module_view
+
+    root = _pkg(
+        tmp_path,
+        {
+            "thing.py": "def f(): ...\n",
+            "tests/__init__.py": "",
+            "tests/test_thing.py": "from pkg.thing import f\n",
+        },
+    )
+    view = compute_module_view(root, "pkg.thing")
+    assert view.imported_by == ("pkg.tests.test_thing",)
+
+
+def test_module_view_suggests_near_matches_for_an_unknown_module(tmp_path: Path):
+    from archy.conventions import compute_module_view
+
+    root = _pkg(tmp_path, {"layers.py": ""})
+    with pytest.raises(LookupError, match=r"pkg\.layers"):
+        compute_module_view(root, "layers")
