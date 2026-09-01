@@ -46,8 +46,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 sys.path.append(str(REPO_ROOT / "bench"))
 
-from archy.conventions import compute_conventions  # noqa: E402
 from run import clone_or_update, load_manifest  # noqa: E402
+
+from archy.conventions import compute_conventions  # noqa: E402
 
 KEY_PATH = Path(__file__).with_name("conventions_key.yaml")
 
@@ -74,16 +75,16 @@ def analyse(path: Path) -> dict:
 def _check_base(report: dict, e: dict):
     fams = [b for b in report["bases"] if b["base"] == e["family"]]
     if not fams:
-        return False, "no kind family named %r (found: %s)" % (
+        return False, "no kind family named {!r} (found: {})".format(
             e["family"],
             ", ".join(b["base"] for b in report["bases"][:6]) or "none",
         )
     f = fams[0]
     if "home_module" in e and f["home_module"] != e["home_module"]:
-        return False, "home is %s, expected %s" % (f["home_module"], e["home_module"])
+        return False, "home is {}, expected {}".format(f["home_module"], e["home_module"])
     if "min_count" in e and f["count"] < e["min_count"]:
-        return False, "count %d < %d" % (f["count"], e["min_count"])
-    return True, "%s n=%d @ %s" % (f["base"], f["count"], f["home_module"])
+        return False, f"count {f['count']} < {e['min_count']}"
+    return True, f"{f['base']} n={f['count']} @ {f['home_module']}"
 
 
 def _check_constant(report: dict, e: dict):
@@ -94,30 +95,33 @@ def _check_constant(report: dict, e: dict):
             if c["name"] == e["constant"]:
                 vals = {v for v, _ in c["distribution"]}
                 if "values" in e and not set(map(str, e["values"])) <= vals:
-                    return False, "%s has values %s, expected to include %s" % (
-                        c["name"], sorted(vals), e["values"])
-                return True, "%s = %s" % (c["name"], sorted(vals))
-        return False, "family %s declares no shared constant %r" % (e["family"], e["constant"])
-    return False, "no kind family named %r" % e["family"]
+                    return False, "{} has values {}, expected to include {}".format(
+                        c["name"], sorted(vals), e["values"]
+                    )
+                return True, "{} = {}".format(c["name"], sorted(vals))
+        return False, "family {} declares no shared constant {!r}".format(
+            e["family"], e["constant"]
+        )
+    return False, "no kind family named {!r}".format(e["family"])
 
 
 def _check_registry(report: dict, e: dict):
     regs = [r for r in report["registries"] if r["constructor"] == e["constructor"]]
     if not regs:
-        return False, "no registry for %r (found: %s)" % (
+        return False, "no registry for {!r} (found: {})".format(
             e["constructor"],
             ", ".join(r["constructor"] for r in report["registries"][:6]) or "none",
         )
     r = regs[0]
     if "home_module" in e and r["home_module"] != e["home_module"]:
-        return False, "home is %s, expected %s" % (r["home_module"], e["home_module"])
+        return False, "home is {}, expected {}".format(r["home_module"], e["home_module"])
     if "min_count" in e and r["count"] < e["min_count"]:
-        return False, "count %d < %d" % (r["count"], e["min_count"])
+        return False, f"count {r['count']} < {e['min_count']}"
     if "keyword" in e:
         kws = {k["name"] for k in r["keyword_defaults"]}
         if e["keyword"] not in kws:
-            return False, "registry has keywords %s, expected %s" % (sorted(kws), e["keyword"])
-    return True, "%s n=%d @ %s" % (r["constructor"], r["count"], r["home_module"])
+            return False, "registry has keywords {}, expected {}".format(sorted(kws), e["keyword"])
+    return True, f"{r['constructor']} n={r['count']} @ {r['home_module']}"
 
 
 def _check_gap(report: dict, e: dict, field: str):
@@ -126,17 +130,20 @@ def _check_gap(report: dict, e: dict, field: str):
         # 🔴 Asserting silence. mypy names all 78 of its codes in its own docs, so
         #    a gap there is a FALSE POSITIVE, which is the one thing this section
         #    must never emit. A missing row could not say that.
-        return (not gaps), ("no gap, as expected" if not gaps else
-                            "reported a gap: missing %s" % gaps[0]["missing"])
+        return (not gaps), (
+            "no gap, as expected"
+            if not gaps
+            else "reported a gap: missing {}".format(gaps[0]["missing"])
+        )
     if not gaps:
-        return False, "no %s for family %r" % (field, e["family"])
+        return False, "no {} for family {!r}".format(field, e["family"])
     g = gaps[0]
     missing = set(g["missing"])
     want = set(e.get("missing", []))
     if want and not want <= missing:
-        return False, "missing=%s, expected to include %s" % (sorted(missing), sorted(want))
-    return True, "%d/%d missing %s" % (g["documented"] if field == "doc_gaps" else g["exported"],
-                                       g["defined"], sorted(missing))
+        return False, f"missing={sorted(missing)}, expected to include {sorted(want)}"
+    have = g["documented"] if field == "doc_gaps" else g["exported"]
+    return True, f"{have}/{g['defined']} missing {sorted(missing)}"
 
 
 def _check_naming(report: dict, e: dict):
@@ -155,10 +162,15 @@ def _check_naming(report: dict, e: dict):
                 continue
             if "min_count" in e and f["count"] < e["min_count"]:
                 continue
-            return True, "*%s n=%d @ %s" % (f["suffix"], f["count"], f["home_module"])
-    seen = ["*%s@%s" % (f["suffix"], f["home_module"])
-            for h in report["naming"] for f in h["families"]][:6]
-    return False, "no *%s family matching (found: %s)" % (e["suffix"], ", ".join(seen) or "none")
+            return True, f"*{f['suffix']} n={f['count']} @ {f['home_module']}"
+    seen = [
+        "*{}@{}".format(f["suffix"], f["home_module"])
+        for h in report["naming"]
+        for f in h["families"]
+    ][:6]
+    return False, "no *{} family matching (found: {})".format(
+        e["suffix"], ", ".join(seen) or "none"
+    )
 
 
 def _check_partition(report: dict, e: dict):
@@ -166,7 +178,7 @@ def _check_partition(report: dict, e: dict):
     roots = set(p.get("shadow_roots") or [])
     want = set(e.get("shadow_roots", []))
     if not want <= roots:
-        return False, "shadow_roots=%s, expected to include %s" % (sorted(roots), sorted(want))
+        return False, f"shadow_roots={sorted(roots)}, expected to include {sorted(want)}"
     return True, "set aside %s" % (sorted(roots) or "nothing")
 
 
@@ -191,8 +203,11 @@ def main() -> int:
 
     key = yaml.safe_load(KEY_PATH.read_text())
     manifest = {p["name"]: p for p in load_manifest()}
-    rows = [r for r in key["repos"]
-            if (args.set in ("all", r["set"])) and (not args.repo or r["name"] == args.repo)]
+    rows = [
+        r
+        for r in key["repos"]
+        if (args.set in ("all", r["set"])) and (not args.repo or r["name"] == args.repo)
+    ]
     if not rows:
         raise SystemExit("no repos matched")
 
@@ -208,23 +223,26 @@ def main() -> int:
         path = clone_or_update(proj)
         report = analyse(path)
         if args.determinism:
-            print("  %-12s deterministic ✅  (sha %s)" % (name, proj["sha"]))
+            print(f"  {name:<12} deterministic ✅  (sha {proj['sha']})")
             continue
 
         passed = 0
-        print("\n=== %s  (%s, sha %s) ===" % (name, entry["set"], proj["sha"]))
+        print("\n=== {}  ({}, sha {}) ===".format(name, entry["set"], proj["sha"]))
         for q in entry["questions"]:
             check = CHECKS[q["kind"]]
             ok, found = check(report, q)
             passed += ok
             mark = "PASS" if ok else "FAIL"
-            print("  [%s] %-14s %s" % (mark, q["id"], found))
+            print(f"  [{mark}] {q['id']:<14} {found}")
             if args.verbose and not ok:
-                print("         expected: %s" % {k: v for k, v in q.items() if k not in ("id", "kind")})
+                print(
+                    "         expected: %s"
+                    % {k: v for k, v in q.items() if k not in ("id", "kind")}
+                )
         totals.setdefault(entry["set"], [0, 0])
         totals[entry["set"]][0] += passed
         totals[entry["set"]][1] += len(entry["questions"])
-        print("  -> %d/%d" % (passed, len(entry["questions"])))
+        print(f"  -> {passed}/{len(entry['questions'])}")
 
     if args.determinism:
         return 0
@@ -234,15 +252,17 @@ def main() -> int:
         if s not in totals:
             continue
         got, tot = totals[s]
-        print("  %-12s %d/%d  (%.0f%%)" % (s, got, tot, 100 * got / tot))
+        print(f"  {s:<12} {got}/{tot}  ({100 * got / tot:.0f}%)")
     if "development" in totals and "heldout" in totals:
         d = totals["development"][0] / totals["development"][1]
         h = totals["heldout"][0] / totals["heldout"][1]
         print("\n  🔴 ONLY THE HELD-OUT NUMBER IS EVIDENCE. The development set was used to")
         print("     build these heuristics, so its score is a fit.")
         if h < d - 0.25:
-            print("  🔴 HELD-OUT IS %.0f POINTS BELOW DEVELOPMENT: the heuristics are fitted to"
-                  % (100 * (d - h)))
+            print(
+                "  🔴 HELD-OUT IS %.0f POINTS BELOW DEVELOPMENT: the heuristics are fitted to"
+                % (100 * (d - h))
+            )
             print("     the four repos they were written against. Treat #410's table accordingly.")
     return 0
 
