@@ -108,6 +108,35 @@ class NamingFamily(BaseModel):
         return self.home_count / self.count if self.count else 0.0
 
 
+class NamingHome(BaseModel):
+    """One module and the naming families it is the home of.
+
+    Grouped this way on purpose. Ranked as a flat list of suffixes, a big
+    generic family (`*Payload`, 13) buries a small sharply-located one
+    (`*Violation`, 3 in `layers.py`) even though the second is the more
+    useful answer: an agent is about to add a class to a PARTICULAR module,
+    so the module is the right key. Concentration-weighting alone does not
+    fix it -- `*Payload` is 13/13 in one module, so it is perfectly
+    concentrated too and still outranks `*Violation`.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    families: tuple[NamingFamily, ...]
+
+    @computed_field
+    @property
+    def total(self) -> int:
+        """Classes across every family this module hosts."""
+        return sum(f.count for f in self.families)
+
+    @computed_field
+    @property
+    def family_count(self) -> int:
+        return len(self.families)
+
+
 class SurfaceFamily(BaseModel):
     """A set of definitions that mirror each other and must move together.
 
@@ -134,17 +163,42 @@ class SurfaceFamily(BaseModel):
 class Gate(BaseModel):
     """One site where the program exits non-zero.
 
+    `category` separates the two things a non-zero exit can mean, because
+    they answer different questions and conflating them makes the count
+    useless:
+
+    `gate`   -- a FINDING failed. Written as an explicit exit code
+                (`sys.exit(1)`, `raise SystemExit`, `ctx.exit`), because the
+                code itself is the result being communicated.
+    `error`  -- the USER did something wrong (bad config, missing file,
+                unavailable extra). Written as a raised framework exception
+                (`ClickException`, `UsageError`, `Abort`), which delegates
+                the exit code to the framework.
+
+    That split is a heuristic over HOW the exit is written, not a
+    declaration the source makes; a project that raises its own exception
+    subclass for findings would land in neither bucket cleanly. It
+    reproduces the intended split exactly on Click projects, which write
+    findings as `sys.exit(n)` precisely so the code is controllable.
+
     `control` is the lever: `flag:--strict` (a CLI option feeds the guard),
-    `param:<name>` (a function argument does, with no flag found),
-    `config:<attr>` (a config/result attribute does), or `hardcoded` (the
-    exit is unconditional or guarded by something with no named lever).
+    `config:<attr>` (a config/result attribute does), `param:<name>` (a
+    function argument does, with no flag found), or `hardcoded` (the exit
+    is unconditional or guarded by something with no named lever).
+
+    `code` is the literal exit status when the source states one. `None`
+    means it is not a literal -- either computed
+    (`sys.exit(0 if ok else 1)`) or left to the framework, which is itself
+    the answer to "what code does this project fail with".
     """
 
     model_config = ConfigDict(frozen=True)
 
     module: str
     function: str
+    category: str
     kind: str
+    code: int | None
     control: str
     is_command: bool
 
@@ -193,16 +247,25 @@ class ConventionsReport(BaseModel):
     root: str
     modules_scanned: int
     modules_unparsed: int
-    naming: tuple[NamingFamily, ...]
+    naming: tuple[NamingHome, ...]
     surfaces: tuple[SurfaceFamily, ...]
     gates: tuple[Gate, ...]
+    errors: tuple[Gate, ...]
     models: ModelCensus
 
     @computed_field
     @property
     def gate_modules(self) -> tuple[str, ...]:
-        """Modules that can end the process -- everything else is advisory."""
+        """Modules that fail the build on a FINDING. Everything else is
+        advisory -- user-error exits live in `errors` and say nothing about
+        whether a new finding should gate."""
         return tuple(sorted({g.module for g in self.gates}))
+
+    @computed_field
+    @property
+    def gate_codes(self) -> tuple[int, ...]:
+        """The literal exit statuses this project fails findings with."""
+        return tuple(sorted({g.code for g in self.gates if g.code is not None}))
 
 
 def camel_suffix(name: str) -> str:
@@ -240,7 +303,7 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
     return facts
 
 
-def _naming_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[NamingFamily, ...]:
+def _naming_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[NamingHome, ...]:
     members: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for f in facts:
         for cls in f.classes:
@@ -263,7 +326,15 @@ def _naming_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[
             )
         )
     families.sort(key=lambda f: (-f.count, f.suffix))
-    return tuple(families)
+
+    by_home: dict[str, list[NamingFamily]] = defaultdict(list)
+    for family in families:
+        by_home[family.home_module].append(family)
+    homes = [NamingHome(module=module, families=tuple(rows)) for module, rows in by_home.items()]
+    # Biggest naming surface first, then most distinct families, then name:
+    # the module an agent is most likely to be adding a class to.
+    homes.sort(key=lambda h: (-h.total, -h.family_count, h.module))
+    return tuple(homes)
 
 
 def _surface_families(
@@ -350,16 +421,41 @@ def _is_command(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     )
 
 
-def _exit_kind(node: ast.stmt) -> str | None:
-    """The exit flavour a statement performs, or None if it is not an exit."""
+def _literal_code(call: ast.expr | None) -> int | None:
+    """The literal exit status of an exit call, or None when it is computed.
+
+    `sys.exit(0 if ok else 1)` deliberately returns None: two codes are
+    possible and reporting either one would be a lie.
+    """
+    if not isinstance(call, ast.Call) or not call.args:
+        return None
+    first = call.args[0]
+    if isinstance(first, ast.Constant) and isinstance(first.value, int):
+        return first.value
+    return None
+
+
+def _exit_site(node: ast.stmt) -> tuple[str, str, int | None] | None:
+    """`(category, kind, code)` for an exiting statement, else None.
+
+    A raised framework exception is the ERROR channel (the framework picks
+    the code); an explicit exit call or `SystemExit` is the GATE channel
+    (the code is the result). See `Gate` for why the split matters.
+    """
     if isinstance(node, ast.Raise) and node.exc is not None:
+        call = node.exc if isinstance(node.exc, ast.Call) else None
         exc = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
         name = _dotted(exc).rsplit(".", 1)[-1]
-        return name if name in _EXIT_RAISES else None
+        if name == "SystemExit":
+            return ("gate", name, _literal_code(call))
+        if name in _EXIT_RAISES:
+            return ("error", name, None)
+        return None
     if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
-        dotted = _dotted(node.value.func)
+        call = node.value
+        dotted = _dotted(call.func)
         if dotted in _EXIT_CALLS or dotted.rsplit(".", 1)[-1] == "exit":
-            return dotted
+            return ("gate", dotted, _literal_code(call))
     return None
 
 
@@ -387,13 +483,13 @@ def _scan_gates(
     body: Iterable[ast.stmt],
     *,
     condition: ast.expr | None,
-    out: list[tuple[str, ast.expr | None]],
+    out: list[tuple[tuple[str, str, int | None], ast.expr | None]],
 ) -> None:
     """Walk statements, remembering the innermost `if` test above each exit."""
     for node in body:
-        kind = _exit_kind(node)
-        if kind is not None:
-            out.append((kind, condition))
+        site = _exit_site(node)
+        if site is not None:
+            out.append((site, condition))
             continue
         if isinstance(node, ast.If):
             _scan_gates(node.body, condition=node.test, out=out)
@@ -411,29 +507,41 @@ def _scan_gates(
                 _scan_gates(handler.body, condition=condition, out=out)
 
 
-def _gates(facts: Iterable[_ModuleFacts]) -> tuple[Gate, ...]:
-    gates: list[Gate] = []
+def _gates(facts: Iterable[_ModuleFacts]) -> tuple[tuple[Gate, ...], tuple[Gate, ...]]:
+    """`(gates, errors)`.
+
+    Only FUNCTION bodies are scanned, which is also what drops the
+    `if __name__ == "__main__": sys.exit(main())` entry point: it is
+    module-level, and it forwards a return value rather than stating a
+    verdict, so counting it as a gate would inflate every Click project by
+    exactly one.
+    """
+    found_gates: list[Gate] = []
+    found_errors: list[Gate] = []
     for f in facts:
         for fn in f.functions:
-            found: list[tuple[str, ast.expr | None]] = []
+            found: list[tuple[tuple[str, str, int | None], ast.expr | None]] = []
             _scan_gates(fn.body, condition=None, out=found)
             if not found:
                 continue
             flags = _click_flags(fn)
             args = fn.args
             params = {a.arg for a in [*args.posonlyargs, *args.args, *args.kwonlyargs]}
-            for kind, condition in found:
-                gates.append(
-                    Gate(
-                        module=f.qualname,
-                        function=fn.name,
-                        kind=kind,
-                        control=_control_for(condition, params, flags),
-                        is_command=_is_command(fn),
-                    )
+            for (category, kind, code), condition in found:
+                site = Gate(
+                    module=f.qualname,
+                    function=fn.name,
+                    category=category,
+                    kind=kind,
+                    code=code,
+                    control=_control_for(condition, params, flags),
+                    is_command=_is_command(fn),
                 )
-    gates.sort(key=lambda g: (g.module, g.function, g.kind, g.control))
-    return tuple(gates)
+                (found_gates if category == "gate" else found_errors).append(site)
+    key = lambda g: (g.module, g.function, g.kind, g.control)  # noqa: E731
+    found_gates.sort(key=key)
+    found_errors.sort(key=key)
+    return tuple(found_gates), tuple(found_errors)
 
 
 def _frozen_config(cls: ast.ClassDef) -> tuple[bool, list[str]]:
@@ -533,12 +641,14 @@ def compute_conventions(
             continue
         facts.append(_collect(tree, module.qualname))
 
+    gates, errors = _gates(facts)
     return ConventionsReport(
         root=str(root),
         modules_scanned=len(facts),
         modules_unparsed=unparsed,
         naming=_naming_families(facts, min_count=min_family),
         surfaces=_surface_families(facts, min_count=min_family),
-        gates=_gates(facts),
+        gates=gates,
+        errors=errors,
         models=_model_census(facts),
     )

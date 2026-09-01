@@ -1604,10 +1604,17 @@ def test_conventions_tool_returns_the_derived_house_style(acyclic_project: Path)
     server = create_server()
     _content, structured = _call_tool(server, "archy_conventions", {"path": str(acyclic_project)})
     assert isinstance(structured, dict)
-    family = next(f for f in structured["naming"] if f["suffix"] == "Violation")
+    home = next(h for h in structured["naming"] if h["module"] == "pkg.layers")
+    family = next(f for f in home["families"] if f["suffix"] == "Violation")
     assert family["home_module"] == "pkg.layers"
     assert family["concentration"] == 1.0
+    assert home["total"] == 2
+    # Both exit channels are on the wire, separately: an agent asking "should
+    # my finding gate?" must not be handed a count of bad-input exits.
+    assert structured["gates"] == []
+    assert structured["errors"] == []
     assert "gate_modules" in structured
+    assert "gate_codes" in structured
     assert structured["models"]["value_classes"] == 0
 
 

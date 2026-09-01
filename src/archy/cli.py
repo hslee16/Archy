@@ -18,7 +18,7 @@ from archy.contracts import (
     ContractsResult,
     run_contracts,
 )
-from archy.conventions import ConventionsReport, compute_conventions
+from archy.conventions import ConventionsReport, Gate, compute_conventions
 from archy.coupling import (
     DEFAULT_MIN_CONFIDENCE,
     DEFAULT_MIN_SUPPORT,
@@ -2619,18 +2619,29 @@ if __name__ == "__main__":  # pragma: no cover
 def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
     """Hand-rolled payload, per this module's convention: the CLI decides what
     to truncate, so the JSON says how much it dropped rather than silently
-    handing back a short list that looks complete."""
+    handing back a short list that looks complete. Gates and errors are never
+    truncated -- the whole point of the section is the complete inventory."""
     payload = report.model_dump()
     payload["top_n"] = top_n
-    payload["naming"] = [f.model_dump() for f in report.naming[:top_n]]
+    payload["naming"] = [h.model_dump() for h in report.naming[:top_n]]
     payload["surfaces"] = [s.model_dump() for s in report.surfaces[:top_n]]
     payload["gates"] = [g.model_dump() for g in report.gates]
+    payload["errors"] = [g.model_dump() for g in report.errors]
     payload["totals"] = {
         "naming": len(report.naming),
         "surfaces": len(report.surfaces),
         "gates": len(report.gates),
+        "errors": len(report.errors),
     }
     return payload
+
+
+def _gate_row(gate: Gate) -> str:
+    code = "?" if gate.code is None else str(gate.code)
+    where = f"{gate.module}:{gate.function}"
+    suffix = "  [command]" if gate.is_command else ""
+    call = f"{gate.kind}({code})"
+    return f"  {where:<34} {call:<18} {gate.control}{suffix}"
 
 
 def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
@@ -2640,22 +2651,21 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         f"# {report.root}: {report.modules_scanned} module(s) parsed"
         + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else ""),
         "",
-        f"## naming ({len(report.naming)} family/families; showing "
+        f"## naming - by home module ({len(report.naming)} module(s); showing "
         f"{min(top_n, len(report.naming))})",
     ]
     if not report.naming:
         lines.append("  (none: no class-name suffix is shared by enough definitions)")
-    for f in report.naming[:top_n]:
-        spread = "" if len(f.modules) == 1 else f" of {f.count} across {len(f.modules)} modules"
-        lines.append(
-            f"  *{f.suffix:<14} {f.count:>3}  home={f.home_module} "
-            f"({f.home_count}{spread})  e.g. {', '.join(f.examples)}"
-        )
+    for home in report.naming[:top_n]:
+        families = " ".join(f"*{f.suffix}({f.count})" for f in home.families)
+        lines.append(f"  {home.module:<34} {home.total:>3}  {families}")
+        top = home.families[0]
+        lines.append(f"  {'':<34}      e.g. {', '.join(top.examples)}")
 
     lines += [
         "",
-        f"## surfaces ({len(report.surfaces)}; showing "
-        f"{min(top_n, len(report.surfaces))}) - wire all of these together",
+        f"## surfaces ({len(report.surfaces)}; showing {min(top_n, len(report.surfaces))})"
+        " - wire all of these together",
     ]
     if not report.surfaces:
         lines.append("  (none)")
@@ -2665,31 +2675,37 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
             f"  {s.kind:<8} {s.stem:<28} {s.surface_count} @ {where}: {', '.join(s.surfaces)}"
         )
 
-    bases = ", ".join(f"{b}={n}" for b, n in m.base_counts[:5])
-    bases_note = f"  bases: {bases}" if bases else ""
+    # The question this section exists for is "should MY NEW FINDING gate?", so
+    # a finding-failure exit and a bad-input exit must not share a count.
     optional = [g for g in report.gates if g.optional]
+    codes = ", ".join(str(c) for c in report.gate_codes) or "none literal"
     lines += [
         "",
-        f"## gates ({len(report.gates)} non-zero exit site(s), {len(optional)} caller-controlled)",
+        f"## gates ({len(report.gates)} finding-failure exit(s), "
+        f"{len(optional)} caller-controlled; exit code(s): {codes})",
     ]
     if not report.gates:
-        lines.append("  (none: nothing in this project exits non-zero)")
-    commands = sorted({g.function for g in report.gates if g.is_command})
-    if commands:
-        lines.append(f"  gating commands: {', '.join(commands)}")
-    controls = sorted({g.control for g in report.gates})
-    for control in controls:
-        rows = [g for g in report.gates if g.control == control]
-        where = sorted({f"{g.module}:{g.function}" for g in rows})
-        shown = ", ".join(where[:4]) + (f", +{len(where) - 4} more" if len(where) > 4 else "")
-        lines.append(f"  {control:<24} {len(rows):>3}  {shown}")
+        lines.append("  (none: no finding in this project fails the build)")
+    lines += [_gate_row(g) for g in report.gates]
 
+    kinds = ", ".join(
+        f"{kind}={sum(1 for g in report.errors if g.kind == kind)}"
+        for kind in sorted({g.kind for g in report.errors})
+    )
+    where = ", ".join(sorted({g.module for g in report.errors}))
+    lines += [
+        "",
+        f"## errors ({len(report.errors)} user-error exit(s) - bad input, not a finding)",
+    ]
+    lines.append(f"  {kinds} @ {where}" if report.errors else "  (none)")
+
+    bases = ", ".join(f"{b}={n}" for b, n in m.base_counts[:5])
     lines += [
         "",
         "## models",
         f"  {m.value_classes} value class(es) of {m.total_classes} class(es); "
         f"{m.frozen_classes} frozen ({m.frozen_ratio:.0%})",
-        f"  dominant base: {m.dominant_base or '(none)'}" + bases_note,
+        f"  dominant base: {m.dominant_base or '(none)'}" + (f"  bases: {bases}" if bases else ""),
         f"  config: {', '.join(f'{k}={n}' for k, n in m.config_flags) or '(none)'}",
         f"  collection fields: {m.tuple_fields} tuple / {m.list_fields} list "
         f"({m.tuple_ratio:.0%} tuple)",
