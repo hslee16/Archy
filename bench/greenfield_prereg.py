@@ -5,7 +5,7 @@
     uv run python bench/greenfield_prereg.py --score bench/greenfield_results.jsonl
 
 Written **before the generation half exists and before any agent time is spent**,
-per `CLAUDE.md` and #369 itself. The measurement half (`bench/greenfield_eval.py`,
+per `AGENTS.md` and #369 itself. The measurement half (`bench/greenfield_eval.py`,
 #373) is already built and validated against the paper's three fixture cases.
 This file is the other precondition: the thresholds, including the ones that kill
 the idea.
@@ -176,7 +176,7 @@ architecture result, and is structurally unevaluable rather than non-compliant.
 ## Resumability, because this spends hours
 
 The runner reuses the `bench/q1b_run.py` shape, which `tests/test_q1b_run.py`
-pins and `CLAUDE.md` now states as a rule: one ledger row per completed unit
+pins and `AGENTS.md` now states as a rule: one ledger row per completed unit
 written in a single append, only `status="ok"` counts as done, stalls are retried
 but results never are, a crash in one unit does not end the loop, a usage limit
 is not a result, and an interrupt exits cleanly saying how to resume.

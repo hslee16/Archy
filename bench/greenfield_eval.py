@@ -6,7 +6,7 @@
     uv run python bench/greenfield_eval.py --fetch-suite
 
 This is the MEASUREMENT half of #369, built and validated before any agent time
-is spent, per `CLAUDE.md`. The generation half comes after this is trusted,
+is spent, per `AGENTS.md`. The generation half comes after this is trusted,
 because every harness bug found during a paid run is a run wasted (#356 lost
 eleven that way).
 
