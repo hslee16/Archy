@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1000 460" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="archy-layers-title archy-layers-desc">
+      <title id="archy-layers-title">archy layer contract</title>
+      <desc id="archy-layers-desc">Layer stack of archy's four declared layers, cli over policy over graph over parser, with one forbidden upward dependency from the graph layer to the cli layer marked as the violation that archy check rejects.</desc>
+
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/>
+        </marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- Direction column (left margin, outside the stack) -->
+      <text x="40" y="68" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">ABSTRACTION</text>
+      <polygon points="76,80 84,80 80,72" fill="#4f5d75"/>
+      <line x1="80" y1="80" x2="80" y2="336" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+      <text x="40" y="352" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">SOURCE TEXT</text>
+
+      <!-- FORBIDDEN edge: graph -> cli. Drawn before the bands so z-order keeps it behind them. -->
+      <path d="M880,240 H904 A8,8 0 0 0 912,232 V120 A8,8 0 0 0 904,112 H880"
+            fill="none" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
+      <rect x="920" y="168" width="72" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="922" y="177" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em" font-weight="600">FORBIDDEN</text>
+
+      <!-- Stack outer hairlines -->
+      <line x1="120" y1="80" x2="880" y2="80" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+      <line x1="120" y1="336" x2="880" y2="336" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+
+      <!-- L4 cli -->
+      <rect x="120" y="80" width="760" height="64" fill="#ffffff"/>
+      <line x1="120" y1="144" x2="880" y2="144" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+      <text x="140" y="116" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L4</text>
+      <text x="240" y="118" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">cli</text>
+      <text x="860" y="118" fill="#4f5d75" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.08em">archy.cli, archy.mcp</text>
+
+      <!-- L3 policy -->
+      <rect x="120" y="144" width="760" height="64" fill="#f5f5f5"/>
+      <line x1="120" y1="208" x2="880" y2="208" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+      <text x="140" y="180" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L3</text>
+      <text x="240" y="182" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">policy</text>
+      <text x="860" y="182" fill="#4f5d75" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.08em">archy.layers</text>
+
+      <!-- L2 graph -->
+      <rect x="120" y="208" width="760" height="64" fill="#ececec"/>
+      <line x1="120" y1="272" x2="880" y2="272" stroke="rgba(45,49,66,0.12)" stroke-width="1"/>
+      <text x="140" y="244" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L2</text>
+      <text x="240" y="246" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">graph</text>
+      <text x="860" y="240" fill="#4f5d75" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.08em">archy.graph, archy.cycles, archy.score,</text>
+      <text x="860" y="256" fill="#4f5d75" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.08em">archy.history, archy.trend</text>
+
+      <!-- L1 parser -->
+      <rect x="120" y="272" width="760" height="64" fill="#ececec"/>
+      <text x="140" y="308" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">L1</text>
+      <text x="240" y="310" fill="#2d3142" font-size="16" font-weight="600" font-family="'Geist', sans-serif">parser</text>
+      <text x="860" y="310" fill="#4f5d75" font-size="10" font-family="'Geist Mono', monospace" text-anchor="end" letter-spacing="0.08em">archy.parser</text>
+
+      <!-- Legend strip -->
+      <line x1="120" y1="384" x2="960" y2="384" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="120" y="400" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <line x1="220" y1="396" x2="252" y2="396" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="5,4"/>
+      <text x="260" y="400" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">FORBIDDEN UPWARD DEPENDENCY</text>
+
+      <text x="120" y="428" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" font-style="italic">Dependencies may only point downward. The one upward edge is what `archy check` rejects, and it is declared in archy.yaml rather than inferred.</text>
+    </svg>

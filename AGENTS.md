@@ -46,6 +46,8 @@ Fetch the job's failing *step*, then its log.
 
 ## Adding a gate or a payload field
 
+![One change fans out to three surfaces: the CLI text output, the CLI JSON output and the MCP payload. Reaching only some of them is the defect that three consecutive review rounds of #371 each found again.](docs/assets/diagrams/three-surfaces.png)
+
 **Wire it to every surface in one change.** Three at the time of writing: the
 CLI's text output, the CLI's `--format json`, and the MCP payload. Confirm that
 is still current by picking an existing gate and grepping for every site that

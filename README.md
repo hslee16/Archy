@@ -56,6 +56,10 @@ The full write-up, including the six measurement artifacts that nearly turned a 
 
 ## The failure it catches
 
+![archy's layer contract: four stacked layers, cli over policy over graph over parser, with dependencies allowed only downward and one forbidden upward edge from the graph layer into cli marked as the violation.](docs/assets/diagrams/layer-contract.png)
+
+The contract is the picture. Everything is allowed to depend downward, and nothing upward, which is a rule you declare rather than one archy infers.
+
 Here is the failure it was built for, compressed into one line. This is archy's own source, under archy's own layer rules, with a single import of the kind an agent adds when it needs a helper and the nearest one is upward:
 
 ```python
@@ -160,6 +164,8 @@ AI agents generate code at machine speed, and the reasoning went: without a feed
 
 **Where a feedback loop did pay is narrower, and it is the moment code is written rather than the patrol afterwards.** Building a new backend to a specified architecture, 3 of 25 unaided agents got the dependency direction wrong; with a checker in the loop, none did, and the API behaved just as well. That is one model, one framework, and the mildest of the Constraint Decay paper's conditions, so it is not a general claim. It does say the loop is worth having at generation time, where the mistake is cheap to prevent and, per the decay study, never repaired afterwards.
 
+![archy's architecture: your Python source is parsed into an import graph, which feeds both the analysis modules and the layer policy you declare in archy.yaml, with every result reaching you through one shared set of surfaces.](docs/assets/diagrams/architecture.png)
+
 `archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
 
 The agent-feedback framing is empirically supported by 2025-2026 research: the Navigation Paradox paper shows large LLM context windows do not eliminate the need for structural graph navigation, LocAgent's ablation finds graph edges materially improve code-localization accuracy, the Constraint Decay paper ([arxiv:2605.06445](https://arxiv.org/html/2605.06445v1)) finds agents lose ~30 points in pass rate as architectural constraints accumulate (Clean Architecture layering alone costs -9.1 points, on the open and mid-tier models tested) and that its ground-truth layer/dependency-direction verifier is essentially `archy check`, and the coding-agent failure-mode literature names the specific patterns (scope drift, cross-file reasoning failure) that an architectural feedback loop is built to catch. Citations, a failure-mode-to-archy-capability mapping, and the resulting roadmap priorities are in [`docs/research/RESEARCH_METRICS.md` §14c](docs/research/RESEARCH_METRICS.md).
@@ -211,6 +217,10 @@ archy graph path/to/project --format dot | dot -Tsvg > graph.svg
 ```
 
 ### Find import cycles
+
+![Three modules ranked by dependency depth, where pkg.a imports pkg.b and pkg.b imports pkg.c, and a back-edge from pkg.c to pkg.a closes a cycle.](docs/assets/diagrams/import-cycle.png)
+
+Ranking the modules is what makes a cycle visible: every ordinary import points down a rank, so the one edge pointing back up is the entire finding.
 
 Tarjan SCCs of size >= 2, plus self-loops (a module importing itself). Use `--strict` in CI to fail on any cycle.
 

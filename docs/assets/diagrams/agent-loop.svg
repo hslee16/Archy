@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 768 744" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="archy-loop-title archy-loop-desc">
+      <title id="archy-loop-title">The archy agent loop</title>
+      <desc id="archy-loop-desc">Six stations run clockwise, Snapshot, Impact, Risk, Edit, Diff and Fix or revert; only Snapshot writes the shared .archy/baseline.json record at the centre and only Diff reads it back.</desc>
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+        <marker id="arrow-soft" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#7a8399"/></marker>
+      </defs>
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+      <path d="M 464.000 109.726 A 240.0 240.0 0 0 1 568.969 183.073" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 607.285 248.000 A 240.0 240.0 0 0 1 607.722 422.882" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 569.731 488.000 A 240.0 240.0 0 0 1 465.130 561.871" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 304.000 562.274 A 240.0 240.0 0 0 1 199.031 488.927" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 160.715 424.000 A 240.0 240.0 0 0 1 160.278 249.118" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M 198.269 184.000 A 240.0 240.0 0 0 1 302.870 110.129" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="384.000" y1="128.000" x2="384.000" y2="278.000" stroke="#7a8399" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-soft)"/>
+      <line x1="231.580" y1="424.000" x2="288.737" y2="391.000" stroke="#7a8399" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-soft)"/>
+      <rect x="284" y="284" width="200" height="104" rx="6" fill="#f5f5f5"/>
+      <rect x="284" y="284" width="200" height="104" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+      <text x="384" y="328" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">.archy/baseline.json</text>
+      <text x="384" y="348" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">one record per session</text>
+      <rect x="304" y="64" width="160" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="304" y="64" width="160" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="384" y="92" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Snapshot</text>
+      <text x="384" y="108" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">baseline written</text>
+      <rect x="512" y="184" width="160" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="512" y="184" width="160" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="592" y="212" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Impact</text>
+      <text x="592" y="228" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">who breaks</text>
+      <rect x="512" y="424" width="160" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="512" y="424" width="160" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="592" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Risk</text>
+      <text x="592" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">central and fragile</text>
+      <rect x="304" y="544" width="160" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="304" y="544" width="160" height="64" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="384" y="572" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Edit</text>
+      <text x="384" y="588" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">the change itself</text>
+      <rect x="96" y="424" width="160" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="96" y="424" width="160" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="176" y="452" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Diff</text>
+      <text x="176" y="468" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">what regressed</text>
+      <rect x="96" y="184" width="160" height="64" rx="6" fill="#f5f5f5"/>
+      <rect x="96" y="184" width="160" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="176" y="212" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Fix or revert</text>
+      <text x="176" y="228" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">highest risk first</text>
+      <rect x="365" y="183" width="38" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="384" y="192" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WRITES</text>
+      <rect x="244" y="388" width="33" height="12" rx="2" fill="#f5f5f5"/>
+      <text x="260" y="396" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">READS</text>
+      <line x1="40" y1="680" x2="728" y2="680" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="696" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <line x1="130" y1="692" x2="162" y2="692" stroke="#4f5d75" stroke-width="1.2"/>
+      <text x="172" y="696" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">LOOP ORDER</text>
+      <line x1="310" y1="692" x2="342" y2="692" stroke="#7a8399" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="352" y="696" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.06em">TOUCHES THE BASELINE FILE</text>
+      <text x="40" y="724" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" font-style="italic">Only two stations open the baseline. The other four read the live graph, which is why a stale baseline quietly invalidates the diff and nothing else.</text>
+    </svg>
