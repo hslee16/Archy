@@ -20,9 +20,9 @@ explicitly.
 
 ![The archy agent loop: six stations, Snapshot, Impact, Risk, Edit, Diff and Fix or revert, arranged clockwise around a shared .archy/baseline.json record that only Snapshot writes and only Diff reads back.](assets/diagrams/agent-loop.png)
 
-The two motions matter separately. Work advances around the ring once per
-edit, while the baseline at the centre is the only thing that persists across
-passes, which is why a stale baseline quietly invalidates every later diff.
+Work advances around the ring once per edit; the baseline at the centre is the
+only thing that persists across passes, which is why a stale one quietly
+invalidates every later diff.
 
 1. **Snapshot** at session start so you have a baseline.
 

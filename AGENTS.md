@@ -48,10 +48,9 @@ Fetch the job's failing *step*, then its log.
 
 ![One change fans out to three surfaces: the CLI text output, the CLI JSON output and the MCP payload. Reaching only some of them is the defect that three consecutive review rounds of #371 each found again.](docs/assets/diagrams/three-surfaces.png)
 
-**Wire it to every surface in one change.** Three at the time of writing: the
-CLI's text output, the CLI's `--format json`, and the MCP payload. Confirm that
-is still current by picking an existing gate and grepping for every site that
-renders it: its `_<cmd>_to_text` helper and `_<cmd>_to_dict` payload in
+**Wire it to every surface in one change.** Three at the time of writing.
+Confirm that is still current by picking an existing gate and grepping for
+every site that renders it: its `_<cmd>_to_text` helper and `_<cmd>_to_dict` payload in
 `src/archy/cli.py`, and its tool's return model in `src/archy/mcp.py`. A fourth
 surface would show up as a site that none of those three patterns match. A presence check shipped to the CLI alone
 left the MCP surface, the one agents actually call, reporting `passed=true` for
