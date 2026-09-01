@@ -239,6 +239,121 @@ class ModelCensus(BaseModel):
         return self.tuple_fields / total if total else 0.0
 
 
+class SharedConstant(BaseModel):
+    """A class-level constant that several members of one family set.
+
+    This is the gate-vs-advisory question in its declarative form. In
+    ``click`` every exception carries ``exit_code``, and its two literal
+    values (1 and 2) *are* the severity convention -- stated nowhere in
+    prose and invisible to an exit-site census, because the single
+    ``sys.exit`` that consumes it lives in generic dispatch code.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    setters: int
+    values: tuple[str, ...]
+    distribution: tuple[tuple[str, int], ...]
+
+
+class BaseFamily(BaseModel):
+    """Classes grouped by the base they derive from, not by how they are spelled.
+
+    A suffix family answers "what do I call it"; a base family answers
+    "what is it a kind of", and the two disagree more often than not. In
+    ``click`` twelve exception classes derive from ``ClickException``
+    while only three carry an ``Error`` suffix, so a suffix census reports
+    a weak convention where a strong one exists.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    base: str
+    count: int
+    home_module: str
+    home_count: int
+    members: tuple[str, ...]
+    suffixes: tuple[str, ...]
+    shared_constants: tuple[SharedConstant, ...] = ()
+
+    @computed_field
+    @property
+    def concentration(self) -> float:
+        return self.home_count / self.count if self.count else 0.0
+
+    @computed_field
+    @property
+    def suffix_agreement(self) -> float:
+        """Share of members carrying the family's most common suffix. Low
+        agreement is the signal that the base, not the name, is the rule."""
+        if not self.members:
+            return 0.0
+        return Counter(camel_suffix(m) for m in self.members).most_common(1)[0][1] / len(
+            self.members
+        )
+
+
+class RegistryEntry(BaseModel):
+    """A constructor called repeatedly at module level to declare values.
+
+    Not every project declares its findings as classes. ``mypy`` declares
+    79 error codes as module-level ``X = ErrorCode(...)`` assignments, so
+    a census that walks only ``ClassDef`` sees none of them -- and the
+    keyword that decides whether a new code is on by default
+    (``default_enabled``) is a keyword argument here, not a class
+    attribute and not an exit site.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    constructor: str
+    count: int
+    home_module: str
+    home_count: int
+    examples: tuple[str, ...]
+    keyword_defaults: tuple[SharedConstant, ...]
+    literal_names: tuple[str, ...]
+
+
+class ExportGap(BaseModel):
+    """Family members absent from the ``__all__`` that governs them.
+
+    The generic form of the most-replicated defect in this project's own
+    history: a new type wired into some surfaces and not others. An
+    ``__all__`` list is a literal, so the diff against a family is
+    derived, never guessed.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    export_module: str
+    family: str
+    exported: int
+    defined: int
+    missing: tuple[str, ...]
+
+
+class ModulePartition(BaseModel):
+    """What was censused and what was set aside, with the reason.
+
+    Reporting the partition is load-bearing rather than cosmetic. Before
+    it existed, ``pydantic``'s naming home came back as
+    ``pydantic.v1.errors`` -- the vendored legacy copy, 93 classes -- in
+    place of the live ``pydantic.errors`` with 6. That is a *wrong*
+    answer rather than a missing one, and an agent acting on it would add
+    its class to a deprecated shim.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    production: int
+    tests: int
+    shadowed: int
+    nonsource: int = 0
+    shadow_roots: tuple[str, ...] = ()
+
+
 class ConventionsReport(BaseModel):
     """The whole derived house style for one project."""
 
@@ -252,6 +367,10 @@ class ConventionsReport(BaseModel):
     gates: tuple[Gate, ...]
     errors: tuple[Gate, ...]
     models: ModelCensus
+    bases: tuple[BaseFamily, ...] = ()
+    registries: tuple[RegistryEntry, ...] = ()
+    export_gaps: tuple[ExportGap, ...] = ()
+    partition: ModulePartition | None = None
 
     @computed_field
     @property
@@ -291,6 +410,13 @@ class _ModuleFacts:
         self.qualname = qualname
         self.classes: list[ast.ClassDef] = []
         self.functions: list[ast.FunctionDef | ast.AsyncFunctionDef] = []
+        # Module-level assignments only, not `ast.walk`: a registry is a
+        # top-level declaration, and a same-shaped call inside a function
+        # body is a local variable that means nothing about house style.
+        self.body_assignments: list[ast.Assign | ast.AnnAssign] = []
+        # None means the module declares no `__all__` at all, which is a
+        # different fact from declaring an empty one.
+        self.exports: frozenset[str] | None = None
 
 
 def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
@@ -300,7 +426,338 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
             facts.classes.append(node)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             facts.functions.append(node)
+    for node in tree.body:
+        if isinstance(node, ast.Assign | ast.AnnAssign):
+            facts.body_assignments.append(node)
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id == "__all__":
+                    facts.exports = _string_literals(node.value)
+    if facts.exports is None:
+        # `click` publishes its API with `from .x import Y as Y` and no
+        # `__all__` at all -- the PEP 484 explicit re-export form, which type
+        # checkers treat as public. Reading only `__all__` would report that
+        # such a package exports nothing, so a missing member would never
+        # surface. Only the redundant-alias form counts: a plain
+        # `from .x import Y` is an implementation import, not a promise.
+        reexports = {
+            alias.asname
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+            if alias.asname and alias.asname == alias.name
+        }
+        if reexports:
+            facts.exports = frozenset(reexports)
     return facts
+
+
+def _string_literals(node: ast.expr | None) -> frozenset[str]:
+    """The string constants of a list/tuple literal. Anything dynamic yields
+    what could be read statically, never a guess about the rest."""
+    if not isinstance(node, ast.List | ast.Tuple):
+        return frozenset()
+    return frozenset(
+        e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)
+    )
+
+
+# --------------------------------------------------------------------------
+# Which modules the house style actually lives in.
+#
+# A census over every file a project ships answers a different question
+# from the one an agent is asking. Test modules carry their own strong and
+# deliberately throwaway conventions -- ``test_*`` functions, ``Foo`` and
+# ``MyModel`` fixtures -- and there are usually more of them than of the
+# thing being described, so they win every count they are entered in.
+# Measured across four projects, the top mirrored "surface" was a test
+# fixture in four cases out of four.
+#
+# Vendored copies are worse than noisy, because they are plausible. They
+# duplicate the parent package's module names by construction, so the
+# duplicate outranks the original on volume and the census names the dead
+# copy as home.
+_TEST_PARTS = frozenset({"tests", "test", "testing", "_test", "_tests"})
+_TYPING_PLUMBING = frozenset(
+    {"TypeVar", "ParamSpec", "TypeVarTuple", "NewType", "TypeAlias", "NamedTuple", "Generic"}
+)
+
+
+def _is_nonsource_module(qualname: str) -> bool:
+    """Modules under a dot-directory: tooling that ships in the repo but is not
+    the library. `pydantic` keeps a GitHub Action in `.github/actions/`, whose
+    classes were outranking `pydantic`'s own on a `BaseModel` census."""
+    return qualname.startswith(".") or any(part.startswith(".") for part in qualname.split("."))
+
+
+def _is_test_module(qualname: str) -> bool:
+    parts = qualname.split(".")
+    if _TEST_PARTS & set(parts):
+        return True
+    leaf = parts[-1]
+    return leaf.startswith("test_") or leaf.endswith("_test") or leaf == "conftest"
+
+
+def _shadow_roots(
+    qualnames: Iterable[str], *, min_modules: int = 5, ratio: float = 0.5
+) -> frozenset[str]:
+    """Subpackages that re-implement their own parent, found by overlap.
+
+    Derived rather than pattern-matched on purpose. Hardcoding ``v1`` would
+    catch ``pydantic`` and nothing else, and would be wrong for a project
+    whose ``v1`` is the live one. A subtree that restates half its parent's
+    module names under a second prefix is a copy whatever it is called.
+    """
+    names = list(qualnames)
+    by_prefix: dict[str, set[str]] = defaultdict(set)
+    outside: dict[str, set[str]] = defaultdict(set)
+    for q in names:
+        parts = q.split(".")
+        if len(parts) < 3:
+            continue
+        prefix = ".".join(parts[:2])
+        by_prefix[prefix].add(".".join(parts[2:]))
+    for prefix in by_prefix:
+        root = prefix.split(".")[0]
+        for q in names:
+            if q.startswith(prefix + "."):
+                continue
+            if q.startswith(root + "."):
+                outside[prefix].add(q[len(root) + 1 :])
+    shadows = set()
+    for prefix, inner in by_prefix.items():
+        if len(inner) < min_modules:
+            continue
+        overlap = len(inner & outside[prefix])
+        if overlap / len(inner) >= ratio:
+            shadows.add(prefix)
+    return frozenset(shadows)
+
+
+def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[BaseFamily, ...]:
+    """Group classes by what they are a kind of, following inheritance to the root.
+
+    Two decisions carry this function.
+
+    *Transitive, not direct.* ``click`` defines twelve exceptions under
+    ``ClickException``, but only ``UsageError`` and two others name it
+    directly; the rest arrive through ``UsageError``. A direct-edge census
+    reports the intermediate class as the family and misses the real one --
+    the same edge-versus-path distinction that ``check`` and ``contracts``
+    draw, applied to inheritance instead of imports.
+
+    *Only bases defined in this repository.* A convention has to be the
+    project's own. This is also what keeps the section readable: ``ABC``,
+    ``Protocol``, ``TypedDict``, ``Generic`` and ``Exception`` are language
+    plumbing that every project uses identically, they out-count every real
+    family, and they say nothing an agent could act on. Requiring a local
+    definition removes them without a stop-list to maintain.
+    """
+    facts = list(facts)
+    home_of: dict[str, str] = {}
+    node_of: dict[str, ast.ClassDef] = {}
+    parents: dict[str, set[str]] = defaultdict(set)
+    for f in facts:
+        for cls in f.classes:
+            home_of.setdefault(cls.name, f.qualname)
+            node_of.setdefault(cls.name, cls)
+            for base in cls.bases:
+                name = _dotted(base).split(".")[-1]
+                if name:
+                    parents[cls.name].add(name)
+
+    def ancestors(name: str) -> set[str]:
+        seen: set[str] = set()
+        stack = list(parents.get(name, ()))
+        while stack:
+            cur = stack.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+            stack.extend(parents.get(cur, ()))
+        return seen
+
+    members: dict[str, set[str]] = defaultdict(set)
+    for name in node_of:
+        for base in ancestors(name):
+            if base in node_of:  # local definitions only; see the docstring
+                members[base].add(name)
+                # The class that names the family belongs to it. Without this the
+                # root's own declarations are invisible, and the root is exactly
+                # where a family states its defaults: `click` sets
+                # `exit_code = 1` on `ClickException` and `2` on `UsageError`,
+                # which is the whole severity convention and reads as a single
+                # unexplained override if the base is left out.
+                members[base].add(base)
+
+    out: list[BaseFamily] = []
+    for base, names in members.items():
+        if len(names) < min_count:
+            continue
+        by_module = Counter(home_of[n] for n in names if n in home_of)
+        if not by_module:
+            continue
+        home, home_count = by_module.most_common(1)[0]
+        out.append(
+            BaseFamily(
+                base=base,
+                count=len(names),
+                home_module=home,
+                home_count=home_count,
+                members=tuple(sorted(names)),
+                suffixes=tuple(sorted({camel_suffix(n) for n in names})),
+                shared_constants=_shared_constants(
+                    [node_of[n] for n in sorted(names) if n in node_of], min_count=min_count
+                ),
+            )
+        )
+    out.sort(key=lambda b: (-b.count, b.base))
+    return tuple(out)
+
+
+def _shared_constants(classes: list[ast.ClassDef], *, min_count: int) -> tuple[SharedConstant, ...]:
+    """Class-level constants several members of a family assign literally.
+
+    Only literals are reported. A computed default says nothing an agent
+    can copy, and including it would turn a fact into a guess.
+    """
+    seen: dict[str, list[str]] = defaultdict(list)
+    for cls in classes:
+        for node in cls.body:
+            target = None
+            value = None
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                target, value = node.target.id, node.value
+            elif (
+                isinstance(node, ast.Assign)
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+            ):
+                target, value = node.targets[0].id, node.value
+            if target is None or value is None or target.startswith("__"):
+                continue
+            if isinstance(value, ast.Constant):
+                seen[target].append(repr(value.value))
+    out = []
+    for name, values in seen.items():
+        if len(values) < min_count:
+            continue
+        dist = Counter(values)
+        out.append(
+            SharedConstant(
+                name=name,
+                setters=len(values),
+                values=tuple(sorted(dist)),
+                distribution=tuple(sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))),
+            )
+        )
+    out.sort(key=lambda c: (-c.setters, c.name))
+    return tuple(out)
+
+
+def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[RegistryEntry, ...]:
+    """Module-level ``NAME = Ctor(...)`` families. See RegistryEntry."""
+    calls: dict[str, list[tuple[str, str, ast.Call]]] = defaultdict(list)
+    for f in facts:
+        for node in f.body_assignments:
+            if not isinstance(node.value, ast.Call):
+                continue
+            ctor = _dotted(node.value.func).split(".")[-1]
+            if not ctor or not ctor[:1].isupper():
+                continue
+            # Type-system plumbing is declared this way in every typed project
+            # and is identical everywhere, so it out-counts real registries while
+            # telling an agent nothing about this repository.
+            if ctor in _TYPING_PLUMBING:
+                continue
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                if isinstance(target, ast.Name):
+                    calls[ctor].append((target.id, f.qualname, node.value))
+    out: list[RegistryEntry] = []
+    for ctor, rows in calls.items():
+        if len(rows) < max(min_count, 3):
+            continue
+        by_module = Counter(module for _, module, _ in rows)
+        home, home_count = by_module.most_common(1)[0]
+        kw: dict[str, list[str]] = defaultdict(list)
+        literals: list[str] = []
+        for _, _, call in rows:
+            for keyword in call.keywords:
+                if keyword.arg and isinstance(keyword.value, ast.Constant):
+                    kw[keyword.arg].append(repr(keyword.value.value))
+            if (
+                call.args
+                and isinstance(call.args[0], ast.Constant)
+                and isinstance(call.args[0].value, str)
+            ):
+                first = call.args[0].value
+                # 🔴 Slugs only. `mypy.message_registry` declares 102 entries whose
+                # first argument is a full diagnostic sentence, and a census that
+                # echoed them would emit tens of kilobytes of prose -- spending the
+                # context this command exists to save. A name an agent could copy is
+                # short and has no spaces; anything else is content, not convention.
+                if first and len(first) <= 40 and " " not in first:
+                    literals.append(first)
+        defaults = []
+        for name, values in kw.items():
+            # `min_count`, not the registry's own floor of 3: a keyword passed by
+            # two members of a larger family is precisely the interesting case --
+            # the minority that opts out of a default is what the split is about.
+            if len(values) < min_count:
+                continue
+            dist = Counter(values)
+            defaults.append(
+                SharedConstant(
+                    name=name,
+                    setters=len(values),
+                    values=tuple(sorted(dist)),
+                    distribution=tuple(sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))),
+                )
+            )
+        defaults.sort(key=lambda c: (-c.setters, c.name))
+        out.append(
+            RegistryEntry(
+                constructor=ctor,
+                count=len(rows),
+                home_module=home,
+                home_count=home_count,
+                examples=tuple(sorted({n for n, _, _ in rows})[:4]),
+                keyword_defaults=tuple(defaults),
+                literal_names=tuple(sorted(set(literals))[:6]),
+            )
+        )
+    out.sort(key=lambda r: (-r.count, r.constructor))
+    return tuple(out)
+
+
+def _export_gaps(
+    facts: Iterable[_ModuleFacts], families: tuple[BaseFamily, ...]
+) -> tuple[ExportGap, ...]:
+    """Family members missing from an ``__all__`` that already lists their siblings."""
+    exports = {f.qualname: f.exports for f in facts if f.exports is not None}
+    if not exports:
+        return ()
+    out: list[ExportGap] = []
+    for family in families:
+        for module, names in exports.items():
+            listed = [m for m in family.members if m in names]
+            # Only meaningful where the list already governs most of the family;
+            # a module exporting one member of a large family is unrelated, not broken.
+            if len(listed) < 2 or len(listed) == len(family.members):
+                continue
+            if len(listed) / len(family.members) < 0.5:
+                continue
+            out.append(
+                ExportGap(
+                    export_module=module,
+                    family=family.base,
+                    exported=len(listed),
+                    defined=len(family.members),
+                    missing=tuple(sorted(set(family.members) - set(names))),
+                )
+            )
+    out.sort(key=lambda g: (-(g.defined - g.exported), g.export_module))
+    return tuple(out)
 
 
 def _naming_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[NamingHome, ...]:
@@ -620,6 +1077,7 @@ def compute_conventions(
     ignored_dirs: Iterable[str] = DEFAULT_IGNORED_DIRS,
     extra_roots: Iterable[str] = (),
     min_family: int = 2,
+    include_tests: bool = False,
 ) -> ConventionsReport:
     """Derive `root`'s house style from its own source.
 
@@ -627,7 +1085,25 @@ def compute_conventions(
     surface set: at 2 a single pair counts, which is the right default for
     a small project and noisy on a large one.
     """
-    modules = discover_modules(root, ignored_dirs=ignored_dirs, extra_roots=extra_roots)
+    modules = list(discover_modules(root, ignored_dirs=ignored_dirs, extra_roots=extra_roots))
+    # 🔴 Partition BEFORE parsing, and report what was set aside. A census run
+    # over tests and vendored copies answers a different question from the one
+    # asked; see ModulePartition for the measured failure that motivated this.
+    shadows = _shadow_roots(m.qualname for m in modules)
+    n_tests = n_shadowed = n_nonsource = 0
+    kept = []
+    for module in modules:
+        if _is_nonsource_module(module.qualname):
+            n_nonsource += 1
+            continue
+        if not include_tests and _is_test_module(module.qualname):
+            n_tests += 1
+            continue
+        if any(module.qualname.startswith(sh + ".") or module.qualname == sh for sh in shadows):
+            n_shadowed += 1
+            continue
+        kept.append(module)
+    modules = kept
     facts: list[_ModuleFacts] = []
     unparsed = 0
     for module in modules:
@@ -642,6 +1118,7 @@ def compute_conventions(
         facts.append(_collect(tree, module.qualname))
 
     gates, errors = _gates(facts)
+    bases = _base_families(facts, min_count=min_family)
     return ConventionsReport(
         root=str(root),
         modules_scanned=len(facts),
@@ -651,4 +1128,14 @@ def compute_conventions(
         gates=gates,
         errors=errors,
         models=_model_census(facts),
+        bases=bases,
+        registries=_registries(facts, min_count=min_family),
+        export_gaps=_export_gaps(facts, bases),
+        partition=ModulePartition(
+            production=len(facts),
+            tests=n_tests,
+            shadowed=n_shadowed,
+            nonsource=n_nonsource,
+            shadow_roots=tuple(sorted(shadows)),
+        ),
     )

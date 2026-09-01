@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,16 @@ from archy.conventions import ConventionsReport, camel_suffix, compute_conventio
 def _families(report: ConventionsReport) -> list:
     """Flatten the by-home-module naming report back to a list of families."""
     return [family for home in report.naming for family in home.families]
+
+
+def _tmp(source: str) -> Path:
+    """One module in a throwaway package, for cases reduced from a real project."""
+    root = Path(tempfile.mkdtemp())
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "mod.py").write_text(source)
+    return root
 
 
 def _project(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -351,3 +362,172 @@ def test_home_families_are_ordered_largest_first(tmp_path: Path):
     home = compute_conventions(project).naming[0]
     assert [f.suffix for f in home.families] == ["Rule", "Spec"]
     assert home.total == 5
+
+
+# --------------------------------------------------------------------------
+# Detection of conventions that a suffix-and-exit-site census cannot see.
+#
+# Every case below is reduced from a real project where the original census
+# returned a wrong or empty answer: `click` (kinds, shared constants, PEP 484
+# re-exports), `mypy` (registries, keyword defaults) and `pydantic` (a
+# vendored subtree outranking the live package).
+
+
+def test_kind_family_follows_inheritance_past_the_intermediate_class():
+    """`click` names `ClickException` on three classes; the rest arrive via
+    `UsageError`. A direct-edge census reports the intermediate as the family."""
+    src = """
+class ClickException(Exception):
+    exit_code = 1
+class UsageError(ClickException):
+    exit_code = 2
+class BadParameter(UsageError): pass
+class MissingParameter(BadParameter): pass
+"""
+    report = compute_conventions(_tmp(src))
+    family = next(b for b in report.bases if b.base == "ClickException")
+    assert family.count == 4  # the three descendants and the base itself
+    assert "MissingParameter" in family.members
+
+
+def test_kind_family_ignores_bases_this_project_does_not_define():
+    """`ABC`, `Protocol` and `Exception` are used identically everywhere and
+    out-count every real family, so a local definition is required."""
+    src = """
+from abc import ABC
+class A(ABC): pass
+class B(ABC): pass
+class C(ABC): pass
+"""
+    report = compute_conventions(_tmp(src))
+    assert not [b for b in report.bases if b.base == "ABC"]
+
+
+def test_shared_constant_reports_the_split_not_just_the_values():
+    """The gate convention lives in the declaration. `click`'s single
+    `sys.exit` is in generic dispatch code, so an exit-site census finds
+    nothing in the module that actually decides severity."""
+    src = """
+class Base(Exception):
+    exit_code = 1
+class Usage(Base):
+    exit_code = 2
+class Other(Base): pass
+"""
+    report = compute_conventions(_tmp(src))
+    family = next(b for b in report.bases if b.base == "Base")
+    const = next(c for c in family.shared_constants if c.name == "exit_code")
+    assert const.setters == 2
+    assert dict(const.distribution) == {"1": 1, "2": 1}
+
+
+def test_registry_reports_keyword_defaults_of_repeated_construction():
+    """`mypy` declares 79 error codes as module-level assignments, so a census
+    that walks only ClassDef sees none of them -- including `default_enabled`,
+    the keyword that answers whether a new code gates."""
+    src = """
+class ErrorCode:
+    def __init__(self, code, desc, default_enabled=True): ...
+A = ErrorCode("arg-type", "d")
+B = ErrorCode("attr-defined", "d")
+C = ErrorCode("unimported-reveal", "d", default_enabled=False)
+D = ErrorCode("explicit-any", "d", default_enabled=False)
+"""
+    report = compute_conventions(_tmp(src))
+    entry = next(r for r in report.registries if r.constructor == "ErrorCode")
+    assert entry.count == 4
+    assert "arg-type" in entry.literal_names
+    kw = next(c for c in entry.keyword_defaults if c.name == "default_enabled")
+    # Two of four *pass* it; the other two take the default. Reporting the
+    # setter count is what keeps that from reading as "all of them are False".
+    assert kw.setters == 2
+
+
+def test_registry_does_not_echo_prose_as_a_name():
+    """`mypy.message_registry` has 102 entries whose first argument is a full
+    diagnostic sentence. Echoing them would spend the context this saves."""
+    src = """
+class ErrorMessage:
+    def __init__(self, text): ...
+A = ErrorMessage("Cannot infer type of lambda from the surrounding context")
+B = ErrorMessage("Argument after ** must be a mapping, not a sequence type")
+C = ErrorMessage("Overloaded function signatures 1 and 2 overlap")
+"""
+    report = compute_conventions(_tmp(src))
+    entry = next(r for r in report.registries if r.constructor == "ErrorMessage")
+    assert entry.count == 3
+    assert entry.literal_names == ()
+
+
+def test_registry_skips_type_system_plumbing():
+    src = """
+from typing import TypeVar
+A = TypeVar("A")
+B = TypeVar("B")
+C = TypeVar("C")
+"""
+    assert not [r for r in compute_conventions(_tmp(src)).registries if r.constructor == "TypeVar"]
+
+
+def test_export_gap_reads_pep484_re_exports_when_there_is_no_dunder_all(tmp_path: Path):
+    """`click` publishes its API with `from .x import Y as Y` and no `__all__`.
+    Reading only `__all__` reports that such a package exports nothing."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "errors.py").write_text(
+        "class Base(Exception): pass\n"
+        "class First(Base): pass\n"
+        "class Second(Base): pass\n"
+        "class Forgotten(Base): pass\n"
+    )
+    (pkg / "__init__.py").write_text(
+        "from .errors import Base as Base\n"
+        "from .errors import First as First\n"
+        "from .errors import Second as Second\n"
+        # a plain import is an implementation detail, not a promise
+        "from .errors import Forgotten\n"
+    )
+    report = compute_conventions(tmp_path)
+    gap = next(g for g in report.export_gaps if g.family == "Base")
+    assert gap.missing == ("Forgotten",)
+
+
+def test_vendored_subtree_is_set_aside_by_overlap_with_its_parent(tmp_path: Path):
+    """`pydantic`'s naming home came back as `pydantic.v1.errors` -- the legacy
+    copy, 93 classes -- in place of `pydantic.errors` with 6. Detected by
+    overlap rather than by name: a project whose `v1` is the live one is fine."""
+    pkg = tmp_path / "pkg"
+    (pkg / "v1").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "v1" / "__init__.py").write_text("")
+    for name in ("errors", "main", "fields", "types", "networks", "utils"):
+        (pkg / f"{name}.py").write_text("class Thing: pass\n")
+        (pkg / "v1" / f"{name}.py").write_text(
+            "\n".join(f"class Legacy{i}: pass" for i in range(10))
+        )
+    report = compute_conventions(tmp_path)
+    assert report.partition is not None
+    assert "pkg.v1" in report.partition.shadow_roots
+    assert report.partition.shadowed == 7
+    assert all("v1" not in home.module for home in report.naming)
+
+
+def test_tests_are_set_aside_unless_asked_for(tmp_path: Path):
+    """Fixture classes outnumber the code they exercise and win any count they
+    are entered in; measured across four projects the top mirrored surface was
+    a test fixture in four cases out of four."""
+    pkg = tmp_path / "pkg"
+    (pkg / "tests").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "tests" / "__init__.py").write_text("")
+    (pkg / "real.py").write_text("class Base: pass\nclass RealThing(Base): pass\n")
+    (pkg / "tests" / "test_it.py").write_text(
+        "\n".join(f"class Base: pass\nclass Fixture{i}(Base): pass" for i in range(8))
+    )
+    default = compute_conventions(tmp_path)
+    assert default.partition is not None and default.partition.tests == 2
+    assert all("test" not in home.module for home in default.naming)
+
+    with_tests = compute_conventions(tmp_path, include_tests=True)
+    assert with_tests.partition is not None and with_tests.partition.tests == 0
+    assert with_tests.modules_scanned > default.modules_scanned
