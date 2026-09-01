@@ -1113,15 +1113,30 @@ def _register_tools(server: Server) -> None:
             "build or only warn'), `errors` (the separate, usually much "
             "larger set of USER-ERROR exits - bad config, missing file - "
             "which say nothing about gating and are kept apart so the gate "
-            "count stays meaningful), and `models` (base-class, frozen, and "
-            "tuple-vs-list census over the value types). Advisory only; it "
+            "count stays meaningful), `models` (base-class, frozen, and "
+            "tuple-vs-list census over the value types), `bases` (kind "
+            "families grouped by what they derive from TRANSITIVELY, "
+            "counting only bases this project defines - a family reached "
+            "through an intermediate class is reported under the base that "
+            "names it, and suffix agreement is stated so a family whose name "
+            "is not the rule says so), `registries` (`NAME = Ctor(...)` "
+            "families with the distribution of every keyword passed - how a "
+            "project declares codes, messages, or flags when it does not use "
+            "classes), `export_gaps` (family members absent from an "
+            "`__all__`, or from a `from .x import Y as Y` block, that "
+            "already lists their siblings) and `doc_gaps` (members the "
+            "project's own `.rst`/`.md` surface does not name, where it "
+            "already documents most of the family). Advisory only; it "
             "never fails and mutates nothing. `min_family` raises the floor "
             "for reporting a family (default 2, raise it on a large project "
-            "to cut noise)."
+            "to cut noise). `include_tests` censuses test modules too "
+            "(default false: test fixtures dilute a real family)."
         ),
     )
-    def archy_conventions(path: str, min_family: int = 2) -> ConventionsReport:
-        return _run_conventions(Path(path), min_family=min_family)
+    def archy_conventions(
+        path: str, min_family: int = 2, include_tests: bool = False
+    ) -> ConventionsReport:
+        return _run_conventions(Path(path), min_family=min_family, include_tests=include_tests)
 
     # removed v0.41 (#267): archy_status demoted off the agent surface. Index
     # freshness is diagnostic plumbing, not a mid-task decision (every tool
@@ -1132,10 +1147,12 @@ def _register_tools(server: Server) -> None:
 # --- thin internals ----------------------------------------------------------
 
 
-def _run_conventions(path: Path, *, min_family: int) -> ConventionsReport:
+def _run_conventions(path: Path, *, min_family: int, include_tests: bool) -> ConventionsReport:
     if min_family < 2:
         raise ValueError(f"min_family must be >= 2; got {min_family}")
-    return compute_conventions(path, **_graph_kwargs(path), min_family=min_family)
+    return compute_conventions(
+        path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
+    )
 
 
 def _run_score(

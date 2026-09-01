@@ -1618,6 +1618,22 @@ def test_conventions_tool_returns_the_derived_house_style(acyclic_project: Path)
     assert structured["models"]["value_classes"] == 0
 
 
+def test_conventions_tool_threads_include_tests_to_the_census(acyclic_project: Path):
+    # The parameter has to reach the surface agents actually call. A flag wired
+    # to the CLI alone is this repo's most-repeated defect (AGENTS.md), and it
+    # is invisible from the CLI side, so the round trip is asserted here.
+    (acyclic_project / "pkg" / "test_thing.py").write_text("class FixtureViolation: pass\n")
+    server = create_server()
+    _c, default = _call_tool(server, "archy_conventions", {"path": str(acyclic_project)})
+    _c, with_tests = _call_tool(
+        server, "archy_conventions", {"path": str(acyclic_project), "include_tests": True}
+    )
+    assert isinstance(default, dict) and isinstance(with_tests, dict)
+    assert default["partition"]["tests"] == 1
+    assert with_tests["partition"]["tests"] == 0
+    assert with_tests["modules_scanned"] > default["modules_scanned"]
+
+
 def test_conventions_tool_rejects_a_nonsense_min_family(acyclic_project: Path):
     # Tier-2 usage error: an invalid argument value raises rather than
     # returning a confusing empty report (#229 error model).

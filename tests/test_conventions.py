@@ -6,10 +6,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from archy.conventions import ConventionsReport, camel_suffix, compute_conventions
+from archy.conventions import (
+    ConventionsReport,
+    NamingFamily,
+    camel_suffix,
+    compute_conventions,
+)
 
 
-def _families(report: ConventionsReport) -> list:
+def _families(report: ConventionsReport) -> list[NamingFamily]:
     """Flatten the by-home-module naming report back to a list of families."""
     return [family for home in report.naming for family in home.families]
 
@@ -240,7 +245,12 @@ def test_computed_fields_survive_model_dump(tmp_path: Path):
                 "def _x_to_json(): pass\n"
                 "def go():\n"
                 "    sys.exit(1)\n"
-            )
+            ),
+            "errors.py": (
+                "class Base(Exception): pass\n"
+                "class FirstProblem(Base): pass\n"
+                "class SecondProblem(Base): pass\n"
+            ),
         },
     )
     payload = compute_conventions(project).model_dump()
@@ -248,6 +258,10 @@ def test_computed_fields_survive_model_dump(tmp_path: Path):
     assert "concentration" in payload["naming"][0]["families"][0]
     assert {"total", "family_count"} <= set(payload["naming"][0])
     assert "surface_count" in payload["surfaces"][0]
+    # `suffix_agreement` is the one an agent acts on: it says whether the base
+    # or the name is the rule, so a plain property here would silently answer
+    # "the name" on every MCP call.
+    assert {"concentration", "suffix_agreement"} <= set(payload["bases"][0])
     assert "optional" in payload["gates"][0]
     assert {"frozen_ratio", "tuple_ratio", "dominant_base"} <= set(payload["models"])
 
@@ -472,22 +486,25 @@ C = TypeVar("C")
 def test_export_gap_reads_pep484_re_exports_when_there_is_no_dunder_all(tmp_path: Path):
     """`click` publishes its API with `from .x import Y as Y` and no `__all__`.
     Reading only `__all__` reports that such a package exports nothing."""
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "errors.py").write_text(
-        "class Base(Exception): pass\n"
-        "class First(Base): pass\n"
-        "class Second(Base): pass\n"
-        "class Forgotten(Base): pass\n"
+    root = _project(
+        tmp_path,
+        {
+            "errors.py": (
+                "class Base(Exception): pass\n"
+                "class First(Base): pass\n"
+                "class Second(Base): pass\n"
+                "class Forgotten(Base): pass\n"
+            ),
+            "__init__.py": (
+                "from .errors import Base as Base\n"
+                "from .errors import First as First\n"
+                "from .errors import Second as Second\n"
+                # a plain import is an implementation detail, not a promise
+                "from .errors import Forgotten\n"
+            ),
+        },
     )
-    (pkg / "__init__.py").write_text(
-        "from .errors import Base as Base\n"
-        "from .errors import First as First\n"
-        "from .errors import Second as Second\n"
-        # a plain import is an implementation detail, not a promise
-        "from .errors import Forgotten\n"
-    )
-    report = compute_conventions(tmp_path)
+    report = compute_conventions(root)
     gap = next(g for g in report.export_gaps if g.family == "Base")
     assert gap.missing == ("Forgotten",)
 
@@ -534,19 +551,21 @@ def test_tests_are_set_aside_unless_asked_for(tmp_path: Path):
 
 
 def _documented_project(tmp_path: Path, doc: str) -> Path:
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "errors.py").write_text(
-        "class Base(Exception): pass\n"
-        "class First(Base): pass\n"
-        "class Second(Base): pass\n"
-        "class Undocumented(Base): pass\n"
+    root = _project(
+        tmp_path,
+        {
+            "errors.py": (
+                "class Base(Exception): pass\n"
+                "class First(Base): pass\n"
+                "class Second(Base): pass\n"
+                "class Undocumented(Base): pass\n"
+            )
+        },
     )
-    docs = tmp_path / "docs"
+    docs = root / "docs"
     docs.mkdir()
     (docs / "api.rst").write_text(doc)
-    return tmp_path
+    return root
 
 
 def test_doc_gap_finds_a_member_its_own_docs_do_not_name(tmp_path: Path):

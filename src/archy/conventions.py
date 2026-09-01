@@ -648,6 +648,32 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
     return tuple(out)
 
 
+def _shared_constants_from(
+    seen: dict[str, list[str]], *, min_count: int
+) -> tuple[SharedConstant, ...]:
+    """Collected literal values, as a census ordered by how many sites set each name.
+
+    Shared by the class-attribute and registry-keyword censuses. The ordering is
+    the load-bearing part: values by frequency then name, names by setter count
+    then name, so a caller reading the first row is reading the majority.
+    """
+    out = []
+    for name, values in seen.items():
+        if len(values) < min_count:
+            continue
+        dist = Counter(values)
+        out.append(
+            SharedConstant(
+                name=name,
+                setters=len(values),
+                values=tuple(sorted(dist)),
+                distribution=tuple(sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))),
+            )
+        )
+    out.sort(key=lambda c: (-c.setters, c.name))
+    return tuple(out)
+
+
 def _shared_constants(classes: list[ast.ClassDef], *, min_count: int) -> tuple[SharedConstant, ...]:
     """Class-level constants several members of a family assign literally.
 
@@ -671,21 +697,7 @@ def _shared_constants(classes: list[ast.ClassDef], *, min_count: int) -> tuple[S
                 continue
             if isinstance(value, ast.Constant):
                 seen[target].append(repr(value.value))
-    out = []
-    for name, values in seen.items():
-        if len(values) < min_count:
-            continue
-        dist = Counter(values)
-        out.append(
-            SharedConstant(
-                name=name,
-                setters=len(values),
-                values=tuple(sorted(dist)),
-                distribution=tuple(sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))),
-            )
-        )
-    out.sort(key=lambda c: (-c.setters, c.name))
-    return tuple(out)
+    return _shared_constants_from(seen, min_count=min_count)
 
 
 def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[RegistryEntry, ...]:
@@ -731,23 +743,10 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
                 # short and has no spaces; anything else is content, not convention.
                 if first and len(first) <= 40 and " " not in first:
                     literals.append(first)
-        defaults = []
-        for name, values in kw.items():
-            # `min_count`, not the registry's own floor of 3: a keyword passed by
-            # two members of a larger family is precisely the interesting case --
-            # the minority that opts out of a default is what the split is about.
-            if len(values) < min_count:
-                continue
-            dist = Counter(values)
-            defaults.append(
-                SharedConstant(
-                    name=name,
-                    setters=len(values),
-                    values=tuple(sorted(dist)),
-                    distribution=tuple(sorted(dist.items(), key=lambda kv: (-kv[1], kv[0]))),
-                )
-            )
-        defaults.sort(key=lambda c: (-c.setters, c.name))
+        # `min_count`, not the registry's own floor of 3: a keyword passed by
+        # two members of a larger family is precisely the interesting case --
+        # the minority that opts out of a default is what the split is about.
+        defaults = _shared_constants_from(kw, min_count=min_count)
         out.append(
             RegistryEntry(
                 constructor=ctor,
@@ -755,7 +754,7 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
                 home_module=home,
                 home_count=home_count,
                 examples=tuple(sorted({n for n, _, _ in rows})[:4]),
-                keyword_defaults=tuple(defaults),
+                keyword_defaults=defaults,
                 literal_names=tuple(sorted(set(literals))),
             )
         )
@@ -787,6 +786,12 @@ _DOC_SLUG = re.compile(r"(?<![\w-])([a-z][a-z0-9]*(?:-[a-z0-9]+)+)(?![\w-])")
 _DOC_BRACKET = re.compile(r"\[([A-Za-z_][\w.-]*)\]")
 _DOC_SUFFIXES = (".rst", ".md")
 _DOC_MAX_BYTES = 2_000_000
+
+# A partial-coverage gap is only worth reporting where the surface already
+# governs most of the family. One member mentioned or exported in passing is
+# not a promise about the rest, so `_doc_gaps` and `_export_gaps` share this
+# floor rather than each carrying its own copy of the same policy.
+_PARTIAL_COVERAGE_FLOOR = 0.5
 
 
 def _harvest_docs(root: Path, ignored_dirs: frozenset[str]) -> tuple[dict[str, set[str]], int]:
@@ -854,9 +859,7 @@ def _doc_gaps(
             documented = [m for m in public if m in names]
             if len(documented) < min_documented or len(documented) == len(public):
                 continue
-            # Only where the docs already cover most of the family. One member
-            # mentioned in passing is not a promise to document the rest.
-            if len(documented) / len(public) < 0.5:
+            if len(documented) / len(public) < _PARTIAL_COVERAGE_FLOOR:
                 continue
             if best is None or len(documented) > best.documented:
                 best = DocGap(
@@ -883,11 +886,9 @@ def _export_gaps(
     for family in families:
         for module, names in exports.items():
             listed = [m for m in family.members if m in names]
-            # Only meaningful where the list already governs most of the family;
-            # a module exporting one member of a large family is unrelated, not broken.
             if len(listed) < 2 or len(listed) == len(family.members):
                 continue
-            if len(listed) / len(family.members) < 0.5:
+            if len(listed) / len(family.members) < _PARTIAL_COVERAGE_FLOOR:
                 continue
             out.append(
                 ExportGap(
