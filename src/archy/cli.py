@@ -1671,7 +1671,7 @@ def conventions(path: Path, top_n: int, min_family: int, include_tests: bool, fm
     Answers the four questions an agent otherwise re-derives by reading:
     what is a new thing a kind of and where does it live (kinds, naming,
     registries), how many parallel surfaces must it be wired through
-    (surfaces, export gaps), does a new finding fail the build or only
+    (surfaces, export gaps, doc gaps), does a new finding fail the build or only
     warn (gates, plus the constants and keyword defaults a family
     declares), and what shape are the value types (models).
 
@@ -2706,11 +2706,15 @@ def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
     payload["gates"] = [g.model_dump() for g in report.gates]
     payload["errors"] = [g.model_dump() for g in report.errors]
     payload["bases"] = [b.model_dump() for b in report.bases[:top_n]]
-    payload["registries"] = [r.model_dump() for r in report.registries[:top_n]]
+    payload["registries"] = [
+        {**r.model_dump(), "literal_names": list(r.literal_names[:6])}
+        for r in report.registries[:top_n]
+    ]
     # Export gaps are never truncated: the section exists to be complete, for
     # the same reason gates are. A truncated list of "things you forgot to
     # wire up" is worse than none, because it reads as a finished checklist.
     payload["export_gaps"] = [g.model_dump() for g in report.export_gaps]
+    payload["doc_gaps"] = [g.model_dump() for g in report.doc_gaps]
     payload["totals"] = {
         "naming": len(report.naming),
         "surfaces": len(report.surfaces),
@@ -2719,6 +2723,7 @@ def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
         "bases": len(report.bases),
         "registries": len(report.registries),
         "export_gaps": len(report.export_gaps),
+        "doc_gaps": len(report.doc_gaps),
     }
     return payload
 
@@ -2736,7 +2741,8 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     m = report.models
     lines = [
         f"# {report.root}: {report.modules_scanned} module(s) parsed"
-        + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else ""),
+        + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else "")
+        + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else ""),
         *(
             [
                 "# set aside: "
@@ -2804,7 +2810,9 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     for r in report.registries[:top_n]:
         lines.append(f"  {r.constructor:<28} {r.count:>3} @ {r.home_module} ({r.home_count})")
         if r.literal_names:
-            lines.append(f"  {'':<28}     names: {', '.join(r.literal_names)}")
+            shown = ", ".join(r.literal_names[:6])
+            more = f" (+{len(r.literal_names) - 6})" if len(r.literal_names) > 6 else ""
+            lines.append(f"  {'':<28}     names: {shown}{more}")
         for c in r.keyword_defaults[:3]:
             dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
             # "13 of 80 pass it" is the fact; a bare distribution reads as if the
@@ -2821,6 +2829,17 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         for g in report.export_gaps:
             lines.append(
                 f"  {g.export_module:<28} {g.family}: {g.exported}/{g.defined}"
+                f"  missing {', '.join(g.missing)}"
+            )
+
+    if report.doc_gaps:
+        lines += [
+            "",
+            f"## doc gaps ({len(report.doc_gaps)}) - public members their own docs do not name",
+        ]
+        for g in report.doc_gaps:
+            lines.append(
+                f"  {g.doc_root + '/':<28} {g.family}: {g.documented}/{g.defined}"
                 f"  missing {', '.join(g.missing)}"
             )
 

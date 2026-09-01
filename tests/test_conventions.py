@@ -531,3 +531,102 @@ def test_tests_are_set_aside_unless_asked_for(tmp_path: Path):
     with_tests = compute_conventions(tmp_path, include_tests=True)
     assert with_tests.partition is not None and with_tests.partition.tests == 0
     assert with_tests.modules_scanned > default.modules_scanned
+
+
+def _documented_project(tmp_path: Path, doc: str) -> Path:
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "errors.py").write_text(
+        "class Base(Exception): pass\n"
+        "class First(Base): pass\n"
+        "class Second(Base): pass\n"
+        "class Undocumented(Base): pass\n"
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.rst").write_text(doc)
+    return tmp_path
+
+
+def test_doc_gap_finds_a_member_its_own_docs_do_not_name(tmp_path: Path):
+    """`pytest` ships `PytestFDWarning` exported and with no `autoclass`
+    entry -- the same half-wired defect as a missing re-export."""
+    root = _documented_project(
+        tmp_path,
+        ".. autoexception:: Base\n.. autoexception:: First\n.. autoexception:: Second\n",
+    )
+    report = compute_conventions(root)
+    gap = next(g for g in report.doc_gaps if g.family == "Base")
+    assert gap.missing == ("Undocumented",)
+    assert (gap.documented, gap.defined) == (3, 4)
+
+
+def test_doc_gap_stays_silent_when_the_docs_are_complete(tmp_path: Path):
+    root = _documented_project(
+        tmp_path,
+        ".. autoexception:: Base\n.. autoexception:: First\n"
+        ".. autoexception:: Second\n.. autoexception:: Undocumented\n",
+    )
+    assert not compute_conventions(root).doc_gaps
+
+
+def test_doc_gap_ignores_a_family_the_docs_barely_touch(tmp_path: Path):
+    """One member mentioned in passing is not a promise to document the rest;
+    reporting it would bury the real gaps."""
+    root = _documented_project(tmp_path, "See ``First`` for details.\n")
+    assert not compute_conventions(root).doc_gaps
+
+
+def test_doc_gap_matches_a_slug_in_prose_but_not_a_bare_identifier(tmp_path: Path):
+    """Strictness scales with ambiguity. `mypy` documents each of its 79 codes
+    as `[arg-type]` in a section heading and six of them are ordinary English
+    words, so both a hyphen rule and a bracket rule are needed; matching a bare
+    CamelCase word in a sentence would call anything documented."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "codes.py").write_text(
+        "class ErrorCode:\n"
+        "    def __init__(self, code): ...\n"
+        'A = ErrorCode("arg-type")\n'
+        'B = ErrorCode("override")\n'
+        'C = ErrorCode("attr-defined")\n'
+        'D = ErrorCode("no-untyped-call")\n'
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "codes.rst").write_text(
+        "Check argument types [arg-type]\n"
+        "Check overrides [override]\n"
+        "An attr-defined problem is reported when...\n"
+        # no-untyped-call is named nowhere
+    )
+    report = compute_conventions(tmp_path)
+    gap = next(g for g in report.doc_gaps if g.family == "ErrorCode(...)")
+    assert gap.missing == ("no-untyped-call",)
+
+
+def test_doc_gap_does_not_report_private_members(tmp_path: Path):
+    """A project is entitled to leave `_PydanticGeneralMetadata` out on purpose."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "m.py").write_text(
+        "class Base: pass\nclass First(Base): pass\n"
+        "class Second(Base): pass\nclass _Private(Base): pass\n"
+    )
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "api.md").write_text("`Base` `First` `Second`\n")
+    assert not compute_conventions(tmp_path).doc_gaps
+
+
+def test_conventions_reports_nothing_when_a_project_ships_no_docs(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "m.py").write_text("class Base: pass\nclass A(Base): pass\nclass B(Base): pass\n")
+    report = compute_conventions(tmp_path)
+    assert report.docs_scanned == 0
+    assert report.doc_gaps == ()

@@ -334,6 +334,32 @@ class ExportGap(BaseModel):
     missing: tuple[str, ...]
 
 
+class DocGap(BaseModel):
+    """Family members named nowhere in the project's own documentation.
+
+    The last surface a census can reach, and the one two of four surveyed
+    projects keep half their answer in. ``mypy`` splits its error codes
+    across ``error_code_list.rst`` and ``error_code_list2.rst`` by whether
+    they are on by default, so the docs *are* the gate convention;
+    ``pytest`` ships ``PytestFDWarning`` exported and with no ``autoclass``
+    entry, which is the same half-wired defect as a missing re-export.
+
+    Prose is matched, never parsed. A name is "documented" if it appears
+    as a directive target (``.. autoclass::``, ``::: pkg.Thing``) or
+    inside a code span. That admits a passing mention as documentation,
+    which is the conservative direction: this section should under-report
+    rather than send an agent to write docs that already exist.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    doc_root: str
+    family: str
+    documented: int
+    defined: int
+    missing: tuple[str, ...]
+
+
 class ModulePartition(BaseModel):
     """What was censused and what was set aside, with the reason.
 
@@ -370,6 +396,8 @@ class ConventionsReport(BaseModel):
     bases: tuple[BaseFamily, ...] = ()
     registries: tuple[RegistryEntry, ...] = ()
     export_gaps: tuple[ExportGap, ...] = ()
+    doc_gaps: tuple[DocGap, ...] = ()
+    docs_scanned: int = 0
     partition: ModulePartition | None = None
 
     @computed_field
@@ -493,6 +521,11 @@ def _is_nonsource_module(qualname: str) -> bool:
 def _is_test_module(qualname: str) -> bool:
     parts = qualname.split(".")
     if _TEST_PARTS & set(parts):
+        return True
+    # A directory name is not always a Python identifier: `mypyc/test-data/`
+    # holds typeshed fixtures that redefine `RuntimeError` and `LookupError`,
+    # and they were being reported as this project's own kind families.
+    if any(part.startswith(("test-", "test_", "tests-", "_test")) for part in parts[:-1]):
         return True
     leaf = parts[-1]
     return leaf.startswith("test_") or leaf.endswith("_test") or leaf == "conftest"
@@ -723,10 +756,119 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
                 home_count=home_count,
                 examples=tuple(sorted({n for n, _, _ in rows})[:4]),
                 keyword_defaults=tuple(defaults),
-                literal_names=tuple(sorted(set(literals))[:6]),
+                literal_names=tuple(sorted(set(literals))),
             )
         )
     out.sort(key=lambda r: (-r.count, r.constructor))
+    return tuple(out)
+
+
+# Directive targets: reStructuredText `.. autoclass:: Thing` and the
+# mkdocstrings `::: pkg.Thing` form. Both name a symbol unambiguously.
+_DOC_DIRECTIVE = re.compile(
+    r"^\s*(?:\.\.\s+(?:auto)?(?:class|exception|function|data|attribute|method|module)::"
+    r"|:::)\s*([\w.]+)",
+    re.M,
+)
+# Anything inside a code span. Deliberately generous: see DocGap's docstring.
+_DOC_CODE_SPAN = re.compile(r"`{1,2}\s*([A-Za-z_][\w.-]*)\s*`{1,2}")
+# Bare lowercase-hyphenated slugs anywhere in the prose. Strictness is scaled
+# to how ambiguous a token is: `Path` or `Command` in a sentence says nothing,
+# so identifiers must appear in a code span or a directive, but `arg-type` is
+# not an English word and a bare-word match is safe. Without this, `mypy` --
+# which documents each of its 79 codes as `[arg-type]` in a section heading --
+# reads as documenting 13 of them.
+_DOC_SLUG = re.compile(r"(?<![\w-])([a-z][a-z0-9]*(?:-[a-z0-9]+)+)(?![\w-])")
+# A bracketed token is markup, not prose, so an ambiguous single word is safe
+# inside one. `mypy` heads each section `Check argument types [arg-type]`, and
+# six of its codes are ordinary English words -- `override`, `abstract`,
+# `syntax` -- which no hyphen rule can reach and which were being reported as
+# undocumented while their own section headings named them.
+_DOC_BRACKET = re.compile(r"\[([A-Za-z_][\w.-]*)\]")
+_DOC_SUFFIXES = (".rst", ".md")
+_DOC_MAX_BYTES = 2_000_000
+
+
+def _harvest_docs(root: Path, ignored_dirs: frozenset[str]) -> tuple[dict[str, set[str]], int]:
+    """Identifiers named in each documentation directory, and the file count.
+
+    Keyed on the top-level directory so the report can say *where* a family
+    is documented; a project with `docs/` and a separate `website/` should
+    not have a gap in one hidden by coverage in the other.
+    """
+    found: dict[str, set[str]] = defaultdict(set)
+    seen = 0
+    for path in sorted(root.rglob("*")):
+        if path.suffix not in _DOC_SUFFIXES or not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if any(part in ignored_dirs or part.startswith(".") for part in rel.parts[:-1]):
+            continue
+        try:
+            if path.stat().st_size > _DOC_MAX_BYTES:
+                continue
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        seen += 1
+        key = rel.parts[0] if len(rel.parts) > 1 else "."
+        names = found[key]
+        for match in _DOC_DIRECTIVE.finditer(text):
+            names.add(match.group(1).rsplit(".", 1)[-1])
+        for match in _DOC_CODE_SPAN.finditer(text):
+            names.add(match.group(1).rsplit(".", 1)[-1])
+        for match in _DOC_SLUG.finditer(text):
+            names.add(match.group(1))
+        for match in _DOC_BRACKET.finditer(text):
+            names.add(match.group(1).rsplit(".", 1)[-1])
+    return dict(found), seen
+
+
+def _doc_gaps(
+    families: tuple[BaseFamily, ...],
+    registries: tuple[RegistryEntry, ...],
+    docs: dict[str, set[str]],
+    *,
+    min_documented: int = 2,
+) -> tuple[DocGap, ...]:
+    """Public family members a documentation directory does not name."""
+    groups: list[tuple[str, tuple[str, ...]]] = [(f.base, f.members) for f in families]
+    # A registry's values are documented by the string they are declared with,
+    # not by the constant that holds them: `mypy` documents `arg-type`, and
+    # splits its codes across two files by whether they are on by default, so
+    # for that project the docs *are* the gate convention.
+    groups += [(f"{r.constructor}(...)", r.literal_names) for r in registries if r.literal_names]
+    out: list[DocGap] = []
+    for name, members in groups:
+        # Private names are not a documentation defect; a project is entitled
+        # to leave `_PydanticGeneralMetadata` out of its docs on purpose.
+        public = tuple(m for m in members if not m.startswith("_"))
+        if len(public) < min_documented:
+            continue
+        # One row per family, from the directory that documents it best. A
+        # project with a `docs/` tree and a README covers most families in
+        # both, and reporting each twice buries the real gaps under near
+        # duplicates that differ only in which stray mention they caught.
+        best: DocGap | None = None
+        for doc_root, names in sorted(docs.items()):
+            documented = [m for m in public if m in names]
+            if len(documented) < min_documented or len(documented) == len(public):
+                continue
+            # Only where the docs already cover most of the family. One member
+            # mentioned in passing is not a promise to document the rest.
+            if len(documented) / len(public) < 0.5:
+                continue
+            if best is None or len(documented) > best.documented:
+                best = DocGap(
+                    doc_root=doc_root,
+                    family=name,
+                    documented=len(documented),
+                    defined=len(public),
+                    missing=tuple(sorted(set(public) - names)),
+                )
+        if best is not None:
+            out.append(best)
+    out.sort(key=lambda g: (-(g.defined - g.documented), g.doc_root, g.family))
     return tuple(out)
 
 
@@ -1119,6 +1261,8 @@ def compute_conventions(
 
     gates, errors = _gates(facts)
     bases = _base_families(facts, min_count=min_family)
+    registries = _registries(facts, min_count=min_family)
+    docs, docs_seen = _harvest_docs(root, frozenset(ignored_dirs))
     return ConventionsReport(
         root=str(root),
         modules_scanned=len(facts),
@@ -1129,8 +1273,10 @@ def compute_conventions(
         errors=errors,
         models=_model_census(facts),
         bases=bases,
-        registries=_registries(facts, min_count=min_family),
+        registries=registries,
         export_gaps=_export_gaps(facts, bases),
+        doc_gaps=_doc_gaps(bases, registries, docs),
+        docs_scanned=docs_seen,
         partition=ModulePartition(
             production=len(facts),
             tests=n_tests,
