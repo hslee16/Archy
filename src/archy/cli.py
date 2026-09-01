@@ -258,10 +258,13 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        click.echo(_violations_to_text(violations, config_path))
+        click.echo(_violations_to_text(violations, config_path, coverage))
         if config.required:
             click.echo(_reach_violations_to_text(reach_violations, config.required))
         click.echo(_coverage_to_text(coverage))
+        hints = _pattern_hints_to_text(coverage)
+        if hints:
+            click.echo(hints)
         presence = _presence_to_text(coverage, config.min_layers_present)
         if presence:
             click.echo(presence)
@@ -1893,9 +1896,35 @@ def _reach_violations_to_text(
     return "\n".join(lines)
 
 
-def _violations_to_text(violations: list[Violation], config_path: Path) -> str:
+def _violations_to_text(
+    violations: list[Violation], config_path: Path, coverage: LayerCoverage
+) -> str:
+    """The headline verdict, qualified by coverage when coverage is degenerate.
+
+    A clean pass under a config that governs no edges is true and useless: it
+    says nothing was found without saying nothing was looked at. The numbers
+    were already printed one line below, where a reader who has just read
+    "No layer violations" has already stopped reading. Promoting the fact into
+    the verdict itself is the whole point (#362).
+
+    The substring "No layer violations" is preserved verbatim: `bench/walkthrough.py`
+    and the CLI tests assert on it, and the qualification is a clause, not a
+    replacement. The exit code is untouched -- see `check`.
+    """
     if not violations:
-        return f"# No layer violations (config: {config_path})."
+        verdict = f"# No layer violations (config: {config_path})."
+        if coverage.governs_nothing:
+            return (
+                f"# No layer violations, but no module in the tree falls under any root "
+                f"this config names, so no rule here can fire (config: {config_path})."
+            )
+        if coverage.governs_no_edges:
+            return (
+                f"# No layer violations, but this config governs "
+                f"{coverage.edges_governed} of {coverage.edges_total} internal edges "
+                f"(0%), so no forbid rule can fire (config: {config_path})."
+            )
+        return verdict
     lines = [f"# {len(violations)} layer violation(s) (config: {config_path})"]
     current_rule: tuple[str, str] | None = None
     for v in violations:
@@ -1924,6 +1953,20 @@ def _coverage_to_json(coverage: LayerCoverage) -> dict:
         "layer_sizes": dict(coverage.layer_sizes),
         "layers_present": coverage.layers_present,
         "empty_layers": list(coverage.empty_layers),
+        # The degenerate-coverage verdict and its most common cause, on the
+        # wire as well as in the text output. A JSON consumer seeing an empty
+        # `violations` list otherwise has to re-derive "could this config have
+        # said anything?" from the raw counts.
+        "governs_no_edges": coverage.governs_no_edges,
+        "exact_pattern_hints": [
+            {
+                "layer": hint.layer,
+                "pattern": hint.pattern,
+                "unlayered_descendants": list(hint.unlayered_descendants),
+                "suggestion": hint.suggestion,
+            }
+            for hint in coverage.exact_pattern_hints
+        ],
     }
 
 
@@ -1975,6 +2018,26 @@ def _coverage_to_text(coverage: LayerCoverage) -> str:
             "every declared root package and are not counted above"
         )
     return line
+
+
+def _pattern_hints_to_text(coverage: LayerCoverage) -> str:
+    """Name the cause of degenerate coverage, not just the number.
+
+    Empty when nothing was detected, so the caller can skip the echo entirely.
+    """
+    lines = []
+    for hint in coverage.exact_pattern_hints:
+        count = len(hint.unlayered_descendants)
+        shown = ", ".join(hint.unlayered_descendants[:3])
+        if count > 3:
+            shown += f", ... (+{count - 3} more)"
+        noun = "module is" if count == 1 else "modules are"
+        lines.append(
+            f"#   layer {hint.layer!r} matches {hint.pattern} exactly; "
+            f"{count} descendant {noun} unlayered ({shown}). "
+            f'Did you mean "{hint.suggestion}"?'
+        )
+    return "\n".join(lines)
 
 
 def _sdp_violations_to_json(violations: list[SdpViolation]) -> list[dict]:

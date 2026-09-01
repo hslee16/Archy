@@ -1630,3 +1630,39 @@ def test_conventions_tool_rejects_a_nonsense_min_family(acyclic_project: Path):
             "archy_conventions",
             {"path": str(acyclic_project), "min_family": 1},
         )
+
+
+def test_check_payload_carries_the_exact_pattern_hint(tmp_path: Path):
+    """Part 2 on the agent-facing surface, asserted on the SERIALIZED form.
+
+    `model_dump()` drops properties, and an agent reading `passed=true` with an
+    empty `violations` list has no other way to learn that the config governs
+    nothing and why.
+    """
+    from archy.mcp import CheckPayload, _run_check
+
+    app = tmp_path / "app"
+    (app / "store").mkdir(parents=True)
+    (app / "api").mkdir()
+    (app / "__init__.py").write_text("")
+    (app / "store" / "__init__.py").write_text("")
+    (app / "api" / "__init__.py").write_text("")
+    (app / "api" / "context.py").write_text("")
+    (app / "store" / "repository.py").write_text("from app.api.context import ctx\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  store:\n    modules: ['app.store']\n"
+        "  api:\n    modules: ['app.api']\n"
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+
+    payload = _run_check(tmp_path, config_path=None)
+
+    assert isinstance(payload, CheckPayload)
+    assert payload.violations == ()
+    dumped = payload.model_dump()
+    assert dumped["coverage"]["governs_no_edges"] is True
+    hints = {h["layer"]: h for h in dumped["coverage"]["exact_pattern_hints"]}
+    assert hints["store"]["pattern"] == "app.store"
+    assert hints["store"]["suggestion"] == "app.store.**"
+    assert "app.store.repository" in hints["store"]["unlayered_descendants"]
