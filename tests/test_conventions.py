@@ -649,3 +649,66 @@ def test_conventions_reports_nothing_when_a_project_ships_no_docs(tmp_path: Path
     report = compute_conventions(tmp_path)
     assert report.docs_scanned == 0
     assert report.doc_gaps == ()
+
+
+def test_consumer_family_crosses_modules_that_share_no_name_stem():
+    """The CLI renders a result through `_x_to_text` / `_x_to_json`, which share
+    a stem; the MCP surface renders the same result through a handler that
+    shares nothing with them. What the three have in common is the symbol they
+    consume, so a stem-keyed census can only ever find two of them."""
+    root = Path(tempfile.mkdtemp())
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "layers.py").write_text("def find_violations():\n    return []\n")
+    (pkg / "cli.py").write_text(
+        "from pkg.layers import find_violations\n"
+        "def _violations_to_text(v): ...\n"
+        "def _violations_to_json(v): ...\n"
+    )
+    (pkg / "mcp.py").write_text("from pkg.layers import find_violations\ndef _run_check(): ...\n")
+    report = compute_conventions(root)
+    fam = next(s for s in report.surfaces if s.kind == "consumer" and s.stem == "find_violations")
+    assert set(fam.surfaces) == {"pkg.cli", "pkg.mcp"}
+    # and the stem-keyed family still finds the CLI pair, which is the half a
+    # consumer family does not replace
+    helper = next(s for s in report.surfaces if s.kind == "helper" and s.stem == "_violations_to")
+    assert set(helper.surfaces) == {"json", "text"}
+
+
+def test_consumer_family_ignores_a_widely_used_utility():
+    """A co-update set is small. Sixteen modules import the graph builder here;
+    forgetting one is not a failure mode, that is infrastructure. Without the
+    cap this section ranks the most-imported helper first and never reaches the
+    sets it exists to name."""
+    root = Path(tempfile.mkdtemp())
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "util.py").write_text("def build_graph(): ...\n")
+    for i in range(9):
+        (pkg / f"m{i}.py").write_text("from pkg.util import build_graph\n")
+    report = compute_conventions(root)
+    assert not [s for s in report.surfaces if s.kind == "consumer" and s.stem == "build_graph"]
+
+
+def test_cross_module_families_outrank_larger_same_module_ones():
+    """Sorting by member count alone buried this project's own render surfaces
+    at rank 38 of 50, behind a 13-member family of one-helper-per-tool that no
+    caller has to keep in step. A family confined to one file is wired in a
+    single edit; a family spanning several is the one that gets half-wired."""
+    root = Path(tempfile.mkdtemp())
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("def render(): ...\n")
+    (pkg / "a.py").write_text("from pkg.core import render\n")
+    (pkg / "b.py").write_text("from pkg.core import render\n")
+    # a large same-module helper family, of the shape that used to win
+    (pkg / "big.py").write_text("\n".join(f"def _run_{n}(): ..." for n in "abcdefghij") + "\n")
+    report = compute_conventions(root)
+    kinds = [s.kind for s in report.surfaces]
+    assert kinds.index("consumer") < kinds.index("helper")
+    big = next(s for s in report.surfaces if s.stem == "_run")
+    small = next(s for s in report.surfaces if s.kind == "consumer" and s.stem == "render")
+    assert big.surface_count > small.surface_count  # and still ranks below it

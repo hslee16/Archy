@@ -7,8 +7,10 @@ SHAs from `bench/projects.yaml`, or inline where the project is not in the manif
 
 | set | score | what it means |
 |---|---|---|
-| **development** | **14/14 (100%)** | `click`, `mypy`, `pydantic`, `pytest`. **A fit, not evidence.** |
+| **development** | **15/15 (100%)** | `click`, `mypy`, `pydantic`, `pytest`, plus this project at an external evaluation's pin. **A fit, not evidence.** |
 | **held-out** | **12/13 (92%)** | `httpx`, `attrs`, `requests`, `rich`. **This is the number.** |
+
+The surfaces fix below changed no held-out row: 12/13 before and after.
 
 All 8 projects analysed twice per run; both payloads byte-identical.
 
@@ -128,3 +130,44 @@ does not depend on this** and stands on its own.
 So the claim this bench supports is **"one command returns what costs a model 2-12
 targeted reads and a consistency check it has to invent"**. The claim it does not
 support, at any sample size, is that the resulting work is better.
+
+
+## The surfaces fix, and why it needed a bench to find
+
+The section is asked *"what must be updated alongside this?"*, and on this project
+it was answering with two thirds of the truth, ranked below the fold.
+
+`check` renders layer violations through three surfaces: CLI text, CLI
+`--format json`, and the MCP payload. The CLI pair is `_violations_to_text` and
+`_violations_to_json`, which share the stem `_violations_to` and grouped
+correctly. The MCP surface is `_run_check`, which shares **no stem with them**.
+A stem-keyed census is structurally blind to the third surface — and that is
+the surface half-wired features actually miss.
+
+Two changes, both recombinations of what the census already parsed:
+
+- **Consumer families.** What the three surfaces have in common is not a name,
+  it is the symbol they consume. A consumer family is keyed on a definition and
+  lists the internal modules importing it, **capped at 5** — a co-update set is
+  small by nature. Sixteen modules import `build_graph`; forgetting one is not a
+  failure mode, that is infrastructure.
+- **Cross-module families rank first.** A family confined to one file is wired
+  in a single edit; a family spanning several is the one that gets half-wired.
+
+Measured on this project at `77517865e0d5`:
+
+| | before | after |
+|---|---|---|
+| `find_violations` co-update set | not detected as a family | **rank 4 of 150**, naming `archy.cli`, `archy.diff`, `archy.mcp` |
+| best partial answer | `_violations_to` at **rank 38 of 50** — `json`, `text` only | still present, and no longer the best answer |
+| visible in the default `--top 12`? | **no** | **yes** |
+
+🔴 **It was derived and invisible, which is the failure mode a correctness score
+cannot see.** The bench row `archy-at-eval-pin / q4_surfaces` asserts both the
+membership and `max_rank: 12`, so a future ranking change that pushes it back
+under the fold fails rather than passing quietly.
+
+⚠️ **This does not raise the effectiveness ceiling.** On the corpus this was
+measured against, 7 of 25 runs touched only the module holding the logic and
+wired nothing at all; a correct, well-ranked surface rule does not reach them.
+It converts the 2 runs that stopped at two surfaces.

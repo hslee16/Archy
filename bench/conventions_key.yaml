@@ -208,3 +208,29 @@ repos:
         kind: doc_gap
         family: ConsoleError
         absent: true
+
+  # ---------------------------------------------------------------------
+  # This project, at the commit an external evaluation pins. Development, not
+  # evidence: the ranking fix below was motivated by exactly this case.
+  #
+  # 🔴 THE REGRESSION IT LOCKS IN. `check` renders layer violations through
+  # three surfaces -- CLI text, CLI `--format json`, and the MCP payload -- and
+  # a stem-keyed census could only ever see two of them, because the CLI pair
+  # `_violations_to_text` / `_violations_to_json` shares a stem and `mcp.py`'s
+  # `_run_check` shares nothing with it. What the three have in common is the
+  # symbol they consume, not their names. Before the consumer family and
+  # cross-module ranking existed, the partial answer sat at rank 38 of 50,
+  # behind a default `--top` of 12: derived, and invisible.
+  - name: archy-at-eval-pin
+    set: development
+    project:
+      name: archy-at-eval-pin
+      repo: hslee16/Archy
+      sha: "77517865e0d5"
+      src_dir: src/archy
+    questions:
+      - id: q4_surfaces
+        kind: consumer_surface
+        symbol: find_violations
+        consumers: [archy.cli, archy.mcp]
+        max_rank: 12

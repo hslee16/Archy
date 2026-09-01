@@ -173,6 +173,34 @@ def _check_naming(report: dict, e: dict):
     )
 
 
+def _check_consumer_surface(report: dict, e: dict):
+    """The co-update set: which modules render the same result type.
+
+    Regression test for the defect that motivated the section. Before
+    cross-module ranking existed, this repo's own three render surfaces sat
+    at rank 38 of 50 behind a default cutoff of 12, and the MCP one was not
+    in the family at all because it shares no name stem with the CLI pair.
+    """
+    fams = [s for s in report["surfaces"] if s["kind"] == "consumer" and s["stem"] == e["symbol"]]
+    if not fams:
+        return False, f"no consumer family for {e['symbol']!r}"
+    f = fams[0]
+    want = set(e["consumers"])
+    have = set(f["surfaces"])
+    if not want <= have:
+        return False, f"consumers {sorted(have)}, missing {sorted(want - have)}"
+    if "max_rank" in e:
+        rank = next(
+            i
+            for i, s in enumerate(report["surfaces"], 1)
+            if s["kind"] == "consumer" and s["stem"] == e["symbol"]
+        )
+        if rank > e["max_rank"]:
+            return False, f"ranked {rank}, must be within the top {e['max_rank']}"
+        return True, f"rank {rank}, consumers {sorted(have)}"
+    return True, f"consumers {sorted(have)}"
+
+
 def _check_partition(report: dict, e: dict):
     p = report.get("partition") or {}
     roots = set(p.get("shadow_roots") or [])
@@ -184,6 +212,7 @@ def _check_partition(report: dict, e: dict):
 
 CHECKS = {
     "kind_family": _check_base,
+    "consumer_surface": _check_consumer_surface,
     "naming_family": _check_naming,
     "shared_constant": _check_constant,
     "registry": _check_registry,
