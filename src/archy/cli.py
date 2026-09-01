@@ -18,6 +18,7 @@ from archy.contracts import (
     ContractsResult,
     run_contracts,
 )
+from archy.conventions import ConventionsReport, compute_conventions
 from archy.coupling import (
     DEFAULT_MIN_CONFIDENCE,
     DEFAULT_MIN_SUPPORT,
@@ -1624,6 +1625,57 @@ def uninstall(
         click.echo(f"  {path}")
 
 
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--top",
+    "top_n",
+    type=int,
+    default=12,
+    show_default=True,
+    help="Maximum rows per section.",
+)
+@click.option(
+    "--min-family",
+    "min_family",
+    type=int,
+    default=2,
+    show_default=True,
+    help="Minimum members before a naming family or mirrored set is reported.",
+)
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["text", "json"]),
+    default="text",
+    help="Output format.",
+)
+def conventions(path: Path, top_n: int, min_family: int, fmt: str) -> None:
+    """Report the project's own house style, derived from its source.
+
+    Answers the four questions an agent otherwise re-derives by reading:
+    what do I name a new class and where does it live (naming families),
+    how many parallel surfaces must a new field be wired through
+    (surfaces), does a new finding fail the build or only warn (gates,
+    with the flag or config field that controls each), and what shape are
+    the value types (models).
+
+    Advisory, never a gate: it reports and always exits 0. Only `check`,
+    `contracts` and the `--strict` variants fail a build.
+    """
+    _require(top_n >= 1, "top", ">= 1", top_n)
+    _require(min_family >= 2, "min-family", ">= 2", min_family)
+    report = compute_conventions(path, **_graph_kwargs(path), min_family=min_family)
+    if fmt == "json":
+        click.echo(json.dumps(_conventions_to_dict(report, top_n=top_n), indent=2, sort_keys=True))
+    else:
+        click.echo(_conventions_to_text(report, top_n=top_n))
+
+
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     try:
         g = build_graph(path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path))
@@ -2562,3 +2614,84 @@ def _graph_to_text(g: nx.DiGraph) -> str:
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
+
+
+def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
+    """Hand-rolled payload, per this module's convention: the CLI decides what
+    to truncate, so the JSON says how much it dropped rather than silently
+    handing back a short list that looks complete."""
+    payload = report.model_dump()
+    payload["top_n"] = top_n
+    payload["naming"] = [f.model_dump() for f in report.naming[:top_n]]
+    payload["surfaces"] = [s.model_dump() for s in report.surfaces[:top_n]]
+    payload["gates"] = [g.model_dump() for g in report.gates]
+    payload["totals"] = {
+        "naming": len(report.naming),
+        "surfaces": len(report.surfaces),
+        "gates": len(report.gates),
+    }
+    return payload
+
+
+def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
+    """Terse on purpose: an agent pays per token to read this."""
+    m = report.models
+    lines = [
+        f"# {report.root}: {report.modules_scanned} module(s) parsed"
+        + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else ""),
+        "",
+        f"## naming ({len(report.naming)} family/families; showing "
+        f"{min(top_n, len(report.naming))})",
+    ]
+    if not report.naming:
+        lines.append("  (none: no class-name suffix is shared by enough definitions)")
+    for f in report.naming[:top_n]:
+        spread = "" if len(f.modules) == 1 else f" of {f.count} across {len(f.modules)} modules"
+        lines.append(
+            f"  *{f.suffix:<14} {f.count:>3}  home={f.home_module} "
+            f"({f.home_count}{spread})  e.g. {', '.join(f.examples)}"
+        )
+
+    lines += [
+        "",
+        f"## surfaces ({len(report.surfaces)}; showing "
+        f"{min(top_n, len(report.surfaces))}) - wire all of these together",
+    ]
+    if not report.surfaces:
+        lines.append("  (none)")
+    for s in report.surfaces[:top_n]:
+        where = s.module or "across modules"
+        lines.append(
+            f"  {s.kind:<8} {s.stem:<28} {s.surface_count} @ {where}: {', '.join(s.surfaces)}"
+        )
+
+    bases = ", ".join(f"{b}={n}" for b, n in m.base_counts[:5])
+    bases_note = f"  bases: {bases}" if bases else ""
+    optional = [g for g in report.gates if g.optional]
+    lines += [
+        "",
+        f"## gates ({len(report.gates)} non-zero exit site(s), {len(optional)} caller-controlled)",
+    ]
+    if not report.gates:
+        lines.append("  (none: nothing in this project exits non-zero)")
+    commands = sorted({g.function for g in report.gates if g.is_command})
+    if commands:
+        lines.append(f"  gating commands: {', '.join(commands)}")
+    controls = sorted({g.control for g in report.gates})
+    for control in controls:
+        rows = [g for g in report.gates if g.control == control]
+        where = sorted({f"{g.module}:{g.function}" for g in rows})
+        shown = ", ".join(where[:4]) + (f", +{len(where) - 4} more" if len(where) > 4 else "")
+        lines.append(f"  {control:<24} {len(rows):>3}  {shown}")
+
+    lines += [
+        "",
+        "## models",
+        f"  {m.value_classes} value class(es) of {m.total_classes} class(es); "
+        f"{m.frozen_classes} frozen ({m.frozen_ratio:.0%})",
+        f"  dominant base: {m.dominant_base or '(none)'}" + bases_note,
+        f"  config: {', '.join(f'{k}={n}' for k, n in m.config_flags) or '(none)'}",
+        f"  collection fields: {m.tuple_fields} tuple / {m.list_fields} list "
+        f"({m.tuple_ratio:.0%} tuple)",
+    ]
+    return "\n".join(lines)

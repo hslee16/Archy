@@ -1283,3 +1283,81 @@ def test_render_rejects_invalid_last(tmp_path: Path):
     result = CliRunner().invoke(main, ["render", str(project), "--view", "trend", "--last", "0"])
     assert result.exit_code != 0
     assert "--last" in result.output
+
+
+def _make_conventions_project(tmp_path: Path) -> Path:
+    """A project with one of each thing `archy conventions` reports."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "layers.py").write_text(
+        "class Violation: pass\nclass ReachViolation: pass\nclass SdpViolation: pass\n"
+    )
+    (pkg / "cli.py").write_text(
+        "import sys\n"
+        "def _report_to_text(): pass\n"
+        "def _report_to_json(): pass\n"
+        "def run(strict):\n"
+        "    if strict:\n"
+        "        sys.exit(1)\n"
+    )
+    return tmp_path
+
+
+def test_conventions_text_reports_all_four_sections(tmp_path: Path):
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(main, ["conventions", str(project)])
+    assert result.exit_code == 0
+    for heading in ("## naming", "## surfaces", "## gates", "## models"):
+        assert heading in result.output
+    assert "*Violation" in result.output
+    assert "pkg.layers" in result.output
+    assert "param:strict" in result.output
+
+
+def test_conventions_always_exits_zero_even_with_gates_present(tmp_path: Path):
+    # Advisory, not a gate: only `check`, `contracts` and the `--strict`
+    # variants fail a build. Reporting that a project HAS gates must not
+    # itself become one.
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(main, ["conventions", str(project)])
+    assert result.exit_code == 0
+
+
+def test_conventions_json_matches_the_text_surface(tmp_path: Path):
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(main, ["conventions", str(project), "--format", "json"])
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["totals"]["naming"] >= 1
+    family = next(f for f in payload["naming"] if f["suffix"] == "Violation")
+    assert family["home_module"] == "pkg.layers"
+    # Derived values must survive `model_dump()` -- a plain property would be
+    # silently absent here and on the MCP wire.
+    assert "concentration" in family
+    assert "gate_modules" in payload
+    assert payload["models"]["dominant_base"] is None
+
+
+def test_conventions_top_truncates_but_reports_the_total(tmp_path: Path):
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(
+        main, ["conventions", str(project), "--top", "1", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert len(payload["naming"]) == 1
+    assert payload["totals"]["naming"] >= len(payload["naming"])
+
+
+def test_conventions_rejects_a_nonsense_min_family(tmp_path: Path):
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(main, ["conventions", str(project), "--min-family", "1"])
+    assert result.exit_code != 0
+    assert "min-family" in result.output
+
+
+def test_conventions_rejects_a_nonsense_top(tmp_path: Path):
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(main, ["conventions", str(project), "--top", "0"])
+    assert result.exit_code != 0

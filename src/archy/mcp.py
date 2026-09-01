@@ -2,12 +2,12 @@
 
 Built on the official Python `mcp` SDK's ergonomic server class, imported via
 `archy.mcp_compat` so both SDK majors work (`FastMCP` on 1.x, `MCPServer` on
-2.x; see #391). The 11
+2.x; see #391). The 12
 tools cover archy's analysis surface (`archy_score`, `archy_cycles`,
 `archy_check`, `archy_impact`,
 `archy_snapshot`, `archy_diff`, `archy_simulate`, `archy_graph`,
 `archy_what_to_refactor_next`, `archy_dsm`,
-`archy_duplicates`) so an agent
+`archy_duplicates`, `archy_conventions`) so an agent
 can treat archy as a structural sensor in its own feedback loop, the way
 the README pitches. Several tools carry a mode/lens/param switch that
 absorbs what used to be a separate tool: `archy_impact(mode='affected')`
@@ -100,6 +100,7 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
 from archy.contracts import ContractCheck
+from archy.conventions import ConventionsReport, compute_conventions
 from archy.coupling import (
     DEFAULT_MIN_CONFIDENCE,
     DEFAULT_MIN_SUPPORT,
@@ -660,7 +661,7 @@ _READ_ONLY_ANNOTATIONS = ToolAnnotations(
     idempotentHint=True,
     openWorldHint=False,
 )
-"""All 11 archy tools are read-only structural analysis: they compute over a
+"""All 12 archy tools are read-only structural analysis: they compute over a
 project and mutate nothing observable on the wire, are closed-domain (no
 network/external world), and are idempotent for a fixed source tree. Declaring
 this explicitly lets trusted clients auto-approve archy's calls instead of
@@ -1091,6 +1092,32 @@ def _register_tools(server: Server) -> None:
             near_miss=near_miss,
         )
 
+    @server.tool(
+        name="archy_conventions",
+        title="Report the project's house style",
+        annotations=_READ_ONLY_ANNOTATIONS,
+        description=(
+            "**Call before adding a new class, field, or command to an "
+            "unfamiliar project.** Derives the repository's own conventions "
+            "from its source instead of leaving you to infer them by reading. "
+            "Returns four censuses: `naming` (class-name suffix families with "
+            "the module each family lives in - the answer to 'what do I call "
+            "a new one and where does it go'), `surfaces` (mirrored helper "
+            "sets like `_x_to_text`/`_x_to_json` and names defined in several "
+            "modules - the answer to 'how many places must I wire a new "
+            "field'), `gates` (every site that exits non-zero, each tagged "
+            "with the lever that controls it: `flag:--strict`, "
+            "`config:<attr>`, `param:<name>`, or `hardcoded` - the answer to "
+            "'should my new finding fail the build or only warn'), and "
+            "`models` (base-class, frozen, and tuple-vs-list census over the "
+            "value types). Advisory only; it never fails and mutates nothing. "
+            "`min_family` raises the floor for reporting a family (default 2, "
+            "raise it on a large project to cut noise)."
+        ),
+    )
+    def archy_conventions(path: str, min_family: int = 2) -> ConventionsReport:
+        return _run_conventions(Path(path), min_family=min_family)
+
     # removed v0.41 (#267): archy_status demoted off the agent surface. Index
     # freshness is diagnostic plumbing, not a mid-task decision (every tool
     # syncs on demand, so a result is never stale); the capability now lives in
@@ -1098,6 +1125,12 @@ def _register_tools(server: Server) -> None:
 
 
 # --- thin internals ----------------------------------------------------------
+
+
+def _run_conventions(path: Path, *, min_family: int) -> ConventionsReport:
+    if min_family < 2:
+        raise ValueError(f"min_family must be >= 2; got {min_family}")
+    return compute_conventions(path, **_graph_kwargs(path), min_family=min_family)
 
 
 def _run_score(
