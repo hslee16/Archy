@@ -2736,6 +2736,22 @@ def _gate_row(gate: Gate) -> str:
     return f"  {where:<34} {call:<18} {gate.control}{suffix}"
 
 
+def _shown(total: int, top_n: int) -> str:
+    """`(150; showing 12, --top 150 for the rest)`, or just `(12)` when nothing is hidden.
+
+    🔴 A reader who is told "showing 12" and not told how to see the other 138
+    cannot tell a missing fact from an unranked one, so absence from the list
+    proves nothing to them. Measured: 24 pieces of real agent reasoning, all
+    chosen because this command could in principle answer them, scored 0 -- and
+    both blind readers named truncation, not the analysis, as the reason. The
+    number was computed and then withheld. Printing the way to ask for it costs
+    one clause.
+    """
+    if total <= top_n:
+        return f"({total})"
+    return f"({total}; showing {top_n}, --top {total} for the rest)"
+
+
 def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     """Terse on purpose: an agent pays per token to read this."""
     m = report.models
@@ -2760,14 +2776,20 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
                     )
                     if part
                 )
+                # 🔴 Say how to get them back. Setting tests aside is right when a
+                # vendored copy or a fixture pile would otherwise win every count,
+                # and wrong when the question IS about tests -- "where do helpers
+                # live in this test file, and what are they called" is a real
+                # convention this command silently cannot answer. One of the 24
+                # scored derivations asked exactly that.
+                + ("  (--include-tests to census them)" if report.partition.tests else "")
             ]
             if report.partition
             and (report.partition.tests or report.partition.shadowed or report.partition.nonsource)
             else []
         ),
         "",
-        f"## naming - by home module ({len(report.naming)} module(s); showing "
-        f"{min(top_n, len(report.naming))})",
+        f"## naming - by home module {_shown(len(report.naming), top_n)}",
     ]
     if not report.naming:
         lines.append("  (none: no class-name suffix is shared by enough definitions)")
@@ -2782,8 +2804,7 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     # they disagree in most projects, so this section leads.
     lines += [
         "",
-        f"## kinds - classes grouped by what they derive from "
-        f"({len(report.bases)}; showing {min(top_n, len(report.bases))})",
+        f"## kinds - classes grouped by what they derive from {_shown(len(report.bases), top_n)}",
     ]
     if not report.bases:
         lines.append("  (none: no base defined in this project has enough subclasses)")
@@ -2802,8 +2823,8 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
 
     lines += [
         "",
-        f"## registries - values declared by repeated construction "
-        f"({len(report.registries)}; showing {min(top_n, len(report.registries))})",
+        "## registries - values declared by repeated construction "
+        + _shown(len(report.registries), top_n),
     ]
     if not report.registries:
         lines.append("  (none)")
@@ -2845,8 +2866,7 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
 
     lines += [
         "",
-        f"## surfaces ({len(report.surfaces)}; showing {min(top_n, len(report.surfaces))})"
-        " - wire all of these together",
+        f"## surfaces {_shown(len(report.surfaces), top_n)} - wire all of these together",
     ]
     if not report.surfaces:
         lines.append("  (none)")

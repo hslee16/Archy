@@ -145,6 +145,12 @@ class SurfaceFamily(BaseModel):
                         differing trailing segments.
     `kind='mirrored'` -- one name defined in several modules, `surfaces`
                         are those modules.
+    `kind='consumer'` -- one definition imported by several modules, which is
+                        the shape a stem-keyed census cannot see: `module` is
+                        the defining module and `surfaces` are the importers.
+                        A name defined in more than one module is omitted
+                        unless the import says which one it came from, because
+                        naming the wrong home is worse than naming none.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -445,6 +451,13 @@ class _ModuleFacts:
         # None means the module declares no `__all__` at all, which is a
         # different fact from declaring an empty one.
         self.exports: frozenset[str] | None = None
+        # Names this module pulls in by `from ... import X`. Kept unfiltered;
+        # `_surface_families` decides which of them this project defines.
+        # (source module, name). The module is "" for a relative import, which
+        # is not resolved here: a name that is unambiguous project-wide does not
+        # need it, and one that is not must not be guessed at. See
+        # `_surface_families`.
+        self.internal_imports: set[tuple[str, str]] = set()
 
 
 def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
@@ -454,6 +467,12 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
             facts.classes.append(node)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             facts.functions.append(node)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            source = "" if node.level else (node.module or "")
+            for alias in node.names:
+                if alias.name != "*":
+                    facts.internal_imports.add((source, alias.name))
     for node in tree.body:
         if isinstance(node, ast.Assign | ast.AnnAssign):
             facts.body_assignments.append(node)
@@ -938,15 +957,33 @@ def _naming_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[
 
 
 def _surface_families(
-    facts: Iterable[_ModuleFacts], *, min_count: int
+    facts: Iterable[_ModuleFacts], *, min_count: int, max_consumers: int = 5
 ) -> tuple[SurfaceFamily, ...]:
-    """Two mirror shapes: per-surface helpers, and one name in many modules.
+    """Three mirror shapes: consumers of one type, per-surface helpers, and
+    one name in many modules.
 
     A helper family is keyed on the function name minus its final
     underscore segment, so `_hotspots_to_text` / `_hotspots_to_json` group
     under `_hotspots_to` with surfaces `json`, `text`. Requiring at least
     two DISTINCT trailing segments is what separates a real per-surface
     family from an accidental prefix collision.
+
+    🔴 A CONSUMER FAMILY EXISTS BECAUSE NAME STEMS DO NOT CROSS MODULES.
+    In this project the CLI renders layer violations through
+    `_violations_to_text` and `_violations_to_json`, which share a stem and
+    group correctly -- and the MCP surface renders the same result through
+    `_run_check`, which shares nothing with them. A stem-keyed census is
+    structurally blind to the third surface, and that surface is the one
+    half-wired features actually miss. What the three have in common is not
+    a name: it is the symbol they consume. So a consumer family is keyed on
+    a definition and lists the internal modules that import it.
+
+    Ranking puts cross-module families first, ahead of larger same-module
+    ones. A family confined to one file is wired or not in a single edit; a
+    family spanning several is the one that gets half-wired, which is the
+    question this section is asked. Sorting by member count alone buried
+    `_violations_to` at rank 38 of 50, behind a 13-member family of
+    one-helper-per-MCP-tool that no caller needs to keep in step.
     """
     facts = list(facts)
     out: list[SurfaceFamily] = []
@@ -968,6 +1005,60 @@ def _surface_families(
                     )
                 )
 
+    # 🔴 EVERY module that defines the name, not the first one seen. Keying on
+    # the bare name and taking the first definition is a WRONG ANSWER, not a
+    # missing one: with `foo` defined in both `pkg.a` and `pkg.b`, an importer
+    # of `pkg.b.foo` was reported as consuming `pkg.a`, pointing an agent at a
+    # module it must not edit. This repository carries seven such collisions
+    # (`_load_graph`, `_graph_kwargs` and `_score_to_dict` among them).
+    defined_in: dict[str, set[str]] = defaultdict(set)
+    for f in facts:
+        for node in f.classes:
+            defined_in[node.name].add(f.qualname)
+        for node in f.functions:
+            defined_in[node.name].add(f.qualname)
+    # Keyed by (home, name), never by name alone. Two modules can define the
+    # same name and each be imported unambiguously; merging them into one
+    # family reports half its consumers against the wrong home, which is the
+    # same wrong answer one level up.
+    consumers: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for f in facts:
+        for source, name in f.internal_imports:
+            candidates = defined_in.get(name)
+            if not candidates:
+                continue  # not a symbol this project defines
+            if source in candidates:
+                home = source
+            elif len(candidates) == 1:
+                # A relative import, or one written through a re-export. The
+                # name has one definition project-wide, so there is nothing to
+                # get wrong.
+                home = next(iter(candidates))
+            else:
+                # Ambiguous and unresolved. Saying nothing beats naming the
+                # wrong module, which is the failure this section causes most.
+                continue
+            # A module importing from itself is not a surface.
+            if home != f.qualname:
+                consumers[(home, name)].add(f.qualname)
+    for (home, name), modules in sorted(consumers.items()):
+        # 🔴 A co-update set is SMALL BY NATURE, and the cap is what separates one
+        # from a popular utility. Sixteen modules import `build_graph`; forgetting
+        # one of them is not a failure mode, that is just infrastructure. Two or
+        # three modules rendering the same result IS the failure mode -- it is how
+        # a feature ships wired to the CLI and not to the MCP payload. Without the
+        # cap this section ranks the most-imported helper first and never reaches
+        # the sets it exists to name.
+        if min_count <= len(modules) <= max_consumers:
+            out.append(
+                SurfaceFamily(
+                    kind="consumer",
+                    stem=name,
+                    module=home,
+                    surfaces=tuple(sorted(modules)),
+                )
+            )
+
     homes: dict[str, set[str]] = defaultdict(set)
     for f in facts:
         for cls in f.classes:
@@ -980,7 +1071,9 @@ def _surface_families(
                 )
             )
 
-    out.sort(key=lambda s: (-s.surface_count, s.kind, s.stem))
+    # Cross-module first, then by size. See the docstring: a same-module family is
+    # wired in one edit; a cross-module one is what gets half-wired.
+    out.sort(key=lambda s: (0 if s.kind == "helper" else -1, -s.surface_count, s.kind, s.stem))
     return tuple(out)
 
 
