@@ -1,0 +1,211 @@
+# Answer key for `archy conventions`, checked by bench/conventions_bench.py.
+#
+# Each row states a question an agent actually asks about an unfamiliar codebase,
+# the section of the report that must answer it, and a machine-checkable
+# expectation. The four questions are fixed:
+#
+#   q1_gate       does a new finding fail by default, or is it advisory?
+#   q2_naming     what do I call a new one?
+#   q3_placement  which module does it go in?
+#   q4_surfaces   what must be updated alongside it to be visible everywhere?
+#
+# 🔴 `set:` IS LOAD-BEARING. `development` repos motivated the features in #410
+# and then scored them, and two heuristics were tuned directly against them --
+# the doc-strictness ladder against mypy, the shadow-subtree thresholds against
+# pydantic. Their score is a FIT. Only `heldout` rows are evidence; they were
+# keyed from each project's own source, by readers who were not shown archy's
+# output, before this bench was run against them.
+#
+# SHAs come from bench/projects.yaml unless a row carries its own `project:`
+# block. A repo with no pin cannot be scored reproducibly and the bench refuses.
+#
+# `absent: true` asserts SILENCE, and it is a real answer rather than a missing
+# row: mypy names all of its error codes in its own docs, so a doc gap there
+# would be a false positive.
+
+repos:
+  - name: click
+    set: development
+    questions:
+      - id: q2_naming
+        kind: kind_family
+        family: ClickException
+        min_count: 8
+      - id: q3_placement
+        kind: kind_family
+        family: ClickException
+        home_module: click.exceptions
+      - id: q1_gate
+        kind: shared_constant
+        family: ClickException
+        constant: exit_code
+        values: [1, 2]
+      - id: q4_surfaces
+        kind: export_gap
+        family: ClickException
+        missing: [NoArgsIsHelpError]
+
+  - name: mypy
+    set: development
+    questions:
+      - id: q2_naming
+        kind: registry
+        constructor: ErrorCode
+        min_count: 60
+      - id: q3_placement
+        kind: registry
+        constructor: ErrorCode
+        home_module: mypy.errorcodes
+      - id: q1_gate
+        kind: registry
+        constructor: ErrorCode
+        keyword: default_enabled
+      # mypy documents every error code, so the only correct output is silence.
+      - id: q4_surfaces
+        kind: doc_gap
+        family: ErrorCode(...)
+        absent: true
+
+  - name: pydantic
+    set: development
+    questions:
+      # The census used to name `pydantic.v1.errors` -- the vendored legacy copy,
+      # 93 classes -- as the home of the error family, in place of the live
+      # module with 6. A wrong answer, not a missing one.
+      - id: q0_partition
+        kind: partition
+        shadow_roots: [pydantic.v1]
+      - id: q2_naming
+        kind: kind_family
+        family: PydanticErrorMixin
+      - id: q3_placement
+        kind: kind_family
+        family: PydanticErrorMixin
+        home_module: pydantic.errors
+
+  - name: pytest
+    set: development
+    questions:
+      - id: q2_naming
+        kind: kind_family
+        family: PytestWarning
+        min_count: 10
+      - id: q3_placement
+        kind: kind_family
+        family: PytestWarning
+        home_module: _pytest.warning_types
+      # Defined and exported, with no autoclass entry.
+      - id: q4_surfaces
+        kind: doc_gap
+        family: PytestWarning
+        missing: [PytestFDWarning]
+
+  # ---------------------------------------------------------------------
+  # HELD-OUT. None of these four was used to build or tune anything in #410.
+  # Each key was derived from the project's own source by a reader who was not
+  # shown archy's output, at the SHA recorded here, before this bench was ever
+  # run against them. That ordering is the whole point; a key written after
+  # seeing the output measures nothing.
+  #
+  # 🔴 QUESTIONS THE REPO ITSELF DOES NOT ANSWER ARE NOT SCORED. `rich` has no
+  # discoverable naming, placement or surface convention -- two disjoint error
+  # roots, 9 classes in `rich.errors` against 11 scattered elsewhere, no
+  # re-export and no reference page. No tool can recover a convention that does
+  # not exist, so those rows assert only that archy does NOT INVENT one. That
+  # is a false-positive test, and it is the more valuable half.
+
+  - name: httpx
+    set: heldout
+    questions:
+      # 21 classes under HTTPError, all 28 in one module, stated as a tree in
+      # the module docstring.
+      - id: q2_naming
+        kind: kind_family
+        family: HTTPError
+        min_count: 15
+      - id: q3_placement
+        kind: kind_family
+        family: HTTPError
+        home_module: httpx._exceptions
+      # All four surfaces are complete (28/28 in __all__ and in docs/exceptions.md,
+      # with a test asserting the export list). Any gap here is a false positive.
+      - id: q4_surfaces
+        kind: export_gap
+        family: HTTPError
+        absent: true
+      - id: q4_docs
+        kind: doc_gap
+        family: HTTPError
+        absent: true
+
+  - name: attrs
+    set: heldout
+    project:
+      name: attrs
+      repo: python-attrs/attrs
+      sha: "8f76777"
+      src_dir: src
+    questions:
+      # 🔴 attrs has NO repo-local root: each of the 9 errors subclasses a
+      # different stdlib exception picked per semantics. The kind census
+      # structurally cannot answer this repo, so the suffix census must.
+      - id: q2_naming
+        kind: naming_family
+        suffix: Error
+        home_module: attr.exceptions
+        min_count: 8
+      - id: q4_surfaces
+        kind: doc_gap
+        family: FrozenError
+        absent: true
+
+  - name: requests
+    set: heldout
+    project:
+      name: requests
+      repo: psf/requests
+      sha: "d64b9ad"
+      src_dir: src/requests
+    questions:
+      - id: q2_naming
+        kind: kind_family
+        family: RequestException
+        min_count: 18
+      - id: q3_placement
+        kind: kind_family
+        family: RequestException
+        home_module: requests.exceptions
+      # Severity is the root base class, not an attribute: RequestException is
+      # raised, RequestsWarning is passed to warnings.warn.
+      - id: q1_gate
+        kind: kind_family
+        family: RequestsWarning
+        min_count: 3
+      # 25 defined -> 11 re-exported -> 9 in __all__ -> 8 documented.
+      - id: q4_surfaces
+        kind: export_gap
+        family: RequestException
+        missing: [InvalidURL, ProxyError, SSLError]
+
+  - name: rich
+    set: heldout
+    questions:
+      # The one question rich does answer: ConsoleError is a real root with 6
+      # children in rich.errors.
+      - id: q2_naming
+        kind: kind_family
+        family: ConsoleError
+        home_module: rich.errors
+        min_count: 5
+      # 🔴 FALSE-POSITIVE TESTS. rich re-exports no error type (__all__ is five
+      # console helpers) and ships no reference page for them, so there is no
+      # surface for archy to find a gap in. Claiming one would be inventing a
+      # convention the project does not have.
+      - id: q4_surfaces
+        kind: export_gap
+        family: ConsoleError
+        absent: true
+      - id: q4_docs
+        kind: doc_gap
+        family: ConsoleError
+        absent: true
