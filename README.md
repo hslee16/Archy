@@ -123,7 +123,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.43.1, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
+**Status:** v0.44.0, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -431,7 +431,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.43.1
+- uses: hslee16/archy@v0.44.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -457,7 +457,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.43.1
+    rev: v0.44.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -649,6 +649,8 @@ Shipped:
 
 - **v0.42, `archy render`** ([#284](https://github.com/hslee16/archy/issues/284)): static HTML export for the human governor, `--view dsm|trend`. Self-contained (inline SVG + CSS, no JS, no CDN, no server) and byte-stable for a fixed input. CLI-only by design: no MCP tool, and the `graph` view stays deferred behind a usage signal ([`docs/SPEC_VISUALIZATION.md`](docs/SPEC_VISUALIZATION.md) §3a, §6.3).
 - **v0.43, `required:` reach contracts** ([#387](https://github.com/hslee16/archy/issues/387)): the inverse of `forbid:`. Every module matching `source` must *transitively* reach `must_reach`, counting the implicit package-`__init__` import Python guarantees. From a reported production incident where 34 standalone entrypoints each needed a model registry imported before the ORM configured itself: 21 crashed, and 2 passed only by reaching it through unrelated imports, which is why the rule is defined over reach and not direct imports. Opt-in, gates `archy check`, and carries the author's `reason` to every surface. Honest limit: archy cannot *derive* such a rule (that is framework semantics), so this is a ratchet that catches the rest and prevents regression, not a detector.
+- **v0.44, `archy conventions`** ([#401](https://github.com/hslee16/archy/pull/401)): reports a repository's house style derived from its own source, so an agent editing an unfamiliar project stops guessing. Five censuses: `naming` (class-name suffix families grouped by *home module*, so the file you are about to edit shows its own patterns rather than a project-wide average), `surfaces` (mirrored helper sets like `_x_to_text` / `_x_to_json`, the "wire all of these together" list), `gates` (every site where a failed finding exits non-zero, with its literal exit code and the lever controlling it), `errors` (user-error exits kept separate, so the gate count stays meaningful), and `models` (base-class / frozen / tuple-vs-list census). Advisory by design: it never fails and mutates nothing, always exiting 0, because a derived convention is evidence about a codebase, not a rule its author declared.
+
 
 **Install / distribution**
 
