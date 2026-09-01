@@ -171,3 +171,47 @@ under the fold fails rather than passing quietly.
 measured against, 7 of 25 runs touched only the module holding the logic and
 wired nothing at all; a correct, well-ranked surface rule does not reach them.
 It converts the 2 runs that stopped at two surfaces.
+
+## 🔴 What this bench does NOT measure, and the measurement that says it matters
+
+Everything above is **detection**: does the census derive the fact? The answer is yes,
+12/13 held-out. That is not the same as **retrievability**: can a reader get the fact
+out of the default output?
+
+They came apart, and the gap was measured rather than guessed. 24 pieces of real agent
+reasoning were selected *because* an inventory could in principle have stated the fact
+they were working out — a deliberately favourable sample — and scored blind against this
+build and against the previous release. Two independent readers, neither told which
+version was which:
+
+**0 of 24, both versions, perfect agreement on every row.**
+
+Both readers gave the same reason without being prompted for one:
+
+> every near-miss failed on **truncation**, not on the wrong kind of fact — the report
+> says `150; showing 12`, so **absence from the list proves nothing**
+
+Four blockers, none of which is "the census derives the wrong things":
+
+1. **Truncation.** The section computes 150 families and prints 12. The fix above moves
+   one co-update set from rank 38 to rank 4, which is why the `archy-at-eval-pin` row
+   asserts `max_rank: 12` — but that guards **one symbol**, not the class. Questions
+   about `risk`, `hotspots`, `reach`, `instability` and `gitlog` are still below the fold.
+2. **The questions are targeted; the output is a ranking.** "Does `risk.py` import
+   `hotspots`?" is a lookup, and a top-N cannot serve a lookup.
+3. **Many are negative and exhaustive.** "Does *any* of graph/cycles/score/history/trend
+   reach `layers`?" A digest can never answer a negative.
+4. **The largest cluster is documentation content** — which line of README says what.
+   `77 doc file(s)` is a count.
+
+One blocker is self-inflicted and worth stating plainly: one of the 24 asks where test
+helpers live and how they are named. Test modules are set aside by default, so the report
+**structurally cannot answer it**. That default is right for a vendored legacy subtree
+and wrong here, and `--include-tests` exists but nothing points a reader at it.
+
+**So the next change to this command is not a fifth census.** It is queryability — a
+`--module` filter, an exhaustive mode, or a lookup that answers "what consumes X" and
+"does X reach Y" on demand. 🔴 **And that should not be added to this PR**: the held-out
+set scores detection, so a retrieval feature would ship unmeasured, which is the failure
+this file exists to prevent. It needs its own held-out measurement, against derivations
+rather than repositories.
