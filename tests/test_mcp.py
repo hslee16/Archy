@@ -142,8 +142,12 @@ def test_create_server_registers_expected_tools():
         "archy_dsm",
         "archy_simulate",
         "archy_duplicates",
+        # `archy_conventions` is the 12th: it reports a project's derived house
+        # style (naming families, mirrored surfaces, gate inventory, model
+        # census) so an agent stops re-deriving conventions by reading source.
+        "archy_conventions",
     }
-    assert len(names) == 11
+    assert len(names) == 12
 
 
 def test_all_tools_declare_read_only_annotations():
@@ -245,6 +249,7 @@ def test_all_tools_declare_output_schema():
         ("archy_cycles", {}, False),  # bare list, empty on an acyclic project -> {"result": []}
         ("archy_impact", {"files": ["pkg/a.py"]}, True),  # union, blast branch (Impact)
         ("archy_impact", {"files": ["pkg/a.py"], "mode": "affected"}, True),  # affected branch
+        ("archy_conventions", {}, True),  # BaseModel return (ConventionsReport)
     ],
 )
 def test_tool_result_conforms_to_output_schema(
@@ -1585,3 +1590,43 @@ def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):
     # The guard fires inside `_manager_for` before the watcher is scheduled.
     with pytest.raises(ScanTooLargeError):
         _load_graph(tmp_path, internal_only=True)
+
+
+def test_conventions_tool_returns_the_derived_house_style(acyclic_project: Path):
+    # The wire contract an agent reads BEFORE naming a new class: the family,
+    # its home module, and the derived `concentration` that says how much to
+    # trust that home. `concentration` is a `computed_field` precisely because
+    # `model_dump()` drops plain properties, so its presence here is the
+    # regression test for that trap.
+    (acyclic_project / "pkg" / "layers.py").write_text(
+        "class Violation: pass\nclass ReachViolation: pass\n"
+    )
+    server = create_server()
+    _content, structured = _call_tool(server, "archy_conventions", {"path": str(acyclic_project)})
+    assert isinstance(structured, dict)
+    home = next(h for h in structured["naming"] if h["module"] == "pkg.layers")
+    family = next(f for f in home["families"] if f["suffix"] == "Violation")
+    assert family["home_module"] == "pkg.layers"
+    assert family["concentration"] == 1.0
+    assert home["total"] == 2
+    # Both exit channels are on the wire, separately: an agent asking "should
+    # my finding gate?" must not be handed a count of bad-input exits.
+    assert structured["gates"] == []
+    assert structured["errors"] == []
+    assert "gate_modules" in structured
+    assert "gate_codes" in structured
+    assert structured["models"]["value_classes"] == 0
+
+
+def test_conventions_tool_rejects_a_nonsense_min_family(acyclic_project: Path):
+    # Tier-2 usage error: an invalid argument value raises rather than
+    # returning a confusing empty report (#229 error model).
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    with pytest.raises(ToolError):
+        _call_tool(
+            server,
+            "archy_conventions",
+            {"path": str(acyclic_project), "min_family": 1},
+        )
