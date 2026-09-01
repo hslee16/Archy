@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="archy-surfaces-title archy-surfaces-desc">
+      <title id="archy-surfaces-title">One change, three surfaces</title>
+      <desc id="archy-surfaces-desc">Every new gate or payload field must reach the CLI text output, the CLI JSON output, and the MCP payload; wiring only some of them is the defect three consecutive review rounds of #371 each found again.</desc>
+
+      <defs>
+        <style>@import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap');</style>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+          <polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/>
+        </marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#f5f5f5"/>
+
+      <!-- Arrows first -->
+      <path d="M460,116 V152 A8,8 0 0 1 452,160 H208 A8,8 0 0 0 200,168 V192"
+            fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <line x1="500" y1="116" x2="500" y2="192" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <path d="M540,116 V152 A8,8 0 0 0 548,160 H792 A8,8 0 0 1 800,168 V192"
+            fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <path d="M200,256 V304 A8,8 0 0 0 208,312 H392 A8,8 0 0 1 400,320 V352"
+            fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <line x1="500" y1="256" x2="500" y2="352" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+      <path d="M800,256 V304 A8,8 0 0 1 792,312 H608 A8,8 0 0 0 600,320 V352"
+            fill="none" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+
+      <!-- Source of the change -->
+      <rect x="400" y="60" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="400" y="60" width="200" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="500" y="86" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">A new gate or field</text>
+      <text x="500" y="102" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">one change</text>
+
+      <!-- Surface 1 -->
+      <rect x="100" y="200" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="100" y="200" width="200" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="200" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CLI text</text>
+      <text x="200" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">_x_to_text</text>
+
+      <!-- Surface 2 -->
+      <rect x="400" y="200" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="400" y="200" width="200" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="500" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">CLI JSON</text>
+      <text x="500" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">_x_to_dict</text>
+
+      <!-- Surface 3 -->
+      <rect x="700" y="200" width="200" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="700" y="200" width="200" height="56" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+      <text x="800" y="226" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">MCP payload</text>
+      <text x="800" y="242" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">@computed_field</text>
+
+      <!-- Outcome (focal) -->
+      <rect x="340" y="360" width="320" height="56" rx="6" fill="#f5f5f5"/>
+      <rect x="340" y="360" width="320" height="56" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+      <text x="500" y="386" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">All three, or it is not shipped</text>
+      <text x="500" y="402" fill="#eb6c36" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">assert on model_dump(), not the attribute</text>
+
+      <!-- Legend strip -->
+      <line x1="40" y1="460" x2="960" y2="460" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+      <text x="40" y="476" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">WHY IT MATTERS</text>
+
+      <text x="40" y="504" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" font-style="italic">Wiring two of three is the defect three consecutive review rounds of #371 each found again. The surface left out was the MCP payload, the one agents call, so it reported</text>
+      <text x="40" y="522" fill="#4f5d75" font-size="8.5" font-family="'Geist', sans-serif" font-style="italic">passed=true for the exact case the gate existed to catch. FastMCP drops a plain @property, which is why the third box names @computed_field.</text>
+    </svg>
