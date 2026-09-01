@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from archy.cli import _conventions_to_text
 from archy.conventions import (
     ConventionsReport,
     NamingFamily,
@@ -36,6 +37,11 @@ def _project(tmp_path: Path, files: dict[str, str]) -> Path:
     for name, source in files.items():
         (pkg / name).write_text(source)
     return tmp_path
+
+
+def _new_project(files: dict[str, str]) -> Path:
+    """`_project` in a scratch directory, for cases that do not take `tmp_path`."""
+    return _project(Path(tempfile.mkdtemp()), files)
 
 
 @pytest.mark.parametrize(
@@ -656,17 +662,17 @@ def test_consumer_family_crosses_modules_that_share_no_name_stem():
     a stem; the MCP surface renders the same result through a handler that
     shares nothing with them. What the three have in common is the symbol they
     consume, so a stem-keyed census can only ever find two of them."""
-    root = Path(tempfile.mkdtemp())
-    pkg = root / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "layers.py").write_text("def find_violations():\n    return []\n")
-    (pkg / "cli.py").write_text(
-        "from pkg.layers import find_violations\n"
-        "def _violations_to_text(v): ...\n"
-        "def _violations_to_json(v): ...\n"
+    root = _new_project(
+        {
+            "layers.py": "def find_violations():\n    return []\n",
+            "cli.py": (
+                "from pkg.layers import find_violations\n"
+                "def _violations_to_text(v): ...\n"
+                "def _violations_to_json(v): ...\n"
+            ),
+            "mcp.py": "from pkg.layers import find_violations\ndef _run_check(): ...\n",
+        },
     )
-    (pkg / "mcp.py").write_text("from pkg.layers import find_violations\ndef _run_check(): ...\n")
     report = compute_conventions(root)
     fam = next(s for s in report.surfaces if s.kind == "consumer" and s.stem == "find_violations")
     assert set(fam.surfaces) == {"pkg.cli", "pkg.mcp"}
@@ -676,18 +682,71 @@ def test_consumer_family_crosses_modules_that_share_no_name_stem():
     assert set(helper.surfaces) == {"json", "text"}
 
 
+def test_consumer_family_reads_the_module_an_import_names():
+    """Keying on the bare name and taking the first definition reported the
+    wrong home: importers of `pkg.b.foo` were listed as consuming `pkg.a`,
+    pointing an agent at a module it must not edit. This repository carries
+    seven such collisions, `_load_graph` and `_score_to_dict` among them."""
+    root = _new_project(
+        {
+            "a.py": "def foo(): return 1\n",
+            "b.py": "def foo(): return 2\n",
+            "c.py": "from pkg.b import foo\n",
+            "d.py": "from pkg.b import foo\n",
+        },
+    )
+    fam = next(s for s in compute_conventions(root).surfaces if s.kind == "consumer")
+    assert fam.stem == "foo"
+    assert fam.module == "pkg.b"
+    assert set(fam.surfaces) == {"pkg.c", "pkg.d"}
+
+
+def test_two_definitions_of_one_name_stay_separate_families():
+    """Keying the census on the bare name merged them: importers of `pkg.a.foo`
+    were reported under `pkg.b` because the last home written won. Each
+    definition consumed unambiguously is its own co-update set."""
+    root = _new_project(
+        {
+            "a.py": "def foo(): return 1\n",
+            "b.py": "def foo(): return 2\n",
+            "c.py": "from pkg.a import foo\n",
+            "d.py": "from pkg.a import foo\n",
+            "e.py": "from pkg.b import foo\n",
+            "f.py": "from pkg.b import foo\n",
+        }
+    )
+    fams = [s for s in compute_conventions(root).surfaces if s.kind == "consumer"]
+    assert {(s.module, s.surfaces) for s in fams} == {
+        ("pkg.a", ("pkg.c", "pkg.d")),
+        ("pkg.b", ("pkg.e", "pkg.f")),
+    }
+
+
+def test_consumer_family_stays_silent_when_the_home_is_ambiguous():
+    """A relative import does not say which module it reached, so a colliding
+    name cannot be resolved. Saying nothing beats naming the wrong module:
+    this section exists to tell an agent what to wire, and a confident wrong
+    answer sends it to edit the wrong file."""
+    root = _new_project(
+        {
+            "a.py": "def foo(): return 1\n",
+            "b.py": "def foo(): return 2\n",
+            "c.py": "from .b import foo\n",
+            "d.py": "from .b import foo\n",
+        },
+    )
+    assert not [s for s in compute_conventions(root).surfaces if s.kind == "consumer"]
+
+
 def test_consumer_family_ignores_a_widely_used_utility():
     """A co-update set is small. Sixteen modules import the graph builder here;
     forgetting one is not a failure mode, that is infrastructure. Without the
     cap this section ranks the most-imported helper first and never reaches the
     sets it exists to name."""
-    root = Path(tempfile.mkdtemp())
-    pkg = root / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "util.py").write_text("def build_graph(): ...\n")
-    for i in range(9):
-        (pkg / f"m{i}.py").write_text("from pkg.util import build_graph\n")
+    root = _new_project(
+        {"util.py": "def build_graph(): ...\n"}
+        | {f"m{i}.py": "from pkg.util import build_graph\n" for i in range(9)},
+    )
     report = compute_conventions(root)
     assert not [s for s in report.surfaces if s.kind == "consumer" and s.stem == "build_graph"]
 
@@ -697,15 +756,15 @@ def test_cross_module_families_outrank_larger_same_module_ones():
     at rank 38 of 50, behind a 13-member family of one-helper-per-tool that no
     caller has to keep in step. A family confined to one file is wired in a
     single edit; a family spanning several is the one that gets half-wired."""
-    root = Path(tempfile.mkdtemp())
-    pkg = root / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "core.py").write_text("def render(): ...\n")
-    (pkg / "a.py").write_text("from pkg.core import render\n")
-    (pkg / "b.py").write_text("from pkg.core import render\n")
-    # a large same-module helper family, of the shape that used to win
-    (pkg / "big.py").write_text("\n".join(f"def _run_{n}(): ..." for n in "abcdefghij") + "\n")
+    root = _new_project(
+        {
+            "core.py": "def render(): ...\n",
+            "a.py": "from pkg.core import render\n",
+            "b.py": "from pkg.core import render\n",
+            # a large same-module helper family, of the shape that used to win
+            "big.py": "\n".join(f"def _run_{n}(): ..." for n in "abcdefghij") + "\n",
+        },
+    )
     report = compute_conventions(root)
     kinds = [s.kind for s in report.surfaces]
     assert kinds.index("consumer") < kinds.index("helper")
@@ -720,15 +779,12 @@ def test_truncated_sections_say_how_to_see_the_rest(tmp_path: Path):
     reasoning, every one chosen because this command could in principle answer
     it, scored zero -- and both blind readers named truncation rather than the
     analysis. The number was computed and then withheld."""
-    from archy.cli import _conventions_to_text
-
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
     # one distinct suffix family per module, so there are many homes to truncate
-    for i in range(8):
-        (pkg / f"m{i}.py").write_text(f"class AlphaKind{i}: pass\nclass BetaKind{i}: pass\n")
-    report = compute_conventions(tmp_path)
+    root = _project(
+        tmp_path,
+        {f"m{i}.py": f"class AlphaKind{i}: pass\nclass BetaKind{i}: pass\n" for i in range(8)},
+    )
+    report = compute_conventions(root)
     text = _conventions_to_text(report, top_n=2)
     assert "--top" in text, "a truncated section must name the flag that widens it"
     # and an untruncated section must not nag
@@ -741,8 +797,6 @@ def test_setting_tests_aside_says_how_to_include_them(tmp_path: Path):
     wrong when the question IS about tests -- "where do helpers live in this test
     file and what are they called" is a real convention. One of the 24 scored
     derivations asked exactly that, and the report could not answer it."""
-    from archy.cli import _conventions_to_text
-
     pkg = tmp_path / "pkg"
     (pkg / "tests").mkdir(parents=True)
     (pkg / "__init__.py").write_text("")

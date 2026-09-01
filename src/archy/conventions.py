@@ -145,6 +145,12 @@ class SurfaceFamily(BaseModel):
                         differing trailing segments.
     `kind='mirrored'` -- one name defined in several modules, `surfaces`
                         are those modules.
+    `kind='consumer'` -- one definition imported by several modules, which is
+                        the shape a stem-keyed census cannot see: `module` is
+                        the defining module and `surfaces` are the importers.
+                        A name defined in more than one module is omitted
+                        unless the import says which one it came from, because
+                        naming the wrong home is worse than naming none.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -447,7 +453,11 @@ class _ModuleFacts:
         self.exports: frozenset[str] | None = None
         # Names this module pulls in by `from ... import X`. Kept unfiltered;
         # `_surface_families` decides which of them this project defines.
-        self.internal_imports: set[str] = set()
+        # (source module, name). The module is "" for a relative import, which
+        # is not resolved here: a name that is unambiguous project-wide does not
+        # need it, and one that is not must not be guessed at. See
+        # `_surface_families`.
+        self.internal_imports: set[tuple[str, str]] = set()
 
 
 def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
@@ -459,9 +469,10 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
             facts.functions.append(node)
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
+            source = "" if node.level else (node.module or "")
             for alias in node.names:
                 if alias.name != "*":
-                    facts.internal_imports.add(alias.name)
+                    facts.internal_imports.add((source, alias.name))
     for node in tree.body:
         if isinstance(node, ast.Assign | ast.AnnAssign):
             facts.body_assignments.append(node)
@@ -994,21 +1005,43 @@ def _surface_families(
                     )
                 )
 
-    defined_in = {}
+    # 🔴 EVERY module that defines the name, not the first one seen. Keying on
+    # the bare name and taking the first definition is a WRONG ANSWER, not a
+    # missing one: with `foo` defined in both `pkg.a` and `pkg.b`, an importer
+    # of `pkg.b.foo` was reported as consuming `pkg.a`, pointing an agent at a
+    # module it must not edit. This repository carries seven such collisions
+    # (`_load_graph`, `_graph_kwargs` and `_score_to_dict` among them).
+    defined_in: dict[str, set[str]] = defaultdict(set)
     for f in facts:
         for node in f.classes:
-            defined_in.setdefault(node.name, f.qualname)
+            defined_in[node.name].add(f.qualname)
         for node in f.functions:
-            defined_in.setdefault(node.name, f.qualname)
-    consumers: dict[str, set[str]] = defaultdict(set)
+            defined_in[node.name].add(f.qualname)
+    # Keyed by (home, name), never by name alone. Two modules can define the
+    # same name and each be imported unambiguously; merging them into one
+    # family reports half its consumers against the wrong home, which is the
+    # same wrong answer one level up.
+    consumers: dict[tuple[str, str], set[str]] = defaultdict(set)
     for f in facts:
-        for name in f.internal_imports:
-            home = defined_in.get(name)
-            # Only a symbol this project defines, and only where the importer is
-            # not its home: a module importing from itself is not a surface.
-            if home is not None and home != f.qualname:
-                consumers[name].add(f.qualname)
-    for name, modules in consumers.items():
+        for source, name in f.internal_imports:
+            candidates = defined_in.get(name)
+            if not candidates:
+                continue  # not a symbol this project defines
+            if source in candidates:
+                home = source
+            elif len(candidates) == 1:
+                # A relative import, or one written through a re-export. The
+                # name has one definition project-wide, so there is nothing to
+                # get wrong.
+                home = next(iter(candidates))
+            else:
+                # Ambiguous and unresolved. Saying nothing beats naming the
+                # wrong module, which is the failure this section causes most.
+                continue
+            # A module importing from itself is not a surface.
+            if home != f.qualname:
+                consumers[(home, name)].add(f.qualname)
+    for (home, name), modules in sorted(consumers.items()):
         # 🔴 A co-update set is SMALL BY NATURE, and the cap is what separates one
         # from a popular utility. Sixteen modules import `build_graph`; forgetting
         # one of them is not a failure mode, that is just infrastructure. Two or
@@ -1021,7 +1054,7 @@ def _surface_families(
                 SurfaceFamily(
                     kind="consumer",
                     stem=name,
-                    module=defined_in[name],
+                    module=home,
                     surfaces=tuple(sorted(modules)),
                 )
             )

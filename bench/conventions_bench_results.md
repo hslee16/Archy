@@ -141,14 +141,14 @@ it was answering with two thirds of the truth, ranked below the fold.
 `--format json`, and the MCP payload. The CLI pair is `_violations_to_text` and
 `_violations_to_json`, which share the stem `_violations_to` and grouped
 correctly. The MCP surface is `_run_check`, which shares **no stem with them**.
-A stem-keyed census is structurally blind to the third surface — and that is
+A stem-keyed census is structurally blind to the third surface, and that is
 the surface half-wired features actually miss.
 
 Two changes, both recombinations of what the census already parsed:
 
 - **Consumer families.** What the three surfaces have in common is not a name,
   it is the symbol they consume. A consumer family is keyed on a definition and
-  lists the internal modules importing it, **capped at 5** — a co-update set is
+  lists the internal modules importing it, **capped at 5**: a co-update set is
   small by nature. Sixteen modules import `build_graph`; forgetting one is not a
   failure mode, that is infrastructure.
 - **Cross-module families rank first.** A family confined to one file is wired
@@ -159,7 +159,7 @@ Measured on this project at `77517865e0d5`:
 | | before | after |
 |---|---|---|
 | `find_violations` co-update set | not detected as a family | **rank 4 of 150**, naming `archy.cli`, `archy.diff`, `archy.mcp` |
-| best partial answer | `_violations_to` at **rank 38 of 50** — `json`, `text` only | still present, and no longer the best answer |
+| best partial answer | `_violations_to` at **rank 38 of 50** (`json`, `text` only) | still present, and no longer the best answer |
 | visible in the default `--top 12`? | **no** | **yes** |
 
 🔴 **It was derived and invisible, which is the failure mode a correctness score
@@ -180,7 +180,7 @@ out of the default output?
 
 They came apart, and the gap was measured rather than guessed. 24 pieces of real agent
 reasoning were selected *because* an inventory could in principle have stated the fact
-they were working out — a deliberately favourable sample — and scored blind against this
+they were working out (a deliberately favourable sample) and scored blind against this
 build and against the previous release. Two independent readers, neither told which
 version was which:
 
@@ -188,28 +188,36 @@ version was which:
 
 Both readers gave the same reason without being prompted for one:
 
-> every near-miss failed on **truncation**, not on the wrong kind of fact — the report
+> every near-miss failed on **truncation**, not on the wrong kind of fact; the report
 > says `150; showing 12`, so **absence from the list proves nothing**
 
 Four blockers, none of which is "the census derives the wrong things":
 
 1. **Truncation.** The section computes 150 families and prints 12. The fix above moves
    one co-update set from rank 38 to rank 4, which is why the `archy-at-eval-pin` row
-   asserts `max_rank: 12` — but that guards **one symbol**, not the class. Questions
+   asserts `max_rank: 12`, but that guards **one symbol**, not the class. Questions
    about `risk`, `hotspots`, `reach`, `instability` and `gitlog` are still below the fold.
 2. **The questions are targeted; the output is a ranking.** "Does `risk.py` import
    `hotspots`?" is a lookup, and a top-N cannot serve a lookup.
 3. **Many are negative and exhaustive.** "Does *any* of graph/cycles/score/history/trend
    reach `layers`?" A digest can never answer a negative.
-4. **The largest cluster is documentation content** — which line of README says what.
+4. **The largest cluster is documentation content**: which line of README says what.
    `77 doc file(s)` is a count.
 
 One blocker is self-inflicted and worth stating plainly: one of the 24 asks where test
 helpers live and how they are named. Test modules are set aside by default, so the report
 **structurally cannot answer it**. That default is right for a vendored legacy subtree
-and wrong here, and `--include-tests` exists but nothing points a reader at it.
+and wrong here, and at the time of the scoring `--include-tests` existed with nothing
+pointing a reader at it. The report now prints `(--include-tests to census them)` beside
+the excluded count, and truncated sections now name `--top`.
 
-**So the next change to this command is not a fifth census.** It is queryability — a
+⚠️ **The 0 of 24 was measured before those two fixes and has not been re-scored.** So it
+describes the build the readers saw, not this one, and nothing here claims the fixes move
+it. The honest prior is that they do not move it much: blockers 2, 3 and 4 above are
+untouched by a hint, and a re-score would be the way to find out rather than an argument
+about it.
+
+**So the next change to this command is not a fifth census.** It is queryability: a
 `--module` filter, an exhaustive mode, or a lookup that answers "what consumes X" and
 "does X reach Y" on demand. 🔴 **And that should not be added to this PR**: the held-out
 set scores detection, so a retrieval feature would ship unmeasured, which is the failure
