@@ -10,10 +10,10 @@
 [![Glama](https://glama.ai/mcp/servers/hslee16/archy/badges/score.svg)](https://glama.ai/mcp/servers/hslee16/archy)
 
 > **Your folders show your architecture. Your imports decide it.**
-> archy is the one that *fails* when they disagree: dependency direction, transitive reach and cycles, checked against layers and forbidden edges you declared, every session and in CI.
+> archy turns a Python import graph into something an agent can *use*: blast radius before an edit, the tests that edit affects, the modules most at risk. And it *fails* when the graph disagrees with the layers you declared. Same graph either way, as a CLI and an MCP server, every session and in CI.
 
 > [!IMPORTANT]
-> **Status, 2026-07-27: maintenance. Feature work has stopped, on purpose.**
+> **Status, 2026-09-01: one line reopened. Everything else stays in maintenance.**
 >
 > archy works, is tested on every push across three Python versions and three
 > operating systems, and will keep working. Bugs get fixed. Pull requests get
@@ -29,6 +29,21 @@
 > because the reasoning behind it was circular: I had cited a lack of users as
 > grounds to stop the very work meant to attract them. This time the argument
 > is different and it is evidence, not a mood. It is all published below.
+>
+> **What reopened, and why it is not a walk-back.** All four studies measured
+> agents with a large context window and strong long-range code reasoning. The
+> open question is whether these same tools matter *more* to a small local
+> model, which has neither. A DGX Spark holds 128 GB of unified memory, which
+> brings roughly 70B to 200B models within local reach at 4-bit, but their
+> usable context stays far below a frontier API model's and degrades faster
+> across it. Under that constraint a structural answer to "what does this
+> change reach, and what breaks if it is wrong" may substitute for context the
+> model cannot hold. That is a different population, not a re-reading of the
+> same result, and it is untested. archy has already tested two
+> token-reduction propositions and got null on both, so nothing here is a
+> claim yet. Any result, including another null, gets published in
+> [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md) like the others. The
+> thresholds are written down in advance in [#408](https://github.com/hslee16/archy/issues/408).
 
 ## Read this first: I measured the premise, and it was wrong
 
