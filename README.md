@@ -58,12 +58,12 @@ The full write-up, including the six measurement artifacts that nearly turned a 
 
 ![archy's layer contract: four stacked layers, cli over policy over graph over parser, with dependencies allowed only downward and one forbidden upward edge from the graph layer into cli marked as the violation.](docs/assets/diagrams/layer-contract.png)
 
-The contract is the picture. Everything is allowed to depend downward, and nothing upward, which is a rule you declare rather than one archy infers.
+Nothing in that picture is derived. Which layer a module belongs to, and which direction is forbidden, are facts you write down in `archy.yaml`; archy only checks that the source still agrees with them.
 
 Here is the failure it was built for, compressed into one line. This is archy's own source, under archy's own layer rules, with a single import of the kind an agent adds when it needs a helper and the nearest one is upward:
 
 ```python
-# src/archy/parser.py
+# src/archy/graph.py
 from archy.cli import main    # convenience import. The diff looks harmless.
 ```
 
@@ -71,8 +71,8 @@ from archy.cli import main    # convenience import. The diff looks harmless.
 $ uvx archy check .
 # 1 layer violation(s) (config: archy.yaml)
 
-parser -> cli (forbidden):
-  archy.parser -> archy.cli  (line: 9)
+graph -> cli (forbidden):
+  archy.graph -> archy.cli  (line: 21)
 
 $ echo $?
 1
@@ -82,19 +82,19 @@ $ uvx archy cycles .
 
 Cycle of 8 module(s):
   - archy.cli
+  - archy.conventions
   - archy.duplicates
   - archy.graph
   - archy.index
   - archy.mcp
-  - archy.parser
   - archy.simulate
   - archy.watcher
 
 $ uvx archy score .
-# archy score: 0.660          (0.669 before the edit)
+# archy score: 0.647          (0.656 before the edit)
 ...
-acyclicity:  0.930  (1 cycles, tangle=0.070)
-# graph: 115 modules, 244 edges     (243 before the edit)
+acyclicity:  0.942  (1 cycles, tangle=0.058)
+# graph: 139 modules, 264 edges     (263 before the edit)
 ```
 
 One import, one edge. A forbidden layer edge, an eight-module cycle, and the score down 0.009. Nothing in the diff itself says any of that, and no amount of reading the file reveals it, because the rule that makes it a violation is not in the source. You supplied it.
@@ -103,7 +103,7 @@ Note the size of the score move. 0.009 is small, and that is the honest shape of
 
 That example is a *direct* forbidden import, which is the easy case: an agent that reads `archy.yaml` first can catch it without archy. The harder and more honest case is a **transitive** violation, where the edit adds no forbidden import at all and reading the config tells you nothing. [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) is a one-command reproduction of that, and it states plainly which archy surfaces catch it (one) and which miss it (three).
 
-Reproduce the example above on a checkout: add that import to `src/archy/parser.py`, then run the three commands **with the `uvx` prefix**. It has to be a separate archy, because that one import is a genuine runtime import cycle, and an editable-installed archy can no longer start to report on itself. `archy check` exits 1, which is what it does in CI and what the MCP server reports to an agent before it commits.
+Reproduce the example above on a checkout: add that import to `src/archy/graph.py`, then run the three commands **with the `uvx` prefix**. It has to be a separate archy, because that one import is a genuine runtime import cycle, and an editable-installed archy can no longer start to report on itself. `archy check` exits 1, which is what it does in CI and what the MCP server reports to an agent before it commits.
 
 ![archy demo](docs/demo.gif)
 
@@ -166,7 +166,7 @@ AI agents generate code at machine speed, and the reasoning went: without a feed
 
 ![archy's architecture: your Python source is parsed into an import graph, which feeds both the analysis modules and the layer policy you declare in archy.yaml, with every result reaching you through one shared set of surfaces.](docs/assets/diagrams/architecture.png)
 
-`archy` watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. It's designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents can read their own architectural impact before committing.
+What that buys you is placement: it runs in CI, in pre-commit, and as an MCP server (`archy mcp`), so a coding agent can read its own architectural impact before it commits rather than after review.
 
 The agent-feedback framing is empirically supported by 2025-2026 research: the Navigation Paradox paper shows large LLM context windows do not eliminate the need for structural graph navigation, LocAgent's ablation finds graph edges materially improve code-localization accuracy, the Constraint Decay paper ([arxiv:2605.06445](https://arxiv.org/html/2605.06445v1)) finds agents lose ~30 points in pass rate as architectural constraints accumulate (Clean Architecture layering alone costs -9.1 points, on the open and mid-tier models tested) and that its ground-truth layer/dependency-direction verifier is essentially `archy check`, and the coding-agent failure-mode literature names the specific patterns (scope drift, cross-file reasoning failure) that an architectural feedback loop is built to catch. Citations, a failure-mode-to-archy-capability mapping, and the resulting roadmap priorities are in [`docs/research/RESEARCH_METRICS.md` §14c](docs/research/RESEARCH_METRICS.md).
 

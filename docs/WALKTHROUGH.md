@@ -85,6 +85,11 @@ the whole point.
 But `shipping.common.tenancy` already imports `shipping.api.context`. So the
 store now reaches the api layer, two hops out.
 
+![The store layer imports common and common imports api, each permitted on its own; together they compose a forbidden reach from store to api that exists in no single file.](assets/diagrams/transitive-violation.png)
+
+The dashed arrow is the thing the rules forbid, and it is the one arrow no
+file contains.
+
 ## The result
 
 | Surface | Result | Why |
