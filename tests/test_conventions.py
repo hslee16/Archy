@@ -929,6 +929,26 @@ def test_module_view_drops_a_relative_import_past_the_project_root(tmp_path: Pat
     assert compute_module_view(root, "pkg.a").imports_internal == ()
 
 
+def test_module_view_ignores_a_reexport_from_outside_the_package(tmp_path: Path):
+    """Only a SELF-referential import re-exports. `graph._reexport_source` skips
+    anything else, and treating a cross-package import as a re-export routed
+    `from pkgA import Thing` straight to `pkgB.impl` and reported NOTHING
+    importing `pkgA` -- while `archy impact` reports the `pkgA` edge. The
+    existing re-export test only covers the same-package case, where the two
+    rules happen to agree, so the divergence was invisible.
+    """
+    pkg_b = tmp_path / "pkgB"
+    pkg_b.mkdir()
+    (pkg_b / "__init__.py").write_text("")
+    (pkg_b / "impl.py").write_text("class Thing: ...\n")
+    pkg_a = tmp_path / "pkgA"
+    pkg_a.mkdir()
+    (pkg_a / "__init__.py").write_text("from pkgB.impl import Thing\n")
+    (tmp_path / "consumer.py").write_text("from pkgA import Thing\n")
+    assert compute_module_view(tmp_path, "consumer").imports_internal == ("pkgA",)
+    assert compute_module_view(tmp_path, "pkgA").imported_by == ("consumer",)
+
+
 def test_module_view_sees_plain_import_statements(tmp_path: Path):
     root = _project(tmp_path, {"a.py": "import pkg.b\n", "b.py": ""})
     assert compute_module_view(root, "pkg.a").imports_internal == ("pkg.b",)

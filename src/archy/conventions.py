@@ -702,6 +702,15 @@ def _reexport_maps(
             continue
         pkg_map: dict[str, str] = {}
         for base, names in f.import_froms:
+            # Only a SELF-referential import re-exports. `graph._reexport_source`
+            # skips anything else, on the grounds that re-exporting a module from
+            # outside the package says nothing about where the package's own names
+            # live; treating it as a re-export routed `from pkgA import Thing` to
+            # `pkgB.impl` and reported nothing importing `pkgA`, where the graph
+            # reports the `pkgA` edge. A relative import always lands inside the
+            # package by construction, so this one check covers both forms.
+            if base != qualname and not base.startswith(qualname + "."):
+                continue
             for name, local in names:
                 # `from .x import Foo` re-exports Foo from the submodule `x`;
                 # `from .x import y` where `x.y` is itself a module is a
