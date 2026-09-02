@@ -585,9 +585,13 @@ def _resolve_relative(module: str | None, level: int, pkg: str) -> str:
     parts = pkg.split(".") if pkg else []
     # level 1 is the containing package, each extra level walks one further up
     up = level - 1
-    base = ".".join(parts[: len(parts) - up]) if up <= len(parts) else ""
-    if not base:
-        return module or ""
+    if up >= len(parts):
+        # Enough dots to walk past the project root. Python rejects this import
+        # at runtime, and `graph._resolve_relative_base` drops it for the same
+        # reason; returning the bare suffix instead would invent an edge to
+        # whatever top-level module happened to share the name.
+        return ""
+    base = ".".join(parts[: len(parts) - up])
     return f"{base}.{module}" if module else base
 
 
@@ -744,10 +748,10 @@ def _resolved_imports(
     applies, which is the case where the package really is what gets imported.
     """
     resolved = {m for m in facts.imported_modules if m in known}
-    for base, names, may_fall_back in facts.import_froms:
+    for base, names, _ in facts.import_froms:
         targets = set()
         pkg_map = reexports.get(base, {})
-        for name, _ in names:
+        for name, _local in names:
             submodule = f"{base}.{name}"
             if submodule in known:
                 targets.add(submodule)
@@ -755,9 +759,14 @@ def _resolved_imports(
                 targets.add(pkg_map[name])
         if targets:
             resolved |= targets
-        elif may_fall_back and base in known:
+        elif base in known:
+            # Nothing imported was a module of its own, so the package itself is
+            # what gets imported -- including `from . import NAME` where NAME is
+            # defined directly in the `__init__.py`. Gating this on the import
+            # being non-relative made `from . import DIRECT_NAME` report no
+            # imports at all, while `archy impact` reported the package edge.
             resolved.add(base)
-    return resolved
+    return resolved - {facts.qualname}
 
 
 def _try_collect(module: Module) -> _ModuleFacts | None:

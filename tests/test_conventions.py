@@ -907,6 +907,28 @@ def test_module_view_follows_a_package_reexport_to_the_defining_module(tmp_path:
     assert compute_module_view(root, "pkg.sub.impl").imported_by == ("pkg.a", "pkg.sub")
 
 
+def test_module_view_reports_a_name_defined_in_the_package_init(tmp_path: Path):
+    """`from . import NAME` where NAME lives in the `__init__.py` itself imports
+    the PACKAGE. Suppressing the package fallback for every bare relative import
+    made this report no imports at all, while `archy impact` reported the edge.
+    The sibling-module case is already handled by preferring a real submodule,
+    so the suppression bought nothing and cost a false negative.
+    """
+    root = _project(tmp_path, {"sub.py": "from . import DIRECT\n"})
+    (tmp_path / "pkg" / "__init__.py").write_text("DIRECT = 1\n")
+    assert compute_module_view(root, "pkg.sub").imports_internal == ("pkg",)
+    assert compute_module_view(root, "pkg").imported_by == ("pkg.sub",)
+
+
+def test_module_view_drops_a_relative_import_past_the_project_root(tmp_path: Path):
+    """`from ... import x` in a shallow package escapes the root. Python rejects
+    it at runtime and `graph._resolve_relative_base` drops it; emitting the bare
+    suffix instead would invent an edge to whatever top-level module shares the
+    name."""
+    root = _project(tmp_path, {"a.py": "from ... import b\n", "b.py": ""})
+    assert compute_module_view(root, "pkg.a").imports_internal == ()
+
+
 def test_module_view_sees_plain_import_statements(tmp_path: Path):
     root = _project(tmp_path, {"a.py": "import pkg.b\n", "b.py": ""})
     assert compute_module_view(root, "pkg.a").imports_internal == ("pkg.b",)
