@@ -1,4 +1,13 @@
-"""Click-based command-line interface for archy."""
+"""Click-based command-line interface for archy.
+
+archy:owns        ContractsOutcome, affected, brief, check, contracts, conventions,
+                  coupling, cycles, diff, dsm, duplicates, graph, hotspots, impact,
+                  index, index_clear, index_status, index_sync, install, main, mcp,
+                  render, score, simulate, snapshot, trend, uninstall,
+                  what_to_refactor_next
+archy:gates       exit 1 (flag:--strict), exit 1 (flag:--strict-tolerance),
+                  exit 1 (hardcoded), exit 1 (param:check), non-zero exit (hardcoded)
+"""
 
 from __future__ import annotations
 
@@ -1814,7 +1823,9 @@ def conventions(
         path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
     if emit_headers:
-        _emit_headers(report, path, write=write, check=check_headers, fmt=fmt)
+        _emit_headers(
+            report, path, write=write, check=check_headers, fmt=fmt, include_tests=include_tests
+        )
         return
     if fmt == "json":
         click.echo(json.dumps(_conventions_to_dict(report, top_n=top_n), indent=2, sort_keys=True))
@@ -3303,7 +3314,13 @@ def _require_headers_flags(
 
 
 def _emit_headers(
-    report: ConventionsReport, path: Path, *, write: bool, check: bool, fmt: str
+    report: ConventionsReport,
+    path: Path,
+    *,
+    write: bool,
+    check: bool,
+    fmt: str,
+    include_tests: bool,
 ) -> None:
     """Print, write or verify the derived header blocks.
 
@@ -3311,7 +3328,12 @@ def _emit_headers(
     failure whose only content is "something drifted" costs a reader the same
     investigation the check was supposed to save.
     """
-    headers = compute_headers(report, path, discover_modules(path, **_graph_kwargs(path)))
+    headers = compute_headers(
+        report,
+        path,
+        discover_modules(path, **_graph_kwargs(path)),
+        include_tests=include_tests,
+    )
     stale: list[str] = []
     written: list[str] = []
 

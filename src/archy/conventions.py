@@ -48,6 +48,15 @@ arguments, decorator shapes, the statement nesting a ``sys.exit`` sits
 in), and the stdlib grammar already models those exactly. Module
 discovery is shared with the graph builder so the file set matches what
 every other archy command sees.
+
+archy:owns        BaseFamily, ConventionsReport, DocGap, ExportGap, Gate, ModelCensus,
+                  ModulePartition, ModuleView, NamingFamily, NamingHome, RegistryEntry,
+                  SharedConstant, SurfaceFamily, camel_suffix, censused_modules,
+                  compute_conventions, compute_module_view
+archy:mirrored-by ConventionsReport -> archy.cli, archy.headers, archy.mcp,
+                  ModuleView -> archy.cli, archy.mcp, compute_conventions -> archy.cli,
+                  archy.mcp, bench.conventions_bench, compute_module_view -> archy.cli,
+                  archy.mcp
 """
 
 from __future__ import annotations
@@ -800,6 +809,24 @@ def _classify_module(
     if root_of:
         return "shadowed", f"set aside: in {root_of}, which duplicates its parent"
     return "censused", "censused"
+
+
+def censused_modules(qualnames: Iterable[str], *, include_tests: bool = False) -> frozenset[str]:
+    """The subset of `qualnames` the census actually looked at.
+
+    A third caller of `_classify_module`, for the same reason the other two
+    share it: a surface that reports on modules the census set aside is
+    reporting about a population the census never measured. `--emit-headers`
+    got this wrong first time and wrote a derived block into all 143 modules,
+    tests included, while the census had looked at 79 of them.
+    """
+    names = list(qualnames)
+    shadows = _shadow_roots(names)
+    return frozenset(
+        name
+        for name in names
+        if _classify_module(name, shadows, include_tests=include_tests)[0] == "censused"
+    )
 
 
 def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[BaseFamily, ...]:

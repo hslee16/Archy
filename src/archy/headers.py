@@ -28,6 +28,9 @@ tool call; and the entire claim is that the fact arrives through `read` rather
 than through an archy invocation, so an MCP tool that hands the same block to a
 model that asked for it would be testing the pull surface that already returned
 0 of 89, 0 of 24 and 0 of 38. #431 records the reopen path.
+
+archy:owns        ModuleHeader, apply_header, compute_headers, existing_block,
+                  render_header, split_block
 """
 
 from __future__ import annotations
@@ -38,7 +41,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from archy.conventions import ConventionsReport
+from archy.conventions import ConventionsReport, censused_modules
 from archy.graph import Module
 
 MARKER = "archy:"
@@ -85,7 +88,11 @@ def _public_top_level(source: str) -> tuple[str, ...]:
 
 
 def compute_headers(
-    report: ConventionsReport, root: Path, modules: Iterable[Module]
+    report: ConventionsReport,
+    root: Path,
+    modules: Iterable[Module],
+    *,
+    include_tests: bool = False,
 ) -> tuple[ModuleHeader, ...]:
     """Derive one header per scanned module from what `conventions` already computed.
 
@@ -101,7 +108,12 @@ def compute_headers(
     # user typed, commonly `.`, so the two have to be reconciled before either
     # is used as a key or printed as a relative path.
     root = root.resolve()
-    paths = {m.qualname: m.path.resolve() for m in modules}
+    discovered = list(modules)
+    # Only where the census looked. Writing a derived block into a module the
+    # census set aside states a fact about a population it never measured, and
+    # on this repository that was 143 modules written from a census of 79.
+    censused = censused_modules((m.qualname for m in discovered), include_tests=include_tests)
+    paths = {m.qualname: m.path.resolve() for m in discovered if m.qualname in censused}
     by_module: dict[str, list[str]] = {}
     for family in report.surfaces:
         # `consumer` is the shape that matters here: one definition several
