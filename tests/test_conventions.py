@@ -982,3 +982,44 @@ def test_module_view_suggests_near_matches_for_an_unknown_module(tmp_path: Path)
     root = _project(tmp_path, {"layers.py": ""})
     with pytest.raises(LookupError, match=r"pkg\.layers"):
         compute_module_view(root, "layers")
+
+
+def test_lookup_resolves_the_five_shapes_that_used_to_disagree(tmp_path: Path):
+    """Pin the ANSWERS, not the agreement.
+
+    An agreement assertion between the lookup and the graph is tautological now
+    that both call `graph.resolve_from_import`: break the shared function and
+    both sides break identically, so they still agree. Verified by mutating the
+    re-export branch, which an agreement-only version of this test passed
+    straight through. So this asserts what each shape must resolve TO, which is
+    what #414 actually had to fix five times.
+    """
+    from archy.graph import build_graph
+
+    pkg = tmp_path / "app"
+    (pkg / "sub").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from app.impl import Thing\nfrom . import sibling\n")
+    (pkg / "impl.py").write_text("Thing = 1\n")
+    (pkg / "sibling.py").write_text("x = 1\n")
+    (pkg / "sub" / "__init__.py").write_text("")
+    (pkg / "sub" / "uses.py").write_text(
+        "from app import Thing\n"  # a re-exported name routes to the DEFINING module
+        "from app import sibling\n"  # a submodule is an edge to the submodule
+        "from .. import sibling as s2\n"  # relative, out of a subpackage
+    )
+
+    view = compute_module_view(tmp_path, "app.sub.uses")
+    resolved = set(view.imports_internal)
+
+    # `from app import Thing` must not stop at the package: `app.impl` defines it.
+    assert "app.impl" in resolved
+    # `from app import sibling` is the submodule, never the bare package.
+    assert "app.sibling" in resolved
+    # Attributing the submodule import to `app` as well was one of the five.
+    assert "app" not in resolved
+
+    # And the graph, which is the surface the lookup must never contradict,
+    # reaches the same modules from the same file.
+    g = build_graph(tmp_path)
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+    assert {t for t in g.successors("app.sub.uses") if t in internal} == resolved

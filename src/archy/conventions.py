@@ -74,6 +74,8 @@ from archy.graph import (
     Module,
     _follow_reexport_chains,
     discover_modules,
+    resolve_from_import,
+    resolve_relative_import,
 )
 
 # A CamelCase name splits into an acronym run (`DSM`, `MCP`) or a single
@@ -583,26 +585,13 @@ def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _M
 
 
 def _resolve_relative(module: str | None, level: int, pkg: str) -> str:
-    """Turn `from . import x` / `from ..y import z` into an absolute dotted name.
+    """`graph.resolve_relative_import` in this module's vocabulary.
 
-    A relative import is invisible to a plain name match, so a module census
-    that skipped it would report "no, it does not import that" for a module
-    that plainly does -- the worst possible error for a lookup whose whole
-    purpose is answering negatives.
+    The decision is not duplicated here; only the empty-string convention this
+    file's callers expect, where the graph uses None for an import that walks
+    past the project root.
     """
-    if not level:
-        return module or ""
-    parts = pkg.split(".") if pkg else []
-    # level 1 is the containing package, each extra level walks one further up
-    up = level - 1
-    if up >= len(parts):
-        # Enough dots to walk past the project root. Python rejects this import
-        # at runtime, and `graph._resolve_relative_base` drops it for the same
-        # reason; returning the bare suffix instead would invent an edge to
-        # whatever top-level module happened to share the name.
-        return ""
-    base = ".".join(parts[: len(parts) - up])
-    return f"{base}.{module}" if module else base
+    return resolve_relative_import(module, level, pkg) or ""
 
 
 def _string_literals(node: ast.expr | None) -> frozenset[str]:
@@ -741,33 +730,13 @@ def _resolved_imports(
 ) -> set[str]:
     """The project modules `facts` imports, resolved against what exists.
 
-    Mirrors `graph._expand_with_imported_names` so this lookup and archy's own
-    dependency graph give the same answer. `from pkg import submodule` is an
-    edge to the SUBMODULE, not to `pkg`: attributing it to the package too
-    reported `archy.install.base` as importing `archy.install`, which `archy
-    impact` says nothing does. A name the package re-exports routes to the
-    module that defines it. The bare package is the fallback only when neither
-    applies, which is the case where the package really is what gets imported.
+    The resolution itself is `graph.resolve_from_import`, not a copy of it, so
+    this lookup and archy's own dependency graph cannot give different answers.
+    They did, five ways, before the algorithm was shared (#414, #419).
     """
     resolved = {m for m in facts.imported_modules if m in known}
     for base, names in facts.import_froms:
-        targets = set()
-        pkg_map = reexports.get(base, {})
-        for name, _local in names:
-            submodule = f"{base}.{name}"
-            if submodule in known:
-                targets.add(submodule)
-            elif name in pkg_map:
-                targets.add(pkg_map[name])
-        if targets:
-            resolved |= targets
-        elif base in known:
-            # Nothing imported was a module of its own, so the package itself is
-            # what gets imported -- including `from . import NAME` where NAME is
-            # defined directly in the `__init__.py`. Gating this on the import
-            # being non-relative made `from . import DIRECT_NAME` report no
-            # imports at all, while `archy impact` reported the package edge.
-            resolved.add(base)
+        resolved |= set(resolve_from_import(base, (n for n, _ in names), known, reexports))
     return resolved - {facts.qualname}
 
 

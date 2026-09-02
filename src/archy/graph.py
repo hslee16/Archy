@@ -6,7 +6,8 @@ root. External imports (stdlib, third-party) appear as nodes with
 
 archy:owns        Module, ScanTooLargeError, assemble_graph, build_graph,
                   discover_modules, effective_max_modules, graph_to_dict,
-                  internal_subgraph, parse_project, resolve_modules
+                  internal_subgraph, parse_project, resolve_from_import,
+                  resolve_modules, resolve_relative_import
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
                   assemble_graph -> archy.index, archy.watcher,
@@ -461,6 +462,65 @@ def _resolve_targets(
     )
 
 
+def resolve_from_import(
+    base: str,
+    imported_names: Iterable[str],
+    known: set[str] | frozenset[str],
+    reexports: dict[str, dict[str, str]],
+) -> list[str]:
+    """Which internal modules `from base import ...` actually reaches.
+
+    🔴 SHARED BECAUSE THE TWO CALLERS MUST AGREE. `archy.conventions` answers
+    the same question for `conventions --module`, and when it had its own copy
+    the two disagreed five separate ways (#414), every one a case where the
+    lookup contradicted `archy impact` on archy's own source. A lookup whose
+    purpose is being trusted in the negative cannot disagree with the graph it
+    sits beside, so the decision lives here once.
+
+    `from pkg import submodule` is an edge to the SUBMODULE, not to `pkg`.
+    A name the package re-exports routes to the module that defines it. The
+    bare package is the fallback only when neither applies, which is when the
+    package really is the thing imported, including `from . import NAME` where
+    NAME is defined directly in the `__init__.py`.
+    """
+    targets: list[str] = []
+    pkg_map = reexports.get(base, {})
+    for name in imported_names:
+        submodule = f"{base}.{name}"
+        if submodule in known:
+            targets.append(submodule)
+        elif name in pkg_map:
+            targets.append(pkg_map[name])
+    if not targets and base in known:
+        targets.append(base)
+    return targets
+
+
+def resolve_relative_import(module: str | None, level: int, package: str) -> str | None:
+    """Turn `from . import x` / `from ..y import z` into an absolute dotted name.
+
+    Shared for the same reason as `resolve_from_import`: a relative import is
+    invisible to a plain name match, so a census that resolved it differently
+    from the graph would answer "no, it does not import that" about a module
+    that plainly does.
+
+    `package` is the CONTAINING package, so a caller holding a module rather
+    than a package strips the last segment before calling. None means the
+    import walks past the project root; Python rejects it at runtime too, and
+    returning the bare suffix would invent an edge to whatever top-level module
+    happened to share the name.
+    """
+    if not level:
+        return module or None
+    parts = package.split(".") if package else []
+    up = level - 1  # `from .` stays in the current package
+    if up >= len(parts):
+        return None
+    base = ".".join(parts[: len(parts) - up])
+    joined = f"{base}.{module}" if module else base
+    return joined or None
+
+
 def _expand_with_imported_names(
     base: str,
     imported_names: tuple[str, ...],
@@ -476,20 +536,7 @@ def _expand_with_imported_names(
     base_internal = base in internal_qualnames
 
     if base_internal and imported_names:
-        targets: list[str] = []
-        matched_any = False
-        reexports = reexport_maps.get(base, {})
-        for name in imported_names:
-            submodule = f"{base}.{name}"
-            if submodule in internal_qualnames:
-                targets.append(submodule)
-                matched_any = True
-            elif name in reexports:
-                targets.append(reexports[name])
-                matched_any = True
-        if not matched_any:
-            targets.append(base)
-        return targets
+        return resolve_from_import(base, imported_names, internal_qualnames, reexport_maps)
 
     if base_internal:
         return [base]
@@ -513,22 +560,13 @@ def _resolve_relative_base(
             break
     suffix = raw[leading_dots:]
 
+    # This side carries the dots inside the raw module string and holds a
+    # Module rather than a package name, so it adapts both before handing the
+    # decision to the shared resolver.
     src_parts = source_module.qualname.split(".")
     if not source_module.is_package:
         src_parts = src_parts[:-1]
-
-    walk_up = leading_dots - 1  # `from .` stays in the current package
-    if walk_up >= len(src_parts):
-        # `==` already consumes the whole package path and lands at the project
-        # root, so any remaining suffix attaches to a bare name outside the
-        # project (e.g. `from ...x` in a 2-deep package). Python rejects this
-        # same import at runtime; dropping it avoids injecting a phantom node.
-        return None  # escapes the project root
-    base = src_parts[: len(src_parts) - walk_up] if walk_up else src_parts
-
-    target_parts = [*base, *(suffix.split(".") if suffix else [])]
-    target = ".".join(p for p in target_parts if p)
-    return target or None
+    return resolve_relative_import(suffix or None, leading_dots, ".".join(src_parts))
 
 
 def _build_reexport_maps(
