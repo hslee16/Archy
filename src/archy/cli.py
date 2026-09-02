@@ -9,6 +9,7 @@ from typing import cast
 
 import click
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 from archy import __version__
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
@@ -208,10 +209,40 @@ def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: boo
     default=False,
     help="List every module that matches no declared layer.",
 )
-def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) -> None:
+@click.option(
+    "--contracts",
+    "with_contracts",
+    is_flag=True,
+    default=False,
+    help="Also evaluate `forbid` rules transitively via import-linter, which sees paths a "
+    "direct-edge check cannot. Reported alongside; it does not change the exit code.",
+)
+@click.option(
+    "--contracts-config",
+    "contracts_config",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    default=None,
+    help="Explicit .importlinter path for --contracts (default: discovered, else derived "
+    "from archy.yaml `forbid:`).",
+)
+def check(
+    path: Path,
+    config_path: Path | None,
+    fmt: str,
+    show_unlayered: bool,
+    with_contracts: bool,
+    contracts_config: Path | None,
+) -> None:
     """Check the project at PATH against layer rules in archy.yaml.
 
     Exits 0 if there are no violations, 1 otherwise.
+
+    `--contracts` adds the transitive verdict from import-linter. It is
+    REPORTED, never gated on: a direct-edge violation and a transitive reach are
+    different findings, and silently failing builds on the second because the
+    flag was passed would change what a green check has always meant. The MCP
+    tool has nested contracts under `archy_check(contracts=True)` since v0.41;
+    this is the same capability on the command line, where it was missing.
     """
     if config_path is None:
         discovered = discover_config(path)
@@ -252,6 +283,8 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
         and coverage.layers_present < config.min_layers_present
     )
 
+    contracts_result = _run_check_contracts(path, contracts_config) if with_contracts else None
+
     if fmt == "json":
         payload = {
             "violations": _violations_to_json(violations),
@@ -262,6 +295,8 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
             "min_layers_present": config.min_layers_present,
             "presence_fails": presence_fails,
         }
+        if contracts_result is not None:
+            payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_violations_to_text(violations, config_path, coverage))
@@ -271,6 +306,10 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
         hints = _pattern_hints_to_text(coverage)
         if hints:
             click.echo(hints)
+        if not with_contracts:
+            handoff = _contracts_handoff_to_text(config, coverage, violations)
+            if handoff:
+                click.echo(handoff)
         presence = _presence_to_text(coverage, config.min_layers_present)
         if presence:
             click.echo(presence)
@@ -282,6 +321,9 @@ def check(path: Path, config_path: Path | None, fmt: str, show_unlayered: bool) 
             click.echo(_sdp_violations_to_text(sdp_violations, config.sdp.tolerance))
             if sdp_violations and config.sdp.mode == "warn":
                 click.echo("# (sdp.mode=warn; not failing the gate)")
+        if contracts_result is not None:
+            click.echo("")
+            click.echo(_contracts_outcome_to_text(contracts_result))
 
     sdp_fails = bool(sdp_violations) and config.sdp.mode == "error"
     # Required-reach failures gate like forbid violations do. They are opt-in
@@ -1725,6 +1767,74 @@ def conventions(
         click.echo(_conventions_to_text(report, top_n=top_n))
 
 
+@main.command()
+@click.argument(
+    "path",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default=".",
+)
+@click.option(
+    "--top", "top_n", type=int, default=8, show_default=True, help="Maximum rows per section."
+)
+@click.option(
+    "--contracts",
+    "with_contracts",
+    is_flag=True,
+    default=False,
+    help="Include the transitive import-linter verdict.",
+)
+@click.option(
+    "--include-tests", "include_tests", is_flag=True, default=False, help="Census test modules too."
+)
+@click.option(
+    "--format", "fmt", type=click.Choice(["text", "json"]), default="text", help="Output format."
+)
+def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt: str) -> None:
+    """One screen to hand an agent BEFORE it starts on an unfamiliar repository.
+
+    Composes what is already computed -- `conventions`, the co-update sets,
+    the gate inventory, and `check`'s coverage -- into a single bounded answer
+    to "what do I need to know before I touch this?".
+
+    \b
+    Why a command rather than a note telling you to run six:
+    reading is far cheaper than writing on an inference box, so a briefing
+    costs seconds of prefill while the model working the same facts out for
+    itself costs tens of seconds of decode per block. That trade only pays if
+    the briefing arrives without being asked for, which means one invocation a
+    hook or a harness can make.
+
+    Advisory, always exits 0. It reports; `check` and `contracts` gate.
+    """
+    _require(top_n >= 1, "top", ">= 1", top_n)
+    kw = _graph_kwargs(path)
+    report = compute_conventions(path, **kw, include_tests=include_tests)
+
+    coverage = config = None
+    config_path = discover_config(path)
+    if config_path is not None:
+        try:
+            config = load_config(config_path)
+            coverage = compute_coverage(build_graph(path, **kw), config)
+        except LayerConfigError:
+            # A malformed archy.yaml is worth reporting from `check`, which gates
+            # on it. Here it would replace the whole briefing with one error, so
+            # the section says nothing rather than the command saying nothing.
+            coverage = config = None
+
+    contracts = _run_check_contracts(path, None) if with_contracts else None
+
+    if fmt == "json":
+        payload = {
+            "conventions": _conventions_to_dict(report, top_n=top_n),
+            "coverage": _coverage_to_json(coverage) if coverage is not None else None,
+            "contracts": (_contracts_outcome_to_dict(contracts) if contracts is not None else None),
+        }
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
+    else:
+        click.echo(_brief_to_text(report, coverage, config, contracts, top_n=top_n))
+
+
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     try:
         g = build_graph(path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path))
@@ -2066,6 +2176,212 @@ def _coverage_to_text(coverage: LayerCoverage) -> str:
     return line
 
 
+def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
+    """One screen an agent can be handed BEFORE it starts, not a report to browse.
+
+    🔴 SIZED FOR INJECTION, WHICH IS AN ECONOMIC CLAIM, NOT AN AESTHETIC ONE.
+    On the hardware this was measured on, reading runs at ~796 tok/s and writing
+    at ~12 -- 66x apart. A few thousand tokens of briefing costs seconds of
+    prefill; one block of the model working the same fact out for itself costs
+    ~32 seconds of decode. A brief only has to prevent one block in a handful of
+    runs to pay for itself, which is why this is a command rather than advice to
+    run six others.
+
+    Ordered by what a reader needs FIRST, not by what is cheapest to compute:
+    what kind of thing am I adding, what do I call it, what has to change with
+    it, does it gate, and what can this configuration not see. The last is the
+    one an agent skips and then re-derives at length.
+    """
+    L = [f"# archy brief: {report.root}"]
+    p = report.partition
+    if p:
+        aside = ", ".join(
+            x
+            for x in (
+                f"{p.tests} test" if p.tests else "",
+                f"{p.nonsource} non-source" if p.nonsource else "",
+                f"{p.shadowed} duplicating a parent" if p.shadowed else "",
+            )
+            if x
+        )
+        L.append(
+            f"#   {report.modules_scanned} module(s)"
+            + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else "")
+            + (f"; set aside: {aside}" if aside else "")
+        )
+
+    L.append("")
+    L.append("## what kind of thing am I adding, and where does it go")
+    kinds = [b for b in report.bases if b.count >= 3][:top_n]
+    if not kinds:
+        L.append("  (no base class in this project has enough subclasses to be a convention)")
+    for b in kinds:
+        note = (
+            ""
+            if b.suffix_agreement >= 0.8
+            else f"  <- name is NOT the rule ({b.suffix_agreement:.0%})"
+        )
+        L.append(f"  {b.base:<26} {b.count:>3} @ {b.home_module}{note}")
+        for c in b.shared_constants[:2]:
+            dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
+            L.append(f"  {'':<26}     {c.name} = {dist}  ({c.setters} of {b.count} set it)")
+
+    L.append("")
+    L.append("## what must change WITH it")
+    # 🔴 Cross-module first and never truncated below the fold: a co-update set is
+    # the one thing here that is actionable rather than descriptive, and a
+    # half-wired feature is this project's most-replicated defect.
+    co = [x for x in report.surfaces if x.kind == "consumer"][:top_n]
+    if not co:
+        L.append("  (no symbol is consumed by 2-5 internal modules)")
+    for x in co:
+        L.append(f"  {x.stem:<26} {x.module} -> {', '.join(x.surfaces)}")
+    for g in report.export_gaps[:top_n]:
+        L.append(
+            f"  🔴 {g.export_module}: {g.family} "
+            f"{g.exported}/{g.defined}, missing {', '.join(g.missing)}"
+        )
+    for g in report.doc_gaps[:top_n]:
+        L.append(
+            f"  🔴 {g.doc_root}/: {g.family} "
+            f"{g.documented}/{g.defined}, missing {', '.join(g.missing)}"
+        )
+
+    L.append("")
+    codes = ", ".join(str(c) for c in report.gate_codes) or "none literal"
+    L.append(
+        f"## does a new finding gate ({len(report.gates)} "
+        f"finding-failure exit(s); code(s): {codes})"
+    )
+    L += [_gate_row(g) for g in report.gates[:top_n]] or [
+        "  (nothing here fails a build on a finding)"
+    ]
+
+    L.append("")
+    L.append("## what this configuration cannot see")
+
+    def indent(block: str) -> list[str]:
+        # Per LINE, not per block: these renderers emit multi-line text and a
+        # single strip() left every continuation flush against the margin,
+        # which reads as a new section rather than the rest of a sentence.
+        return ["  " + ln.lstrip("# ").rstrip() for ln in block.split("\n") if ln.strip()]
+
+    if coverage is None:
+        L.append("  (no archy.yaml discovered, so no layer rule governs anything)")
+    else:
+        L += indent(_coverage_to_text(coverage))
+        hints = _pattern_hints_to_text(coverage)
+        if hints:
+            L += indent(hints)
+        if config is not None:
+            handoff = _contracts_handoff_to_text(config, coverage, [])
+            if handoff:
+                L += indent(handoff)
+    if contracts is not None:
+        L.append("")
+        L.append(_contracts_outcome_to_text(contracts))
+    return "\n".join(L)
+
+
+class ContractsOutcome(BaseModel):
+    """The `--contracts` addendum, including the case where it produced no verdict.
+
+    Carries `available` and `error` so a run that could not reach a verdict still
+    says why on every surface. Returning `None` instead left `check --format
+    json` with no `contracts` key at all and `brief --format json` with a bare
+    `null`, which is indistinguishable from a bug in archy; the reason went only
+    to stderr, which neither structured stream carries. The MCP surface has
+    reported `available`/`error` from the start, so this is also what keeps the
+    two telling the same story.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    available: bool = True
+    error: str | None = None
+    result: ContractsResult | None = None
+
+
+def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsOutcome:
+    """Run contracts for `check --contracts`, and never let it fail the check.
+
+    A missing `import-linter` or an unreadable contracts config is a reason the
+    EXTRA verdict is unavailable, not a reason the layer check did not happen.
+    The standalone `contracts` command exits 1 on both, which is right when the
+    verdict is the whole point and wrong when it is an addendum: a flag that can
+    turn a passing check into a failing one because an optional dependency is
+    absent would make `--contracts` unsafe to leave on in CI.
+
+    The two failures are distinguished the way `mcp._run_contracts` distinguishes
+    them: a missing dependency is `available=False`, while a config archy could
+    not read is `available=True` with the reason attached.
+    """
+    # Function-local on purpose, and load-bearing twice over: it keeps the
+    # optional import-linter dependency off the module-import path, and it
+    # resolves `run_contracts` through the module at CALL time, which is what
+    # lets a test substitute a raising stub to exercise the no-verdict branch.
+    from archy.contracts import ContractsConfigError, ContractsNotAvailable, run_contracts
+
+    try:
+        return ContractsOutcome(result=run_contracts(path, config_filename=config_filename))
+    except ContractsNotAvailable as exc:
+        click.echo(f"# --contracts unavailable: {exc}", err=True)
+        return ContractsOutcome(available=False, error=str(exc))
+    except ContractsConfigError as exc:
+        click.echo(f"# --contracts unavailable: {exc}", err=True)
+        return ContractsOutcome(available=True, error=str(exc))
+
+
+def _contracts_handoff_to_text(
+    config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
+) -> str:
+    """Name the flag that settles a `forbid` rule this run could not verify.
+
+    🔴 THIS EXISTS BECAUSE OF A MEASUREMENT, NOT A HUNCH. Over a five-hour agent
+    run on this repository, `archy check` was invoked TWENTY times and
+    `archy contracts` ZERO times -- while the model named `contracts` thirty-one
+    times in its own reasoning and the task statement named it too. Awareness was
+    never the deficit. The model navigates by re-running the command it is
+    changing, so the only handoff that lands is one printed by that command.
+
+    Deliberately points at `--contracts` on `check` rather than at the separate
+    `contracts` command: a flag on the invocation already being typed is the
+    smallest discovery step available, and the same run then answers the
+    question instead of ending with a suggestion.
+
+    Silent unless it would be useful: a `forbid` rule must exist (nothing to
+    verify otherwise), the direct pass must have found nothing (a reader with a
+    concrete violation already has somewhere to go), and coverage must be
+    incomplete enough that a path could hide in the ungoverned part. On a fully
+    layered repository with every edge governed it stays quiet.
+    """
+    if not config.forbid or violations:
+        return ""
+    # 🔴 THE CONDITION IS "THIS RUN CANNOT PROVE THE ABSENCE", NOT "COVERAGE IS ZERO".
+    # A first attempt fired only on `governs_nothing`, and stayed silent on this
+    # very repository -- 3 forbid rules, 13% of edges governed, 34 unlayered
+    # modules, and `contracts` finding a genuinely broken rule the direct-edge
+    # pass missed. Some coverage is not enough coverage; the question is whether
+    # a path could hide in the part this check does not govern.
+    incomplete = (
+        coverage.governs_nothing
+        or coverage.governs_no_edges
+        or bool(coverage.exact_pattern_hints)
+        or bool(coverage.unlayered_modules)
+        or coverage.edges_governed < coverage.edges_total
+    )
+    if not incomplete:
+        return ""
+    n = len(config.forbid)
+    rules = "rule" if n == 1 else "rules"
+    return (
+        f"#   {n} forbid {rules} declared, but this check governs too little of the graph to "
+        "verify them.\n"
+        "#   `archy check --contracts` evaluates them transitively via import-linter, which "
+        "sees paths a direct-edge check cannot."
+    )
+
+
 def _pattern_hints_to_text(coverage: LayerCoverage) -> str:
     """Name the cause of degenerate coverage, not just the number.
 
@@ -2266,6 +2582,19 @@ def _contracts_to_dict(result: ContractsResult) -> dict:
             for c in result.contracts
         ],
     }
+
+
+def _contracts_outcome_to_dict(outcome: ContractsOutcome) -> dict:
+    payload: dict = {"available": outcome.available, "error": outcome.error}
+    if outcome.result is not None:
+        payload.update(_contracts_to_dict(outcome.result))
+    return payload
+
+
+def _contracts_outcome_to_text(outcome: ContractsOutcome) -> str:
+    if outcome.result is None:
+        return f"# contracts: no verdict ({outcome.error})"
+    return _contracts_to_text(outcome.result)
 
 
 def _contracts_to_text(result: ContractsResult) -> str:

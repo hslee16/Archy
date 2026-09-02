@@ -147,7 +147,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 | Mode | Command |
 |---|---|
 | Inspection | `archy graph`, `archy cycles` |
-| CI governance | `archy check` (reads `archy.yaml`) |
+| CI governance | `archy check` (reads `archy.yaml`; `--contracts` nests the transitive import-linter verdict in the same output, reported, never gated) |
 | Transitive contracts | `archy contracts` (reads `.importlinter` (canonical) or falls back to `archy.yaml`; requires `archy[contracts]`) |
 | One-shot score | `archy score` |
 | Trended score | `archy score --record` + `archy trend` |
@@ -157,6 +157,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 | Change coupling | `archy coupling` (module pairs that co-change in git history but share no import/call edge - hidden dependencies; source-only, advisory) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | Human-facing export | `archy render --view dsm\|trend` (one self-contained HTML file: no JS, no CDN, offline, byte-stable) |
+| Pre-task briefing | `archy brief` (one screen composing conventions, layer coverage and the gate inventory for an agent to read BEFORE it starts, plus optional `--contracts`; advisory, always exits 0) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
 | Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue; wire in or cleanly remove the MCP server) |
@@ -264,6 +265,8 @@ pip install 'archy[contracts]'
 archy contracts path/to/project
 archy contracts path/to/project --format json
 ```
+
+`archy check --contracts` runs this same transitive verdict inline, nested under the check output. It never changes `check`'s own exit code: a flag that can turn a passing check into a failing one because an optional dependency is absent would be unsafe to leave on in CI. Use the standalone `archy contracts` when the transitive result should itself gate the build.
 
 **Config resolution.** `archy contracts` reads, in order:
 
@@ -679,6 +682,8 @@ Shipped:
 - **v0.45, coverage-qualified `check` verdicts** ([#404](https://github.com/hslee16/archy/pull/404)): `archy check` used to print `# No layer violations.` on a config governing 0% of a codebase's internal import edges. That verdict is true and useless: it says nothing was found without saying nothing was looked at, and the coverage line that would have told you sits one line below, where a reader who has concluded "clean" does not look. The verdict now carries the cause: `No layer violations, but this config governs 0 of 4 internal edges (0%), so no forbid rule can fire.` Same data, moved to where the decision is made.
 - **v0.45, `conventions` beyond a suffix-and-exit-site census** ([#410](https://github.com/hslee16/archy/pull/410)): the command had only ever been measured on this repository. Scored against mypy, pytest, pydantic and click with a hand-derived answer key, it managed 0/4, ~1/4, 0/4 and ~0.5/4. Two were *wrong* answers rather than missing ones, which is worse: pydantic's naming home came back as the vendored legacy copy `pydantic.v1.errors` (93 classes) instead of `pydantic.errors` (6), so an agent acting on it would add its class to a deprecated shim. Adds the censuses those misses needed - registries (`NAME = Ctor(...)`, which is how mypy declares its 79 error codes, invisible to a `ClassDef` census), transitive base families, export and doc gaps - and sets aside vendored subtrees and test modules so a real family is not diluted by fixtures.
 - **v0.45, `archy conventions --module` / `archy_module_view`** ([#414](https://github.com/hslee16/archy/pull/414)): the same census as a *lookup* rather than a ranking. Scored against the ordinary report, 24 pieces of real agent reasoning that a census could in principle have answered scored zero, and both blind readers gave the same reason: the report says `150; showing 12`, so a module's absence from it proves nothing. The questions were of the form "does `risk` import `hotspots`" and "does *any* of graph/cycles/score still reach `layers`", and a top-N ranking is the wrong shape for both. So every list in this view is COMPLETE for the one module named, relative imports are resolved (an unresolved one would answer "no, it does not import that" about a module that plainly does), `imported_by` counts test importers even when tests are otherwise set aside, and `status` says whether the module was censused or set aside and why, so an empty result is never mistaken for "nothing to report". A mistyped module name is a usage error and exits 1 rather than returning an empty view.
+
+- **v0.46, `check --contracts` and `archy brief`** ([#421](https://github.com/hslee16/archy/pull/421)): measured, not guessed. Over a five-hour agent run on this repository `archy check` was invoked twenty times and `archy contracts` zero times, while the model named `contracts` thirty-one times in its own reasoning: awareness was not the deficit, so the handoff has to come from the command already being run. `archy check` now names `--contracts` when `forbid:` rules exist, the direct pass found nothing, and coverage is too thin to prove their absence; `--contracts` itself nests the transitive verdict in `check`'s output as an addendum that reports and never gates. `archy brief` composes conventions, coverage and the gate inventory into one screen sized for injection before an agent starts. The motivation is an inference-cost *ratio* on a local model, where reading runs at ~796 tok/s against ~12 tok/s of writing, so a briefing that prevents one block of the model deriving the same fact for itself would pay for its own prefill many times over. **That is the argument for building it, not a result.** archy has measured this twice and got null both times ([#282](https://github.com/hslee16/archy/issues/282), [#289](https://github.com/hslee16/archy/issues/289): N=22, no reduction in a frontier model's reads-before-first-edit), the local-model arm that would test the ratio is scheduled and has not reported, and the command therefore claims **no** token or read saving. It shipped on judgment, ahead of its own evidence, and [`docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md`](docs/research/PREWALK_READ_REDUCTION_SYNTHESIS.md) §6a records exactly that.
 
 
 **Install / distribution**

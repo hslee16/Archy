@@ -1469,3 +1469,135 @@ def test_check_verdict_unqualified_when_coverage_is_real(tmp_path: Path):
     headline = result.output.splitlines()[0]
     assert headline.startswith("# No layer violations (config:")
     assert "Did you mean" not in result.output
+
+
+def _make_uncovered_forbid_project(tmp_path: Path) -> Path:
+    """A config whose layers govern a little, but not the edge that matters."""
+    root = tmp_path / "proj"
+    (root / "shipping" / "store").mkdir(parents=True)
+    (root / "shipping" / "common").mkdir(parents=True)
+    (root / "shipping" / "api").mkdir(parents=True)
+    for pkg in ("", "store", "common", "api"):
+        (root / "shipping" / pkg / "__init__.py").write_text("")
+    (root / "shipping" / "store" / "repository.py").write_text(
+        "from shipping.common.tenancy import current\n"
+    )
+    (root / "shipping" / "common" / "tenancy.py").write_text(
+        "from shipping.api.context import ctx\n\ndef current(): return ctx\n"
+    )
+    (root / "shipping" / "api" / "context.py").write_text("ctx = 1\n")
+    (root / "archy.yaml").write_text(
+        "layers:\n"
+        "  api:\n    modules: [shipping.api]\n"
+        "  store:\n    modules: [shipping.store]\n"
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+    return root
+
+
+def test_check_names_the_flag_that_can_settle_what_it_cannot_verify(tmp_path: Path):
+    """Measured, not guessed: over a five-hour agent run `archy check` was
+    invoked twenty times and `archy contracts` zero times, while the model named
+    `contracts` thirty-one times in its own reasoning. Awareness was not the
+    deficit, so the handoff has to come from the command already being run."""
+    root = _make_uncovered_forbid_project(tmp_path)
+    result = CliRunner().invoke(main, ["check", str(root)])
+    assert "forbid rule" in result.output
+    assert "--contracts" in result.output
+
+
+def test_check_handoff_is_silent_once_contracts_was_asked_for(tmp_path: Path):
+    root = _make_uncovered_forbid_project(tmp_path)
+    result = CliRunner().invoke(main, ["check", str(root), "--contracts"])
+    assert "evaluates them transitively" not in result.output
+
+
+def test_check_handoff_is_silent_without_forbid_rules(tmp_path: Path):
+    """Nothing to verify means nothing to hand off. A line printed on every run
+    is one a reader learns to skip."""
+    root = _make_uncovered_forbid_project(tmp_path)
+    (root / "archy.yaml").write_text(
+        "layers:\n  api:\n    modules: [shipping.api]\n  store:\n    modules: [shipping.store]\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(root)])
+    assert "--contracts" not in result.output
+
+
+def test_check_contracts_does_not_change_the_exit_code(tmp_path: Path):
+    """`--contracts` REPORTS. A flag that can turn a passing check into a failing
+    one would change what a green check has always meant, and would make the
+    flag unsafe to leave on in CI."""
+    root = _make_uncovered_forbid_project(tmp_path)
+    plain = CliRunner().invoke(main, ["check", str(root)])
+    withc = CliRunner().invoke(main, ["check", str(root), "--contracts"])
+    assert withc.exit_code == plain.exit_code
+
+
+def test_brief_answers_the_four_questions_and_stays_small(tmp_path: Path):
+    """`brief` exists because of an economic argument: reading is ~66x cheaper
+    than writing on an inference box, so a briefing only pays if it is small
+    enough to inject and complete enough to prevent a derivation."""
+    root = _make_uncovered_forbid_project(tmp_path)
+    result = CliRunner().invoke(main, ["brief", str(root)])
+    assert result.exit_code == 0
+    for heading in (
+        "what kind of thing",
+        "what must change WITH it",
+        "does a new finding gate",
+        "cannot see",
+    ):
+        assert heading in result.output
+    # the co-update set and the coverage gap are the two actionable parts
+    assert "layer coverage" in result.output
+    assert len(result.output) < 20_000
+
+
+def test_brief_is_advisory_and_never_gates(tmp_path: Path):
+    root = _make_uncovered_forbid_project(tmp_path)
+    assert CliRunner().invoke(main, ["brief", str(root)]).exit_code == 0
+
+
+def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: Path, monkeypatch):
+    """A verdict without a reason is not actionable. When import-linter is
+    absent, `contracts` missing from the JSON entirely is indistinguishable from
+    a bug in archy, and a reason on stderr is carried by neither structured
+    stream. The MCP surface has always reported `available`/`error` here."""
+    # Local: the substitution has to land on the module object that
+    # `_run_check_contracts` imports from at call time.
+    import archy.contracts
+
+    def _boom(*args, **kwargs):
+        raise archy.contracts.ContractsNotAvailable("import-linter is not installed")
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    out = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+    assert payload["contracts"]["available"] is False
+    assert "import-linter" in payload["contracts"]["error"]
+
+    text = CliRunner().invoke(main, ["check", str(root), "--contracts"]).output
+    assert "# contracts: no verdict (import-linter is not installed)" in text
+
+
+def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch):
+    """An unreadable contracts config is `available=True` with a reason, the way
+    `mcp._run_contracts` distinguishes it from a missing dependency."""
+    # Local: the substitution has to land on the module object that
+    # `_run_check_contracts` imports from at call time.
+    import archy.contracts
+
+    def _boom(*args, **kwargs):
+        raise archy.contracts.ContractsConfigError("no contracts config found")
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    out = CliRunner().invoke(main, ["brief", str(root), "--contracts", "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+    assert payload["contracts"]["available"] is True
+    assert "no contracts config" in payload["contracts"]["error"]
+
+    text = CliRunner().invoke(main, ["brief", str(root), "--contracts"]).output
+    assert "# contracts: no verdict (no contracts config found)" in text

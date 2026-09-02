@@ -107,7 +107,19 @@ p=0.607). The agent found the roughly 3-file spine on its own, briefed or not. T
 any brief on a task that grep-able. That reframes the whole question: the path
 to an effect here is a harder *setting*, not a better *brief*.
 
-I shipped no feature. The N=10 hint would have been enough to ship one.
+I shipped no feature *on this result*. The N=10 hint would have been enough to ship one.
+
+**Postscript (v0.46).** `archy brief` did later ship ([#421](https://github.com/hslee16/archy/issues/421)), on the prior that a *local*
+model, paying a far steeper decode price, has headroom this experiment could not see.
+Being precise about what that is and is not: it is a **judgment call taken ahead of the
+measurement**, not a measurement. The frontier-model read-substitution effect tested
+here is still null, and the feature claims nothing about it. The nearest local-model
+comparison that has actually run went the *other* way (seeding archy's own docs before
+the task: the unseeded control scored highest and the seeded cell spent ~7% more
+tokens, at n=1 per arm, which is too thin to conclude either direction). The arm that
+would settle it is scheduled and unreported. If it comes back null, the honest outcome
+is a third null and a feature that has to justify itself some other way. Recording that
+in advance is the point of this file.
 
 ## What generalizes
 

@@ -1541,7 +1541,7 @@ ran twice and landed null twice.
 | study | design | N | headline | verdict |
 | --- | --- | --- | --- | --- |
 | **#282** (arm B) | apply archy's own #1 `what_to_refactor_next` recommendation to flask, measure agent footprint on a fixed task | 10 pairs | `footprint_tokens` median **+4,213 in the refactored direction** (4/6 pairs, p=0.754); per-pair deltas span −28,565 to +27,125 | **null**, and the token headline leans the *wrong* way |
-| **#289** (arm C) | inject an archy structural brief before the task, measure reads before first edit | 22 pairs | `pre_edit_reads` median **−2.0** (14/8, **p=0.286**), after an N=10 hint at p=0.109 that did not survive more data | **null**; NO-GO on an `archy brief` surface |
+| **#289** (arm C) | inject an archy structural brief before the task, measure reads before first edit | 22 pairs | `pre_edit_reads` median **−2.0** (14/8, **p=0.286**), after an N=10 hint at p=0.109 that did not survive more data | **null** on this endpoint; the NO-GO it carried was withdrawn in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)) on maintainer judgment ahead of a measurement, not on one. The local-model brief-injection arm is scheduled and unreported |
 
 A third cell (a harder-to-navigate repo) was **cancelled by pre-run adversarial
 review before any agent time was spent**, on two defects that could not be
@@ -1565,7 +1565,9 @@ archy's layer with this power budget.
 - **Not supportable, on our own evidence:** any claim that applying an
   **archy** recommendation reduces agent tokens or re-reads. We tested exactly
   that, twice, and could not show it. The README and marketing copy therefore
-  carry **no** token-savings number, and #261's original framing ("archy's
+  carry **no** token-savings number (the v0.46 `archy brief` entry names the
+  inference-cost *ratio* that motivated the feature and explicitly disclaims a
+  measured saving, which is the line this bullet requires), and #261's original framing ("archy's
   pitch is cheaper agent runs / fewer tokens") is **superseded by this
   subsection**: it was written before the bench reported.
 - **What archy does claim** stays what it always was: a deterministic

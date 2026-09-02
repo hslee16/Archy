@@ -450,6 +450,11 @@ way.
 regressed to null on more data), not just low power. This validates the anti-theater
 gate: a feature shipped on the N=10 hint would have been theater.
 
+**Withdrawn in v0.46** ([#421](https://github.com/hslee16/archy/issues/421)), on maintainer judgment taken ahead of a measurement
+rather than on one. Nothing in this bench was refuted or re-run: the reads null above
+stands exactly as reported, and the local-model brief-injection arm that motivated the
+override is scheduled and has not yet reported.
+
 **Follow-up disposition:** #292 (power to N≈30) is effectively answered here (null at
 N=22); #291 (task-conditioned focus) keeps a weak prior since breadth never moved;
 #290 (brief precision metric) and #293 (metric split) remain useful measurement infra.
