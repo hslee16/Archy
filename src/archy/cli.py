@@ -2389,6 +2389,22 @@ def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
     return outcome.error if outcome is not None and outcome.result is None else None
 
 
+def _unverified_forbid_rules(
+    config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
+) -> str | None:
+    """`"3 forbid rules declared"`, or None when nothing is left unverified.
+
+    The guard and the pluralisation are what the text handoff and the JSON
+    reason have to agree on; their tails differ because one is a `#` block for a
+    reader and the other a sentence for a parser. Keeping only the tails apart
+    is what stops the two disagreeing about whether there is anything to say.
+    """
+    if not contracts_unverified(config, coverage, violations):
+        return None
+    n = len(config.forbid)
+    return f"{n} forbid {'rule' if n == 1 else 'rules'} declared"
+
+
 def _transitive_unverified_reason(
     config: LayerConfig,
     coverage: LayerCoverage,
@@ -2407,18 +2423,17 @@ def _transitive_unverified_reason(
     worse than saying nothing: it sends them round a loop they have already been
     through, so that case reports the actual cause instead.
     """
-    if not contracts_unverified(config, coverage, violations):
+    stem = _unverified_forbid_rules(config, coverage, violations)
+    if stem is None:
         return None
-    n = len(config.forbid)
-    rules = "rule" if n == 1 else "rules"
     if no_verdict_error is not None:
         return (
-            f"{n} forbid {rules} declared and still unverified: `--contracts` produced no "
-            f"transitive verdict ({no_verdict_error})."
+            f"{stem} and still unverified: `--contracts` produced no transitive verdict "
+            f"({no_verdict_error})."
         )
     return (
-        f"{n} forbid {rules} declared, but this check governs too little of the graph to "
-        "verify them; `--contracts` evaluates them transitively via import-linter."
+        f"{stem}, but this check governs too little of the graph to verify them; "
+        "`--contracts` evaluates them transitively via import-linter."
     )
 
 
@@ -2445,12 +2460,11 @@ def _contracts_handoff_to_text(
     incomplete enough that a path could hide in the ungoverned part. On a fully
     layered repository with every edge governed it stays quiet.
     """
-    if not contracts_unverified(config, coverage, violations):
+    stem = _unverified_forbid_rules(config, coverage, violations)
+    if stem is None:
         return ""
-    n = len(config.forbid)
-    rules = "rule" if n == 1 else "rules"
     return (
-        f"#   {n} forbid {rules} declared, but this check governs too little of the graph to "
+        f"#   {stem}, but this check governs too little of the graph to "
         "verify them.\n"
         "#   `archy check --contracts` evaluates them transitively via import-linter, which "
         "sees paths a direct-edge check cannot."
