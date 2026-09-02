@@ -77,6 +77,7 @@ from archy.layers import (
     SdpViolation,
     Violation,
     compute_coverage,
+    contracts_unverified,
     discover_config,
     find_reach_violations,
     find_sdp_violations,
@@ -294,6 +295,21 @@ def check(
             "coverage": _coverage_to_json(coverage),
             "min_layers_present": config.min_layers_present,
             "presence_fails": presence_fails,
+            # A clean verdict has to say what it looked at. The text output has
+            # carried this since v0.46 and the JSON did not, so a machine reader
+            # could not tell "checked transitively and clean" from "never
+            # looked" (#343).
+            "transitive_checked": _transitive_checked(contracts_result),
+            "transitive_unverified_reason": (
+                None
+                if _transitive_checked(contracts_result)
+                else _transitive_unverified_reason(
+                    config,
+                    coverage,
+                    violations,
+                    no_verdict_error=_no_verdict_error(contracts_result),
+                )
+            ),
         }
         if contracts_result is not None:
             payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
@@ -1805,6 +1821,16 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
     hook or a harness can make.
 
     Advisory, always exits 0. It reports; `check` and `contracts` gate.
+
+    \b
+    CLI-only ON PURPOSE, and recorded here because review has now flagged its
+    absence from the MCP surface twice. The value claimed above is that the
+    briefing arrives WITHOUT being asked for, which a hook or harness does and
+    an in-session tool call does not; an agent that has already decided to ask
+    can reach the same facts through `archy_conventions` and
+    `archy_check(contracts=True)`. Same call `archy render` made in v0.42. An
+    `archy_brief` tool is the reopen path if a usage signal appears (#427), not
+    a gap to close on symmetry alone.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     kw = _graph_kwargs(path)
@@ -1829,6 +1855,26 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
             "conventions": _conventions_to_dict(report, top_n=top_n),
             "coverage": _coverage_to_json(coverage) if coverage is not None else None,
             "contracts": (_contracts_outcome_to_dict(contracts) if contracts is not None else None),
+            # brief's TEXT output has rendered this handoff from the start; its
+            # JSON had not, which left the same clean-pass-says-nothing gap #343
+            # closed on `check` open one command over. `violations` is empty
+            # because brief does not run the direct pass: it reports what the
+            # config cannot see, not what it caught.
+            "transitive_checked": _transitive_checked(contracts),
+            "transitive_unverified_reason": (
+                _transitive_unverified_reason(
+                    config,
+                    coverage,
+                    [],
+                    no_verdict_error=_no_verdict_error(contracts),
+                )
+                # brief tolerates a missing or malformed archy.yaml and still
+                # reports; `check` cannot get here without one.
+                if config is not None
+                and coverage is not None
+                and not _transitive_checked(contracts)
+                else None
+            ),
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -2332,6 +2378,75 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsO
         return ContractsOutcome(available=True, error=str(exc))
 
 
+def _transitive_checked(outcome: ContractsOutcome | None) -> bool:
+    """Did this run actually reach a transitive verdict?
+
+    Not "were contracts requested": a request that could not run leaves the
+    rules exactly as unverified as never asking, and conflating the two is the
+    bug #343 closed. `check` and `brief` both answer it from here so the two
+    JSON payloads cannot drift apart on it.
+    """
+    return outcome is not None and outcome.result is not None
+
+
+def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
+    """The reason contracts produced nothing, or None if they were never asked.
+
+    Distinguishes "not requested" (no error to report; the handoff names the
+    flag) from "requested and failed" (name the actual failure, because naming
+    the flag to someone who just passed it sends them round a loop).
+    """
+    return outcome.error if outcome is not None and outcome.result is None else None
+
+
+def _unverified_forbid_rules(
+    config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
+) -> str | None:
+    """`"3 forbid rules declared"`, or None when nothing is left unverified.
+
+    The guard and the pluralisation are what the text handoff and the JSON
+    reason have to agree on; their tails differ because one is a `#` block for a
+    reader and the other a sentence for a parser. Keeping only the tails apart
+    is what stops the two disagreeing about whether there is anything to say.
+    """
+    if not contracts_unverified(config, coverage, violations):
+        return None
+    n = len(config.forbid)
+    return f"{n} forbid {'rule' if n == 1 else 'rules'} declared"
+
+
+def _transitive_unverified_reason(
+    config: LayerConfig,
+    coverage: LayerCoverage,
+    violations: list[Violation],
+    *,
+    no_verdict_error: str | None = None,
+) -> str | None:
+    """The text handoff's reason, for a reader that cannot parse prose.
+
+    A bare `transitive_checked: false` is a verdict without a reason, which
+    AGENTS.md rules out on every surface: the consumer needs to know whether the
+    rules were merely not requested or could not be proven, and what settles it.
+
+    `no_verdict_error` distinguishes the two ways this run can fail to verify.
+    Naming `--contracts` to a caller who just passed it and watched it fail is
+    worse than saying nothing: it sends them round a loop they have already been
+    through, so that case reports the actual cause instead.
+    """
+    stem = _unverified_forbid_rules(config, coverage, violations)
+    if stem is None:
+        return None
+    if no_verdict_error is not None:
+        return (
+            f"{stem} and still unverified: `--contracts` produced no transitive verdict "
+            f"({no_verdict_error})."
+        )
+    return (
+        f"{stem}, but this check governs too little of the graph to verify them; "
+        "`--contracts` evaluates them transitively via import-linter."
+    )
+
+
 def _contracts_handoff_to_text(
     config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
 ) -> str:
@@ -2355,27 +2470,11 @@ def _contracts_handoff_to_text(
     incomplete enough that a path could hide in the ungoverned part. On a fully
     layered repository with every edge governed it stays quiet.
     """
-    if not config.forbid or violations:
+    stem = _unverified_forbid_rules(config, coverage, violations)
+    if stem is None:
         return ""
-    # 🔴 THE CONDITION IS "THIS RUN CANNOT PROVE THE ABSENCE", NOT "COVERAGE IS ZERO".
-    # A first attempt fired only on `governs_nothing`, and stayed silent on this
-    # very repository -- 3 forbid rules, 13% of edges governed, 34 unlayered
-    # modules, and `contracts` finding a genuinely broken rule the direct-edge
-    # pass missed. Some coverage is not enough coverage; the question is whether
-    # a path could hide in the part this check does not govern.
-    incomplete = (
-        coverage.governs_nothing
-        or coverage.governs_no_edges
-        or bool(coverage.exact_pattern_hints)
-        or bool(coverage.unlayered_modules)
-        or coverage.edges_governed < coverage.edges_total
-    )
-    if not incomplete:
-        return ""
-    n = len(config.forbid)
-    rules = "rule" if n == 1 else "rules"
     return (
-        f"#   {n} forbid {rules} declared, but this check governs too little of the graph to "
+        f"#   {stem}, but this check governs too little of the graph to "
         "verify them.\n"
         "#   `archy check --contracts` evaluates them transitively via import-linter, which "
         "sees paths a direct-edge check cannot."

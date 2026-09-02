@@ -747,3 +747,27 @@ def test_governs_no_edges_survives_model_dump():
     dumped = coverage.model_dump()
     assert dumped["governs_no_edges"] is True
     assert dumped["exact_pattern_hints"] == ()
+
+
+def test_forbid_and_required_report_the_same_shape_of_key_error(tmp_path: Path):
+    """Both rule kinds route their key/type validation through one helper, so
+    the two messages have to stay recognisably the same shape. They were
+    separately inlined before, which is how they could have drifted."""
+    base = "layers:\n  api:\n    modules: ['app.api']\n  store:\n    modules: ['app.store']\n"
+
+    missing_forbid = tmp_path / "a.yaml"
+    missing_forbid.write_text(base + "forbid:\n  - {from: store}\n")
+    with pytest.raises(LayerConfigError, match=r"forbid entry is missing required key 'to'"):
+        load_config(missing_forbid)
+
+    missing_required = tmp_path / "b.yaml"
+    missing_required.write_text(base + "required:\n  - {source: 'app.**'}\n")
+    with pytest.raises(
+        LayerConfigError, match=r"required entry is missing required key 'must_reach'"
+    ):
+        load_config(missing_required)
+
+    bad_type = tmp_path / "c.yaml"
+    bad_type.write_text(base + "forbid:\n  - {from: store, to: 3}\n")
+    with pytest.raises(LayerConfigError, match=r"forbid `from`/`to` values must be strings"):
+        load_config(bad_type)
