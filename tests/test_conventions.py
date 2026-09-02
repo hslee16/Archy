@@ -12,6 +12,7 @@ from archy.conventions import (
     NamingFamily,
     camel_suffix,
     compute_conventions,
+    compute_module_view,
 )
 
 
@@ -35,7 +36,11 @@ def _project(tmp_path: Path, files: dict[str, str]) -> Path:
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     for name, source in files.items():
-        (pkg / name).write_text(source)
+        target = pkg / name
+        # A key may name a subpackage path (`sub/__init__.py`), which the
+        # module-view cases need and a flat write cannot create.
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source)
     return tmp_path
 
 
@@ -808,24 +813,11 @@ def test_setting_tests_aside_says_how_to_include_them(tmp_path: Path):
     assert "--include-tests" in _conventions_to_text(report, top_n=12)
 
 
-def _pkg(tmp_path: Path, files: dict[str, str]) -> Path:
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    for name, src in files.items():
-        target = pkg / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(src)
-    return tmp_path
-
-
 def test_module_view_answers_a_negative(tmp_path: Path):
     """The whole point. "Does `risk` import `hotspots`?" is answered by the
     ABSENCE of hotspots from a complete list; against the ranked report the same
     question scored zero, because `150; showing 12` makes absence meaningless."""
-    from archy.conventions import compute_module_view
-
-    root = _pkg(
+    root = _project(
         tmp_path,
         {
             "risk.py": "from pkg.instability import inst\n",
@@ -842,9 +834,7 @@ def test_module_view_resolves_relative_imports(tmp_path: Path):
     """A relative import is invisible to a plain name match, so an unresolved one
     would answer "no, it does not import that" about a module that plainly
     does -- the worst error a negative-answering lookup can make."""
-    from archy.conventions import compute_module_view
-
-    root = _pkg(
+    root = _project(
         tmp_path,
         {
             "a.py": "from . import b\nfrom .c import thing\n",
@@ -856,19 +846,76 @@ def test_module_view_resolves_relative_imports(tmp_path: Path):
     assert set(view.imports_internal) == {"pkg.b", "pkg.c"}
 
 
-def test_module_view_sees_plain_import_statements(tmp_path: Path):
-    from archy.conventions import compute_module_view
+def test_module_view_resolves_relative_imports_inside_a_package_init(tmp_path: Path):
+    """A package's own `__init__.py` is its own `__package__`, so `from . import x`
+    there means the sibling INSIDE it. Stripping a level as if it were a plain
+    submodule resolved to a name no module has, and the unknown name was then
+    filtered out silently -- a false negative in the aggregating `__init__.py`
+    that is the commonest place in a project to write a relative import."""
+    root = _project(
+        tmp_path, {"sub/__init__.py": "from . import x\n", "sub/x.py": "def f(): ...\n"}
+    )
+    assert compute_module_view(root, "pkg.sub").imports_internal == ("pkg.sub.x",)
 
-    root = _pkg(tmp_path, {"a.py": "import pkg.b\n", "b.py": ""})
+
+def test_module_view_attributes_a_submodule_import_to_the_submodule(tmp_path: Path):
+    """`from pkg import mod` is an edge to the MODULE, not to the package.
+
+    Recording both made the lookup disagree with archy's own dependency graph:
+    it reported `archy.install.base` importing `archy.install`, which `archy
+    impact` says nothing does. A false positive is as corrosive here as a false
+    negative, since the whole claim is that this list can be trusted exactly.
+    """
+    root = _project(
+        tmp_path,
+        {"sub/__init__.py": "", "sub/mod.py": "", "a.py": "from pkg.sub import mod\n"},
+    )
+    assert compute_module_view(root, "pkg.a").imports_internal == ("pkg.sub.mod",)
+
+
+def test_module_view_falls_back_to_the_package_for_a_symbol_import(tmp_path: Path):
+    """`from pkg import Symbol` really does import the package: no imported name
+    is a module, so the package is what gets executed. The fallback exists for
+    this case and must not be lost to the submodule rule above."""
+    root = _project(
+        tmp_path,
+        {"sub/__init__.py": "class Thing: pass\n", "a.py": "from pkg.sub import Thing\n"},
+    )
+    assert compute_module_view(root, "pkg.a").imports_internal == ("pkg.sub",)
+
+
+def test_module_view_follows_a_package_reexport_to_the_defining_module(tmp_path: Path):
+    """`from pkg import Symbol` where the package re-exports Symbol is an edge to
+    the module that DEFINES it, which is what `archy impact` reports.
+
+    Reproduced on archy's own source before the fix: `archy/cli.py` does `from
+    archy.install import run_install`, `archy/install/__init__.py` re-exports it
+    from `archy.install.runner`, and the view said cli did not import runner
+    while the dependency graph said it did. A false negative is the worst error
+    this lookup can make, since its whole claim is that absence is an answer.
+    """
+    root = _project(
+        tmp_path,
+        {
+            "sub/__init__.py": "from pkg.sub.impl import run\n",
+            "sub/impl.py": "def run(): ...\n",
+            "a.py": "from pkg.sub import run\n",
+        },
+    )
+    view = compute_module_view(root, "pkg.a")
+    assert view.imports_internal == ("pkg.sub.impl",)
+    assert compute_module_view(root, "pkg.sub.impl").imported_by == ("pkg.a", "pkg.sub")
+
+
+def test_module_view_sees_plain_import_statements(tmp_path: Path):
+    root = _project(tmp_path, {"a.py": "import pkg.b\n", "b.py": ""})
     assert compute_module_view(root, "pkg.a").imports_internal == ("pkg.b",)
 
 
 def test_module_view_says_why_a_module_was_set_aside(tmp_path: Path):
     """A set-aside module must say so. Otherwise its emptiness reads as
     "nothing to report" when the truth is "not looked at"."""
-    from archy.conventions import compute_module_view
-
-    root = _pkg(tmp_path, {"tests/__init__.py": "", "tests/test_it.py": "def test_x(): ...\n"})
+    root = _project(tmp_path, {"tests/__init__.py": "", "tests/test_it.py": "def test_x(): ...\n"})
     assert "--include-tests" in compute_module_view(root, "pkg.tests.test_it").status
     assert compute_module_view(root, "pkg.tests.test_it", include_tests=True).status == "censused"
 
@@ -877,9 +924,7 @@ def test_module_view_counts_test_importers_even_when_tests_are_set_aside(tmp_pat
     """ "Who imports me" is a question about the whole project. A module imported
     only by tests IS imported, and reporting it as unused because tests were set
     aside would be a false negative of exactly the kind this view prevents."""
-    from archy.conventions import compute_module_view
-
-    root = _pkg(
+    root = _project(
         tmp_path,
         {
             "thing.py": "def f(): ...\n",
@@ -892,8 +937,6 @@ def test_module_view_counts_test_importers_even_when_tests_are_set_aside(tmp_pat
 
 
 def test_module_view_suggests_near_matches_for_an_unknown_module(tmp_path: Path):
-    from archy.conventions import compute_module_view
-
-    root = _pkg(tmp_path, {"layers.py": ""})
+    root = _project(tmp_path, {"layers.py": ""})
     with pytest.raises(LookupError, match=r"pkg\.layers"):
         compute_module_view(root, "layers")

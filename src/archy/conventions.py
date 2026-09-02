@@ -60,7 +60,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.graph import DEFAULT_IGNORED_DIRS, discover_modules
+from archy.graph import DEFAULT_IGNORED_DIRS, Module, discover_modules
 
 # A CamelCase name splits into an acronym run (`DSM`, `MCP`) or a single
 # capitalized word. The trailing element is the family: `DSMDiff` -> `Diff`,
@@ -496,16 +496,31 @@ class _ModuleFacts:
         # answering it from symbols alone would miss both `import pkg.mod` and
         # every relative import in the project.
         self.imported_modules: set[str] = set()
+        # One entry per `from X import ...`: the resolved base, the (name,
+        # local-name) pairs, and whether a bare-package fallback is legal for
+        # it. Kept unresolved because the answer depends on the project's
+        # module set; see `_resolved_imports`.
+        self.import_froms: list[tuple[str, tuple[tuple[str, str], ...], bool]] = []
+        # Whether this module is a package's `__init__.py`. Only those can
+        # re-export, so only those contribute to the re-export map.
+        self.is_package = False
 
 
-def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
+def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _ModuleFacts:
     facts = _ModuleFacts(qualname)
+    facts.is_package = is_package
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             facts.classes.append(node)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             facts.functions.append(node)
-    pkg = qualname.rsplit(".", 1)[0] if "." in qualname else ""
+    # The package a relative import is relative to. For a package's own
+    # `__init__.py` that is the qualname itself, because Python sets
+    # `__package__ == __name__` there; stripping a level as if it were a plain
+    # submodule resolves `from . import x` one level too shallow, and the bogus
+    # name is then filtered out as unknown -- a silent false negative in the
+    # aggregating `__init__.py` that is the commonest place to see one.
+    pkg = qualname if is_package else (qualname.rsplit(".", 1)[0] if "." in qualname else "")
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -517,17 +532,20 @@ def _collect(tree: ast.Module, qualname: str) -> _ModuleFacts:
                     facts.internal_imports.add((source, alias.name))
             base = _resolve_relative(node.module, node.level, pkg)
             if base:
-                # `from . import sibling` means "import the sibling", not
-                # "depend on the containing package", so the bare package is
-                # recorded only when the statement actually names a module.
-                if node.module:
-                    facts.imported_modules.add(base)
-                # `from pkg import mod` names a module when the target is one;
-                # record the candidate and let the caller intersect it with what
-                # the project actually defines rather than guessing here.
-                for alias in node.names:
-                    if alias.name != "*":
-                        facts.imported_modules.add(f"{base}.{alias.name}")
+                # `from X import a, b` is statically ambiguous: the names may be
+                # submodules or symbols in X's namespace. Which one cannot be
+                # decided here, because it depends on what the project defines,
+                # so the statement is recorded whole and resolved by
+                # `_resolved_imports` once the module set is known. `node.module`
+                # is carried because `from . import sibling` imports the sibling
+                # and must never fall back to the containing package.
+                facts.import_froms.append(
+                    (
+                        base,
+                        tuple((a.name, a.asname or a.name) for a in node.names if a.name != "*"),
+                        node.module is not None,
+                    )
+                )
     for node in tree.body:
         if isinstance(node, ast.Assign | ast.AnnAssign):
             facts.body_assignments.append(node)
@@ -658,6 +676,128 @@ def _shadow_roots(
         if overlap / len(inner) >= ratio:
             shadows.add(prefix)
     return frozenset(shadows)
+
+
+def _reexport_maps(
+    facts: dict[str, _ModuleFacts], known: frozenset[str]
+) -> dict[str, dict[str, str]]:
+    """`{package: {exported name: the module it actually lives in}}`.
+
+    Re-exports live in package `__init__.py` files. Without this map, `from
+    archy.install import run_install` resolves to the package `archy.install`,
+    and the module that really defines `run_install` (`archy.install.runner`)
+    never appears -- a FALSE NEGATIVE on archy's own source, which `archy
+    impact` gets right. Mirrors `graph._build_reexport_maps`; the two must
+    agree, because a lookup that contradicts the dependency graph is worse
+    than no lookup.
+    """
+    maps: dict[str, dict[str, str]] = {}
+    for qualname, f in facts.items():
+        if not f.is_package:
+            continue
+        pkg_map: dict[str, str] = {}
+        for base, names, _ in f.import_froms:
+            for name, local in names:
+                # `from .x import Foo` re-exports Foo from the submodule `x`;
+                # `from .x import y` where `x.y` is itself a module is a
+                # module import, not a symbol re-export.
+                source = f"{base}.{name}" if f"{base}.{name}" in known else base
+                if source in known and source != qualname:
+                    pkg_map[local] = source
+        if pkg_map:
+            maps[qualname] = pkg_map
+    _follow_reexport_chains(maps)
+    return maps
+
+
+def _follow_reexport_chains(maps: dict[str, dict[str, str]], *, max_depth: int = 8) -> None:
+    """Walk `pkg -> sub -> impl` re-export hops down to the defining module.
+
+    Depth-capped and cycle-guarded for the same reason
+    `graph._follow_reexport_chains` is: two packages re-exporting the same name
+    from each other would otherwise loop forever.
+    """
+    for pkg, name_map in maps.items():
+        for name, target in name_map.items():
+            visited = {pkg}
+            hop = target
+            for _ in range(max_depth):
+                deeper = maps.get(hop, {}).get(name)
+                if deeper is None or deeper in visited:
+                    break
+                visited.add(hop)
+                hop = deeper
+            name_map[name] = hop
+
+
+def _resolved_imports(
+    facts: _ModuleFacts, known: frozenset[str], reexports: dict[str, dict[str, str]]
+) -> set[str]:
+    """The project modules `facts` imports, resolved against what exists.
+
+    Mirrors `graph._expand_with_imported_names` so this lookup and archy's own
+    dependency graph give the same answer. `from pkg import submodule` is an
+    edge to the SUBMODULE, not to `pkg`: attributing it to the package too
+    reported `archy.install.base` as importing `archy.install`, which `archy
+    impact` says nothing does. A name the package re-exports routes to the
+    module that defines it. The bare package is the fallback only when neither
+    applies, which is the case where the package really is what gets imported.
+    """
+    resolved = {m for m in facts.imported_modules if m in known}
+    for base, names, may_fall_back in facts.import_froms:
+        targets = set()
+        pkg_map = reexports.get(base, {})
+        for name, _ in names:
+            submodule = f"{base}.{name}"
+            if submodule in known:
+                targets.add(submodule)
+            elif name in pkg_map:
+                targets.add(pkg_map[name])
+        if targets:
+            resolved |= targets
+        elif may_fall_back and base in known:
+            resolved.add(base)
+    return resolved
+
+
+def _try_collect(module: Module) -> _ModuleFacts | None:
+    """Parse and census one module, or None when it cannot be read.
+
+    Advisory command: an unreadable or half-written file is a fact to report,
+    never a reason to fail. Shared so the two callers cannot drift on WHICH
+    failures are tolerated -- a narrower except tuple in one of them would turn
+    a work-in-progress file into a crash on only one of the two surfaces.
+    """
+    try:
+        tree = ast.parse(module.path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError, UnicodeDecodeError):
+        return None
+    return _collect(tree, module.qualname, is_package=module.is_package)
+
+
+def _classify_module(
+    qualname: str, shadows: frozenset[str], *, include_tests: bool
+) -> tuple[str, str]:
+    """Which partition bucket `qualname` falls in, and why, in ONE check order.
+
+    Both the ranked census and the single-module lookup have to answer this,
+    and they used to answer it separately. The copies drifted in check order,
+    so a test module inside a shadow root was counted as a test by one and
+    reported as shadowed by the other: the same module, two different answers
+    about why it was set aside. A lookup whose whole purpose is being trusted
+    in the negative cannot afford to disagree with the census it sits beside,
+    so the order lives here once and neither caller gets its own.
+    """
+    if _is_nonsource_module(qualname):
+        return "nonsource", "set aside: under a dot-directory, not library source"
+    if not include_tests and _is_test_module(qualname):
+        return "test", "set aside: a test module -- pass --include-tests to census it"
+    root_of = next(
+        (sh for sh in sorted(shadows) if qualname == sh or qualname.startswith(sh + ".")), None
+    )
+    if root_of:
+        return "shadowed", f"set aside: in {root_of}, which duplicates its parent"
+    return "censused", "censused"
 
 
 def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[BaseFamily, ...]:
@@ -1400,32 +1540,27 @@ def compute_conventions(
     # over tests and vendored copies answers a different question from the one
     # asked; see ModulePartition for the measured failure that motivated this.
     shadows = _shadow_roots(m.qualname for m in modules)
-    n_tests = n_shadowed = n_nonsource = 0
+    counts: Counter[str] = Counter()
     kept = []
     for module in modules:
-        if _is_nonsource_module(module.qualname):
-            n_nonsource += 1
-            continue
-        if not include_tests and _is_test_module(module.qualname):
-            n_tests += 1
-            continue
-        if any(module.qualname.startswith(sh + ".") or module.qualname == sh for sh in shadows):
-            n_shadowed += 1
-            continue
-        kept.append(module)
+        bucket, _ = _classify_module(module.qualname, shadows, include_tests=include_tests)
+        counts[bucket] += 1
+        if bucket == "censused":
+            kept.append(module)
+    n_tests, n_shadowed, n_nonsource = (
+        counts["test"],
+        counts["shadowed"],
+        counts["nonsource"],
+    )
     modules = kept
     facts: list[_ModuleFacts] = []
     unparsed = 0
     for module in modules:
-        try:
-            source = module.path.read_text(encoding="utf-8")
-            tree = ast.parse(source)
-        except (OSError, SyntaxError, ValueError, UnicodeDecodeError):
-            # Advisory command: an unreadable or half-written file is a fact
-            # to report, never a reason to fail.
+        collected = _try_collect(module)
+        if collected is None:
             unparsed += 1
             continue
-        facts.append(_collect(tree, module.qualname))
+        facts.append(collected)
 
     gates, errors = _gates(facts)
     bases = _base_families(facts, min_count=min_family)
@@ -1474,26 +1609,11 @@ def compute_module_view(
     modules = list(discover_modules(root, ignored_dirs=ignored_dirs, extra_roots=extra_roots))
     shadows = _shadow_roots(m.qualname for m in modules)
 
-    def status_of(q: str) -> str:
-        if _is_nonsource_module(q):
-            return "set aside: under a dot-directory, not library source"
-        if any(q == sh or q.startswith(sh + ".") for sh in shadows):
-            root_of = next(sh for sh in shadows if q == sh or q.startswith(sh + "."))
-            return f"set aside: in {root_of}, which duplicates its parent"
-        if _is_test_module(q):
-            return (
-                "censused"
-                if include_tests
-                else "set aside: a test module -- pass --include-tests to census it"
-            )
-        return "censused"
-
     facts: dict[str, _ModuleFacts] = {}
     for m in modules:
-        try:
-            facts[m.qualname] = _collect(ast.parse(m.path.read_text(encoding="utf-8")), m.qualname)
-        except (OSError, SyntaxError, ValueError, UnicodeDecodeError):
-            continue
+        collected = _try_collect(m)
+        if collected is not None:
+            facts[m.qualname] = collected
 
     if module not in facts:
         near = sorted(q for q in facts if module in q or q.endswith("." + module))
@@ -1503,16 +1623,18 @@ def compute_module_view(
         )
 
     f = facts[module]
-    known = set(facts)
+    known = frozenset(facts)
+    reexports = _reexport_maps(facts, known)
+    resolved = {q: _resolved_imports(g, known, reexports) for q, g in facts.items()}
     # Complete on both sides. A "does X import Y" question is answered by the
     # presence or ABSENCE of Y here, so a partial list is worse than none.
-    imports = sorted({m for m in f.imported_modules if m in known and m != module})
-    by = sorted(q for q, g in facts.items() if q != module and module in g.imported_modules)
+    imports = sorted(resolved[module] - {module})
+    by = sorted(q for q, mods in resolved.items() if q != module and module in mods)
     fams = sorted({camel_suffix(c.name) for c in f.classes})
     gates, errors = _gates([f])
     return ModuleView(
         module=module,
-        status=status_of(module),
+        status=_classify_module(module, shadows, include_tests=include_tests)[1],
         classes=tuple(sorted(c.name for c in f.classes)),
         functions=tuple(sorted(fn.name for fn in f.functions)),
         imports_internal=tuple(imports),
