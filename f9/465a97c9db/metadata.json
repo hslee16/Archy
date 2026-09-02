@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f9465a97c9db",
+  "strategy": "manual-commit",
+  "branch": "alee/dogfood-headers",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "src/archy/headers.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f9/465a97c9db/0/metadata.json",
+      "transcript": "/f9/465a97c9db/0/full.jsonl",
+      "content_hash": "/f9/465a97c9db/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 732,
+    "cache_creation_tokens": 494802,
+    "cache_read_tokens": 103134845,
+    "output_tokens": 221525,
+    "api_call_count": 366
+  }
+}
