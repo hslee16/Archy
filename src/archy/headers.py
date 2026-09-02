@@ -209,22 +209,40 @@ def existing_block(source: str) -> str | None:
     if doc is None:
         return None
 
-    # 🔴 THE BLOCK IS CONTIGUOUS LINES, NOT MARKER-PREFIXED LINES. Keeping only
-    # lines that start with the marker drops every WRAPPED continuation, and
-    # `render_header` wraps whenever a field exceeds the width, which on real
-    # modules is the common case rather than the exception. The effect was that
-    # `--check` called a file stale the instant after `--write` produced it,
-    # defeating the one job the flag has.
-    kept: list[str] = []
+    kept, _ = split_block(doc)
+    return "\n".join(kept) if kept else None
+
+
+def split_block(doc: str) -> tuple[list[str], list[str]]:
+    """Separate a docstring into (archy block lines, everything else).
+
+    🔴 THE BLOCK IS CONTIGUOUS LINES, NOT MARKER-PREFIXED LINES, and ONE
+    function has to own that definition. `render_header` wraps whenever a field
+    exceeds the width, which on real modules is the common case, so a
+    continuation line belongs to the block while starting with a space rather
+    than the marker.
+
+    Both readers of a docstring need the same answer and they diverged once
+    already, in opposite directions: `--check` compared against marker lines
+    only and called every wrapped header stale the instant `--write` produced
+    it, and `apply_header` stripped marker lines only, leaving orphaned
+    continuations behind as "prose" so a SECOND write corrupted the docstring
+    it was meant to refresh. Two functions answering "which lines are the
+    block" is the bug, not the duplication.
+    """
+    block: list[str] = []
+    prose: list[str] = []
+    in_block = False
     for line in doc.splitlines():
         if line.strip().startswith(MARKER):
-            kept.append(line.rstrip())
-        elif kept:
-            if line.strip() and line[:1].isspace():
-                kept.append(line.rstrip())
-            else:
-                break
-    return "\n".join(kept) if kept else None
+            in_block = True
+            block.append(line.rstrip())
+        elif in_block and line.strip() and line[:1].isspace():
+            block.append(line.rstrip())
+        else:
+            in_block = False
+            prose.append(line)
+    return block, prose
 
 
 def apply_header(source: str, block: str) -> str:
@@ -245,7 +263,7 @@ def apply_header(source: str, block: str) -> str:
     body = doc.split(quote, 2)
     if len(body) < 3:
         return source
-    prose_lines = [line for line in body[1].splitlines() if not line.strip().startswith(MARKER)]
+    _, prose_lines = split_block(body[1])
     while prose_lines and not prose_lines[-1].strip():
         prose_lines.pop()
     prose = "\n".join(prose_lines)

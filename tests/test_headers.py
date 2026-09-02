@@ -133,6 +133,36 @@ def test_check_passes_after_write_when_a_header_wraps(tmp_path: Path):
     assert result.exit_code == 0, result.output
 
 
+def test_repeated_writes_are_idempotent_when_a_header_wraps(tmp_path: Path):
+    """The idempotence test above cannot catch this, because its fixture is too
+    small to wrap. `apply_header` stripped marker lines only, so a wrapped
+    header's continuations survived as "prose" and the SECOND write left them
+    stranded above the regenerated block: the command corrupted the docstring it
+    was meant to refresh. Both readers now share one definition of the block.
+    """
+    root = _project(tmp_path, prose="Rule evaluation.\n")
+    rules = root / "myapp" / "core" / "rules.py"
+    rules.write_text(
+        rules.read_text()
+        + "".join(
+            f"\n\ndef find_violations_of_kind_number_{i}(x):\n    return []\n" for i in range(12)
+        )
+    )
+    args = ["conventions", str(root), "--emit-headers", "--write"]
+
+    CliRunner().invoke(main, args)
+    once = rules.read_text()
+    assert len(existing_block(once).splitlines()) > 1, "this fixture must wrap to be a test"
+
+    CliRunner().invoke(main, args)
+    twice = rules.read_text()
+
+    assert twice == once
+    assert twice.count("archy:owns") == 1
+    # The prose has to survive both passes, not just the first.
+    assert "Rule evaluation." in twice
+
+
 def test_check_and_write_are_refused_together(tmp_path: Path):
     root = _project(tmp_path)
     result = CliRunner().invoke(
