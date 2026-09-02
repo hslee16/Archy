@@ -1821,6 +1821,16 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
     hook or a harness can make.
 
     Advisory, always exits 0. It reports; `check` and `contracts` gate.
+
+    \b
+    CLI-only ON PURPOSE, and recorded here because review has now flagged its
+    absence from the MCP surface twice. The value claimed above is that the
+    briefing arrives WITHOUT being asked for, which a hook or harness does and
+    an in-session tool call does not; an agent that has already decided to ask
+    can reach the same facts through `archy_conventions` and
+    `archy_check(contracts=True)`. Same call `archy render` made in v0.42. An
+    `archy_brief` tool is the reopen path if a usage signal appears (#427), not
+    a gap to close on symmetry alone.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     kw = _graph_kwargs(path)
