@@ -21,12 +21,19 @@ uv run ty check
 uv run pytest
 uv run archy check .       # archy's own layer rules
 uv run archy cycles . --strict
+uv run archy conventions . --emit-headers --check   # derived headers still true
 ```
 
 **`ruff check` with no path.** Running `ruff check some/file.py` is not the same
 command and will pass while CI fails: a fixture directory with deliberately
 unused imports broke the build twice in one session because it was only ever
 linted per-file.
+
+**`archy conventions --emit-headers --check` is a gate too.** The headers in
+archy's own modules are derived, so adding a public symbol or changing a mirror
+set makes them stale, and CI fails. Regenerate with `uv run archy conventions .
+--emit-headers --write`; never hand-edit a block, because the next regeneration
+discards the edit and the point of the block is that it is not hand-authored.
 
 **`archy check` and `archy cycles` matter as much as `ruff check`, `ruff
 format`, `ty` and `pytest`.** archy gates itself, so a new fixture tree or bench

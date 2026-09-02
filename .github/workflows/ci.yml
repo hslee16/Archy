@@ -48,6 +48,13 @@ jobs:
           command: cycles
           strict: "true"
 
+      # The headers in archy's own modules are DERIVED, so they can go stale the
+      # moment a public symbol is added or a mirror set changes. A generated
+      # block that quietly stops matching the tree is worse than no block: it
+      # reads like a fact and is not one. This is the gate that stops that.
+      - name: Derived headers are current (archy conventions --emit-headers --check)
+        run: uv run archy conventions . --emit-headers --check
+
   # The lockfile pins ONE mcp major, so every job above proves archy works on
   # exactly the version a user installing from PyPI probably does not get. That
   # gap shipped a broken MCP server in v0.42.0 (#391): `archy mcp` died on import
