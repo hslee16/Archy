@@ -63,6 +63,7 @@ from archy.graph import (
     internal_subgraph,
     parse_project,
 )
+from archy.headers import apply_header, compute_headers, existing_block, render_header
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
@@ -1731,6 +1732,30 @@ def uninstall(
     "code they exercise and win any count they are entered in.",
 )
 @click.option(
+    "--emit-headers",
+    "emit_headers",
+    is_flag=True,
+    default=False,
+    help="Derive a per-module header block (what it owns, what mirrors it, whether a "
+    "finding here gates) and print it. Prints only; add --write to put it in the files.",
+)
+@click.option(
+    "--write",
+    "write",
+    is_flag=True,
+    default=False,
+    help="With --emit-headers, write each block into its module docstring. The only "
+    "archy command that modifies your source, so it never happens implicitly.",
+)
+@click.option(
+    "--check",
+    "check_headers",
+    is_flag=True,
+    default=False,
+    help="With --emit-headers, exit 1 if any header is missing or stale. For CI, so a "
+    "derived block cannot rot into a lie the way hand-written docs do.",
+)
+@click.option(
     "--format",
     "fmt",
     type=click.Choice(["text", "json"]),
@@ -1738,7 +1763,15 @@ def uninstall(
     help="Output format.",
 )
 def conventions(
-    path: Path, top_n: int, min_family: int, module: str | None, include_tests: bool, fmt: str
+    path: Path,
+    top_n: int,
+    min_family: int,
+    module: str | None,
+    include_tests: bool,
+    emit_headers: bool,
+    write: bool,
+    check_headers: bool,
+    fmt: str,
 ) -> None:
     """Report the project's own house style, derived from its source.
 
@@ -1759,6 +1792,9 @@ def conventions(
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     _require(min_family >= 2, "min-family", ">= 2", min_family)
+    # Before the `--module` early return, or the flags it cannot honour are
+    # parsed and dropped on the floor.
+    _require_headers_flags(emit_headers, write, check_headers, module)
     if module:
         # 🔴 A lookup, not a ranking. Every list is complete for this module, so
         # absence from one is an answer rather than an artefact of truncation.
@@ -1777,6 +1813,9 @@ def conventions(
     report = compute_conventions(
         path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
+    if emit_headers:
+        _emit_headers(report, path, write=write, check=check_headers, fmt=fmt)
+        return
     if fmt == "json":
         click.echo(json.dumps(_conventions_to_dict(report, top_n=top_n), indent=2, sort_keys=True))
     else:
@@ -3239,6 +3278,87 @@ def _shown(total: int, top_n: int) -> str:
     if total <= top_n:
         return f"({total})"
     return f"({total}; showing {top_n}, --top {total} for the rest)"
+
+
+def _require_headers_flags(
+    emit_headers: bool, write: bool, check: bool, module: str | None
+) -> None:
+    """`--write` and `--check` mean nothing without `--emit-headers`, and mean opposite
+    things to each other. Silently ignoring a flag someone typed is how a user comes to
+    believe their source was rewritten when it was not.
+
+    `--module` is the same failure and was live: it returns a single-module view
+    early, so `--module X --write` parsed the flag, did nothing, and exited 0.
+    Someone running that in a script would believe a header had been written.
+    """
+    if (write or check) and not emit_headers:
+        raise click.UsageError("--write and --check require --emit-headers.")
+    if write and check:
+        raise click.UsageError("--write rewrites the tree, --check asserts it is already correct.")
+    if module and (emit_headers or write or check):
+        raise click.UsageError(
+            "--module reports on one module; --emit-headers derives blocks for the whole tree. "
+            "Run them separately."
+        )
+
+
+def _emit_headers(
+    report: ConventionsReport, path: Path, *, write: bool, check: bool, fmt: str
+) -> None:
+    """Print, write or verify the derived header blocks.
+
+    `--check` exits 1 on a stale header and says which module, because a CI
+    failure whose only content is "something drifted" costs a reader the same
+    investigation the check was supposed to save.
+    """
+    headers = compute_headers(report, path, discover_modules(path, **_graph_kwargs(path)))
+    stale: list[str] = []
+    written: list[str] = []
+
+    for header in headers:
+        target = path / header.path
+        source = target.read_text(encoding="utf-8")
+        block = render_header(header)
+        if check:
+            if existing_block(source) != block:
+                stale.append(header.module)
+            continue
+        if write:
+            updated = apply_header(source, block)
+            if updated != source:
+                target.write_text(updated, encoding="utf-8")
+                written.append(header.module)
+
+    if fmt == "json":
+        click.echo(
+            json.dumps(
+                {
+                    "headers": [{**h.model_dump(), "rendered": render_header(h)} for h in headers],
+                    "stale": stale,
+                    "written": written,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    elif check:
+        if stale:
+            click.echo(f"# {len(stale)} module(s) with a missing or stale archy header:")
+            for module in stale:
+                click.echo(f"#   {module}")
+            click.echo("# `archy conventions --emit-headers --write` regenerates them.")
+        else:
+            click.echo(f"# {len(headers)} header(s) match the tree.")
+    elif write:
+        click.echo(f"# wrote {len(written)} header(s) into {len(headers)} scanned module(s).")
+    else:
+        for header in headers:
+            click.echo(f"# {header.path}")
+            click.echo(render_header(header))
+            click.echo("")
+
+    if check and stale:
+        sys.exit(1)
 
 
 def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
