@@ -800,13 +800,24 @@ def _register_tools(server: Server) -> None:
             # unverified as not asking, so reporting transitive_checked=True
             # there would reintroduce the bug this field exists to close (#343).
             checked = payload.available and payload.error is None
+            # A stale reason is worse than none. `_run_check` computed its reason
+            # before contracts were attempted, so it names contracts=True -- and
+            # replaying that at a caller who just passed contracts=True and
+            # watched it fail sends them round a loop they have been through.
+            # A non-None reason from `_run_check` is also the signal that there
+            # WAS something to verify, so it gates this branch.
+            if checked or result.transitive_unverified_reason is None:
+                reason = None
+            else:
+                reason = (
+                    "the `forbid` rules are still unverified: archy_check(contracts=True) "
+                    f"produced no transitive verdict ({payload.error})."
+                )
             result = result.model_copy(
                 update={
                     "contracts": payload,
                     "transitive_checked": checked,
-                    "transitive_unverified_reason": (
-                        None if checked else result.transitive_unverified_reason
-                    ),
+                    "transitive_unverified_reason": reason,
                 }
             )
         return result

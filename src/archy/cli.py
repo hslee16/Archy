@@ -301,11 +301,18 @@ def check(
             # looked" (#343).
             "transitive_checked": contracts_result is not None
             and contracts_result.result is not None,
-            "transitive_unverified_reason": (
-                _transitive_unverified_reason(config, coverage, violations)
-                if contracts_result is None
-                else None
-            ),
+            "transitive_unverified_reason": _transitive_unverified_reason(
+                config,
+                coverage,
+                violations,
+                no_verdict_error=(
+                    contracts_result.error
+                    if contracts_result is not None and contracts_result.result is None
+                    else None
+                ),
+            )
+            if contracts_result is None or contracts_result.result is None
+            else None,
         }
         if contracts_result is not None:
             payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
@@ -2345,18 +2352,32 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsO
 
 
 def _transitive_unverified_reason(
-    config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
+    config: LayerConfig,
+    coverage: LayerCoverage,
+    violations: list[Violation],
+    *,
+    no_verdict_error: str | None = None,
 ) -> str | None:
     """The text handoff's reason, for a reader that cannot parse prose.
 
     A bare `transitive_checked: false` is a verdict without a reason, which
     AGENTS.md rules out on every surface: the consumer needs to know whether the
     rules were merely not requested or could not be proven, and what settles it.
+
+    `no_verdict_error` distinguishes the two ways this run can fail to verify.
+    Naming `--contracts` to a caller who just passed it and watched it fail is
+    worse than saying nothing: it sends them round a loop they have already been
+    through, so that case reports the actual cause instead.
     """
     if not contracts_unverified(config, coverage, violations):
         return None
     n = len(config.forbid)
     rules = "rule" if n == 1 else "rules"
+    if no_verdict_error is not None:
+        return (
+            f"{n} forbid {rules} declared and still unverified: `--contracts` produced no "
+            f"transitive verdict ({no_verdict_error})."
+        )
     return (
         f"{n} forbid {rules} declared, but this check governs too little of the graph to "
         "verify them; `--contracts` evaluates them transitively via import-linter."

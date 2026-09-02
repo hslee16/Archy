@@ -1783,20 +1783,33 @@ def test_check_stays_quiet_when_there_is_nothing_to_verify(tmp_path: Path):
 
 def test_check_transitive_checked_needs_a_verdict_not_a_request(tmp_path: Path, monkeypatch):
     """Asking for contracts and having import-linter turn out to be missing
-    leaves the rules exactly as unverified as not asking. Reporting
-    transitive_checked=True there would reintroduce the bug the field closes."""
+    leaves the rules exactly as unverified as not asking, so
+    transitive_checked=True there would reintroduce the bug the field closes.
+
+    The REASON has to move with the flag. `_run_check` computes its reason before
+    contracts are attempted, so it names contracts=True; replaying that at a
+    caller who just passed contracts=True and watched it fail sends them round a
+    loop they have already been through. Goes through the registered tool, not
+    the helpers, because the fallback that produced the stale reason lived in the
+    tool body where a helper-level test could not see it.
+    """
     import archy.contracts
-    from archy.mcp import ContractsPayload
 
     def _boom(*args, **kwargs):
         raise archy.contracts.ContractsNotAvailable("import-linter is not installed")
 
     monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
-    from archy.mcp import _run_contracts
 
-    payload = _run_contracts(_transitive_project(tmp_path), config_filename=None)
+    server = create_server()
+    _c, out = _call_tool(
+        server, "archy_check", {"path": str(_transitive_project(tmp_path)), "contracts": True}
+    )
 
-    assert isinstance(payload, ContractsPayload)
-    assert payload.available is False
-    # The flag the tool derives `transitive_checked` from.
-    assert not (payload.available and payload.error is None)
+    assert isinstance(out, dict)
+    result = out["result"]
+    assert result["contracts"]["available"] is False
+    assert result["transitive_checked"] is False
+    reason = result["transitive_unverified_reason"]
+    # Names the real cause, not the flag the caller already passed and watched fail.
+    assert "import-linter is not installed" in reason
+    assert "produced no transitive verdict" in reason

@@ -1629,3 +1629,26 @@ def test_check_json_reason_is_absent_without_forbid_rules(tmp_path: Path):
 
     assert payload["transitive_checked"] is False
     assert payload["transitive_unverified_reason"] is None
+
+
+def test_check_json_keeps_a_reason_when_contracts_could_not_run(tmp_path: Path, monkeypatch):
+    """The failure this PR exists to close, one level down. Requesting
+    `--contracts` and getting no verdict leaves the forbid rules exactly as
+    unverified as never asking, so dropping the reason there would be the same
+    silent clean pass in a different disguise. It must not name `--contracts`
+    back at a caller who just passed it and watched it fail."""
+    import archy.contracts
+
+    def _boom(*args, **kwargs):
+        raise archy.contracts.ContractsConfigError("no contracts config found")
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    out = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+
+    assert payload["transitive_checked"] is False
+    reason = payload["transitive_unverified_reason"]
+    assert "no contracts config found" in reason
+    assert "produced no transitive verdict" in reason
