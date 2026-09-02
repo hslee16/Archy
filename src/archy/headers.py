@@ -21,6 +21,13 @@ what `--check` exists to prevent.
 What a header does NOT claim: that any of this helps. The arm that answers that
 runs on the local rig, and a prior seeding arm on this card set LOST to its
 control. `docs/WHAT_DIDNT_WORK.md` gets the result either way.
+
+CLI-only ON PURPOSE, and for a stronger reason than `brief` (#427). Two:
+`--write` MUTATES source, which is not something an agent should reach through a
+tool call; and the entire claim is that the fact arrives through `read` rather
+than through an archy invocation, so an MCP tool that hands the same block to a
+model that asked for it would be testing the pull surface that already returned
+0 of 89, 0 of 24 and 0 of 38. #431 records the reopen path.
 """
 
 from __future__ import annotations
