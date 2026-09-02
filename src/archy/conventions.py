@@ -60,7 +60,12 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.graph import DEFAULT_IGNORED_DIRS, Module, discover_modules
+from archy.graph import (
+    DEFAULT_IGNORED_DIRS,
+    Module,
+    _follow_reexport_chains,
+    discover_modules,
+)
 
 # A CamelCase name splits into an acronym run (`DSM`, `MCP`) or a single
 # capitalized word. The trailing element is the family: `DSMDiff` -> `Diff`,
@@ -496,11 +501,11 @@ class _ModuleFacts:
         # answering it from symbols alone would miss both `import pkg.mod` and
         # every relative import in the project.
         self.imported_modules: set[str] = set()
-        # One entry per `from X import ...`: the resolved base, the (name,
-        # local-name) pairs, and whether a bare-package fallback is legal for
-        # it. Kept unresolved because the answer depends on the project's
+        # One entry per `from X import ...`: the resolved base and the (name,
+        # local-name) pairs. Kept unresolved because whether a name is a
+        # submodule, a re-export or a plain symbol depends on the project's
         # module set; see `_resolved_imports`.
-        self.import_froms: list[tuple[str, tuple[tuple[str, str], ...], bool]] = []
+        self.import_froms: list[tuple[str, tuple[tuple[str, str], ...]]] = []
         # Whether this module is a package's `__init__.py`. Only those can
         # re-export, so only those contribute to the re-export map.
         self.is_package = False
@@ -540,11 +545,7 @@ def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _M
                 # is carried because `from . import sibling` imports the sibling
                 # and must never fall back to the containing package.
                 facts.import_froms.append(
-                    (
-                        base,
-                        tuple((a.name, a.asname or a.name) for a in node.names if a.name != "*"),
-                        node.module is not None,
-                    )
+                    (base, tuple((a.name, a.asname or a.name) for a in node.names if a.name != "*"))
                 )
     for node in tree.body:
         if isinstance(node, ast.Assign | ast.AnnAssign):
@@ -700,7 +701,7 @@ def _reexport_maps(
         if not f.is_package:
             continue
         pkg_map: dict[str, str] = {}
-        for base, names, _ in f.import_froms:
+        for base, names in f.import_froms:
             for name, local in names:
                 # `from .x import Foo` re-exports Foo from the submodule `x`;
                 # `from .x import y` where `x.y` is itself a module is a
@@ -710,28 +711,11 @@ def _reexport_maps(
                     pkg_map[local] = source
         if pkg_map:
             maps[qualname] = pkg_map
+    # The graph's own walker, not a copy of it. The two resolvers have to agree
+    # about where a re-exported name lives, and a second hand-synchronized
+    # implementation is exactly the drift this module already had to fix.
     _follow_reexport_chains(maps)
     return maps
-
-
-def _follow_reexport_chains(maps: dict[str, dict[str, str]], *, max_depth: int = 8) -> None:
-    """Walk `pkg -> sub -> impl` re-export hops down to the defining module.
-
-    Depth-capped and cycle-guarded for the same reason
-    `graph._follow_reexport_chains` is: two packages re-exporting the same name
-    from each other would otherwise loop forever.
-    """
-    for pkg, name_map in maps.items():
-        for name, target in name_map.items():
-            visited = {pkg}
-            hop = target
-            for _ in range(max_depth):
-                deeper = maps.get(hop, {}).get(name)
-                if deeper is None or deeper in visited:
-                    break
-                visited.add(hop)
-                hop = deeper
-            name_map[name] = hop
 
 
 def _resolved_imports(
@@ -748,7 +732,7 @@ def _resolved_imports(
     applies, which is the case where the package really is what gets imported.
     """
     resolved = {m for m in facts.imported_modules if m in known}
-    for base, names, _ in facts.import_froms:
+    for base, names in facts.import_froms:
         targets = set()
         pkg_map = reexports.get(base, {})
         for name, _local in names:
