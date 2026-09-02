@@ -152,7 +152,8 @@ def test_repeated_writes_are_idempotent_when_a_header_wraps(tmp_path: Path):
 
     CliRunner().invoke(main, args)
     once = rules.read_text()
-    assert len(existing_block(once).splitlines()) > 1, "this fixture must wrap to be a test"
+    block = existing_block(once)
+    assert block is not None and len(block.splitlines()) > 1, "this fixture must wrap to be a test"
 
     CliRunner().invoke(main, args)
     twice = rules.read_text()
