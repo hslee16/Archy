@@ -10,6 +10,7 @@ from __future__ import annotations
 import keyword
 import re
 from pathlib import Path
+from typing import cast
 
 import networkx as nx
 import yaml
@@ -761,21 +762,34 @@ def _is_package_segment(segment: str) -> bool:
     return segment.isidentifier() and not keyword.iskeyword(segment)
 
 
+def _require_str_keys(
+    entry: dict[str, object], keys: tuple[str, ...], kind: str, path: Path
+) -> list[str]:
+    """Check that `keys` are present on `entry` and are strings, and return them.
+
+    Both `forbid` and `required` entries had their own copy of this, differing
+    only in the key names and the message. The file already extracts this class
+    of validation (`_parse_non_negative_int`, `_check_known_layer`), so a third
+    inline copy was the odd one out. Returns the values in `keys` order so the
+    caller does not re-index what was just validated.
+    """
+    for key in keys:
+        if key not in entry:
+            raise LayerConfigError(f"{kind} entry is missing required key {key!r} in {path}")
+    values = [entry[key] for key in keys]
+    if not all(isinstance(value, str) for value in values):
+        named = "/".join(f"`{key}`" for key in keys)
+        raise LayerConfigError(f"{kind} {named} values must be strings in {path}")
+    return cast("list[str]", values)
+
+
 def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[ForbidRule]:
     if not isinstance(raw, list):
         raise LayerConfigError(f"`forbid` must be a list in {path}")
     out: list[ForbidRule] = []
     for entry_raw in raw:
         entry = _as_str_dict(entry_raw, "forbid entry", path)
-        for required in ("from", "to"):
-            if required not in entry:
-                raise LayerConfigError(
-                    f"forbid entry is missing required key {required!r} in {path}"
-                )
-        src_raw = entry["from"]
-        tgt_raw = entry["to"]
-        if not isinstance(src_raw, str) or not isinstance(tgt_raw, str):
-            raise LayerConfigError(f"forbid `from`/`to` values must be strings in {path}")
+        src_raw, tgt_raw = _require_str_keys(entry, ("from", "to"), "forbid", path)
         _check_known_layer(src_raw, "from", known_layers, path)
         _check_known_layer(tgt_raw, "to", known_layers, path)
         out.append(ForbidRule(from_layer=src_raw, to_layer=tgt_raw))
@@ -798,16 +812,8 @@ def _parse_required(raw: object, path: Path) -> list[RequiredRule]:
     out: list[RequiredRule] = []
     for entry_raw in raw:
         entry = _as_str_dict(entry_raw, "required entry", path)
-        for key in ("source", "must_reach"):
-            if key not in entry:
-                raise LayerConfigError(f"required entry is missing required key {key!r} in {path}")
-        source = entry["source"]
-        must_reach = entry["must_reach"]
+        source, must_reach = _require_str_keys(entry, ("source", "must_reach"), "required", path)
         reason = entry.get("reason", "")
-        if not isinstance(source, str) or not isinstance(must_reach, str):
-            raise LayerConfigError(
-                f"required `source`/`must_reach` values must be strings in {path}"
-            )
         if not isinstance(reason, str):
             raise LayerConfigError(f"required `reason` must be a string in {path}")
         _validate_pattern(source, "required rule has an invalid `source` pattern", path)

@@ -1659,3 +1659,28 @@ def test_check_json_keeps_a_reason_when_contracts_could_not_run(tmp_path: Path, 
     reason = payload["transitive_unverified_reason"]
     assert "no contracts config found" in reason
     assert "produced no transitive verdict" in reason
+
+
+def test_brief_json_says_whether_it_looked_transitively(tmp_path: Path):
+    """The fourth surface. brief's text has rendered this handoff since it
+    shipped and its JSON had not, which left the gap #343 closed on `check`
+    open one command over, on the output a harness parses rather than reads."""
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    payload = _invoke_json(["brief", str(root), "--format", "json"])
+
+    assert payload["transitive_checked"] is False
+    assert "forbid rule" in payload["transitive_unverified_reason"]
+
+
+def test_brief_json_reason_is_absent_without_an_archy_yaml(tmp_path: Path):
+    """No config means no rule to leave unverified, and brief still reports.
+    A reason here would be asserting a gap in a governance that was never
+    declared."""
+    root = _make_uncovered_forbid_project(tmp_path)
+    (root / "archy.yaml").unlink()
+
+    payload = _invoke_json(["brief", str(root), "--format", "json"])
+
+    assert payload["transitive_checked"] is False
+    assert payload["transitive_unverified_reason"] is None

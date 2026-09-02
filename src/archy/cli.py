@@ -1848,6 +1848,28 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
             "conventions": _conventions_to_dict(report, top_n=top_n),
             "coverage": _coverage_to_json(coverage) if coverage is not None else None,
             "contracts": (_contracts_outcome_to_dict(contracts) if contracts is not None else None),
+            # brief's TEXT output has rendered this handoff from the start; its
+            # JSON had not, which left the same clean-pass-says-nothing gap #343
+            # closed on `check` open one command over. `violations` is empty
+            # because brief does not run the direct pass: it reports what the
+            # config cannot see, not what it caught.
+            "transitive_checked": contracts is not None and contracts.result is not None,
+            "transitive_unverified_reason": (
+                _transitive_unverified_reason(
+                    config,
+                    coverage,
+                    [],
+                    no_verdict_error=(
+                        contracts.error
+                        if contracts is not None and contracts.result is None
+                        else None
+                    ),
+                )
+                if config is not None
+                and coverage is not None
+                and (contracts is None or contracts.result is None)
+                else None
+            ),
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
