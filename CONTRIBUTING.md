@@ -2,28 +2,40 @@
 
 ## Community Compact
 
-**Read this first: archy is in maintenance as of 2026-07-27.** Feature work has
-stopped, deliberately, after its premise was measured four times and came back
-rare each time. The reasoning is in [`README.md`](README.md) and in full in
-[`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md). This does not close the
-project to contributions, but it does change what you should expect, so it is
-said here rather than discovered after you have spent a weekend.
+**Read this first: archy is active again as of 2026-09-02, on one line of
+work.** It spent 2026-07-27 to 2026-09-02 in maintenance, deliberately, after
+its premise was measured four times and came back rare each time. What reopened
+it is a different population rather than a different reading of those results:
+**coding agents running a small model on local hardware**, where usable context
+is far below a frontier model's and a structural answer may substitute for
+context the model cannot hold. The reasoning is in [`README.md`](README.md), the
+prior results in full in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md),
+and the pre-registered thresholds in
+[#408](https://github.com/hslee16/archy/issues/408).
+
+This changes what you should expect, so it is said here rather than discovered
+after you have spent a weekend: **feature work is driven along that one line.**
+A PR outside it is still welcome and still reviewed, but it is not what the
+maintainer is actively pushing on, and the honest word for that is "contribution
+accepted", not "roadmap item".
 
 What the maintainer commits to:
 
 - Respond to new issues within a week (best effort; one person, day job).
-- Review pull requests, including feature PRs. Maintenance means I am not
-  *driving* new features; it does not mean I will reject yours unread.
+- Review pull requests, including feature PRs. A narrow focus means I am not
+  *driving* features outside it; it does not mean I will reject yours unread.
 - Keep CI green and the released package working.
 - No surprise re-licensing. archy is MIT and intended to stay that way. Any change would be announced in advance with rationale; released versions stay under their original license.
 - No commercial-feature gating in the OSS package. If a hosted version of archy ever exists, the OSS package will never be the lesser product.
 
 What the maintainer no longer commits to:
 
-- A forward roadmap. [`docs/ROADMAP.md`](docs/ROADMAP.md) and
-  [`docs/FUTURE.md`](docs/FUTURE.md) are kept as a record of what was
-  considered and why, and are explicitly marked closed. Several items in them
-  rest on a claim that has since been retracted.
+- A general forward roadmap. [`docs/ROADMAP.md`](docs/ROADMAP.md) and
+  [`docs/FUTURE.md`](docs/FUTURE.md) stay closed and are kept as a record of
+  what was considered and why; several items in them rest on a claim that has
+  since been retracted, and reopening the project did not reopen them. The one
+  line that *is* planned is the local-model work tracked from
+  [#408](https://github.com/hslee16/archy/issues/408).
 - Building requested features myself, on any timeline.
 
 What contributors are asked to do:

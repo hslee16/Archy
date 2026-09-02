@@ -1,11 +1,17 @@
 # Future Features
 
-> **Status note, 2026-07-27: THIS ROADMAP IS CLOSED. Nothing on it is planned.**
+> **Status note, updated 2026-09-02: THIS ROADMAP IS STILL CLOSED, but archy is not.**
 >
-> archy is in maintenance. Feature work stopped after its premise was measured four times and came
-> back rare each time, most recently in #369, which found a real effect and found it capped at 12%
-> by how seldom the mistake happens (results in [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6
-> and `bench/greenfield_results.md`). Distribution work (#322 and children) is parked, not active.
+> The project went back into active development on 2026-09-02, on one line: **coding agents running
+> a small model on local hardware** (see the banner in [`README.md`](../README.md) and the
+> pre-registered thresholds in [#408](https://github.com/hslee16/archy/issues/408)). That does not
+> reopen anything below. This roadmap closed on 2026-07-27 because archy's premise was measured
+> four times and came back rare each time, most recently in #369, which found a real effect and
+> found it capped at 12% by how seldom the mistake happens (results in
+> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6 and `bench/greenfield_results.md`). **None of
+> that was retracted**, so the items here are still premised on a claim that did not hold.
+> Distribution work (#322 and children) remains parked. New work is tracked against the local-model
+> line, not against this file.
 >
 > Everything below is kept because the design thinking is worth reading and because a closed
 > roadmap that has been *deleted* is indistinguishable from one that was never thought through.
