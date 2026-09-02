@@ -3,10 +3,13 @@
 **Status: COMPLETE.** Every checklist item is answered against primary sources
 and §9 carries the call. The checklist is retained so the coverage is auditable.
 
-**Answer in one line: NO-GO.** The category splits into prefix bloat (real,
-measured, and archy already solved its share) and comprehension context
-(unmeasured by its own vendors, and archy tested its version twice and got
-null). No tickets filed.
+**Answer in one line: NO-GO**, with one exception since overridden. The category
+splits into prefix bloat (real, measured, and archy already solved its share) and
+comprehension context (unmeasured by its own vendors, and archy tested its version
+twice and got null). No tickets filed. The one candidate below that later shipped,
+`archy brief` (v0.46, [#421](https://github.com/hslee16/archy/issues/421)), shipped on
+maintainer judgment ahead of a measurement, not because this survey's verdict changed:
+the local-model arm that would test it is scheduled and has not reported.
 
 ## The question
 
@@ -24,7 +27,7 @@ token-reduction propositions at its own layer and both returned null.**
   refactored direction** (4/6 pairs, p=0.754). The headline leaned the wrong way.
 - **#289**: injected an archy structural brief before the task. `pre_edit_reads`
   median **−2.0** (14/8, **p=0.286**), after an N=10 hint at p=0.109 that did
-  not survive more data. NO-GO on `archy brief`.
+  not survive more data. The NO-GO it carried was withdrawn in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)) on maintainer judgment taken *ahead of* a measurement rather than on one; the local-model brief-injection arm is scheduled and has not reported. The null itself stands.
 
 So this research is not "how do we build one". It is: **given that we already
 failed twice, is there a mechanism in this space that we have not tested and
@@ -569,7 +572,7 @@ the inside.
 
 ## 9. Recommendation (D1-D3)
 
-**NO-GO on building any token-reduction feature. No tickets filed.**
+**NO-GO on building any token-reduction feature. No tickets filed.** (One candidate, `archy brief`, shipped regardless in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)) on maintainer judgment ahead of a measurement. That was an override of this recommendation, not a revision of it: nothing below has been refuted, and the local-model arm is scheduled and unreported.)
 
 The category splits cleanly once you sort by mechanism, and archy's position in
 each half is already settled:
@@ -588,7 +591,7 @@ each half is already settled:
 
 | candidate | anti-theater | discriminant | usage signal | beats the null? | verdict |
 | --- | --- | --- | --- | --- | --- |
-| `archy brief` / repo map (redo) | Fails. Measured null already; the strongest precedent (aider) publishes no token evidence | No | None | **No.** Nothing addresses the measured zero headroom | **Wontfix** |
+| `archy brief` / repo map (redo) | Fails. Measured null already; the strongest precedent (aider) publishes no token evidence | No | None | **No.** Nothing addresses the measured zero headroom | **Wontfix on this evidence.** Shipped anyway in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)) on maintainer judgment, ahead of the local-model arm that would test it; this row's verdict was overridden, not met |
 | Compress archy's tool descriptions further | Passes (deterministic, in-repo measurable) | Marginal | None | n/a | **Not worth it.** 1.96% is already lean; effort better spent elsewhere |
 | Trim `outputSchema` | **Fails on premise for token cost**: client-side on Claude Code, zero context (§7). Not zero everywhere: Gemini + ADK forwards it | No | None | n/a | **Wontfix for tokens.** Revisit only if archy targets a Gemini-class client, where its 14,427 tokens do land in the tool declaration |
 | Token-savings marketing claim | Fails hard. We have two nulls of our own | No | None | No | **Forbidden.** See §14c.7 |
@@ -596,7 +599,7 @@ each half is already settled:
 
 ### D2. The call, and why
 
-**Do not build.** Three independent reasons, any one sufficient:
+**Do not build.** Three independent reasons, any one sufficient. (Overridden once, for `archy brief`, in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)): shipped on maintainer judgment ahead of the local-model measurement. Reasons 1-3 are unchanged by that decision.)
 
 1. **The available surface is spent.** Of ten categories, only three are a
    static analyzer's to build (§5). Two are shipped. The third is measured
@@ -618,7 +621,7 @@ it.
 
 ### D3. Tickets
 
-**None filed.** Nothing cleared all four gates.
+**None filed.** Nothing cleared all four gates. `archy brief` shipped in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)) without clearing them, on maintainer judgment ahead of the scheduled local-model arm.
 
 ### The reopen path, recorded so this is not re-proposed from scratch
 

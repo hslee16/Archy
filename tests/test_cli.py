@@ -1555,3 +1555,49 @@ def test_brief_answers_the_four_questions_and_stays_small(tmp_path: Path):
 def test_brief_is_advisory_and_never_gates(tmp_path: Path):
     root = _make_uncovered_forbid_project(tmp_path)
     assert CliRunner().invoke(main, ["brief", str(root)]).exit_code == 0
+
+
+def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: Path, monkeypatch):
+    """A verdict without a reason is not actionable. When import-linter is
+    absent, `contracts` missing from the JSON entirely is indistinguishable from
+    a bug in archy, and a reason on stderr is carried by neither structured
+    stream. The MCP surface has always reported `available`/`error` here."""
+    # Local: the substitution has to land on the module object that
+    # `_run_check_contracts` imports from at call time.
+    import archy.contracts
+
+    def _boom(*args, **kwargs):
+        raise archy.contracts.ContractsNotAvailable("import-linter is not installed")
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    out = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+    assert payload["contracts"]["available"] is False
+    assert "import-linter" in payload["contracts"]["error"]
+
+    text = CliRunner().invoke(main, ["check", str(root), "--contracts"]).output
+    assert "# contracts: no verdict (import-linter is not installed)" in text
+
+
+def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch):
+    """An unreadable contracts config is `available=True` with a reason, the way
+    `mcp._run_contracts` distinguishes it from a missing dependency."""
+    # Local: the substitution has to land on the module object that
+    # `_run_check_contracts` imports from at call time.
+    import archy.contracts
+
+    def _boom(*args, **kwargs):
+        raise archy.contracts.ContractsConfigError("no contracts config found")
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    out = CliRunner().invoke(main, ["brief", str(root), "--contracts", "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+    assert payload["contracts"]["available"] is True
+    assert "no contracts config" in payload["contracts"]["error"]
+
+    text = CliRunner().invoke(main, ["brief", str(root), "--contracts"]).output
+    assert "# contracts: no verdict (no contracts config found)" in text

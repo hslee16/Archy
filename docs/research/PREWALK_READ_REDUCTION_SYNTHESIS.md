@@ -28,12 +28,20 @@ read 2026-07-20, indexed locally.
   distilled artifact loses the grounded understanding*. An archy brief is exactly
   such an artifact. So the null is that archy context **adds** reads (agent reads
   the brief *and* still reads the source) rather than substituting for them.
-- **Recommendation: NO-GO on any new feature or spec.** The scoped bench was built
-  and run (arm C on the #259 harness). **It returned a non-result** (§6): at N=22 the
-  brief did not reliably reduce reads-before-first-edit (median −2.0, 14/8, p=0.286),
-  after an N=10 hint (p=0.109) that did not survive more data. NO-GO is now on
-  evidence, not just an unproven prior. We measured the substitution rather than
-  asserting it, and it was not there.
+- **The scoped bench was built and run** (arm C on the #259 harness). **It returned a
+  non-result** (§6): at N=22 the brief did not reliably reduce reads-before-first-edit
+  (median −2.0, 14/8, p=0.286), after an N=10 hint (p=0.109) that did not survive more
+  data. We measured the substitution rather than asserting it, and it was not there.
+  **That null stands, unchanged and unrefuted.**
+- **The NO-GO this recommendation carried was withdrawn in v0.46**
+  ([#421](https://github.com/hslee16/archy/issues/421)), and it is worth being exact
+  about on what basis: `archy brief` shipped **on maintainer judgment, ahead of the
+  measurement, not because of one.** No briefed-vs-control result supports it today.
+  The nearest comparison that has actually run went the *other* way (§6a). The
+  local-model brief-injection arm that would settle it is scheduled on the local rig
+  and has not reported. Until it does, the honest status of a local-model
+  deliberation or token saving is **unmeasured**, and nothing in archy's docs or
+  README claims one.
 
 ## 1. The article in archy's terms (research task 1)
 
@@ -190,7 +198,11 @@ change-spread, the substitution mechanism is plausible *and already half-built*)
 and not a feature (shipping now would assert the effect the article warns is
 usually illusory).
 
-- **NO-GO** on an `archy brief` / pre-edit surface spec or any new tool now.
+- ~~**NO-GO** on an `archy brief` / pre-edit surface spec or any new tool now.~~
+  **Withdrawn in v0.46** ([#421](https://github.com/hslee16/archy/issues/421)) on
+  maintainer judgment, ahead of the measurement rather than on one. Struck through
+  rather than deleted: the gate was set aside, not met, and a reader should be able to
+  see that this is what happened.
 - **GO** on extending the #259 harness with arm C (context-injection) and the net
   reads-before-first-edit metric, once #259's baseline harness lands. Low marginal
   cost (a third arm on an existing substrate), high information value (it tests
@@ -228,14 +240,41 @@ multiple-comparison correction across the 5 metrics (~0.21), and it is not a rea
 count, so it cannot be relabeled as read reduction (§14.6). Zero regressions, so no
 correctness signal either way.
 
-**Go/no-go, on evidence now.** **NO-GO** on an `archy brief` feature, because the
-effect *regressed to null on more data*, not merely for want of power. This is the
-anti-theater gate doing its job: a feature shipped on the N=10 hint would have been
-theater. The measurement infra remains worthwhile (#290 brief precision, #293 metric
+**Go/no-go, on evidence now.** The effect *regressed to null on more data*, not merely
+for want of power, and a feature shipped on the N=10 hint would have been theater. The
+feature shipped anyway in v0.46 on maintainer judgment (§5), which is a decision the
+maintainer is entitled to take and which this document records rather than endorses.
+Frontier-model reads-before-first-edit remains null and unclaimed. The measurement infra remains worthwhile (#290 brief precision, #293 metric
 split); a task-conditioned brief (#291) keeps only a weak prior, since breadth never
 moved even with the flat brief. The one-config caveat stands (one model, one repo, one
 task), but the burden now sits on a positive result to appear, not on this null to be
 explained away.
+
+## 6a. The local-model setting: scheduled, not yet measured
+
+The v0.46 override rests on a prior that a *local* model, paying a much steeper
+decode price than a frontier model, has headroom arm C could not see. That prior is
+reasonable and it is untested. What exists today on the local rig:
+
+- **The nearest comparison that ran went the wrong way.** Seeding archy's own
+  `CLAUDE.md` + `SKILL.md` into `AGENTS.md` before the task (arms `84` control, `95`
+  docs seed, `097` CLAUDE.md only), one card, Qwen3.8-27B, **n=1 per arm**: the
+  **unseeded control scored highest** (3 vs 2 vs 2), and the seeded cell spent
+  **+7.9% prompt, +4.8% eval, +6.9% total tokens** against control. Wrong direction on
+  both quality and cost.
+- **That comparison cannot settle anything either way.** n=1 per arm, and the control
+  already hit the rubric maximum, so the round could structurally detect the seed
+  *hurting* and not the seed *helping*. Per-cell dispersion is large (thinking chars
+  CV 81%); the rig's own power analysis puts a 50% effect at ~9 cells per arm.
+- **No deliberation delta has been computed at all.** The recorded "eval tokens" is
+  total generation with no thinking/answer split, so no briefed-vs-unbriefed
+  thinking-token comparison exists yet.
+- **The arm that would answer it is queued and unrun**: pre-task injection of archy's
+  diagnostic output, scheduled on the local rig.
+
+So the reopen path is not hypothetical, it is booked. Until it reports, the correct
+statement is that the local-model claim is **unmeasured**, and the one adjacent
+measurement is discouraging.
 
 ## 7. Would a different brief help? (scoping the non-result)
 

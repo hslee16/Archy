@@ -9,6 +9,7 @@ from typing import cast
 
 import click
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 from archy import __version__
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
@@ -295,7 +296,7 @@ def check(
             "presence_fails": presence_fails,
         }
         if contracts_result is not None:
-            payload["contracts"] = _contracts_to_dict(contracts_result)
+            payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(_violations_to_text(violations, config_path, coverage))
@@ -322,7 +323,7 @@ def check(
                 click.echo("# (sdp.mode=warn; not failing the gate)")
         if contracts_result is not None:
             click.echo("")
-            click.echo(_contracts_to_text(contracts_result))
+            click.echo(_contracts_outcome_to_text(contracts_result))
 
     sdp_fails = bool(sdp_violations) and config.sdp.mode == "error"
     # Required-reach failures gate like forbid violations do. They are opt-in
@@ -1827,7 +1828,7 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
         payload = {
             "conventions": _conventions_to_dict(report, top_n=top_n),
             "coverage": _coverage_to_json(coverage) if coverage is not None else None,
-            "contracts": _contracts_to_dict(contracts) if contracts is not None else None,
+            "contracts": (_contracts_outcome_to_dict(contracts) if contracts is not None else None),
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -2278,11 +2279,30 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
                 L += indent(handoff)
     if contracts is not None:
         L.append("")
-        L.append(_contracts_to_text(contracts))
+        L.append(_contracts_outcome_to_text(contracts))
     return "\n".join(L)
 
 
-def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsResult | None:
+class ContractsOutcome(BaseModel):
+    """The `--contracts` addendum, including the case where it produced no verdict.
+
+    Carries `available` and `error` so a run that could not reach a verdict still
+    says why on every surface. Returning `None` instead left `check --format
+    json` with no `contracts` key at all and `brief --format json` with a bare
+    `null`, which is indistinguishable from a bug in archy; the reason went only
+    to stderr, which neither structured stream carries. The MCP surface has
+    reported `available`/`error` from the start, so this is also what keeps the
+    two telling the same story.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    available: bool = True
+    error: str | None = None
+    result: ContractsResult | None = None
+
+
+def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsOutcome:
     """Run contracts for `check --contracts`, and never let it fail the check.
 
     A missing `import-linter` or an unreadable contracts config is a reason the
@@ -2291,14 +2311,25 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsR
     verdict is the whole point and wrong when it is an addendum: a flag that can
     turn a passing check into a failing one because an optional dependency is
     absent would make `--contracts` unsafe to leave on in CI.
+
+    The two failures are distinguished the way `mcp._run_contracts` distinguishes
+    them: a missing dependency is `available=False`, while a config archy could
+    not read is `available=True` with the reason attached.
     """
+    # Function-local on purpose, and load-bearing twice over: it keeps the
+    # optional import-linter dependency off the module-import path, and it
+    # resolves `run_contracts` through the module at CALL time, which is what
+    # lets a test substitute a raising stub to exercise the no-verdict branch.
     from archy.contracts import ContractsConfigError, ContractsNotAvailable, run_contracts
 
     try:
-        return run_contracts(path, config_filename=config_filename)
-    except (ContractsNotAvailable, ContractsConfigError) as exc:
+        return ContractsOutcome(result=run_contracts(path, config_filename=config_filename))
+    except ContractsNotAvailable as exc:
         click.echo(f"# --contracts unavailable: {exc}", err=True)
-        return None
+        return ContractsOutcome(available=False, error=str(exc))
+    except ContractsConfigError as exc:
+        click.echo(f"# --contracts unavailable: {exc}", err=True)
+        return ContractsOutcome(available=True, error=str(exc))
 
 
 def _contracts_handoff_to_text(
@@ -2551,6 +2582,19 @@ def _contracts_to_dict(result: ContractsResult) -> dict:
             for c in result.contracts
         ],
     }
+
+
+def _contracts_outcome_to_dict(outcome: ContractsOutcome) -> dict:
+    payload: dict = {"available": outcome.available, "error": outcome.error}
+    if outcome.result is not None:
+        payload.update(_contracts_to_dict(outcome.result))
+    return payload
+
+
+def _contracts_outcome_to_text(outcome: ContractsOutcome) -> str:
+    if outcome.result is None:
+        return f"# contracts: no verdict ({outcome.error})"
+    return _contracts_to_text(outcome.result)
 
 
 def _contracts_to_text(result: ContractsResult) -> str:
