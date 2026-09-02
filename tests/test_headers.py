@@ -37,6 +37,35 @@ def _project(tmp_path: Path, *, prose: str = "") -> Path:
     return tmp_path
 
 
+def _wrapping_project(tmp_path: Path) -> Path:
+    """A project whose `owns` field is too long to fit on one line, and the path to it.
+
+    Both wrap regressions hid behind fixtures too small to wrap, so the fixture
+    that forces it is the load-bearing part of those tests and belongs in one
+    place rather than pasted into each.
+    """
+    root = _project(tmp_path, prose="Rule evaluation.\n")
+    rules = root / "myapp" / "core" / "rules.py"
+    rules.write_text(
+        rules.read_text()
+        + "".join(
+            f"\n\ndef find_violations_of_kind_number_{i}(x):\n    return []\n" for i in range(12)
+        )
+    )
+    return rules
+
+
+def _assert_wraps(source: str) -> str:
+    """The written block, having checked it actually wraps.
+
+    Without this the wrap tests would keep passing if the fixture stopped
+    wrapping, and would then be testing nothing.
+    """
+    block = existing_block(source)
+    assert block is not None and len(block.splitlines()) > 1, "this fixture must wrap to be a test"
+    return block
+
+
 def _headers(root: Path):
     report = compute_conventions(root)
     return compute_headers(report, root, discover_modules(root))
@@ -115,21 +144,12 @@ def test_check_passes_after_write_when_a_header_wraps(tmp_path: Path):
     `--write` produced it. Wrapping is the common case, not an edge case: most
     modules with more than a couple of public symbols exceed the width.
     """
-    root = _project(tmp_path, prose="Rule evaluation.\n")
-    rules = root / "myapp" / "core" / "rules.py"
-    # Enough public symbols that the `owns` field cannot fit on one line.
-    rules.write_text(
-        rules.read_text()
-        + "".join(
-            f"\n\ndef find_violations_of_kind_number_{i}(x):\n    return []\n" for i in range(12)
-        )
-    )
+    rules = _wrapping_project(tmp_path)
 
-    CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--write"])
-    block = existing_block(rules.read_text())
-    assert block is not None and len(block.splitlines()) > 1, "this fixture must wrap to be a test"
+    CliRunner().invoke(main, ["conventions", str(tmp_path), "--emit-headers", "--write"])
+    _assert_wraps(rules.read_text())
 
-    result = CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--check"])
+    result = CliRunner().invoke(main, ["conventions", str(tmp_path), "--emit-headers", "--check"])
     assert result.exit_code == 0, result.output
 
 
@@ -140,20 +160,12 @@ def test_repeated_writes_are_idempotent_when_a_header_wraps(tmp_path: Path):
     stranded above the regenerated block: the command corrupted the docstring it
     was meant to refresh. Both readers now share one definition of the block.
     """
-    root = _project(tmp_path, prose="Rule evaluation.\n")
-    rules = root / "myapp" / "core" / "rules.py"
-    rules.write_text(
-        rules.read_text()
-        + "".join(
-            f"\n\ndef find_violations_of_kind_number_{i}(x):\n    return []\n" for i in range(12)
-        )
-    )
-    args = ["conventions", str(root), "--emit-headers", "--write"]
+    rules = _wrapping_project(tmp_path)
+    args = ["conventions", str(tmp_path), "--emit-headers", "--write"]
 
     CliRunner().invoke(main, args)
     once = rules.read_text()
-    block = existing_block(once)
-    assert block is not None and len(block.splitlines()) > 1, "this fixture must wrap to be a test"
+    _assert_wraps(once)
 
     CliRunner().invoke(main, args)
     twice = rules.read_text()
@@ -178,6 +190,21 @@ def test_write_flags_need_emit_headers(tmp_path: Path):
     root = _project(tmp_path)
     result = CliRunner().invoke(main, ["conventions", str(root), "--write"])
     assert result.exit_code != 0
+
+
+def test_module_lookup_refuses_the_header_flags_instead_of_dropping_them(tmp_path: Path):
+    """`--module` returns a single-module view and returns EARLY, so the header
+    flags were parsed and silently discarded: `--module X --write` exited 0
+    having written nothing. Someone running that in a script would believe a
+    header had been written. Same failure the flag guard exists to prevent, one
+    code path over."""
+    root = _project(tmp_path)
+    for flag in ("--write", "--check", "--emit-headers"):
+        args = ["conventions", str(root), "--module", "myapp.core.rules", flag]
+        if flag != "--emit-headers":
+            args.append("--emit-headers")
+        result = CliRunner().invoke(main, args)
+        assert result.exit_code != 0, f"{flag} was silently ignored"
 
 
 def test_apply_header_gives_a_docstring_to_a_module_without_one(tmp_path: Path):

@@ -1792,6 +1792,9 @@ def conventions(
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     _require(min_family >= 2, "min-family", ">= 2", min_family)
+    # Before the `--module` early return, or the flags it cannot honour are
+    # parsed and dropped on the floor.
+    _require_headers_flags(emit_headers, write, check_headers, module)
     if module:
         # 🔴 A lookup, not a ranking. Every list is complete for this module, so
         # absence from one is an answer rather than an artefact of truncation.
@@ -1807,7 +1810,6 @@ def conventions(
             else _module_view_to_text(view)
         )
         return
-    _require_headers_flags(emit_headers, write, check_headers)
     report = compute_conventions(
         path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
@@ -3278,14 +3280,26 @@ def _shown(total: int, top_n: int) -> str:
     return f"({total}; showing {top_n}, --top {total} for the rest)"
 
 
-def _require_headers_flags(emit_headers: bool, write: bool, check: bool) -> None:
+def _require_headers_flags(
+    emit_headers: bool, write: bool, check: bool, module: str | None
+) -> None:
     """`--write` and `--check` mean nothing without `--emit-headers`, and mean opposite
     things to each other. Silently ignoring a flag someone typed is how a user comes to
-    believe their source was rewritten when it was not."""
+    believe their source was rewritten when it was not.
+
+    `--module` is the same failure and was live: it returns a single-module view
+    early, so `--module X --write` parsed the flag, did nothing, and exited 0.
+    Someone running that in a script would believe a header had been written.
+    """
     if (write or check) and not emit_headers:
         raise click.UsageError("--write and --check require --emit-headers.")
     if write and check:
         raise click.UsageError("--write rewrites the tree, --check asserts it is already correct.")
+    if module and (emit_headers or write or check):
+        raise click.UsageError(
+            "--module reports on one module; --emit-headers derives blocks for the whole tree. "
+            "Run them separately."
+        )
 
 
 def _emit_headers(
