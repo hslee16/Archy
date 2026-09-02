@@ -12,6 +12,10 @@ given the changed files in a PR, surface the precise set of tests whose
 behavior could be affected. Internal-only at launch (see
 `docs/SPEC_INDEX_AND_INSTALL.md` Q3); third-party / vendored code is out
 of scope until real user demand surfaces.
+
+archy:owns        Affected, find_affected
+archy:mirrored-by Affected -> archy.cli, archy.mcp, find_affected -> archy.cli,
+                  archy.mcp
 """
 
 from __future__ import annotations

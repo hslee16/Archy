@@ -18,6 +18,17 @@ Run:
 
 The script deliberately lives in bench/ and never modifies src/archy. The
 companion empirics doc is docs/research/SCORE_SHAPE_REDESIGN_EMPIRICS.md.
+
+archy:owns        agg_arith, agg_geomean, agg_harmonic, agg_min, agg_mpi,
+                  agg_penalty_geomean, agg_pgm, archy_call, axis_baseline_tangle,
+                  axis_feedback_edges, axis_feedback_x_tangle, axis_largest_scc,
+                  axis_log_cycle_count, axis_modular_tangle, axis_sentrux_legacy,
+                  axis_values, build_internal_graph, collect_all, collect_project,
+                  correlation_matrix, depth_baseline, depth_size_relative,
+                  depth_with_scc_penalty, evaluate, load_corpus, main,
+                  normalize_acyclicity, overall_for, pearson, projects, resolve_root,
+                  scc_metrics, spearman
+archy:gates       exit 1 (hardcoded)
 """
 
 from __future__ import annotations

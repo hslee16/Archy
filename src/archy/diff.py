@@ -11,6 +11,18 @@ Snapshots live in `.archy/baseline.json` by default (one per project,
 overwritten each capture). Sentrux uses an in-process `session_start`
 baseline; archy uses a file so the loop can survive process restarts
 and so the baseline shape is the same one the CLI emits.
+
+archy:owns        CycleSetDiff, DiffReport, DiffSummary, DiffSummaryItem,
+                  ReachViolationSetDiff, ScoreDelta, SdpViolationSetDiff, Snapshot,
+                  ViolationSetDiff, compute_diff, discover_config_for, read_snapshot,
+                  snapshot_to_dict, take_snapshot, write_snapshot
+archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
+                  DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
+                  compute_diff -> archy.cli, archy.mcp, archy.simulate,
+                  bench.delta_direction, bench.simulate_oracle,
+                  read_snapshot -> archy.cli, archy.mcp, take_snapshot -> archy.cli,
+                  archy.mcp, archy.simulate, bench.delta_direction,
+                  bench.simulate_oracle, write_snapshot -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

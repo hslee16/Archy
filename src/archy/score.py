@@ -34,6 +34,19 @@ quality-signal-design.md. sentrux ships a different fifth metric
 because its static computation is fragile under dynamic dispatch,
 decorators, and `if __name__ == "__main__":` gates. See
 docs/LEARNINGS.md for the comparison.
+
+archy:owns        Score, ScoreInputs, compute_acyclicity, compute_complexity,
+                  compute_depth, compute_equality, compute_modularity,
+                  compute_modularity_weighted, compute_score
+archy:mirrored-by Score -> archy.cli, archy.diff, archy.history, archy.mcp,
+                  ScoreInputs -> archy.diff, archy.mcp,
+                  compute_acyclicity -> bench.call_weighted_modularity, bench.dsm,
+                  compute_complexity -> archy.diff, bench.call_weighted_modularity,
+                  bench.dsm, compute_depth -> bench.call_weighted_modularity,
+                  bench.dsm, compute_equality -> bench.call_weighted_modularity,
+                  bench.dsm, compute_modularity -> bench.call_weighted_modularity,
+                  bench.dsm, compute_score -> archy.cli, archy.diff, archy.mcp,
+                  bench.inloop_prevalence, bench.q1b_score
 """
 
 from __future__ import annotations

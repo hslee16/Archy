@@ -33,6 +33,9 @@ The GitHub traffic endpoints are owner-only and need a token with repo scope.
 The script reads ``GITHUB_TOKEN`` / ``GH_TOKEN``, else falls back to
 ``gh auth token``. Without one it degrades cleanly: every other source still
 lands and the traffic block records its null.
+
+archy:owns        append, build_row, main, pull_adopters, pull_community, pull_pypi,
+                  pull_repo, pull_traffic, summarize
 """
 
 from __future__ import annotations

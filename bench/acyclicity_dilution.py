@@ -42,6 +42,9 @@ Usage:
     uv run --with networkx --with pyyaml --with tree-sitter \
         --with tree-sitter-python --with pydantic python bench/acyclicity_dilution.py
     uv run ... python bench/acyclicity_dilution.py --stdout
+
+archy:owns        acy_countlin, acy_current, acy_floor, acy_logcount, format_report,
+                  inject_two_cycle, internal_graph, main, measure, run, synthetic_dag
 """
 
 from __future__ import annotations

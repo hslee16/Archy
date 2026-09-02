@@ -56,6 +56,8 @@ imports are collapsed by `_external_target` and dropped by `assemble_graph`
 Usage:
     uv run python bench/pattern_detection.py
     uv run python bench/pattern_detection.py --json out.json
+
+archy:owns        RepoResult, analyze, main, summarize
 """
 
 from __future__ import annotations

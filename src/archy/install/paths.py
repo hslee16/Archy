@@ -13,6 +13,9 @@ Homedir-anchored paths (`~/.claude.json`, `~/.cursor/mcp.json`, ...) use
 `%USERPROFILE%`, so the spec's "Windows column" of `%USERPROFILE%\\.claude.json`
 is just `home() / ".claude.json"`. Only the roaming/local AppData roots and the
 Windows install-dir fallbacks need explicit branching.
+
+archy:owns        appdata, current_platform, home, is_macos, is_windows, local_appdata,
+                  user_profile
 """
 
 from __future__ import annotations

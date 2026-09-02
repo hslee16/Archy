@@ -17,6 +17,8 @@ Concurrency: one connection guarded by one lock. Both the tool-call thread
 (`build_graph` / `sync_now`) and the debounce thread acquire the same lock, so
 SQLite is only ever touched by one thread at a time (hence
 `check_same_thread=False` is safe).
+
+archy:owns        IndexManager
 """
 
 from __future__ import annotations

@@ -24,6 +24,8 @@ hand-classified genuine-vs-coincidental) recorded alongside in
 Usage:
     uv run --with pyyaml python bench/coupling_sweep.py
     uv run --with pyyaml python bench/coupling_sweep.py --stdout
+
+archy:owns        main, run_project
 """
 
 from __future__ import annotations

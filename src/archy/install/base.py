@@ -10,6 +10,20 @@ The split that keeps the test pyramid cheap: an adapter's :meth:`plan` returns
 content to new content. Rendering is what snapshot tests (layer 2) freeze and
 contract tests (layer 4) parse back; the filesystem only enters when
 :func:`apply_plan` feeds those renders through a :class:`WriteSystem`.
+
+archy:owns        AgentAdapter, FileAction, Scope, apply_plan, apply_uninstall,
+                  delete_file, instructions_block, local_root, permission_patterns,
+                  remove_instructions, upsert_instructions
+archy:mirrored-by delete_file -> archy.install.adapters.continue_,
+                  archy.install.adapters.cursor,
+                  local_root -> archy.install.adapters.claude,
+                  archy.install.adapters.codex, archy.install.adapters.continue_,
+                  archy.install.adapters.cursor, archy.install.adapters.opencode,
+                  remove_instructions -> archy.install.adapters.claude,
+                  archy.install.adapters.codex, archy.install.adapters.opencode,
+                  upsert_instructions -> archy.install.adapters.claude,
+                  archy.install.adapters.codex, archy.install.adapters.continue_,
+                  archy.install.adapters.cursor, archy.install.adapters.opencode
 """
 
 from __future__ import annotations

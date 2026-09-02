@@ -30,6 +30,8 @@ Usage:
     uv run --with networkx --with pyyaml --with tree-sitter \
         --with tree-sitter-python --with pydantic python bench/community_partitioner.py
     uv run ... python bench/community_partitioner.py --stdout
+
+archy:owns        format_report, internal_graph, main, measure, run, synthetic_dag
 """
 
 from __future__ import annotations

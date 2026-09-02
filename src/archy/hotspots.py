@@ -32,6 +32,10 @@ top-K on low-activity projects, where a 12-month cap can collapse the
 result set to fewer than 20 items. Use ``--since`` (a CLI passthrough
 to ``git log --since``) when you want the "what should I refactor
 right now" lens instead of the historical view.
+
+archy:owns        Hotspot, compute_hotspots, git_churn
+archy:mirrored-by compute_hotspots -> archy.cli, archy.refactor,
+                  git_churn -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

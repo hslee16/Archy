@@ -7,6 +7,8 @@ Codex is the only TOML client. MCP servers live under the `mcp_servers` table:
 
 Codex loads project-scoped ``.codex/config.toml`` only for *trusted* projects,
 and reads project ``AGENTS.md`` from the repo root (not under ``.codex/``).
+
+archy:owns        CodexAdapter
 """
 
 from __future__ import annotations

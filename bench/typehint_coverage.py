@@ -26,6 +26,8 @@ decision, not pre-suppose it.
 Usage:
     uv run --with networkx --with pyyaml --with pydantic --with tree-sitter \
         --with tree-sitter-python python bench/typehint_coverage.py
+
+archy:owns        ProjectCoverage, main
 """
 
 from __future__ import annotations

@@ -14,6 +14,8 @@ confidence, so the bar is "mostly plausible", not the ~74% of the exact tiers.
 Usage:
     uv run --with pyyaml python bench/near_duplicates_sweep.py
     uv run --with pyyaml python bench/near_duplicates_sweep.py --stdout
+
+archy:owns        main, run_project
 """
 
 from __future__ import annotations

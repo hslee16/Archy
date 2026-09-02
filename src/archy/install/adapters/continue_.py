@@ -10,6 +10,8 @@ directory, and rules from a ``rules`` directory:
 Continue is a VS Code / JetBrains extension with no headless mode, so it is
 excluded from the E2E layer (layer 5); layers 1-4 cover it. No permission
 allowlist, so ``seed_permissions`` is ignored.
+
+archy:owns        ContinueAdapter
 """
 
 from __future__ import annotations

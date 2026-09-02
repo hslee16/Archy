@@ -48,6 +48,13 @@ because a *healthy* agent waiting on the API is also blocked in a socket read.
 "Blocked on I/O" is the normal state for most of a run. The question is whether
 that I/O will ever complete, which is not visible in the syscall and is only
 observable as absence of progress over time.
+
+archy:owns        Ledger, StallTimeout, SupervisedResult, WallTimeout, run_supervised,
+                  with_retries
+archy:mirrored-by Ledger -> bench.contract_decay, bench.contract_prevalence,
+                  bench.greenfield_run, bench.q1b_run,
+                  run_supervised -> bench.greenfield_run, bench.q1b_run,
+                  with_retries -> bench.greenfield_run, bench.q1b_run
 """
 
 from __future__ import annotations

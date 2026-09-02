@@ -26,6 +26,9 @@ apples-to-apples with archy's published benchmarks (test/doc noise excluded).
 Usage:
     uv run python bench/inloop_prevalence.py \
         --per-repo 40 --out bench/inloop_prevalence_results.json
+
+archy:owns        changed_py, checkout, clone, cyclic_nodes, default_ref, git, main,
+                  metrics, run_repo, sample_commits, summarize
 """
 
 from __future__ import annotations

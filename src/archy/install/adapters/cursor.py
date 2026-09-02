@@ -6,6 +6,8 @@ Paths:
 - instructions:      ``~/.cursor/rules/archy.mdc`` / ``<project>/.cursor/rules/archy.mdc``
 
 Cursor has no permission allowlist, so ``seed_permissions`` is ignored.
+
+archy:owns        CursorAdapter
 """
 
 from __future__ import annotations

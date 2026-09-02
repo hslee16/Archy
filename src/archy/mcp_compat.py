@@ -27,6 +27,8 @@ result) is a claim about the SDK's behavior, not its call shape. That is
 verified against BOTH majors by an actual stdio handshake in
 `tests/test_mcp_protocol.py`, which is the test that would catch a divergence
 this alias cannot.
+
+archy:owns        sdk_major
 """
 
 from __future__ import annotations

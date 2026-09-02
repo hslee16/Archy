@@ -30,6 +30,8 @@ Usage:
     uv run --with networkx --with pyyaml --with tree-sitter \
         --with tree-sitter-python --with pydantic --with click \
         python bench/dsm.py
+
+archy:owns        main
 """
 
 from __future__ import annotations

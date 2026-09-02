@@ -25,6 +25,12 @@ wrap depends on a non-public entry point (`_register_contract_types`)
 and on the `UserOptions` shape; both are pinned to a single import-linter
 minor in `pyproject.toml`, and `tests/test_contracts.py` exercises the
 surface end-to-end so a pin override breaks loudly.
+
+archy:owns        ContractCheck, ContractsConfigError, ContractsNotAvailable,
+                  ContractsResult, run_contracts
+archy:mirrored-by ContractsConfigError -> archy.cli, archy.mcp,
+                  ContractsNotAvailable -> archy.cli, archy.mcp,
+                  run_contracts -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

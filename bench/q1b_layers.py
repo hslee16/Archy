@@ -23,6 +23,8 @@ specific way, which is the most that can be claimed.
 
 Nothing here reads the task manifest. Layer authoring is done blind to which
 files the gold patches touch, so a rule cannot be tuned toward the tasks.
+
+archy:owns        main, matrix, subpackage
 """
 
 from __future__ import annotations

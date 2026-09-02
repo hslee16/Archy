@@ -49,6 +49,19 @@ Unlike module-grained diagnostics (`hotspots`, `dsm`) that read the shared
 `nx.DiGraph`, this one is function-grained: the graph keeps only per-module CC
 aggregates, so `compute_duplicates` consumes the `(modules, parse_results)` pair
 from `archy.graph.parse_project` instead.
+
+archy:owns        DuplicateGroup, DuplicateMember, classify_variants,
+                  compute_duplicates, compute_near_duplicates, demote_independent,
+                  is_test_path
+archy:mirrored-by DuplicateGroup -> archy.cli, archy.mcp,
+                  classify_variants -> archy.cli, archy.mcp,
+                  bench.duplicates_cochange_sweep, compute_duplicates -> archy.cli,
+                  archy.mcp, bench.duplicates_cochange_sweep,
+                  compute_near_duplicates -> archy.cli, archy.mcp,
+                  bench.near_duplicates_sweep, demote_independent -> archy.cli,
+                  archy.mcp, bench.duplicates_cochange_sweep,
+                  is_test_path -> archy.cli, archy.mcp, bench.coupling_sweep,
+                  bench.duplicates_cochange_sweep
 """
 
 from __future__ import annotations

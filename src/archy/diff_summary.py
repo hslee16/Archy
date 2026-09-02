@@ -25,6 +25,9 @@ question a reviewer should answer ("new cycle a -> b; intended, or should an
 edge be inverted?"). A number tells you *what changed*; the question tells
 you *what to decide*. This is the lightweight human-facing layer the review
 brief consumes.
+
+archy:owns        summarize_diff
+archy:mirrored-by summarize_diff -> archy.cli, archy.mcp, archy.simulate
 """
 
 from __future__ import annotations

@@ -27,6 +27,8 @@ the 2026 architectural-technical-debt literature.
 
 See `docs/research/RESEARCH_METRICS.md` section 3 for the relationship to Lakos's
 NCCD (same metric family, different normalization).
+
+archy:owns        compute_propagation_cost, package_init_edges, with_package_init_edges
 """
 
 from __future__ import annotations

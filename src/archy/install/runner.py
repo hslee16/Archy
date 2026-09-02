@@ -3,6 +3,13 @@
 CLI-agnostic on purpose. The Click command in ``archy.cli`` parses flags and
 formats output; everything here returns structured results so the same logic is
 driven directly by unit tests without going through ``CliRunner``.
+
+archy:owns        AdapterResult, Detection, InstallResult, detect_all, plan_for,
+                  print_config, resolve_targets, run_install, run_uninstall
+archy:mirrored-by detect_all -> archy.cli, archy.install, print_config -> archy.cli,
+                  archy.install, resolve_targets -> archy.cli, archy.install,
+                  run_install -> archy.cli, archy.install, run_uninstall -> archy.cli,
+                  archy.install
 """
 
 from __future__ import annotations

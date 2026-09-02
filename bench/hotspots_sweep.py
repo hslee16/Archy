@@ -41,6 +41,8 @@ Limitations (these bound what the numbers prove; issue #179):
 Usage:
     uv run --with pyyaml python bench/hotspots_sweep.py
     uv run --with pyyaml python bench/hotspots_sweep.py --stdout
+
+archy:owns        jaccard, main, run_hotspots
 """
 
 from __future__ import annotations

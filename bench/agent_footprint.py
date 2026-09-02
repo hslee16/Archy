@@ -20,6 +20,11 @@ Two layers, deliberately split:
 
 Sweep scripts are run as `python bench/agent_footprint.py`, so `bench/` is on
 `sys.path[0]`; keep imports self-contained.
+
+archy:owns        FootprintRecord, ParsedTranscript, check_variant_provenance,
+                  drift_spearman, load_file_map, load_records, parse_transcript,
+                  results_table, run_arm_c, run_pair, run_variant, sign_test_p,
+                  summarize
 """
 
 from __future__ import annotations

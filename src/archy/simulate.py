@@ -16,6 +16,11 @@ depends on it): cycle identity is `frozenset(modules)`, violation identity is
 `(from_layer, to_layer, source, target)`, and the DSM gives every import edge a
 constant weight of 1.0. None of those read `lines`, so the simulated and real
 graphs agree on every field the report compares.
+
+archy:owns        AppliedDelta, EdgeRef, EdgeSpec, PropagationDelta, SimulateReport,
+                  find_simulate
+archy:mirrored-by SimulateReport -> archy.cli, archy.mcp, find_simulate -> archy.cli,
+                  archy.mcp, bench.simulate_oracle
 """
 
 from __future__ import annotations

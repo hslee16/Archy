@@ -3,6 +3,10 @@
 Adding a sixth client is a new adapter module plus one entry here. Everything
 else (CLI, runner, tests) iterates this registry rather than naming adapters
 directly.
+
+archy:owns        adapter_ids, all_adapters, get_adapter
+archy:mirrored-by all_adapters -> archy.install, archy.install.runner,
+                  get_adapter -> archy.install, archy.install.runner
 """
 
 from __future__ import annotations

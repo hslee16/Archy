@@ -25,6 +25,8 @@ near-miss primitive + its FP gate).
 Usage:
     uv run --with pyyaml python bench/duplicates_recall_experiment.py
     uv run --with pyyaml python bench/duplicates_recall_experiment.py --stdout
+
+archy:owns        collect_seeds, main, mutate, top_bag, top_shape
 """
 
 from __future__ import annotations

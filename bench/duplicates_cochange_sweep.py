@@ -13,6 +13,8 @@ the #247 path signal did not already catch (pytest's `testing/` dir, etc.).
 Usage:
     uv run --with pyyaml python bench/duplicates_cochange_sweep.py
     uv run --with pyyaml python bench/duplicates_cochange_sweep.py --stdout
+
+archy:owns        main, run_project
 """
 
 from __future__ import annotations

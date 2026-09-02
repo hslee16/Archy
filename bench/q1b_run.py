@@ -64,6 +64,11 @@ the score UP).
   `bench/repo_cache/` clones other benches use are never left detached.
 - **Every row is written as it completes** (`Ledger`), so a kill mid-pilot loses
   one run rather than the whole spend.
+
+archy:owns        RateLimited, agent_env, changed_files, hit_rate_limit,
+                  layer_violations, main, parse_reset_at, problem_statements,
+                  project_slug, reset_worktree, resolve_package, run_agent, run_task,
+                  run_with_limit_backoff, save_transcript, summarize, worktree_at
 """
 
 from __future__ import annotations

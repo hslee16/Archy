@@ -51,6 +51,9 @@ a different design.
 - Every row is written as it completes (`Ledger`), so a kill costs one pair.
 - Report per repo as well as pooled: one large repo with many contracts would
   otherwise dominate a pooled rate.
+
+archy:owns        adoption_commit, checkout, clone, discover, evaluate, gh_json, git,
+                  main, measure_pair, package_paths, python_commits, summarize
 """
 
 from __future__ import annotations

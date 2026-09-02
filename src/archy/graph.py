@@ -3,6 +3,21 @@
 A "module" is identified by its dotted path relative to a discovered package
 root. External imports (stdlib, third-party) appear as nodes with
 `external=True` so callers can filter them.
+
+archy:owns        Module, ScanTooLargeError, assemble_graph, build_graph,
+                  discover_modules, effective_max_modules, graph_to_dict,
+                  internal_subgraph, parse_project, resolve_modules
+archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
+                  archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
+                  assemble_graph -> archy.index, archy.watcher,
+                  bench.pattern_detection, discover_modules -> archy.cli,
+                  archy.conventions, archy.index, archy.mcp, archy.watcher,
+                  effective_max_modules -> archy.cli, archy.mcp,
+                  graph_to_dict -> archy.cli, archy.mcp,
+                  internal_subgraph -> archy.cli, archy.mcp,
+                  parse_project -> archy.cli, archy.mcp,
+                  bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
+                  bench.pattern_detection, resolve_modules -> archy.mcp, archy.simulate
 """
 
 from __future__ import annotations

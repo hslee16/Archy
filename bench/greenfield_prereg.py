@@ -184,6 +184,9 @@ is not a result, and an interrupt exits cleanly saying how to resume.
 Two failure modes #356 did not have, both of which must be handled per task: a
 generated server that will not start, and a container or port leaked by a crash
 into the next task.
+
+archy:owns        ArmSummary, Verdict, main, newcombe_diff_ci, render, summarize_rows,
+                  verdict, wilson
 """
 
 from __future__ import annotations

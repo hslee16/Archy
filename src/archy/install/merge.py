@@ -6,6 +6,14 @@ filesystem, so they are what snapshot tests freeze (layer 2) and contract tests
 parse back (layer 4). The cardinal rule from the testing spec: no hand-coded
 JSON/TOML strings, always parse-then-reserialize, so a user's unrelated config
 survives untouched and a second run is a byte-for-byte no-op (idempotency).
+
+archy:owns        render_claude_permissions, render_continue_yaml, render_json_mcp,
+                  render_opencode_mcp, render_toml_mcp, strip_claude_permissions,
+                  strip_json_mcp, strip_opencode_mcp, strip_toml_mcp
+archy:mirrored-by render_json_mcp -> archy.install.adapters.claude,
+                  archy.install.adapters.cursor,
+                  strip_json_mcp -> archy.install.adapters.claude,
+                  archy.install.adapters.cursor
 """
 
 from __future__ import annotations

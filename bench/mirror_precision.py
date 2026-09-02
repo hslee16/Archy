@@ -10,6 +10,8 @@ Runs over archy's own git history at zero agent cost. Nothing here touches
 building it, because #369 is the cautionary case for the other order.
 
     uv run python bench/mirror_precision.py --json bench/mirror_precision.json
+
+archy:owns        main
 """
 
 from __future__ import annotations

@@ -16,6 +16,8 @@ text conveys poorly. It stays deferred behind a usage signal, matching the
 
 Each view still clears the gate on its own: `dsm` encodes back-edges (gate
 signal 3), `trend` encodes score trajectory (gate signal 4).
+
+archy:owns        render_dsm_html, render_trend_html
 """
 
 from __future__ import annotations

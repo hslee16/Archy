@@ -3,6 +3,25 @@
 A YAML config declares named layers (groups of modules matched by dotted-name
 globs) and forbidden inter-layer edges. `find_violations` walks the import
 graph and returns every edge that crosses a forbidden boundary.
+
+archy:owns        ExactPatternHint, ForbidRule, LayerConfig, LayerConfigError,
+                  LayerCoverage, LayerSpec, ReachViolation, RequiredRule, SdpConfig,
+                  SdpViolation, Violation, compute_coverage, contracts_unverified,
+                  discover_config, find_reach_violations, find_sdp_violations,
+                  find_violations, governed_roots, load_config, match_layer
+archy:mirrored-by LayerConfig -> archy.cli, archy.contracts, archy.diff,
+                  bench.greenfield_eval, LayerConfigError -> archy.cli,
+                  archy.contracts, LayerCoverage -> archy.cli, archy.mcp,
+                  ReachViolation -> archy.cli, archy.diff, archy.mcp,
+                  RequiredRule -> archy.cli, archy.diff, SdpViolation -> archy.cli,
+                  archy.diff, archy.mcp, Violation -> archy.cli, archy.diff, archy.mcp,
+                  compute_coverage -> archy.cli, archy.mcp, bench.greenfield_eval,
+                  contracts_unverified -> archy.cli, archy.mcp,
+                  discover_config -> archy.cli, archy.diff, archy.mcp,
+                  find_reach_violations -> archy.cli, archy.diff, archy.mcp,
+                  find_sdp_violations -> archy.cli, archy.diff, archy.mcp,
+                  find_violations -> archy.cli, archy.diff, archy.mcp,
+                  bench.greenfield_eval, bench.q1b_run
 """
 
 from __future__ import annotations
