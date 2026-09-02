@@ -445,6 +445,77 @@ measurement, and this study does not make it.
 
 [`bench/greenfield_results.md`]: ../bench/greenfield_results.md
 
+## Study 7: can archy tell you a change did not reach its mirror surfaces?
+
+The gap is real and measured. Of six agent patches on tasks naming all three of
+archy's surfaces, **exactly one touched `mcp.py`**; a separate count over 25
+cells found **seven that modified `layers.py` and wired nothing at all**. Every
+one was pytest-green, because nothing in the suite asserts the mirror. I have
+now made the same mistake myself twice in one week, in #421 and again in #426.
+
+So [#429](https://github.com/hslee16/archy/issues/429) proposed that `archy
+check` say so unasked: for a symbol the diff changed, find its callers, group
+them by module, and name the caller modules the diff did not touch. The mirror
+relation derived from the graph rather than declared in config.
+
+**Pre-registered before the harness existed** ([`research/MIRROR_SURFACE_PRECISION.md`](research/MIRROR_SURFACE_PRECISION.md),
+committed in `a20d22f`): precision **>= 0.70** over at least 20 firings, an
+underpowered pass explicitly not a pass, and a miss means it does not ship.
+
+**Measured over all 287 non-merge commits of archy's own history: 42 firings, 1
+true positive, precision 0.024.** The threshold was missed by a factor of
+thirty.
+
+It is not the oracle's fault, which is worth saying because the oracle was
+designed to be the suspect. It scores a firing true only if a later commit went
+back and touched the named module for that symbol, so an omission nobody ever
+fixed reads as a false positive, biasing against the feature by construction.
+But the false positives are not uncorrected bugs. They look like this:
+
+```
+load_config changed in layers.py; cli.py updated, contracts.py NOT updated
+LayerConfig changed in layers.py; cli.py updated, diff.py NOT updated
+compute_score changed in score.py; cli.py updated, diff.py NOT updated
+```
+
+`contracts.py` calls `load_config`. It does not mirror it. Nothing about
+`load_config` changing obliges any of its callers to change, and that is true of
+almost every caller of almost every symbol.
+
+**The finding, in one line: "caller" is the wrong relation.** A mirror is a
+narrow thing, a set of surfaces that must all be updated when a finding kind is
+added. Callers are a much wider set, and they are dominated by ordinary
+consumers. The proposal conflated the two, and the graph as archy builds it
+cannot tell them apart, because it records that `contracts.py` calls
+`layers.load_config`, not why.
+
+Restricting to the `cli.py` / `mcp.py` pair, the two surfaces that really are
+mirrors of each other, does not rescue it: **18 firings, 1 true positive,
+precision 0.056.** That subgroup was computed after the fact and is reported
+because the pre-registration asked for the false positives in full, not as a
+result. It is not a rescued signal, it is the same null at higher resolution.
+
+**What this does and does not settle.** It kills the derivation #429 proposed.
+It does not touch the census that motivated it: the omissions are real, they are
+frequent, and pytest is green through all of them. A narrower relation, say
+"symbols reached by the same renderer family that `archy conventions` already
+detects as a mirrored surface", is a **different hypothesis** and would need its
+own pre-registration and its own pilot. Writing that sentence is not permission
+to go and fit one to this data.
+
+Two harness bugs were caught before the number existed, both by the smoke run
+that AGENTS.md requires. The first version matched symbol names as substrings
+and reported 42 firings at precision 0.038, every one vocabulary collision: the
+CLI commands are called `check`, `diff` and `snapshot`, so any module containing
+the word "check" scored as a caller of `cli.check`. The second returned module
+names without their package prefix, so no import ever matched and the detector
+fired zero times on every input, which is indistinguishable from a clean
+history. `bench/mirror_precision.py --canary` now asserts the resolver still
+sees two known cross-surface symbols, because both bugs produced a publishable
+looking number.
+
+[`bench/mirror_precision.py`]: ../bench/mirror_precision.py
+
 ## What survived, and why archy still exists
 
 Two nulls on agent-side benefit, one retracted premise, a study saying the

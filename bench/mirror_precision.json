@@ -1,0 +1,485 @@
+{
+  "firings": 42,
+  "true_positives": 1,
+  "precision": 0.0238,
+  "distinct_commits": 21,
+  "verdict": "FAIL (does not ship)",
+  "detail": [
+    {
+      "commit": "59f446abef00",
+      "producer": "src/archy/score.py",
+      "symbol": "Score",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/diff.py",
+        "src/archy/history.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "901071a5e5c3",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "901071a5e5c3",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "901071a5e5c3",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "f6cc4dbbfbf9",
+      "producer": "src/archy/diff.py",
+      "symbol": "DiffReport",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "f6cc4dbbfbf9",
+      "producer": "src/archy/diff.py",
+      "symbol": "compute_diff",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "f6cc4dbbfbf9",
+      "producer": "src/archy/diff.py",
+      "symbol": "take_snapshot",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "2ae1d2c1bfda",
+      "producer": "src/archy/score.py",
+      "symbol": "ScoreInputs",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "2ae1d2c1bfda",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "81356fbd9b3f",
+      "producer": "src/archy/impact.py",
+      "symbol": "find_impact",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "0c1360133a41",
+      "producer": "src/archy/graph.py",
+      "symbol": "graph_to_dict",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "4cce29a5dd43",
+      "producer": "src/archy/contracts.py",
+      "symbol": "run_contracts",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "22d1324dfc60",
+      "producer": "src/archy/graph.py",
+      "symbol": "build_graph",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "22d1324dfc60",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "22d1324dfc60",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "0143a5377709",
+      "producer": "src/archy/graph.py",
+      "symbol": "build_graph",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "0143a5377709",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "0143a5377709",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "62051a0bc690",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "62051a0bc690",
+      "producer": "src/archy/score.py",
+      "symbol": "compute_score",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "3dc6ac49f26f",
+      "producer": "src/archy/index.py",
+      "symbol": "open_index",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/watcher.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "7822d20ae40d",
+      "producer": "src/archy/reach.py",
+      "symbol": "compute_propagation_cost",
+      "unmirrored": "src/archy/graph.py",
+      "updated": [
+        "src/archy/score.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "7822d20ae40d",
+      "producer": "src/archy/reach.py",
+      "symbol": "compute_propagation_cost",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/score.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "7822d20ae40d",
+      "producer": "src/archy/reach.py",
+      "symbol": "compute_propagation_cost",
+      "unmirrored": "src/archy/risk.py",
+      "updated": [
+        "src/archy/score.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "0d0c29ee2447",
+      "producer": "src/archy/install/base.py",
+      "symbol": "AgentAdapter",
+      "unmirrored": "src/archy/install/registry.py",
+      "updated": [
+        "src/archy/install/adapters/claude.py",
+        "src/archy/install/adapters/codex.py",
+        "src/archy/install/adapters/continue_.py",
+        "src/archy/install/adapters/cursor.py",
+        "src/archy/install/adapters/opencode.py",
+        "src/archy/install/runner.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "6da1789becc2",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerConfig",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "6da1789becc2",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerConfig",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "6da1789becc2",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "6da1789becc2",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "385efdf08631",
+      "producer": "src/archy/complexity.py",
+      "symbol": "FunctionComplexity",
+      "unmirrored": "src/archy/parser.py",
+      "updated": [
+        "src/archy/graph.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "385efdf08631",
+      "producer": "src/archy/graph.py",
+      "symbol": "build_graph",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": true,
+      "corrected_by": "e4fcc9629a6a"
+    },
+    {
+      "commit": "fad178ce62d1",
+      "producer": "src/archy/hotspots.py",
+      "symbol": "git_churn",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "d735ddc957fd",
+      "producer": "src/archy/impact.py",
+      "symbol": "Impact",
+      "unmirrored": "src/archy/cli.py",
+      "updated": [
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "93c54d3d601c",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerCoverage",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "533cc4d3759f",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerConfig",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "533cc4d3759f",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerConfig",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "533cc4d3759f",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "533cc4d3759f",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/diff.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "dd47111f9c05",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerConfig",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/diff.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "dd47111f9c05",
+      "producer": "src/archy/layers.py",
+      "symbol": "load_config",
+      "unmirrored": "src/archy/contracts.py",
+      "updated": [
+        "src/archy/cli.py",
+        "src/archy/diff.py",
+        "src/archy/mcp.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "676ba1ceadfc",
+      "producer": "src/archy/layers.py",
+      "symbol": "LayerCoverage",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    },
+    {
+      "commit": "676ba1ceadfc",
+      "producer": "src/archy/layers.py",
+      "symbol": "compute_coverage",
+      "unmirrored": "src/archy/mcp.py",
+      "updated": [
+        "src/archy/cli.py"
+      ],
+      "true_positive": false,
+      "corrected_by": null
+    }
+  ]
+}
