@@ -42,7 +42,7 @@ archy
 Architectural sensor for Python codebases (CLI + MCP server)
 
 ### Short description (max 200 chars)
-Python architecture analysis: import graph, cycles, layer rules, five-axis score, refactor-priority hotspots, DSM, and an MCP server (12 tools) so coding agents see structural impact before they commit.
+Python architecture analysis: import graph, cycles, layer rules, five-axis score, refactor-priority hotspots, DSM, and an MCP server (13 tools) so coding agents see structural impact before they commit.
 
 > **The tagline and descriptions in this kit still need a positioning pass** and
 > should not be submitted anywhere until they get one ([#340](https://github.com/hslee16/archy/issues/340)).

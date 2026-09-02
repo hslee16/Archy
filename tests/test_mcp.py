@@ -146,8 +146,15 @@ def test_create_server_registers_expected_tools():
         # style (naming families, mirrored surfaces, gate inventory, model
         # census) so an agent stops re-deriving conventions by reading source.
         "archy_conventions",
+        # `archy_module_view` is the 13th: the same census as a LOOKUP on one
+        # module, complete and unranked. Kept a separate tool rather than a
+        # parameter on `archy_conventions` because a union return type makes
+        # FastMCP wrap every payload under a `result` key, which would change
+        # the released tool's wire format for consumers that never asked for
+        # this feature.
+        "archy_module_view",
     }
-    assert len(names) == 12
+    assert len(names) == 13
 
 
 def test_all_tools_declare_read_only_annotations():
@@ -1632,6 +1639,40 @@ def test_conventions_tool_threads_include_tests_to_the_census(acyclic_project: P
     assert default["partition"]["tests"] == 1
     assert with_tests["partition"]["tests"] == 0
     assert with_tests["modules_scanned"] > default["modules_scanned"]
+
+
+def test_conventions_tool_answers_a_negative_for_one_module(acyclic_project: Path):
+    # The lookup has to reach the surface agents actually call. Shipped to the
+    # CLI alone it would be unreachable from MCP, which is this repo's
+    # most-repeated defect (AGENTS.md), and the point of the view is answering
+    # in the NEGATIVE: the ranked report truncates, so absence from it proves
+    # nothing, while absence from this COMPLETE list is the answer.
+    (acyclic_project / "pkg" / "risk.py").write_text("from pkg.instability import inst\n")
+    (acyclic_project / "pkg" / "instability.py").write_text("def inst(): ...\n")
+    (acyclic_project / "pkg" / "hotspots.py").write_text("def hot(): ...\n")
+    server = create_server()
+    _c, view = _call_tool(
+        server, "archy_module_view", {"path": str(acyclic_project), "module": "pkg.risk"}
+    )
+    assert isinstance(view, dict)
+    assert view["module"] == "pkg.risk"
+    assert view["status"] == "censused"
+    assert view["imports_internal"] == ["pkg.instability"]
+    assert "pkg.hotspots" not in view["imports_internal"]
+
+
+def test_conventions_tool_rejects_an_unknown_module(acyclic_project: Path):
+    # A verdict without a reason is not actionable: an unknown name must fail
+    # loudly rather than return an empty view that reads as "imports nothing".
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    with pytest.raises(ToolError):
+        _call_tool(
+            server,
+            "archy_module_view",
+            {"path": str(acyclic_project), "module": "pkg.nope"},
+        )
 
 
 def test_conventions_tool_rejects_a_nonsense_min_family(acyclic_project: Path):

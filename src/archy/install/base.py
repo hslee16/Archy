@@ -48,6 +48,7 @@ TOOL_NAMES: tuple[str, ...] = (
     "archy_simulate",
     "archy_duplicates",
     "archy_conventions",
+    "archy_module_view",
 )
 
 # Server key used both as the MCP stanza key and in the Claude permission
@@ -63,17 +64,25 @@ INSTRUCTIONS_END = "<!-- archy:end -->"
 INSTRUCTIONS_BODY = """\
 ## archy (architectural sensor)
 
-archy is wired in as an MCP server. It is a *judge*, not a librarian: it scores
-architectural health, finds cycles and layer violations, and maps the blast
-radius of a change. Use it on the edit loop, not just on demand.
+archy is wired in as an MCP server. Ask it before you decide, not only after
+you edit: most of what it answers is cheaper to look up than to work out from
+file names, and a question you answer by reading is a question you may answer
+wrong.
 
 - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
   set of changed files) to see what a module change reaches.
+- To settle whether one part of the codebase can reach another, including
+  through intermediaries, call `archy_check(contracts=True)`. Plain
+  `archy_check` reports DIRECT edges only, so a clean pass from it does not
+  answer a reachability question.
+- To settle "does this module import that one", "what imports this", or "was
+  this module even analysed", call `archy_module_view`. Every list it returns
+  is complete for that module, so an absence is an answer.
+- To settle "what do I call this, which module does it go in, what has to be
+  updated alongside it", call `archy_conventions` instead of inferring the
+  house style from whichever files you happen to have open.
 - Take a baseline with `archy_snapshot` at the start of a task; after edits,
   call `archy_diff` and read `summary.headline` first.
-- When asked "is this codebase healthy / where is the risk", reach for
-  `archy_score`, `archy_what_to_refactor_next` (lens='structural' or
-  'behavioral'), and `archy_cycles` rather than guessing from file names.
 
 Outputs are structured JSON meant for you to act on, not dashboards for humans.
 """

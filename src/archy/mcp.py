@@ -100,7 +100,12 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
 from archy.contracts import ContractCheck
-from archy.conventions import ConventionsReport, compute_conventions
+from archy.conventions import (
+    ConventionsReport,
+    ModuleView,
+    compute_conventions,
+    compute_module_view,
+)
 from archy.coupling import (
     DEFAULT_MIN_CONFIDENCE,
     DEFAULT_MIN_SUPPORT,
@@ -1130,13 +1135,43 @@ def _register_tools(server: Server) -> None:
             "never fails and mutates nothing. `min_family` raises the floor "
             "for reporting a family (default 2, raise it on a large project "
             "to cut noise). `include_tests` censuses test modules too "
-            "(default false: test fixtures dilute a real family)."
+            "(default false: test fixtures dilute a real family). This "
+            "report is RANKED and truncated, so absence from it proves "
+            "nothing; for a negative (`does risk import hotspots`) call "
+            "`archy_module_view` instead."
         ),
     )
     def archy_conventions(
         path: str, min_family: int = 2, include_tests: bool = False
     ) -> ConventionsReport:
         return _run_conventions(Path(path), min_family=min_family, include_tests=include_tests)
+
+    @server.tool(
+        name="archy_module_view",
+        title="Everything known about ONE module, complete and unranked",
+        annotations=_READ_ONLY_ANNOTATIONS,
+        description=(
+            "**Call when the question is a NEGATIVE.** `archy_conventions` "
+            "ranks and truncates, so a module's absence from it means "
+            "nothing; every list here is COMPLETE for the one `module` "
+            "named, so absence IS the answer. Use it for `does risk import "
+            "hotspots`, `does anything still reach layers`, `is this module "
+            "dead`. Returns `imports_internal` (the project modules this one "
+            "imports, with relative imports resolved), `imported_by` (every "
+            "project module that imports it, tests included even when they "
+            "are otherwise set aside, because a module imported only by "
+            "tests IS imported), `classes`, `functions`, `exports` (null "
+            "when the module declares no `__all__` and no explicit "
+            "re-exports, which is different from an empty one), "
+            "`suffix_families`, `gates` (its exit sites) and `status` - "
+            "which says whether the module was censused or set aside and "
+            "why, so an empty result is never mistaken for `nothing to "
+            "report`. Raises on an unknown module name rather than "
+            "returning an empty view. Advisory: mutates nothing."
+        ),
+    )
+    def archy_module_view(path: str, module: str, include_tests: bool = False) -> ModuleView:
+        return _run_module_view(Path(path), module, include_tests=include_tests)
 
     # removed v0.41 (#267): archy_status demoted off the agent surface. Index
     # freshness is diagnostic plumbing, not a mid-task decision (every tool
@@ -1153,6 +1188,17 @@ def _run_conventions(path: Path, *, min_family: int, include_tests: bool) -> Con
     return compute_conventions(
         path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
+
+
+def _run_module_view(path: Path, module: str, *, include_tests: bool) -> ModuleView:
+    """A lookup, not a ranking: every list complete, so absence is an answer.
+
+    Kept a separate tool rather than a `module` parameter on `archy_conventions`
+    because a union return type makes FastMCP wrap EVERY payload under a
+    `result` key, silently changing the wire format of a released tool for
+    consumers that never asked for this feature.
+    """
+    return compute_module_view(path, module, **_graph_kwargs(path), include_tests=include_tests)
 
 
 def _run_score(

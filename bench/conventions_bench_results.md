@@ -223,3 +223,11 @@ about it.
 set scores detection, so a retrieval feature would ship unmeasured, which is the failure
 this file exists to prevent. It needs its own held-out measurement, against derivations
 rather than repositories.
+
+**Update: `--module` shipped in [#414](https://github.com/hslee16/archy/pull/414), and the
+measurement above is still owed.** The paragraph's first instruction held (it was kept out
+of #412 and landed in its own PR), the second did not: there is no held-out score for
+retrievability, so nothing here says the lookup answers the derivations it was built for.
+The numbers in this file score DETECTION and are unaffected by it, which is exactly why
+they cannot be read as evidence for it. Tracked as
+[#418](https://github.com/hslee16/archy/issues/418).

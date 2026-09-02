@@ -18,7 +18,13 @@ from archy.contracts import (
     ContractsResult,
     run_contracts,
 )
-from archy.conventions import ConventionsReport, Gate, compute_conventions
+from archy.conventions import (
+    ConventionsReport,
+    Gate,
+    ModuleView,
+    compute_conventions,
+    compute_module_view,
+)
 from archy.coupling import (
     DEFAULT_MIN_CONFIDENCE,
     DEFAULT_MIN_SUPPORT,
@@ -1651,6 +1657,14 @@ def uninstall(
     help="Minimum members before a naming family or mirrored set is reported.",
 )
 @click.option(
+    "--module",
+    "module",
+    default=None,
+    help="Report everything known about ONE module, complete and unranked: what it "
+    "imports, what imports it, and whether it was set aside. Answers a negative, "
+    "which the ranked report cannot.",
+)
+@click.option(
     "--include-tests",
     "include_tests",
     is_flag=True,
@@ -1665,7 +1679,9 @@ def uninstall(
     default="text",
     help="Output format.",
 )
-def conventions(path: Path, top_n: int, min_family: int, include_tests: bool, fmt: str) -> None:
+def conventions(
+    path: Path, top_n: int, min_family: int, module: str | None, include_tests: bool, fmt: str
+) -> None:
     """Report the project's own house style, derived from its source.
 
     Answers the four questions an agent otherwise re-derives by reading:
@@ -1685,6 +1701,21 @@ def conventions(path: Path, top_n: int, min_family: int, include_tests: bool, fm
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     _require(min_family >= 2, "min-family", ">= 2", min_family)
+    if module:
+        # 🔴 A lookup, not a ranking. Every list is complete for this module, so
+        # absence from one is an answer rather than an artefact of truncation.
+        try:
+            view = compute_module_view(
+                path, module, **_graph_kwargs(path), include_tests=include_tests
+            )
+        except LookupError as exc:
+            raise click.ClickException(str(exc)) from exc
+        click.echo(
+            json.dumps(view.model_dump(), indent=2, sort_keys=True)
+            if fmt == "json"
+            else _module_view_to_text(view)
+        )
+        return
     report = compute_conventions(
         path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
@@ -2734,6 +2765,36 @@ def _gate_row(gate: Gate) -> str:
     suffix = "  [command]" if gate.is_command else ""
     call = f"{gate.kind}({code})"
     return f"  {where:<34} {call:<18} {gate.control}{suffix}"
+
+
+def _module_view_to_text(view: ModuleView) -> str:
+    """Terse and COMPLETE. Every list is the whole list; see ModuleView."""
+    lines = [f"# {view.module}", f"  status        {view.status}"]
+    # Classes and functions separately, each with a count. Completeness is the
+    # point of this view, so nothing is dropped -- but a test module defines a
+    # hundred `test_*` functions, and one undifferentiated wall is the same
+    # delivery failure in a new place. A count lets a reader see the shape
+    # before deciding to read the list.
+    for label, items in (
+        ("classes", view.classes),
+        ("functions", view.functions),
+        ("imports", view.imports_internal),
+        ("imported by", view.imported_by),
+        ("exports", view.exports if view.exports is not None else ()),
+        ("name families", view.suffix_families),
+    ):
+        if label == "exports" and view.exports is None:
+            lines.append(f"  {label:<13} (no __all__ and no explicit re-exports)")
+            continue
+        # "(none)" is a real answer here and must not be silence: it is what
+        # makes "does this import that" answerable in the negative.
+        count = f" ({len(items)})" if len(items) > 6 else ""
+        lines.append(f"  {label + count:<13} {', '.join(items) if items else '(none)'}")
+    if view.gates:
+        lines.append("  exits")
+        lines += [_gate_row(g) for g in view.gates]
+    lines.append("  🔴 every list above is COMPLETE for this module; absence is an answer")
+    return "\n".join(lines)
 
 
 def _shown(total: int, top_n: int) -> str:

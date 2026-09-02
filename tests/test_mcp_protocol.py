@@ -99,7 +99,7 @@ def test_server_completes_the_handshake_and_lists_tools():
     names = {t["name"] for t in tools["tools"]}
 
     assert "archy_check" in names
-    assert len(names) == 12, f"tool count changed: {sorted(names)}"
+    assert len(names) == 13, f"tool count changed: {sorted(names)}"
 
 
 def test_every_tool_advertises_an_output_schema():
