@@ -1471,6 +1471,18 @@ def test_check_verdict_unqualified_when_coverage_is_real(tmp_path: Path):
     assert "Did you mean" not in result.output
 
 
+def _invoke_json(args: list[str]) -> dict:
+    """Invoke the CLI and parse the JSON document out of its output.
+
+    The slice is load-bearing, which is why this is a helper rather than five
+    copies of an idiom: this CliRunner folds stderr into `output`, so a command
+    that writes an advisory there first (`# --contracts unavailable: ...`)
+    prefixes the JSON with a line `json.loads` cannot parse.
+    """
+    out = CliRunner().invoke(main, args).output
+    return json.loads(out[out.index("{") :])
+
+
 def _make_uncovered_forbid_project(tmp_path: Path) -> Path:
     """A config whose layers govern a little, but not the edge that matters."""
     root = tmp_path / "proj"
@@ -1572,8 +1584,7 @@ def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: P
     monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
     root = _make_uncovered_forbid_project(tmp_path)
 
-    out = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"]).output
-    payload = json.loads(out[out.index("{") :])
+    payload = _invoke_json(["check", str(root), "--contracts", "--format", "json"])
     assert payload["contracts"]["available"] is False
     assert "import-linter" in payload["contracts"]["error"]
 
@@ -1594,8 +1605,7 @@ def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch)
     monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
     root = _make_uncovered_forbid_project(tmp_path)
 
-    out = CliRunner().invoke(main, ["brief", str(root), "--contracts", "--format", "json"]).output
-    payload = json.loads(out[out.index("{") :])
+    payload = _invoke_json(["brief", str(root), "--contracts", "--format", "json"])
     assert payload["contracts"]["available"] is True
     assert "no contracts config" in payload["contracts"]["error"]
 
@@ -1609,8 +1619,7 @@ def test_check_json_says_whether_it_looked_transitively(tmp_path: Path):
     tell "checked transitively and clean" from "never looked"."""
     root = _make_uncovered_forbid_project(tmp_path)
 
-    out = CliRunner().invoke(main, ["check", str(root), "--format", "json"]).output
-    payload = json.loads(out[out.index("{") :])
+    payload = _invoke_json(["check", str(root), "--format", "json"])
 
     assert payload["violations"] == []
     assert payload["transitive_checked"] is False
@@ -1624,8 +1633,7 @@ def test_check_json_reason_is_absent_without_forbid_rules(tmp_path: Path):
         "layers:\n  api:\n    modules: [shipping.api]\n  store:\n    modules: [shipping.store]\n"
     )
 
-    out = CliRunner().invoke(main, ["check", str(root), "--format", "json"]).output
-    payload = json.loads(out[out.index("{") :])
+    payload = _invoke_json(["check", str(root), "--format", "json"])
 
     assert payload["transitive_checked"] is False
     assert payload["transitive_unverified_reason"] is None
@@ -1645,8 +1653,7 @@ def test_check_json_keeps_a_reason_when_contracts_could_not_run(tmp_path: Path, 
     monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
     root = _make_uncovered_forbid_project(tmp_path)
 
-    out = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"]).output
-    payload = json.loads(out[out.index("{") :])
+    payload = _invoke_json(["check", str(root), "--contracts", "--format", "json"])
 
     assert payload["transitive_checked"] is False
     reason = payload["transitive_unverified_reason"]
