@@ -1,0 +1,16 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2afa52926380",
+  "strategy": "manual-commit",
+  "branch": "alee/dogfood-headers",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "bench/mirror_precision.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/2a/fa52926380/0/metadata.json",
+      "prompt": ""
+    }
+  ]
+}
