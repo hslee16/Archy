@@ -299,20 +299,17 @@ def check(
             # carried this since v0.46 and the JSON did not, so a machine reader
             # could not tell "checked transitively and clean" from "never
             # looked" (#343).
-            "transitive_checked": contracts_result is not None
-            and contracts_result.result is not None,
-            "transitive_unverified_reason": _transitive_unverified_reason(
-                config,
-                coverage,
-                violations,
-                no_verdict_error=(
-                    contracts_result.error
-                    if contracts_result is not None and contracts_result.result is None
-                    else None
-                ),
-            )
-            if contracts_result is None or contracts_result.result is None
-            else None,
+            "transitive_checked": _transitive_checked(contracts_result),
+            "transitive_unverified_reason": (
+                None
+                if _transitive_checked(contracts_result)
+                else _transitive_unverified_reason(
+                    config,
+                    coverage,
+                    violations,
+                    no_verdict_error=_no_verdict_error(contracts_result),
+                )
+            ),
         }
         if contracts_result is not None:
             payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
@@ -1853,21 +1850,19 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
             # closed on `check` open one command over. `violations` is empty
             # because brief does not run the direct pass: it reports what the
             # config cannot see, not what it caught.
-            "transitive_checked": contracts is not None and contracts.result is not None,
+            "transitive_checked": _transitive_checked(contracts),
             "transitive_unverified_reason": (
                 _transitive_unverified_reason(
                     config,
                     coverage,
                     [],
-                    no_verdict_error=(
-                        contracts.error
-                        if contracts is not None and contracts.result is None
-                        else None
-                    ),
+                    no_verdict_error=_no_verdict_error(contracts),
                 )
+                # brief tolerates a missing or malformed archy.yaml and still
+                # reports; `check` cannot get here without one.
                 if config is not None
                 and coverage is not None
-                and (contracts is None or contracts.result is None)
+                and not _transitive_checked(contracts)
                 else None
             ),
         }
@@ -2371,6 +2366,27 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsO
     except ContractsConfigError as exc:
         click.echo(f"# --contracts unavailable: {exc}", err=True)
         return ContractsOutcome(available=True, error=str(exc))
+
+
+def _transitive_checked(outcome: ContractsOutcome | None) -> bool:
+    """Did this run actually reach a transitive verdict?
+
+    Not "were contracts requested": a request that could not run leaves the
+    rules exactly as unverified as never asking, and conflating the two is the
+    bug #343 closed. `check` and `brief` both answer it from here so the two
+    JSON payloads cannot drift apart on it.
+    """
+    return outcome is not None and outcome.result is not None
+
+
+def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
+    """The reason contracts produced nothing, or None if they were never asked.
+
+    Distinguishes "not requested" (no error to report; the handoff names the
+    flag) from "requested and failed" (name the actual failure, because naming
+    the flag to someone who just passed it sends them round a loop).
+    """
+    return outcome.error if outcome is not None and outcome.result is None else None
 
 
 def _transitive_unverified_reason(

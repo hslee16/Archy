@@ -753,8 +753,6 @@ def test_forbid_and_required_report_the_same_shape_of_key_error(tmp_path: Path):
     """Both rule kinds route their key/type validation through one helper, so
     the two messages have to stay recognisably the same shape. They were
     separately inlined before, which is how they could have drifted."""
-    from archy.layers import LayerConfigError, load_config
-
     base = "layers:\n  api:\n    modules: ['app.api']\n  store:\n    modules: ['app.store']\n"
 
     missing_forbid = tmp_path / "a.yaml"
