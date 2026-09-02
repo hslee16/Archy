@@ -77,6 +77,7 @@ from archy.layers import (
     SdpViolation,
     Violation,
     compute_coverage,
+    contracts_unverified,
     discover_config,
     find_reach_violations,
     find_sdp_violations,
@@ -294,6 +295,17 @@ def check(
             "coverage": _coverage_to_json(coverage),
             "min_layers_present": config.min_layers_present,
             "presence_fails": presence_fails,
+            # A clean verdict has to say what it looked at. The text output has
+            # carried this since v0.46 and the JSON did not, so a machine reader
+            # could not tell "checked transitively and clean" from "never
+            # looked" (#343).
+            "transitive_checked": contracts_result is not None
+            and contracts_result.result is not None,
+            "transitive_unverified_reason": (
+                _transitive_unverified_reason(config, coverage, violations)
+                if contracts_result is None
+                else None
+            ),
         }
         if contracts_result is not None:
             payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
@@ -2332,6 +2344,25 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsO
         return ContractsOutcome(available=True, error=str(exc))
 
 
+def _transitive_unverified_reason(
+    config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
+) -> str | None:
+    """The text handoff's reason, for a reader that cannot parse prose.
+
+    A bare `transitive_checked: false` is a verdict without a reason, which
+    AGENTS.md rules out on every surface: the consumer needs to know whether the
+    rules were merely not requested or could not be proven, and what settles it.
+    """
+    if not contracts_unverified(config, coverage, violations):
+        return None
+    n = len(config.forbid)
+    rules = "rule" if n == 1 else "rules"
+    return (
+        f"{n} forbid {rules} declared, but this check governs too little of the graph to "
+        "verify them; `--contracts` evaluates them transitively via import-linter."
+    )
+
+
 def _contracts_handoff_to_text(
     config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
 ) -> str:
@@ -2355,22 +2386,7 @@ def _contracts_handoff_to_text(
     incomplete enough that a path could hide in the ungoverned part. On a fully
     layered repository with every edge governed it stays quiet.
     """
-    if not config.forbid or violations:
-        return ""
-    # 🔴 THE CONDITION IS "THIS RUN CANNOT PROVE THE ABSENCE", NOT "COVERAGE IS ZERO".
-    # A first attempt fired only on `governs_nothing`, and stayed silent on this
-    # very repository -- 3 forbid rules, 13% of edges governed, 34 unlayered
-    # modules, and `contracts` finding a genuinely broken rule the direct-edge
-    # pass missed. Some coverage is not enough coverage; the question is whether
-    # a path could hide in the part this check does not govern.
-    incomplete = (
-        coverage.governs_nothing
-        or coverage.governs_no_edges
-        or bool(coverage.exact_pattern_hints)
-        or bool(coverage.unlayered_modules)
-        or coverage.edges_governed < coverage.edges_total
-    )
-    if not incomplete:
+    if not contracts_unverified(config, coverage, violations):
         return ""
     n = len(config.forbid)
     rules = "rule" if n == 1 else "rules"

@@ -378,6 +378,39 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
     )
 
 
+def contracts_unverified(
+    config: LayerConfig, coverage: LayerCoverage, violations: list[Violation]
+) -> bool:
+    """True when a clean direct-edge pass cannot prove the `forbid` rules hold.
+
+    Shared by every surface that reports a check, because the honesty of a clean
+    verdict is not a rendering concern. `archy check` states it in text, its JSON
+    carries it as a field, and `archy_check` carries it on the wire; the CLI got
+    it first and the MCP surface, the one agents actually call, went on reporting
+    `passed=true` with nothing saying only direct edges had been looked at (#343).
+
+    🔴 THE CONDITION IS "THIS RUN CANNOT PROVE THE ABSENCE", NOT "COVERAGE IS
+    ZERO". A first attempt fired only on `governs_nothing` and stayed silent on
+    archy's own repository -- forbid rules declared, 13% of edges governed, 34
+    unlayered modules, and `contracts` finding a genuinely broken rule the
+    direct-edge pass missed. Some coverage is not enough coverage; the question
+    is whether a path could hide in the part this check does not govern.
+
+    False when there is nothing to say: no `forbid` rule means nothing to verify,
+    and a run that already found a concrete violation has given the reader
+    somewhere to go without this.
+    """
+    if not config.forbid or violations:
+        return False
+    return (
+        coverage.governs_nothing
+        or coverage.governs_no_edges
+        or bool(coverage.exact_pattern_hints)
+        or bool(coverage.unlayered_modules)
+        or coverage.edges_governed < coverage.edges_total
+    )
+
+
 def _exact_pattern_hints(config: LayerConfig, unlayered: list[str]) -> tuple[ExactPatternHint, ...]:
     """Find bare-qualname patterns that left descendants unlayered.
 

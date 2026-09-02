@@ -1601,3 +1601,31 @@ def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch)
 
     text = CliRunner().invoke(main, ["brief", str(root), "--contracts"]).output
     assert "# contracts: no verdict (no contracts config found)" in text
+
+
+def test_check_json_says_whether_it_looked_transitively(tmp_path: Path):
+    """#343 on the CLI's machine-readable surface. The text output has qualified
+    a clean verdict since v0.46; its JSON had not, so a machine reader could not
+    tell "checked transitively and clean" from "never looked"."""
+    root = _make_uncovered_forbid_project(tmp_path)
+
+    out = CliRunner().invoke(main, ["check", str(root), "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+
+    assert payload["violations"] == []
+    assert payload["transitive_checked"] is False
+    assert "forbid rule" in payload["transitive_unverified_reason"]
+    assert "--contracts" in payload["transitive_unverified_reason"]
+
+
+def test_check_json_reason_is_absent_without_forbid_rules(tmp_path: Path):
+    root = _make_uncovered_forbid_project(tmp_path)
+    (root / "archy.yaml").write_text(
+        "layers:\n  api:\n    modules: [shipping.api]\n  store:\n    modules: [shipping.store]\n"
+    )
+
+    out = CliRunner().invoke(main, ["check", str(root), "--format", "json"]).output
+    payload = json.loads(out[out.index("{") :])
+
+    assert payload["transitive_checked"] is False
+    assert payload["transitive_unverified_reason"] is None

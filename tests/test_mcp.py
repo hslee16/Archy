@@ -1723,3 +1723,80 @@ def test_check_payload_carries_the_exact_pattern_hint(tmp_path: Path):
     assert hints["store"]["pattern"] == "app.store"
     assert hints["store"]["suggestion"] == "app.store.**"
     assert "app.store.repository" in hints["store"]["unlayered_descendants"]
+
+
+def _transitive_project(tmp_path: Path) -> Path:
+    """`store -> common -> api`: legal on every direct edge, illegal transitively."""
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "api.py").write_text("x = 1\n")
+    (tmp_path / "app" / "common.py").write_text("from app import api\n")
+    (tmp_path / "app" / "store.py").write_text("from app import common\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        "  api:\n    modules: ['app.api']\n"
+        "  common:\n    modules: ['app.common']\n"
+        "  store:\n    modules: ['app.store']\n"
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+    return tmp_path
+
+
+def test_check_says_it_only_saw_direct_edges(tmp_path: Path):
+    """#343: `passed=true` must not be silent about what it looked at.
+
+    `archy check` sees DIRECT edges, so `store -> common -> api` passes it and
+    fails `contracts`. The CLI got the qualified verdict in v0.45/v0.46 and this
+    surface did not, leaving an agent unable to tell "checked transitively and
+    clean" from "never looked" on exactly the case archy claims as its
+    differentiator.
+    """
+    from archy.mcp import CheckPayload, _run_check
+
+    payload = _run_check(_transitive_project(tmp_path), config_path=None)
+
+    assert isinstance(payload, CheckPayload)
+    # The direct pass is genuinely clean; that is the whole trap.
+    assert payload.passed is True
+    # FastMCP sends model_dump(), so the wire format is what has to carry this.
+    wire = payload.model_dump()
+    assert wire["transitive_checked"] is False
+    assert "forbid rule" in wire["transitive_unverified_reason"]
+    assert "contracts=True" in wire["transitive_unverified_reason"]
+
+
+def test_check_stays_quiet_when_there_is_nothing_to_verify(tmp_path: Path):
+    """No `forbid` rule means no unproven rule. A reason printed on every clean
+    run is one a reader learns to skip."""
+    from archy.mcp import CheckPayload, _run_check
+
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "api.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text("layers:\n  api:\n    modules: ['app.api']\n")
+
+    payload = _run_check(tmp_path, config_path=None)
+
+    assert isinstance(payload, CheckPayload)
+    assert payload.model_dump()["transitive_unverified_reason"] is None
+
+
+def test_check_transitive_checked_needs_a_verdict_not_a_request(tmp_path: Path, monkeypatch):
+    """Asking for contracts and having import-linter turn out to be missing
+    leaves the rules exactly as unverified as not asking. Reporting
+    transitive_checked=True there would reintroduce the bug the field closes."""
+    import archy.contracts
+    from archy.mcp import ContractsPayload
+
+    def _boom(*args, **kwargs):
+        raise archy.contracts.ContractsNotAvailable("import-linter is not installed")
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    from archy.mcp import _run_contracts
+
+    payload = _run_contracts(_transitive_project(tmp_path), config_filename=None)
+
+    assert isinstance(payload, ContractsPayload)
+    assert payload.available is False
+    # The flag the tool derives `transitive_checked` from.
+    assert not (payload.available and payload.error is None)

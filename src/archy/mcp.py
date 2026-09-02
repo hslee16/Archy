@@ -165,6 +165,7 @@ from archy.layers import (
     SdpViolation,
     Violation,
     compute_coverage,
+    contracts_unverified,
     discover_config,
     find_reach_violations,
     find_sdp_violations,
@@ -339,6 +340,20 @@ class CheckPayload(BaseModel):
     # import-linter (#268): the transitive contract results that used to be the
     # separate archy_contracts tool. None when contracts were not requested.
     contracts: ContractsPayload | None = None
+    # 🔴 WHAT THIS RUN ACTUALLY LOOKED AT, because `passed=true` alone does not
+    # say (#343). `archy check` sees DIRECT edges; a `store -> common -> api`
+    # chain passes it and fails `contracts`. An agent receiving passed=true
+    # could not distinguish "checked transitively and clean" from "never
+    # looked", on exactly the case archy claims as its differentiator. The CLI
+    # got the qualified verdict in v0.45/v0.46 and this surface did not, which
+    # is the three-surfaces defect AGENTS.md warns about, on the surface agents
+    # actually call.
+    transitive_checked: bool = False
+    # Why passed=true does not prove the `forbid` rules hold, phrased for a
+    # caller of this tool rather than a reader of the CLI. None when the
+    # question does not arise: no forbid rules, a concrete violation already
+    # found, or coverage complete enough to prove the absence.
+    transitive_unverified_reason: str | None = None
 
 
 class CheckErrorPayload(BaseModel):
@@ -776,14 +791,22 @@ def _register_tools(server: Server) -> None:
     ) -> CheckPayload | CheckErrorPayload:
         result = _run_check(Path(path), config_path=Path(config_path) if config_path else None)
         if contracts and isinstance(result, CheckPayload):
+            payload = _run_contracts(
+                Path(path),
+                config_filename=(Path(contracts_config_path) if contracts_config_path else None),
+            )
+            # Only a verdict counts as "checked". Requesting contracts and having
+            # import-linter turn out to be missing leaves the rules exactly as
+            # unverified as not asking, so reporting transitive_checked=True
+            # there would reintroduce the bug this field exists to close (#343).
+            checked = payload.available and payload.error is None
             result = result.model_copy(
                 update={
-                    "contracts": _run_contracts(
-                        Path(path),
-                        config_filename=(
-                            Path(contracts_config_path) if contracts_config_path else None
-                        ),
-                    )
+                    "contracts": payload,
+                    "transitive_checked": checked,
+                    "transitive_unverified_reason": (
+                        None if checked else result.transitive_unverified_reason
+                    ),
                 }
             )
         return result
@@ -1288,6 +1311,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
         config.min_layers_present is not None
         and coverage.layers_present < config.min_layers_present
     )
+    unverified = contracts_unverified(config, coverage, violations)
     return CheckPayload(
         config_path=str(config_path),
         violations=tuple(violations),
@@ -1299,6 +1323,18 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
         coverage=coverage,
         presence_fails=presence_fails,
         min_layers_present=config.min_layers_present,
+        transitive_checked=False,
+        transitive_unverified_reason=(
+            (
+                f"{len(config.forbid)} forbid "
+                f"{'rule' if len(config.forbid) == 1 else 'rules'} declared, but this check "
+                "governs too little of the graph to verify them; it sees DIRECT edges only. "
+                "Call archy_check(contracts=True) to evaluate them transitively via "
+                "import-linter, which sees paths a direct-edge check cannot."
+            )
+            if unverified
+            else None
+        ),
     )
 
 
