@@ -9,6 +9,9 @@ Usage:
     uv run --with networkx --with pyyaml python bench/run.py
     uv run --with networkx --with pyyaml python bench/run.py --vulture
     uv run --with networkx --with pyyaml python bench/run.py --stdout
+
+archy:owns        archy_score, clone_or_update, fetch_head_sha, load_manifest, loc,
+                  main, pearson, update_shas, vulture_count
 """
 
 from __future__ import annotations

@@ -91,13 +91,17 @@ uv run ty check
 uv run pytest
 uv run archy check .       # archy enforces its own layer rules
 uv run archy cycles . --strict
+uv run archy conventions . --emit-headers --check   # derived headers still true
 ```
 
 `ruff check some/file.py` is a different command from `ruff check` and will pass
-while CI fails. The last two commands are archy checking itself: a new fixture
+while CI fails. The last three commands are archy checking itself: a new fixture
 or sample tree can introduce a real cycle or layer violation, and the fix is to
 add it to `exclude:` in `archy.yaml` with a note saying why, not to weaken a
-rule.
+rule. The headers check fails when a public symbol or a mirror set changes
+without the derived block being regenerated; run `uv run archy conventions .
+--emit-headers --write` to regenerate it, and never hand-edit a block, because
+the next regeneration discards the edit.
 
 ### If review finds something in code you did not touch
 

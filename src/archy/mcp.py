@@ -86,6 +86,15 @@ with one convention, so an agent has a single recovery contract:
 The de-facto marker an agent can key on: a tier-3 "no usable result" variant is
 a payload with an `error` field and no success data. tests/test_mcp.py asserts
 tier-2 conditions surface as `isError` and tier-3 conditions return in-band.
+
+archy:owns        BriefLayer, CheckErrorPayload, CheckPayload, ContractsPayload,
+                  DSMErrorPayload, DSMTooLargePayload, DiffErrorPayload,
+                  DuplicateGroupSummary, DuplicatesPayload, ForbiddenEdge, GraphEdge,
+                  GraphNode, GraphPayload, GraphSummaryEntry, GraphSummaryPayload,
+                  GraphTooLargePayload, InvariantBrief, LoadBearingModule,
+                  RefactorPriorityEntry, RequiredReach, ScoreComponents, ScoreGate,
+                  ScorePayload, SnapshotPayload, TrendRow, TrendRowInputs,
+                  TrendRowScore, WhatToRefactorPayload, create_server
 """
 
 from __future__ import annotations

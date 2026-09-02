@@ -52,6 +52,9 @@ constant with absolute meaning: it trims the long tail of barely-registering
 modules on a typical project, but dense graphs push many modules above it
 (``top_n`` then caps the list) while very clean or small graphs may leave
 it empty. Tune it per call when a project's risk distribution warrants it.
+
+archy:owns        RefactorPriority, compute_refactor_priorities
+archy:mirrored-by compute_refactor_priorities -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

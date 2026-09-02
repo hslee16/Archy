@@ -13,6 +13,15 @@ archy ships DSM as a visualization-only output (no axis, no diagnostic
 scalar) per `docs/research/DSM_EMPIRICS.md`. The intended consumer is an LLM
 coding agent that reads the matrix as structured context, not a human
 browsing a dashboard.
+
+archy:owns        DSM, DSMCell, DSMDiff, DSMGroup, DSMGroupSummary, DSMSummary,
+                  build_dsm, diff_dsm, dsm_from_dict, read_dsm, render_ascii,
+                  render_diff_text, render_json, summarize_dsm, write_dsm
+archy:mirrored-by DSM -> archy.mcp, archy.render, build_dsm -> archy.cli, archy.mcp,
+                  archy.simulate, bench.simulate_oracle, diff_dsm -> archy.cli,
+                  archy.mcp, archy.simulate, bench.simulate_oracle,
+                  read_dsm -> archy.cli, archy.mcp, summarize_dsm -> archy.mcp,
+                  archy.render
 """
 
 from __future__ import annotations

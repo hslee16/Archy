@@ -2,6 +2,10 @@
 
 Robust to syntax errors: tree-sitter produces a partial tree with ERROR nodes,
 and we still recover whatever imports parsed cleanly.
+
+archy:owns        CallRef, ImportRef, ParseResult, parse_file, parse_source
+archy:mirrored-by ParseResult -> archy.duplicates, archy.graph, archy.index,
+                  parse_file -> archy.graph, archy.index
 """
 
 from __future__ import annotations

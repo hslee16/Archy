@@ -4,6 +4,8 @@ Extracted so `hotspots_sweep.py` and `duplicates_sweep.py` (and any future
 sweep) share one manifest loader and one clone/checkout routine instead of
 copy-pasting them. Sweep scripts are run as `python bench/<name>.py`, so
 `bench/` is on `sys.path[0]` and this module imports as `from _common import ...`.
+
+archy:owns        clone_or_update, load_manifest
 """
 
 from __future__ import annotations

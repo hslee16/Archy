@@ -10,6 +10,11 @@ path becomes a phantom that matches no live graph node), and path normalization
 that matches what ``parse_file`` / the graph node ``path`` attribute produce.
 Keeping these in one place means the churn pass and the co-change pass agree on
 what "the same file" is, so their outputs line up module-for-module.
+
+archy:owns        fold_rename, normalize_py_path, resolve_repo_root
+archy:mirrored-by fold_rename -> archy.coupling, archy.hotspots,
+                  normalize_py_path -> archy.coupling, archy.hotspots,
+                  resolve_repo_root -> archy.coupling, archy.hotspots
 """
 
 from __future__ import annotations

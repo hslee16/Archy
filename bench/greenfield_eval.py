@@ -39,6 +39,11 @@ does archy-in-the-loop move structural compliance, and at what cost to behavior.
 Report both axes always. The paper zeroes behavior on structural failure, which
 means a naive reading rewards a compliant-but-broken server, and that is the
 easiest way for this experiment to produce a flattering lie.
+
+archy:owns        BehavioralVerdict, StructuralVerdict, assert_pass_rate,
+                  behavioral_verdict, container_host, count_asserts, fetch_suite, main,
+                  nesting_tolerant_config, structural_verdict
+archy:mirrored-by StructuralVerdict also in bench.q1b_score
 """
 
 from __future__ import annotations

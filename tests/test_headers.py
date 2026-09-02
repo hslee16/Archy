@@ -192,6 +192,24 @@ def test_write_flags_need_emit_headers(tmp_path: Path):
     assert result.exit_code != 0
 
 
+def test_headers_go_only_where_the_census_looked(tmp_path: Path):
+    """A derived block in a module the census set aside states a fact about a
+    population it never measured. On archy itself the first cut wrote into all
+    143 modules from a census of 79, tests included."""
+    root = _project(tmp_path)
+    (root / "tests").mkdir()
+    (root / "tests" / "__init__.py").write_text("")
+    (root / "tests" / "test_rules.py").write_text(
+        "from myapp.core.rules import find_violations\n\n\n"
+        "def test_it():\n    assert find_violations(1) == []\n"
+    )
+
+    modules = [h.module for h in _headers(root)]
+
+    assert "myapp.core.rules" in modules
+    assert not [m for m in modules if "test" in m], modules
+
+
 def test_module_lookup_refuses_the_header_flags_instead_of_dropping_them(tmp_path: Path):
     """`--module` returns a single-module view and returns EARLY, so the header
     flags were parsed and silently discarded: `--module X --write` exited 0

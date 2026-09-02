@@ -28,6 +28,9 @@ tool call; and the entire claim is that the fact arrives through `read` rather
 than through an archy invocation, so an MCP tool that hands the same block to a
 model that asked for it would be testing the pull surface that already returned
 0 of 89, 0 of 24 and 0 of 38. #431 records the reopen path.
+
+archy:owns        ModuleHeader, apply_header, compute_headers, existing_block,
+                  render_header, split_block
 """
 
 from __future__ import annotations
@@ -38,7 +41,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from archy.conventions import ConventionsReport
+from archy.conventions import ConventionsReport, censused_modules
 from archy.graph import Module
 
 MARKER = "archy:"
@@ -70,10 +73,22 @@ class ModuleHeader(BaseModel):
         return not (self.owns or self.mirrored_by or self.gates)
 
 
-def _public_top_level(source: str) -> tuple[str, ...]:
+def _try_parse(source: str) -> ast.Module | None:
+    """Parse, or None on a syntax error every caller here tolerates.
+
+    A module archy cannot parse gets no header rather than an exception: the
+    command runs over a whole tree, and one unparseable file should not stop the
+    other seventy-five from being written.
+    """
     try:
-        tree = ast.parse(source)
+        return ast.parse(source)
     except SyntaxError:
+        return None
+
+
+def _public_top_level(source: str) -> tuple[str, ...]:
+    tree = _try_parse(source)
+    if tree is None:
         return ()
     out = [
         node.name
@@ -85,7 +100,11 @@ def _public_top_level(source: str) -> tuple[str, ...]:
 
 
 def compute_headers(
-    report: ConventionsReport, root: Path, modules: Iterable[Module]
+    report: ConventionsReport,
+    root: Path,
+    modules: Iterable[Module],
+    *,
+    include_tests: bool = False,
 ) -> tuple[ModuleHeader, ...]:
     """Derive one header per scanned module from what `conventions` already computed.
 
@@ -101,7 +120,12 @@ def compute_headers(
     # user typed, commonly `.`, so the two have to be reconciled before either
     # is used as a key or printed as a relative path.
     root = root.resolve()
-    paths = {m.qualname: m.path.resolve() for m in modules}
+    discovered = list(modules)
+    # Only where the census looked. Writing a derived block into a module the
+    # census set aside states a fact about a population it never measured, and
+    # on this repository that was 143 modules written from a census of 79.
+    censused = censused_modules((m.qualname for m in discovered), include_tests=include_tests)
+    paths = {m.qualname: m.path.resolve() for m in discovered if m.qualname in censused}
     by_module: dict[str, list[str]] = {}
     for family in report.surfaces:
         # `consumer` is the shape that matters here: one definition several
@@ -175,11 +199,8 @@ def render_header(header: ModuleHeader, *, width: int = 88) -> str:
 
 def _docstring_span(source: str) -> tuple[int, int] | None:
     """Character span of the module docstring's body, or None if there is none."""
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
-        return None
-    if not tree.body:
+    tree = _try_parse(source)
+    if tree is None or not tree.body:
         return None
     first = tree.body[0]
     if not (isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant)):
@@ -201,9 +222,8 @@ def existing_block(source: str) -> str | None:
     line filter for the marker missed it and `--check` called a file stale
     immediately after writing it.
     """
-    try:
-        tree = ast.parse(source)
-    except SyntaxError:
+    tree = _try_parse(source)
+    if tree is None:
         return None
     doc = ast.get_docstring(tree, clean=False)
     if doc is None:
@@ -255,7 +275,8 @@ def apply_header(source: str, block: str) -> str:
     """
     span = _docstring_span(source)
     if span is None:
-        # No docstring at all: give the module one that is only the block.
+        # Nothing to preserve here by construction, so the block can be the
+        # whole docstring rather than being merged into one.
         return f'"""{block}\n"""\n\n{source}' if source.strip() else f'"""{block}\n"""\n'
 
     doc = source[span[0] : span[1]]

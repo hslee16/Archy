@@ -118,6 +118,13 @@ null becomes a finding. So `--report` refuses until the pre-registered N is
 complete, and `--progress` exists to watch the batch WITHOUT showing outcomes.
 `--limit` above the pre-registered N is refused for the same reason; the
 pre-registered way to get more data is EXPAND, not a bigger N here.
+
+archy:owns        attempts_per_key, behavioral_row, build_prompt, check_script,
+                  count_archy_invocations, expanded_config, install_deps, ledger_key,
+                  loop, main, missing_for_verdict, preflight, prepare_tree,
+                  render_progress, run_agent, run_check, run_task,
+                  run_with_limit_backoff, save_transcript, served, summarize, sweep,
+                  unit_id
 """
 
 from __future__ import annotations

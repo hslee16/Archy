@@ -49,6 +49,9 @@ question about *time*, and independent pairs cannot show a trend. Samples are
 evenly spaced over the commits since the project declared an architecture, and
 at each one this records the config's own contract set, which modules it names,
 how much of the tree those names reach, and which contracts are broken.
+
+archy:owns        coverage_of, main, measure_repo, parse_contracts, sample_commits,
+                  summarize
 """
 
 from __future__ import annotations

@@ -41,6 +41,8 @@ whether the A/B is powered. Pre-registered reading of that pilot:
   and refactor commits) is required. Recording this *before* seeing the number
   is the point; the same discipline is what stopped #289 shipping on an N=10
   hint.
+
+archy:owns        fetch_rows, main, patch_files, profile, select
 """
 
 from __future__ import annotations

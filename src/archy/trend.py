@@ -1,4 +1,7 @@
-"""ASCII sparkline + last-N table renderer for archy score history."""
+"""ASCII sparkline + last-N table renderer for archy score history.
+
+archy:owns        render_text, sparkline
+"""
 
 from __future__ import annotations
 

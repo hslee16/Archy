@@ -3,6 +3,11 @@
 Each row captures the score, its components, the git context (commit and
 branch where available), and rough scale inputs. The file is append-only
 and line-oriented so it is trivial to diff, grep, jq, and hand-merge.
+
+archy:owns        HistoryRow, append, git_metadata, read, row_from_score
+archy:mirrored-by HistoryRow -> archy.render, archy.trend, append -> archy.cli,
+                  archy.mcp, git_metadata -> archy.cli, archy.mcp, read -> archy.cli,
+                  archy.mcp, row_from_score -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

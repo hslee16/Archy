@@ -11,6 +11,9 @@ that file participates in the discovered graph. Files outside the graph
 (non-Python, gitignored, excluded by archy.yaml, top-level scripts not
 in any package) are reported as `unresolved` rather than silently
 dropped, so callers can tell why a file produced no impact.
+
+archy:owns        CausalChain, CausalHop, Impact, find_impact
+archy:mirrored-by Impact -> archy.cli, archy.mcp, find_impact -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

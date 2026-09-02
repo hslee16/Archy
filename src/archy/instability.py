@@ -16,6 +16,10 @@ how much third-party surface a project pulls in.
 Modules with no incoming or outgoing internal edges are reported as
 `I = 0.0` (vacuous; no information to compute) rather than left out so
 callers can rely on a complete map.
+
+archy:owns        compute_instability
+archy:mirrored-by compute_instability -> archy.graph, archy.layers, archy.mcp,
+                  archy.refactor, archy.risk
 """
 
 from __future__ import annotations

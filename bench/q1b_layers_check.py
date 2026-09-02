@@ -29,6 +29,9 @@ Three failure modes this exists to catch, all of which have already happened:
 
 Nothing here reads the task manifest beyond `repo` and `base_commit`; layer
 authoring stays blind to `gold_py_files` and problem statements.
+
+archy:owns        check_base_commits, check_canary, check_head, evaluate, graph_for,
+                  load_config, main, module_path, report, worktree_at
 """
 
 from __future__ import annotations

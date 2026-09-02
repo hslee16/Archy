@@ -8,6 +8,8 @@ opencode does not use the `mcpServers` shape; its schema keys MCP servers under
 - instructions: ``AGENTS.md`` alongside the config
 
 No permission allowlist, so ``seed_permissions`` is ignored.
+
+archy:owns        OpencodeAdapter
 """
 
 from __future__ import annotations

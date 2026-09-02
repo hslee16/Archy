@@ -43,6 +43,10 @@ Usage:
     uv run --with networkx --with pyyaml --with tree-sitter \
         --with tree-sitter-python --with pydantic python bench/delta_direction.py
     uv run ... python bench/delta_direction.py --stdout
+
+archy:owns        check_cycle_direction, check_resolved_direction,
+                  check_violation_direction, format_report, inject_two_cycle,
+                  internal_graph, main, run, synthetic_dag, synthetic_layered
 """
 
 from __future__ import annotations

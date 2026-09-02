@@ -11,6 +11,8 @@ Paths:
 - local MCP config:  ``<project>/.mcp.json`` (Claude Code's project-scope file)
 - permissions:       ``~/.claude/settings.json`` / ``<project>/.claude/settings.json``
 - instructions:      ``~/.claude/CLAUDE.md`` / ``<project>/CLAUDE.md``
+
+archy:owns        ClaudeAdapter
 """
 
 from __future__ import annotations

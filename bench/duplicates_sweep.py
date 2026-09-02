@@ -40,6 +40,8 @@ Limitations (these bound what the numbers prove; issue #133):
 Usage:
     uv run --with pyyaml python bench/duplicates_sweep.py
     uv run --with pyyaml python bench/duplicates_sweep.py --stdout
+
+archy:owns        main, run_duplicates
 """
 
 from __future__ import annotations

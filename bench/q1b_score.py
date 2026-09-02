@@ -43,6 +43,10 @@ and on the single worst structural event in that corpus (an 8-module SCC) the
 composite score moved *up* by 0.012. So `score_regression` is recorded but does
 not decide `structurally_bad`. The 0.005 floor is also a human-corpus value and
 must be re-derived on agent diffs before it is used for anything.
+
+archy:owns        StructuralMeasure, StructuralVerdict, compare, cyclic_nodes, measure,
+                  score_working_tree
+archy:mirrored-by StructuralVerdict also in bench.greenfield_eval
 """
 
 from __future__ import annotations

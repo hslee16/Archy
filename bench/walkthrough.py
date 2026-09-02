@@ -27,6 +27,8 @@ forbidden layer. Nothing you can read in the diff says "store imports api".
 
 The script asserts its own expected outcomes, so if archy's behavior ever
 changes the walkthrough fails loudly instead of quietly documenting a fiction.
+
+archy:owns        main, materialize, run, show
 """
 
 from __future__ import annotations

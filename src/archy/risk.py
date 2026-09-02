@@ -28,6 +28,10 @@ The metric is a *diagnostic*, not a score-axis. It is exposed on graph nodes,
 graph summaries, and via the ``archy_high_risk_modules`` MCP tool so an agent
 can consult it before a non-trivial edit. It is not folded into ``archy
 score``'s overall number - that boundary is deliberate (see ``FUTURE.md``).
+
+archy:owns        compute_edit_risk
+archy:mirrored-by compute_edit_risk -> archy.diff_summary, archy.graph, archy.mcp,
+                  archy.refactor
 """
 
 from __future__ import annotations

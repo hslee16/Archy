@@ -31,6 +31,9 @@ reports nothing" as a pass is only honest if the key can express it, so
 
 DETERMINISM. A flaky renderer makes a flaky score, so every repo is analysed
 twice and the two payloads must be byte-identical before any row is scored.
+
+archy:owns        analyse, main
+archy:gates       non-zero exit (hardcoded)
 """
 
 from __future__ import annotations
