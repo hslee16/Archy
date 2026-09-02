@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from archy.graph import build_graph
 from archy.score import compute_score
 
-# (repo, package subdir) — small-to-medium pure-Python projects with years of
+# (repo, package subdir): small-to-medium pure-Python projects with years of
 # history and many contributors, spanning CLI / HTTP / web / terminal domains.
 REPOS: list[tuple[str, str]] = [
     ("pallets/click", "src/click"),
