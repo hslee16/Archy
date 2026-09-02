@@ -13,37 +13,42 @@
 > archy turns a Python import graph into something an agent can *use*: blast radius before an edit, the tests that edit affects, the modules most at risk. And it *fails* when the graph disagrees with the layers you declared. Same graph either way, as a CLI and an MCP server, every session and in CI.
 
 > [!IMPORTANT]
-> **Status, 2026-09-01: one line reopened. Everything else stays in maintenance.**
+> **Status, 2026-09-02: active again, on one question.**
 >
-> archy works, is tested on every push across three Python versions and three
-> operating systems, and will keep working. Bugs get fixed. Pull requests get
-> reviewed. The `good first issue` tickets are real and deliberately left open.
+> archy is back in development after five weeks in maintenance. The focus is
+> narrow and it is not the original one: **coding agents running a small model
+> on local hardware.** A DGX Spark carries 128 GB of unified memory, which puts
+> roughly 70B to 200B models within local reach at 4-bit, but their usable
+> context stays far below a frontier API model's and degrades faster across it.
+> Under that constraint a structural answer to "what does this change reach,
+> and what breaks if it is wrong" may substitute for context the model cannot
+> hold at all.
 >
-> What stopped is *new feature work*, and the reason is the section directly
-> below: I measured this tool's premise four separate times, and each time the
-> problem it prevents turned out to be rare. The fourth study found a real
-> effect and also found it capped at 12% by how seldom the mistake happens. At
-> that point another feature is not what is missing, so I stopped adding them.
+> **This is a bet, not a finding, and the difference matters here.** Everything
+> in the section below still stands: I measured this tool's premise four times
+> and the problem it prevents is rare, the one real effect was capped at 12% by
+> how seldom the mistake happens, and two token-reduction propositions came back
+> null. **Every one of those studies ran against an agent with a large context
+> window and strong long-range code reasoning** - the population where a
+> structural index has the least to add, because the model can often just read
+> the code. A small local model is a different population. That is the one
+> reading of the prior nulls that does not require reinterpreting them, and it
+> might still be wrong.
 >
-> An earlier version of this note said much the same thing and I took it down,
-> because the reasoning behind it was circular: I had cited a lack of users as
-> grounds to stop the very work meant to attract them. This time the argument
-> is different and it is evidence, not a mood. It is all published below.
+> So the discipline does not relax because the project is active again. The
+> thresholds are pre-registered in
+> [#408](https://github.com/hslee16/archy/issues/408), **no treatment arm has
+> been scored**, and any result, including another null, gets published in
+> [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md) like the other four.
+> Nothing archy ships today claims a local-model benefit; `archy brief` (v0.46)
+> shipped explicitly on judgment ahead of that measurement rather than on one.
 >
-> **What reopened, and why it is not a walk-back.** All four studies measured
-> agents with a large context window and strong long-range code reasoning. The
-> open question is whether these same tools matter *more* to a small local
-> model, which has neither. A DGX Spark holds 128 GB of unified memory, which
-> brings roughly 70B to 200B models within local reach at 4-bit, but their
-> usable context stays far below a frontier API model's and degrades faster
-> across it. Under that constraint a structural answer to "what does this
-> change reach, and what breaks if it is wrong" may substitute for context the
-> model cannot hold. That is a different population, not a re-reading of the
-> same result, and it is untested. archy has already tested two
-> token-reduction propositions and got null on both, so nothing here is a
-> claim yet. Any result, including another null, gets published in
-> [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md) like the others. The
-> thresholds are written down in advance in [#408](https://github.com/hslee16/archy/issues/408).
+> **What is not changing.** The original use case is still supported and still
+> works: layer governance in CI, blast radius and affected-tests for a frontier
+> agent, the MCP server. This is an adjacent focus, not a replacement, and
+> nothing is being removed or renamed to make room for it. Bugs still get fixed,
+> pull requests still get reviewed, and the `good first issue` tickets are still
+> deliberately left open.
 
 ## Read this first: I measured the premise, and it was wrong
 
@@ -142,7 +147,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.46.0, working, installed and maintained; feature work has stopped (maintenance, see the top of this page). Usable today via:
+**Status:** v0.46.0, working, installed and maintained; in active development on the local-model line (see the top of this page). Usable today via:
 
 | Mode | Command |
 |---|---|
