@@ -107,6 +107,32 @@ def test_check_passes_after_write_and_fails_on_drift(tmp_path: Path):
     assert "myapp.core.rules" in drifted.output
 
 
+def test_check_passes_after_write_when_a_header_wraps(tmp_path: Path):
+    """The regression that made `--check` useless on every real module.
+
+    `existing_block` kept only marker-prefixed lines, so every WRAPPED
+    continuation was dropped and `--check` called a file stale the instant after
+    `--write` produced it. Wrapping is the common case, not an edge case: most
+    modules with more than a couple of public symbols exceed the width.
+    """
+    root = _project(tmp_path, prose="Rule evaluation.\n")
+    rules = root / "myapp" / "core" / "rules.py"
+    # Enough public symbols that the `owns` field cannot fit on one line.
+    rules.write_text(
+        rules.read_text()
+        + "".join(
+            f"\n\ndef find_violations_of_kind_number_{i}(x):\n    return []\n" for i in range(12)
+        )
+    )
+
+    CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--write"])
+    block = existing_block(rules.read_text())
+    assert block is not None and len(block.splitlines()) > 1, "this fixture must wrap to be a test"
+
+    result = CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--check"])
+    assert result.exit_code == 0, result.output
+
+
 def test_check_and_write_are_refused_together(tmp_path: Path):
     root = _project(tmp_path)
     result = CliRunner().invoke(

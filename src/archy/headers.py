@@ -208,7 +208,22 @@ def existing_block(source: str) -> str | None:
     doc = ast.get_docstring(tree, clean=False)
     if doc is None:
         return None
-    kept = [line.strip() for line in doc.splitlines() if line.strip().startswith(MARKER)]
+
+    # 🔴 THE BLOCK IS CONTIGUOUS LINES, NOT MARKER-PREFIXED LINES. Keeping only
+    # lines that start with the marker drops every WRAPPED continuation, and
+    # `render_header` wraps whenever a field exceeds the width, which on real
+    # modules is the common case rather than the exception. The effect was that
+    # `--check` called a file stale the instant after `--write` produced it,
+    # defeating the one job the flag has.
+    kept: list[str] = []
+    for line in doc.splitlines():
+        if line.strip().startswith(MARKER):
+            kept.append(line.rstrip())
+        elif kept:
+            if line.strip() and line[:1].isspace():
+                kept.append(line.rstrip())
+            else:
+                break
     return "\n".join(kept) if kept else None
 
 
