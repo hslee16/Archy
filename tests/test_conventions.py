@@ -14,6 +14,7 @@ from archy.conventions import (
     compute_conventions,
     compute_module_view,
 )
+from archy.graph import build_graph
 
 
 def _families(report: ConventionsReport) -> list[NamingFamily]:
@@ -984,42 +985,48 @@ def test_module_view_suggests_near_matches_for_an_unknown_module(tmp_path: Path)
         compute_module_view(root, "layers")
 
 
-def test_lookup_resolves_the_five_shapes_that_used_to_disagree(tmp_path: Path):
-    """Pin the ANSWERS, not the agreement.
+def test_lookup_resolves_each_import_shape_to_a_distinct_module(tmp_path: Path):
+    """Pin the ANSWERS, and make each shape reach somewhere only it can reach.
 
-    An agreement assertion between the lookup and the graph is tautological now
-    that both call `graph.resolve_from_import`: break the shared function and
-    both sides break identically, so they still agree. Verified by mutating the
-    re-export branch, which an agreement-only version of this test passed
-    straight through. So this asserts what each shape must resolve TO, which is
-    what #414 actually had to fix five times.
+    Two earlier drafts of this test looked stronger than they were, so the
+    fixture is built against both failures.
+
+    The first asserted only that the lookup and the graph AGREE, which is
+    tautological now that both call `graph.resolve_from_import`: break the
+    shared function and both break identically, so they still agree.
+
+    The second pinned answers but let the submodule shape and the relative
+    shape resolve to the SAME module, so the set collapsed them and an
+    off-by-one in `resolve_relative_import`'s level arithmetic still passed.
+    Every shape below therefore resolves somewhere no other shape reaches.
     """
-    from archy.graph import build_graph
-
     pkg = tmp_path / "app"
     (pkg / "sub").mkdir(parents=True)
-    (pkg / "__init__.py").write_text("from app.impl import Thing\nfrom . import sibling\n")
+    (pkg / "__init__.py").write_text("from app.impl import Thing\n")
     (pkg / "impl.py").write_text("Thing = 1\n")
     (pkg / "sibling.py").write_text("x = 1\n")
+    # Reachable ONLY through the two-level relative walk below, so nothing else
+    # in this fixture can put it in the result set.
+    (pkg / "only_via_relative.py").write_text("y = 1\n")
     (pkg / "sub" / "__init__.py").write_text("")
     (pkg / "sub" / "uses.py").write_text(
         "from app import Thing\n"  # a re-exported name routes to the DEFINING module
         "from app import sibling\n"  # a submodule is an edge to the submodule
-        "from .. import sibling as s2\n"  # relative, out of a subpackage
+        "from .. import only_via_relative\n"  # walks up out of the subpackage
     )
 
-    view = compute_module_view(tmp_path, "app.sub.uses")
-    resolved = set(view.imports_internal)
+    resolved = set(compute_module_view(tmp_path, "app.sub.uses").imports_internal)
 
     # `from app import Thing` must not stop at the package: `app.impl` defines it.
     assert "app.impl" in resolved
     # `from app import sibling` is the submodule, never the bare package.
     assert "app.sibling" in resolved
+    # Only the `..` walk can reach this one, so it fails if level handling breaks.
+    assert "app.only_via_relative" in resolved
     # Attributing the submodule import to `app` as well was one of the five.
     assert "app" not in resolved
 
-    # And the graph, which is the surface the lookup must never contradict,
-    # reaches the same modules from the same file.
+    # And the graph, the surface the lookup must never contradict, agrees.
     g = build_graph(tmp_path)
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
     assert {t for t in g.successors("app.sub.uses") if t in internal} == resolved
