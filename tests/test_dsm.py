@@ -64,18 +64,22 @@ def test_summarize_dsm_derives_counts_and_back_edges():
 
 
 def test_summarize_dsm_counts_cross_group_coupling():
-    # Two disjoint communities joined by a single edge: exactly one cell crosses
-    # a group boundary.
+    """Two disjoint communities joined by a single edge, asserted as literals.
+
+    The earlier version rebuilt `group_of` by walking `dsm.groups` and recounted
+    the mismatch exactly as `summarize_dsm` does, so both sides moved together.
+    Collapsing community detection to one group made the expected count 0 and
+    the actual count 0, and the test passed (#439). The grouping itself has to
+    be pinned, or the count it feeds means nothing.
+    """
     dsm = build_dsm(_g(("a", "b"), ("c", "d"), ("b", "c")), group_by="community")
+
     summary = summarize_dsm(dsm)
-    group_of: dict[int, int] = {}
-    offset = 0
-    for gi, grp in enumerate(dsm.groups):
-        for pos in range(offset, offset + len(grp.members)):
-            group_of[pos] = gi
-        offset += len(grp.members)
-    expected_cross = sum(1 for c in dsm.cells if group_of[c.row] != group_of[c.col])
-    assert summary.cross_group_edge_count == expected_cross
+
+    assert [g.members for g in dsm.groups] == [("a", "b"), ("c", "d")]
+    assert summary.group_count == 2
+    # Only `b -> c` spans the two communities; `a -> b` and `c -> d` are internal.
+    assert summary.cross_group_edge_count == 1
 
 
 def test_summarize_dsm_back_edge_sample_is_capped():

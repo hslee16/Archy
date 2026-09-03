@@ -12,6 +12,9 @@ suites. This file only verifies what the MCP layer adds:
 from __future__ import annotations
 
 import asyncio
+import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -988,20 +991,39 @@ def test_graph_summary_validates_top_n(acyclic_project: Path):
 
 
 def test_graph_dump_matches_cli_json(acyclic_project: Path):
-    # Parity contract: the MCP dump must be value-equal to graph_to_dict
-    # (which the CLI uses for `archy graph --format json`).
-    from archy.graph import graph_to_dict
+    """Parity between the MCP dump and `archy graph --format json`.
 
-    g = _internal_graph(acyclic_project)
-    expected = graph_to_dict(g)
+    The two sides have to be derived INDEPENDENTLY or this proves nothing. The
+    earlier version compared the payload against `graph_to_dict(g)` computed in
+    the test, but `mcp._graph_payload_from` opens with `data = graph_to_dict(...)`
+    and transcribes it, so both sides were the same serializer over equal graphs
+    and any mutation of it moved them together (#439). The CLI is therefore
+    invoked as a subprocess here, the way a user reaches it.
+    """
+    cli = subprocess.run(
+        [sys.executable, "-m", "archy.cli", "graph", str(acyclic_project), "--format", "json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert cli.returncode == 0, cli.stderr
+    expected = json.loads(cli.stdout[cli.stdout.index("{") :])
 
     payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=500)
+
     assert isinstance(payload, GraphPayload)
     assert payload.root == expected["root"]
-    assert {n.id for n in payload.nodes} == {n["id"] for n in expected["nodes"]}
-    payload_edges = {(e.source, e.target) for e in payload.edges}
-    expected_edges = {(e["source"], e["target"]) for e in expected["edges"]}
-    assert payload_edges == expected_edges
+    # The CLI dump keeps external nodes; the MCP call above asked for internal
+    # only, so compare against the internal subset rather than the whole thing.
+    internal = {n["id"] for n in expected["nodes"] if not n.get("external")}
+    assert {n.id for n in payload.nodes} == internal
+    assert {(e.source, e.target) for e in payload.edges} == {
+        (e["source"], e["target"])
+        for e in expected["edges"]
+        if e["source"] in internal and e["target"] in internal
+    }
+    # A fixture with no edges would make the comparison above vacuous.
+    assert payload.edges
 
 
 def test_graph_dump_refuses_oversized_graph(acyclic_project: Path):

@@ -63,11 +63,31 @@ def test_external_nodes_excluded():
     assert pc == 0.75
 
 
-def test_project_value_equals_mean_of_per_module():
-    # Algebraic identity: project_pc = mean(per_module_pc).
+def test_diamond_reach_is_reverse_not_forward():
+    """Hand-worked reverse reach on a diamond, per module and for the project.
+
+    This replaces an assertion that `project == mean(per_module)`, which the
+    implementation makes an ALGEBRAIC IDENTITY: it sets `per_module[n] = reach/n`
+    and `total += reach` in one loop, then returns `total/(n*n)`. That holds for
+    every possible definition of `reach`, so swapping `nx.ancestors` for
+    `nx.descendants` -- inverting the metric -- left it green (#439).
+
+    The diamond is the fixture that tells the two apart: `a` is upstream of
+    everything and `c` downstream of everything, so reverse and forward reach
+    give them opposite values.
+
+        a: reaches only itself         1/4 = 0.25
+        b: ancestors {a}               2/4 = 0.5
+        d: ancestors {a}               2/4 = 0.5
+        c: ancestors {a, b, d}         4/4 = 1.0
+        project: (1+2+2+4) / 16            = 0.5625
+    """
     g = _g(("a", "b"), ("b", "c"), ("a", "d"), ("d", "c"))
+
     pc, per_module = compute_propagation_cost(g)
-    assert pc == pytest.approx(sum(per_module.values()) / len(per_module))
+
+    assert per_module == {"a": 0.25, "b": 0.5, "c": 1.0, "d": 0.5}
+    assert pc == pytest.approx(0.5625)
 
 
 def test_fully_coupled_clique_is_one():

@@ -91,10 +91,21 @@ def test_dsm_marks_back_edges_distinctly_under_topological_ordering() -> None:
 
 
 def test_dsm_reports_back_edge_count_under_topological_ordering() -> None:
-    dsm = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "a")), group_by="topological")
-    expected = sum(1 for c in dsm.cells if c.row > c.col)
+    """The count as a literal, and the ordering it depends on.
 
-    assert f"back-edges <b>{expected}</b>" in render_dsm_html(dsm)
+    The earlier version computed `expected` with the same predicate over the
+    same cells `build_dsm` had just produced, so reversing the topological
+    ordering moved both sides together and the test passed (#439).
+    """
+    dsm = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "a")), group_by="topological")
+
+    # A 3-cycle is one SCC, ordered alphabetically inside it, so `c -> a` is the
+    # single edge pointing back up the ordering.
+    assert dsm.ordering == ("a", "b", "c")
+    assert [(dsm.ordering[c.row], dsm.ordering[c.col]) for c in dsm.cells if c.row > c.col] == [
+        ("c", "a")
+    ]
+    assert "back-edges <b>1</b>" in render_dsm_html(dsm)
 
 
 def test_dsm_does_not_claim_back_edges_under_community_grouping() -> None:
