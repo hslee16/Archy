@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import networkx as nx
 import pytest
 
 from archy.graph import (
@@ -671,3 +672,85 @@ def test_effective_max_modules_resolution():
     assert effective_max_modules(None) == DEFAULT_MAX_MODULES  # unset -> default
     assert effective_max_modules(0) is None  # explicitly disabled
     assert effective_max_modules(2500) == 2500  # custom ceiling
+
+
+def test_graph_to_dict_shape_is_pinned_by_hand():
+    """The wire shape as a literal, because every other test of it is relative.
+
+    `archy graph --format json` and `mcp._graph_payload_from` BOTH call this
+    function, so the cross-surface parity test in `tests/test_mcp.py` cannot
+    catch a consistent regression here: dropping a field or renaming a key moves
+    both sides together and that test still passes (#439). Nothing else pins the
+    JSON contract that external consumers actually read.
+
+    Three modules, not two, and that is load-bearing. On a two-node graph every
+    `edit_risk` is structurally 0.0, because one node always has zero fan-in and
+    the other zero instability, so the geometric mean always has a zero factor.
+    A `compute_edit_risk` replaced by `{n: 0.0}` would have passed. The middle
+    module here carries a real value.
+
+    Every number below is worked from the formulas, not captured from a run:
+
+        pkg.a  I = ce 1 / (ce 1 + ca 0)   = 1.0    reverse reach 1/3
+        pkg.b  I = ce 1 / (ce 1 + ca 1)   = 0.5    reverse reach 2/3
+        pkg.c  I = ce 0 / (ce 0 + ca 1)   = 0.0    reverse reach 3/3
+        risk(b) = (2/3 * fan-in 1/2 * 0.5) ** (1/3) = 0.550321
+        risk(a) = 0.0 at zero fan-in, risk(c) = 0.0 at zero instability
+    """
+    g = nx.DiGraph(root="/p")
+    for name in ("pkg.a", "pkg.b", "pkg.c"):
+        g.add_node(name, external=False, path=f"/p/{name}.py", is_package=False)
+    g.add_edge("pkg.a", "pkg.b", is_relative=True, lines=(3,), kinds=("import",))
+    g.add_edge("pkg.b", "pkg.c", is_relative=False, lines=(4,), kinds=("import",))
+
+    assert graph_to_dict(g) == {
+        "root": "/p",
+        "parse_errors": [],
+        "nodes": [
+            {
+                "id": "pkg.a",
+                "external": False,
+                "path": "/p/pkg.a.py",
+                "is_package": False,
+                "instability": 1.0,
+                "propagation_cost": pytest.approx(1 / 3),
+                "edit_risk": 0.0,
+            },
+            {
+                "id": "pkg.b",
+                "external": False,
+                "path": "/p/pkg.b.py",
+                "is_package": False,
+                "instability": 0.5,
+                "propagation_cost": pytest.approx(2 / 3),
+                "edit_risk": pytest.approx(0.550321, abs=5e-7),
+            },
+            {
+                "id": "pkg.c",
+                "external": False,
+                "path": "/p/pkg.c.py",
+                "is_package": False,
+                "instability": 0.0,
+                "propagation_cost": 1.0,
+                "edit_risk": 0.0,
+            },
+        ],
+        "edges": [
+            {
+                "source": "pkg.a",
+                "target": "pkg.b",
+                "is_relative": True,
+                "lines": (3,),
+                "kinds": ("import",),
+            },
+            {
+                "source": "pkg.b",
+                "target": "pkg.c",
+                # The second edge differs on every attribute the first sets, so a
+                # serializer that echoed one edge's values onto all of them fails.
+                "is_relative": False,
+                "lines": (4,),
+                "kinds": ("import",),
+            },
+        ],
+    }

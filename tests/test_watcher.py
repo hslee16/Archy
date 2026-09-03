@@ -40,8 +40,34 @@ def _manager(project: Path, tmp_path: Path) -> IndexManager:
 
 
 def test_build_matches_cold(project: Path, tmp_path: Path):
+    """A cold build through the manager. Deliberately NOT the cache's claim.
+
+    On an empty database no cached row is read, so both sides are the same
+    `parse_file` + `assemble_graph` computation and this cannot fail on anything
+    the cache does; a write-only cache leaves it green (#439). The warm claim is
+    `test_second_build_reads_the_cache` below.
+    """
     m = _manager(project, tmp_path)
     try:
+        assert graph_to_dict(m.build_graph()) == graph_to_dict(build_graph(project))
+    finally:
+        m.stop()
+
+
+def test_second_build_reads_the_cache(project: Path, tmp_path: Path):
+    """The claim the cold test cannot make: the second build reuses stored rows.
+
+    Equality alone would be satisfied by a manager that silently re-parses
+    everything, so the reuse is asserted directly and the graph is checked
+    against a cold build as well.
+    """
+    m = _manager(project, tmp_path)
+    try:
+        m.build_graph()
+        stats = m.sync_now()
+
+        assert stats.reparsed == 0, "a warm build must not re-parse an unchanged file"
+        assert stats.unchanged > 0, "and it must actually read rows back"
         assert graph_to_dict(m.build_graph()) == graph_to_dict(build_graph(project))
     finally:
         m.stop()

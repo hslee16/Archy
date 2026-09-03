@@ -55,7 +55,39 @@ def _equal(root: Path, db_path: Path) -> bool:
 
 
 def test_cold_cache_matches_cold_build(project: Path, tmp_path: Path):
+    """A cold build through the cache. Deliberately NOT the cache's own claim.
+
+    On an empty database `sync` returns the freshly parsed object and no cached
+    row is ever read, so both sides of this are the same `parse_file` +
+    `assemble_graph` computation and it cannot fail on anything the cache does.
+    A write-only cache (storing a corrupt blob so every warm read misses) leaves
+    it green (#439). It is kept because the cold path is still worth exercising,
+    and renamed expectations live in `test_warm_cache_reads_what_it_wrote` below,
+    which is where the cache is actually the thing under test.
+    """
     assert _equal(project, tmp_path / "index.db")
+
+
+def test_warm_cache_reads_what_it_wrote(project: Path, tmp_path: Path):
+    """The claim the cold test cannot make: a row written on one build is read
+    back on the next and produces the same graph.
+
+    Pins it two ways, because equality alone is satisfied by a cache that
+    silently re-parses everything: nothing may be reparsed on the second pass,
+    and the graph must still match a cold build.
+    """
+    db = tmp_path / "index.db"
+    build_graph_cached(project, db_path=db)
+
+    modules = discover_modules(project)
+    with open_index(db) as conn:
+        _, stats = sync(conn, modules)
+
+    assert stats.reparsed == 0, "a warm build must not re-parse an unchanged file"
+    # EVERY module, not just one: `> 0` would pass a partial-cache bug that
+    # needlessly re-parses some files while still returning the right graph.
+    assert stats.unchanged == len(modules)
+    assert _equal(project, db)
 
 
 def test_noop_resync_matches(project: Path, tmp_path: Path):
