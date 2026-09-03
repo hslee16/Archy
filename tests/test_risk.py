@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import networkx as nx
+import pytest
 
 from archy.risk import compute_edit_risk
 
@@ -84,3 +85,36 @@ def test_risk_bounded_in_unit_interval():
     )
     risk = compute_edit_risk(g)
     assert all(0.0 <= v <= 1.0 for v in risk.values())
+
+
+def test_edit_risk_matches_hand_worked_values():
+    """Pin the NUMBER, because every existing assertion on edit_risk is a range
+    check and a range check cannot fail here.
+
+    The composite is the geometric mean of three factors each structurally in
+    [0, 1], so `0.0 <= v <= 1.0` holds for any exponent, any weighting, and a
+    product missing a term. #438 verified that: changing the cube root to a
+    square root left the whole 1,218-test suite green while every published
+    risk value silently rescaled, including the `DEFAULT_MIN_RISK` floor that
+    gates structural membership in `what-to-refactor-next`.
+
+    Worked by hand on the fixture below (5 internal modules, so denom = 4):
+
+        b: prop 2/5, fan-in 1/4, I = ce 2 / (ce 2 + ca 1)
+           (0.4 * 0.25 * 2/3) ** (1/3) = 0.405480
+        e: prop 3/5, fan-in 1/4, I = ce 1 / (ce 1 + ca 1)
+           (0.6 * 0.25 * 0.5)  ** (1/3) = 0.421716
+
+    Two values rather than one so a change that rescales every risk uniformly
+    and one that reweights a single factor are both visible. The zero cases are
+    deliberately NOT re-asserted here: `test_pure_source_has_zero_risk` and
+    `test_stable_sink_has_zero_risk` already pin them by the same mechanism, and
+    an ordering assertion between b and e would be dead, entailed by the two
+    equalities above it.
+    """
+    risk = _g(("a", "b"), ("b", "c"), ("d", "c"), ("b", "e"), ("e", "c"))
+
+    out = compute_edit_risk(risk)
+
+    assert out["b"] == pytest.approx(0.405480, abs=5e-7)
+    assert out["e"] == pytest.approx(0.421716, abs=5e-7)
