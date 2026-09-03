@@ -104,6 +104,13 @@ def test_edit_risk_matches_hand_worked_values():
            (0.4 * 0.25 * 2/3) ** (1/3) = 0.405480
         e: prop 3/5, fan-in 1/4, I = ce 1 / (ce 1 + ca 1)
            (0.6 * 0.25 * 0.5)  ** (1/3) = 0.421716
+
+    Two values rather than one so a change that rescales every risk uniformly
+    and one that reweights a single factor are both visible. The zero cases are
+    deliberately NOT re-asserted here: `test_pure_source_has_zero_risk` and
+    `test_stable_sink_has_zero_risk` already pin them by the same mechanism, and
+    an ordering assertion between b and e would be dead, entailed by the two
+    equalities above it.
     """
     risk = _g(("a", "b"), ("b", "c"), ("d", "c"), ("b", "e"), ("e", "c"))
 
@@ -111,9 +118,3 @@ def test_edit_risk_matches_hand_worked_values():
 
     assert out["b"] == pytest.approx(0.405480, abs=5e-7)
     assert out["e"] == pytest.approx(0.421716, abs=5e-7)
-    # Ordering as well as magnitude: e is reached by more of the project than b.
-    assert out["e"] > out["b"]
-    # A module nothing imports carries no edit risk however central it looks.
-    assert out["a"] == 0.0
-    # ... and neither does one that imports nothing, even at maximum fan-in.
-    assert out["c"] == 0.0
