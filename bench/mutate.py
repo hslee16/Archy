@@ -55,6 +55,12 @@ MUTATIONS: list[tuple[str, str, str]] = [
 
 SKIP = re.compile(r"^\s*(#|from |import )")
 
+# One fact, one place: the baseline gate and the per-mutation confirmation must
+# stay the same invocation, or a flag added to one silently measures something
+# different from the other.
+FULL_SUITE = ["uv", "run", "pytest", "-x", "-q"]
+FULL_SUITE_TIMEOUT = 900
+
 
 def _prose_lines(source: str) -> set[int]:
     """0-based lines occupied by string literals or comments.
@@ -143,7 +149,7 @@ def main() -> int:
     # every mutation in reach as caught and the kill rate would read high for
     # the worst possible reason.
     print("# baseline: running the suite unmutated ...", flush=True)
-    if run(["uv", "run", "pytest", "-x", "-q"], 900) != "pass":
+    if run(FULL_SUITE, FULL_SUITE_TIMEOUT) != "pass":
         print("# refusing to run: the suite is not green before any mutation.")
         return 2
 
@@ -169,7 +175,7 @@ def main() -> int:
                 run(["uv", "run", "pytest", "-x", "-q", str(own)], 180) if own.exists() else "pass"
             )
             if verdict == "pass":
-                verdict = run(["uv", "run", "pytest", "-x", "-q"], 900)
+                verdict = run(FULL_SUITE, FULL_SUITE_TIMEOUT)
 
             if verdict == "timeout":
                 inconclusive.append((path, i + 1, label))
