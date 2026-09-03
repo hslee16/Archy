@@ -74,7 +74,13 @@ def _prose_lines(source: str) -> set[int]:
             covered.update(range(node.lineno - 1, end))
     try:
         for tok in tokenize.generate_tokens(io.StringIO(source).readline):
-            if tok.type in (tokenize.COMMENT, tokenize.STRING):
+            if tok.type == tokenize.STRING:
+                covered.update(range(tok.start[0] - 1, tok.end[0]))
+            elif tok.type == tokenize.COMMENT and tok.line.strip().startswith("#"):
+                # Only a comment-only line is prose. Excluding trailing comments
+                # too would drop `if x >= 1:  # why` from the candidate pool
+                # entirely, which is real code and exactly the annotated,
+                # decision-carrying kind worth mutating.
                 covered.update(range(tok.start[0] - 1, tok.end[0]))
     except (tokenize.TokenError, IndentationError):
         pass
@@ -97,45 +103,90 @@ def candidates() -> list[tuple[Path, int, str, str, str]]:
     return out
 
 
-def run(cmd: list[str], timeout: int) -> bool:
-    """True when the command passes."""
+def run(cmd: list[str], timeout: int) -> str:
+    """`"pass"`, `"fail"`, or `"timeout"`.
+
+    A timeout is NOT a catch, and folding it into one would make every number
+    here flatter than the truth: a suite that did not finish because the machine
+    was busy would silently suppress a real survivor. It gets its own bucket so
+    an inconclusive run looks inconclusive.
+    """
     try:
-        return subprocess.run(cmd, capture_output=True, timeout=timeout).returncode == 0
+        code = subprocess.run(cmd, capture_output=True, timeout=timeout).returncode
     except subprocess.TimeoutExpired:
-        return False
+        return "timeout"
+    return "pass" if code == 0 else "fail"
+
+
+def _clean_tree() -> bool:
+    """Is `src/` free of uncommitted changes?
+
+    A crashed earlier run leaves a mutation on disk, and this harness would then
+    treat that mutated file as the original and restore it, making the damage
+    permanent relative to git. Refusing to start is the only cheap defence, and
+    it also catches two runs overlapping.
+    """
+    return subprocess.run(["git", "diff", "--quiet", "--", str(SRC)]).returncode == 0
 
 
 def main() -> int:
     n = int(sys.argv[1]) if len(sys.argv) > 1 else 60
     seed = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+
+    if not _clean_tree():
+        print(f"# refusing to run: {SRC} has uncommitted changes.")
+        print("# a mutation left by a crashed run would be restored AS the original.")
+        return 2
+
+    # 🔴 BASELINE FIRST, OR EVERY NUMBER IS FLATTERING. `run` reports a failing
+    # suite as "the mutation was caught", so one pre-existing failure would mark
+    # every mutation in reach as caught and the kill rate would read high for
+    # the worst possible reason.
+    print("# baseline: running the suite unmutated ...", flush=True)
+    if run(["uv", "run", "pytest", "-x", "-q"], 900) != "pass":
+        print("# refusing to run: the suite is not green before any mutation.")
+        return 2
+
     picks = candidates()
     random.Random(seed).shuffle(picks)
     picks = picks[:n]
     print(f"# {len(picks)} mutations sampled from {len(candidates())} candidate lines\n")
 
-    survivors = []
+    survivors: list[tuple[Path, int, str, str]] = []
+    inconclusive: list[tuple[Path, int, str]] = []
     for k, (path, i, pat, repl, label) in enumerate(picks, 1):
         original = path.read_text(encoding="utf-8")
-        lines = original.splitlines(keepends=True)
-        lines[i] = re.sub(pat, repl, lines[i], count=1)
-        path.write_text("".join(lines), encoding="utf-8")
         try:
+            # The mutating write lives INSIDE the try, so an interrupt between
+            # writing and testing still reaches the restore below. Outside it,
+            # a Ctrl-C in that window left the tree corrupted.
+            lines = original.splitlines(keepends=True)
+            lines[i] = re.sub(pat, repl, lines[i], count=1)
+            path.write_text("".join(lines), encoding="utf-8")
+
             own = TESTS / f"test_{path.stem}.py"
-            targeted = ["uv", "run", "pytest", "-x", "-q", str(own)] if own.exists() else None
-            caught = False
-            if (targeted and not run(targeted, 180)) or not run(
-                ["uv", "run", "pytest", "-x", "-q"], 900
-            ):
-                caught = True
-            if not caught:
+            verdict = (
+                run(["uv", "run", "pytest", "-x", "-q", str(own)], 180) if own.exists() else "pass"
+            )
+            if verdict == "pass":
+                verdict = run(["uv", "run", "pytest", "-x", "-q"], 900)
+
+            if verdict == "timeout":
+                inconclusive.append((path, i + 1, label))
+                print(f"TIMEOUT   {path}:{i + 1}  [{label}]  (not counted either way)")
+            elif verdict == "pass":
                 survivors.append((path, i + 1, label, lines[i].strip()[:88]))
                 print(f"SURVIVED  {path}:{i + 1}  [{label}]\n          {lines[i].strip()[:88]}")
         finally:
             path.write_text(original, encoding="utf-8")
         if k % 10 == 0:
-            print(f"# ... {k}/{len(picks)} done, {len(survivors)} survivors so far", flush=True)
+            print(f"# ... {k}/{len(picks)} done, {len(survivors)} survivors", flush=True)
 
-    print(f"\n# {len(survivors)} of {len(picks)} mutations survived (no test failed)")
+    caught = len(picks) - len(survivors) - len(inconclusive)
+    print(f"\n# {len(survivors)} survived, {caught} caught, {len(inconclusive)} inconclusive")
+    if not _clean_tree():
+        print(f"# WARNING: {SRC} is dirty after the run; a restore did not complete.")
+        return 1
     return 0
 
 
