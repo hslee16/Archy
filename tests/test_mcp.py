@@ -993,12 +993,16 @@ def test_graph_summary_validates_top_n(acyclic_project: Path):
 def test_graph_dump_matches_cli_json(acyclic_project: Path):
     """Parity between the MCP dump and `archy graph --format json`.
 
-    The two sides have to be derived INDEPENDENTLY or this proves nothing. The
-    earlier version compared the payload against `graph_to_dict(g)` computed in
-    the test, but `mcp._graph_payload_from` opens with `data = graph_to_dict(...)`
-    and transcribes it, so both sides were the same serializer over equal graphs
-    and any mutation of it moved them together (#439). The CLI is therefore
-    invoked as a subprocess here, the way a user reaches it.
+    What this does and does not make independent, stated precisely because the
+    first rewrite overclaimed it. The earlier version compared the payload
+    against `graph_to_dict(g)` computed in the test, which proved nothing
+    (#439). Shelling out to the CLI makes the GRAPH CONSTRUCTION independent:
+    a fresh subprocess doing its own `build_graph` against the cached manager's.
+    It does NOT make the SERIALIZATION independent, because `cli.graph` and
+    `mcp._graph_payload_from` both still call `graph_to_dict`, so a consistent
+    regression inside that function moves both sides together and passes here.
+    `tests/test_graph.py::test_graph_to_dict_shape_is_pinned_by_hand` is what
+    covers that, against a dict written out by hand.
     """
     cli = subprocess.run(
         [sys.executable, "-m", "archy.cli", "graph", str(acyclic_project), "--format", "json"],

@@ -76,7 +76,10 @@ def test_summarize_dsm_counts_cross_group_coupling():
 
     summary = summarize_dsm(dsm)
 
-    assert [g.members for g in dsm.groups] == [("a", "b"), ("c", "d")]
+    # Order-independent: which community networkx enumerates first is an
+    # artifact of greedy modularity's merge order, not a contract, and pinning
+    # it would fail on a tie-breaking change that leaves the count correct.
+    assert {g.members for g in dsm.groups} == {("a", "b"), ("c", "d")}
     assert summary.group_count == 2
     # Only `b -> c` spans the two communities; `a -> b` and `c -> d` are internal.
     assert summary.cross_group_edge_count == 1

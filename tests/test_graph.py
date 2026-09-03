@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import networkx as nx
 import pytest
 
 from archy.graph import (
@@ -671,3 +672,57 @@ def test_effective_max_modules_resolution():
     assert effective_max_modules(None) == DEFAULT_MAX_MODULES  # unset -> default
     assert effective_max_modules(0) is None  # explicitly disabled
     assert effective_max_modules(2500) == 2500  # custom ceiling
+
+
+def test_graph_to_dict_shape_is_pinned_by_hand():
+    """The wire shape as a literal, because every other test of it is relative.
+
+    `archy graph --format json` and `mcp._graph_payload_from` BOTH call this
+    function, so the cross-surface parity test in `tests/test_mcp.py` cannot
+    catch a consistent regression here: dropping a field or renaming a key moves
+    both sides together and that test still passes (#439). Nothing else pins the
+    JSON contract that external consumers actually read.
+
+    The dict below is written out by hand, not captured from a run, which is the
+    only version of this test worth having.
+    """
+    g = nx.DiGraph(root="/p")
+    g.add_node("pkg.a", external=False, path="/p/pkg/a.py", is_package=False)
+    g.add_node("pkg.b", external=False, path="/p/pkg/b.py", is_package=False)
+    g.add_edge("pkg.a", "pkg.b", is_relative=True, lines=(3,), kinds=("import",))
+
+    assert graph_to_dict(g) == {
+        "root": "/p",
+        "parse_errors": [],
+        "nodes": [
+            {
+                "id": "pkg.a",
+                "external": False,
+                "path": "/p/pkg/a.py",
+                "is_package": False,
+                # a imports b and nothing imports a: fully unstable, reaches half
+                # the project (itself), and carries no edit risk at zero fan-in.
+                "instability": 1.0,
+                "propagation_cost": 0.5,
+                "edit_risk": 0.0,
+            },
+            {
+                "id": "pkg.b",
+                "external": False,
+                "path": "/p/pkg/b.py",
+                "is_package": False,
+                "instability": 0.0,
+                "propagation_cost": 1.0,
+                "edit_risk": 0.0,
+            },
+        ],
+        "edges": [
+            {
+                "source": "pkg.a",
+                "target": "pkg.b",
+                "is_relative": True,
+                "lines": (3,),
+                "kinds": ("import",),
+            }
+        ],
+    }

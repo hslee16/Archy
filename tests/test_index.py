@@ -79,11 +79,14 @@ def test_warm_cache_reads_what_it_wrote(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
     build_graph_cached(project, db_path=db)
 
+    modules = discover_modules(project)
     with open_index(db) as conn:
-        _, stats = sync(conn, discover_modules(project))
+        _, stats = sync(conn, modules)
 
     assert stats.reparsed == 0, "a warm build must not re-parse an unchanged file"
-    assert stats.unchanged > 0, "and it must actually read rows back"
+    # EVERY module, not just one: `> 0` would pass a partial-cache bug that
+    # needlessly re-parses some files while still returning the right graph.
+    assert stats.unchanged == len(modules)
     assert _equal(project, db)
 
 
