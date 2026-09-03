@@ -171,9 +171,7 @@ def main() -> int:
             path.write_text("".join(lines), encoding="utf-8")
 
             own = TESTS / f"test_{path.stem}.py"
-            verdict = (
-                run(["uv", "run", "pytest", "-x", "-q", str(own)], 180) if own.exists() else "pass"
-            )
+            verdict = run([*FULL_SUITE, str(own)], 180) if own.exists() else "pass"
             if verdict == "pass":
                 verdict = run(FULL_SUITE, FULL_SUITE_TIMEOUT)
 
