@@ -432,3 +432,29 @@ def test_dsm_models_are_frozen():
     )
     with pytest.raises(ValidationError):
         dsm.ordering = ()  # type: ignore[misc]
+
+
+def test_back_edge_count_is_strict_and_excludes_self_loops():
+    """Pin the count as a literal, and put a self-loop in the fixture.
+
+    Every other test of this number recomputes `c.row > c.col` from the same
+    cells `build_dsm` produced, so it moves with the implementation. #438
+    verified that loosening the predicate to `>=` left the whole suite green,
+    which matters because this count is what `archy dsm --diff` uses for
+    back-edge regression detection and what `archy render` prints.
+
+    The self-loop is the discriminating half: `b -> b` sits on the diagonal,
+    where `row == col`. It is not a back edge, and only a fixture containing
+    one can tell a strict comparison from a loose one.
+    """
+    g = _g(("a", "b"), ("b", "c"), ("c", "a"), ("b", "b"))
+
+    dsm = build_dsm(g, group_by="topological", weight="imports")
+    summary = summarize_dsm(dsm)
+
+    assert dsm.ordering == ("a", "b", "c")
+    # `c -> a` is the only edge pointing back up the ordering.
+    assert summary.back_edge_count == 1
+    assert list(summary.back_edges) == [("c", "a")]
+    # The diagonal cell exists; it just is not a back edge.
+    assert any(c.row == c.col for c in dsm.cells)
