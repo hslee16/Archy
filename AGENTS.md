@@ -74,6 +74,46 @@ and assert on `model_dump()`.
 `violations` list is indistinguishable from a bug in archy. Whatever fails the
 gate must also say why, in every format.
 
+## Tests that cannot fail
+
+A green suite is not evidence a test works. Sixteen tests in this repository
+asserted something true regardless of whether the code was correct, and two of
+them were hiding a live bug: `edit_risk`'s exponent and the DSM back-edge
+predicate could both be changed with all 1,218 tests passing (#438).
+
+**Verify a test by mutating the code it covers and checking it goes red.**
+Nothing else settles it. Reading is not enough, and this is not a counsel of
+perfection: five consecutive review rounds each found a test the previous round
+had just declared sound, including tests written specifically to close this
+class of gap. `bench/mutate.py` does it in bulk; by hand is fine for one test.
+
+The three shapes, each of which shipped here:
+
+- **Agreement between two things that share an implementation.** A test
+  asserting `conventions --module` matches the graph became tautological the
+  moment both were refactored onto one resolver (#437): break it and both break
+  identically. Assert the ANSWER, not the agreement. Where cross-surface parity
+  really is the property, derive the two sides independently, the way
+  `test_greenfield_eval.py` shells out to the CLI on one side.
+- **An expected value the code under test produced.** `project == mean(per_module)`
+  was an algebraic identity of the implementation, true for every possible
+  definition of reach (#439). Hand-work the number and put the arithmetic in the
+  docstring.
+- **A fixture that never reaches the branch.** A clamp tested on a graph whose
+  value is never negative; a ranking checked where every fixture value is `0.0`,
+  so it is sorted in both directions; a two-node graph where `edit_risk` is
+  structurally zero. **Assert the fixture exercises the thing before asserting
+  the outcome**, or the test quietly stops testing when the fixture drifts.
+
+Two traps worth knowing before you mutate anything. **An inert mutation proves
+nothing in either direction**: reversing a topological sort on a 3-cycle changes
+nothing, because one SCC orders its members alphabetically, and a test that
+"survives" it has not been shown to be blind. And **clear `__pycache__`**: a
+reordering mutation keeps the file's byte length, so a stale `.pyc` can survive
+the restore and make a clean tree report the mutated behaviour.
+
+Remaining known cases are filed as #440, #441 and #442.
+
 ## Review findings
 
 Reviews here regularly find real bugs, not just style. When a round finds
