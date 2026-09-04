@@ -397,8 +397,12 @@ def test_dsm_default_is_compact_summary(acyclic_project: Path):
     result = _dsm(acyclic_project)
     assert isinstance(result, DSMSummary)
     assert not hasattr(result, "cells")
-    assert result.module_count >= 2
-    assert result.group_count == len(result.groups)
+    # Pin the counts the fixture actually produces: `pkg`, `pkg.a` and `pkg.b`
+    # fall into two communities. `group_count == len(groups)` held for any
+    # graph, since `summarize_dsm` sets both from one iterable (#441).
+    assert result.module_count == 3
+    assert [(g.label, g.size) for g in result.groups] == [("Community-0", 2), ("Community-1", 1)]
+    assert result.group_count == 2
 
 
 def test_dsm_full_returns_matrix_with_cells(acyclic_project: Path):
@@ -753,15 +757,27 @@ def test_run_snapshot_writes_baseline_and_returns_payload(acyclic_project: Path)
 
 
 def test_snapshot_brief_mirrors_score_and_acyclic_invariant(acyclic_project: Path):
+    """The brief must carry the numbers a caller would get by scoring the
+    project themselves, not merely the numbers of the payload it was built from.
+
+    `brief.overall == payload.score.overall` and
+    `brief.acyclic is (payload.cycles == ())` are both direct copies made inside
+    `_build_invariant_brief`, so they held whatever those numbers were, correct
+    or not; the docstring conceded as much (#441). The right-hand side is
+    derived independently here, by building the graph and calling
+    `compute_score` directly, which is the shape a parity assertion needs.
+    """
+    from archy.graph import build_graph
+    from archy.score import compute_score
+
     payload = _run_snapshot(acyclic_project)
     brief = payload.invariant_brief
-    # The brief is a recombination of the snapshot's own numbers, not a
-    # second computation, so it must agree with the payload exactly.
-    assert brief.acyclic is (payload.cycles == ())
+    independent = compute_score(build_graph(acyclic_project))
+
     assert brief.acyclic is True
-    assert brief.overall == payload.score.overall
-    assert brief.components.modularity == payload.score.modularity
-    assert brief.components.complexity == payload.score.complexity
+    assert brief.overall == pytest.approx(independent.overall)
+    assert brief.components.modularity == pytest.approx(independent.modularity)
+    assert brief.components.complexity == pytest.approx(independent.complexity)
 
 
 def test_snapshot_brief_load_bearing_ranked_and_capped(tmp_path: Path):
@@ -1214,11 +1230,37 @@ def test_graph_tool_focus_still_validates_response_format(acyclic_project: Path)
 
 
 def test_impact_mode_blast_returns_chains(acyclic_project: Path):
-    # mode='blast' (the default) returns the Impact shape with chains.
-    result = _run_impact(acyclic_project, files=[Path("pkg/b.py")])
-    from archy.impact import Impact
+    """`mode='blast'` (the default) answers "what breaks if I edit this", and a
+    chain is the "because": the import path from an impacted module back to the
+    changed one.
 
-    assert isinstance(result, Impact)
+    `pkg.a` does `from pkg.b import thing` on line 1, so editing `pkg/b.py`
+    reaches `pkg.a` in exactly one hop. The old test asserted only
+    `isinstance(result, Impact)`, which the `-> Impact` annotation guarantees on
+    every return path, so an entirely empty `Impact` passed it (#441).
+    """
+    result = _run_impact(acyclic_project, files=[Path("pkg/b.py")])
+
+    assert result.changed == ("pkg.b",)
+    assert result.impacted == ("pkg.a",)
+    assert result.chains_omitted == 0
+    [chain] = result.chains
+    assert chain.impacted == "pkg.a"
+    assert chain.via == ("pkg.a", "pkg.b")
+    assert [(h.source, h.target, h.lines) for h in chain.hops] == [("pkg.a", "pkg.b", (1,))]
+
+    # The old comment claimed this covered `mode='blast'` routing, but
+    # `_run_impact` has no `mode` parameter, so nothing here went through it.
+    # Route through the tool so the claim the test makes is one it tests.
+    _, structured = _call_tool(
+        create_server(),
+        "archy_impact",
+        {"path": str(acyclic_project), "files": ["pkg/b.py"], "mode": "blast"},
+    )
+    assert structured is not None
+    routed = structured["result"]
+    assert routed["impacted"] == ["pkg.a"]
+    assert routed["chains"][0]["via"] == ["pkg.a", "pkg.b"]
 
 
 def test_impact_mode_affected_returns_test_split(tmp_path: Path):
@@ -1270,20 +1312,26 @@ def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\n")
     (pkg / "b.py").write_text("")
+    (pkg / "d.py").write_text("from .b import w\n")
 
     payload = _run_graph_focus(
         tmp_path,
-        modules=["pkg.a"],
+        modules=["pkg.a", "pkg.d"],
         depth=1,
         direction="out",
         internal_only=True,
     )
-    edge = next(e for e in payload.edges if e.source == "pkg.a" and e.target == "pkg.b")
-    assert edge.lines == (2, 3)
-    # `is_relative` is True iff *any* of the contributing imports was relative;
-    # the parser records the last-seen flag, so the assertion is just "tracked".
-    assert edge.is_relative in (True, False)
-    assert isinstance(edge.is_relative, bool)
+    edges = {(e.source, e.target): e for e in payload.edges}
+
+    a_b = edges[("pkg.a", "pkg.b")]
+    assert a_b.lines == (2, 3)
+    # `is_relative` is set when the edge is first created and left alone when a
+    # later import extends it, so a pair written absolute-then-relative reports
+    # False. `pkg.d` writes the relative form first and reports True, which is
+    # what makes this a value assertion: the old pair, `in (True, False)` and
+    # `isinstance(..., bool)`, is true of any bool (#441).
+    assert a_b.is_relative is False
+    assert edges[("pkg.d", "pkg.b")].is_relative is True
 
 
 def test_graph_focus_internal_only_false_keeps_external_neighbors(tmp_path: Path):
@@ -1471,8 +1519,12 @@ def test_refactor_behavioral_lens_shape_and_ranking(tmp_path: Path):
     )
     assert payload.note is None
     assert payload.since is None
-    assert payload.total >= 1
-    assert payload.shown == len(payload.priorities)
+    # `shown` is `len(entries)` and `priorities` IS `entries`, so comparing them
+    # was an identity of the constructor (#441). The fixture has exactly two
+    # modules carrying functions, both under the top_n of 20, so both are shown.
+    assert payload.total == 2
+    assert payload.shown == 2
+    assert [e.module for e in payload.priorities] == ["pkg.hot", "pkg.cold"]
     top = payload.priorities[0]
     assert top.module == "pkg.hot"
     # The behavioral lens keeps only rows the hotspot lens fired on (a row may
@@ -1540,7 +1592,10 @@ def test_what_to_refactor_next_fuses_both_lenses(tmp_path: Path):
     payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
     assert payload.git_available is True
     assert payload.note is None
-    assert payload.shown == len(payload.priorities)
+    # Only `pkg.hot` clears both floors, so the fused ranking is one row long.
+    # `shown == len(priorities)` was an identity of the constructor (#441).
+    assert payload.total == 1
+    assert payload.shown == 1
     top = payload.priorities[0]
     assert top.module == "pkg.hot"
     assert top.lenses == ("hotspot", "edit_risk")

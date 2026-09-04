@@ -7,6 +7,7 @@ import networkx as nx
 import pytest
 
 from archy.layers import (
+    ExactPatternHint,
     ForbidRule,
     LayerConfig,
     LayerConfigError,
@@ -616,11 +617,17 @@ def test_required_reach_allows_an_external_target(tmp_path: Path):
 
 
 def test_required_reach_is_absent_by_default(tmp_path: Path):
-    """Configs predating the feature keep their exit codes exactly."""
+    """Configs predating the feature parse to an empty `required`, so they keep
+    their exit codes exactly.
+
+    The `find_reach_violations(...) == []` line that used to follow is entailed
+    by `config.required == ()` on the line above: the function loops over
+    `config.required`, so an empty one returns `[]` under every implementation
+    (#441). The default is the real claim, and it is the one asserted.
+    """
     config = _cfg(tmp_path, "layers:\n  a:\n    modules: ['a.**']\nforbid: []\n")
 
     assert config.required == ()
-    assert find_reach_violations(_reach_graph(nodes=("a.b",)), config) == []
 
 
 def test_required_reach_parses_the_rule(tmp_path: Path):
@@ -756,7 +763,19 @@ def test_glob_patterns_never_hint(tmp_path: Path):
 
 
 def test_governs_no_edges_survives_model_dump():
-    """MCP serializes coverage with `model_dump()`, which drops properties."""
+    """MCP serializes coverage with `model_dump()`, which drops plain properties.
+
+    Both fields have to be checked at a value that is not the default.
+    `exact_pattern_hints` defaults to `()`, so asserting `== ()` on a coverage
+    built without one held whether or not `model_dump()` carried the field at
+    all (#441); the hint below is constructed so the dump has something to lose.
+    """
+    hint = ExactPatternHint(
+        layer="store",
+        pattern="shipping.store",
+        unlayered_descendants=("shipping.store.repository",),
+        suggestion="shipping.store.**",
+    )
     coverage = LayerCoverage(
         modules_total=2,
         modules_matched=1,
@@ -764,10 +783,11 @@ def test_governs_no_edges_survives_model_dump():
         edges_total=1,
         edges_governed=0,
         unlayered_modules=("app.b",),
+        exact_pattern_hints=(hint,),
     )
     dumped = coverage.model_dump()
     assert dumped["governs_no_edges"] is True
-    assert dumped["exact_pattern_hints"] == ()
+    assert dumped["exact_pattern_hints"] == (hint.model_dump(),)
 
 
 def test_forbid_and_required_report_the_same_shape_of_key_error(tmp_path: Path):

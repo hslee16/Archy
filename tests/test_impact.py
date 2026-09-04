@@ -48,7 +48,6 @@ def test_impact_propagation_cost_matches_changed_plus_impacted_over_internal(tmp
     result = find_impact(g, [project / "app" / "libs" / "db.py"])
     expected = (len(result.changed) + len(result.impacted)) / _internal_count(g)
     assert result.propagation_cost == expected
-    assert 0.0 < result.propagation_cost <= 1.0
 
 
 def test_impact_leaf_with_no_dependents_has_zero_propagation_cost(tmp_path: Path):

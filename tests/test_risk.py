@@ -44,17 +44,35 @@ def test_pure_source_has_zero_risk():
     assert risk["a"] == 0.0
 
 
-def test_central_volatile_module_has_nonzero_risk():
-    # `m` depends on `dep` (instability rises) and is imported by `x`, `y`, `z`
-    # (fan_in and propagation_cost rise). All three components non-zero -> risk > 0.
+def test_central_volatile_module_outranks_a_weaker_one_of_the_same_shape():
+    """`m` and `x` both have all three factors non-zero; `m` is stronger on
+    every one, so it must rank strictly above.
+
+    `x` exists to make the ranking claim real. With only `m` non-zero, every
+    other node scored exactly 0.0 and `risk["m"] == max(risk.values())`
+    followed from `risk["m"] > 0.0` alone (#441).
+
+    Hand-worked. N_internal = 6, so the fan-in denominator is 5:
+      m: Ce = 1 (dep), Ca = 3 (x, y, z) -> I = 1/4; fan_in_norm = 3/5;
+         propagation_cost = |{m, x, y, z, w}| / 6 = 5/6
+         -> (5/6 * 3/5 * 1/4) ** (1/3) = 0.125 ** (1/3) = 0.5
+      x: Ce = 2 (m, dep), Ca = 1 (w) -> I = 2/3; fan_in_norm = 1/5;
+         propagation_cost = |{x, w}| / 6 = 1/3
+         -> (1/3 * 1/5 * 2/3) ** (1/3) = (2/45) ** (1/3) = 0.3542
+    """
     g = _g(
         ("x", "m"),
         ("y", "m"),
         ("z", "m"),
         ("m", "dep"),
+        ("w", "x"),
+        ("x", "dep"),
     )
     risk = compute_edit_risk(g)
-    assert risk["m"] > 0.0
+
+    assert risk["m"] == pytest.approx(0.5)
+    assert risk["x"] == pytest.approx((2 / 45) ** (1 / 3))
+    assert risk["x"] > 0.0  # the runner-up is a real score, not a zero
     assert risk["m"] == max(risk.values())
 
 
@@ -72,9 +90,19 @@ def test_external_nodes_excluded_from_normalization():
     assert compute_edit_risk(base)["b"] == compute_edit_risk(with_ext)["b"]
 
 
-def test_risk_bounded_in_unit_interval():
-    # All three terms are 0..1 so the geometric mean is too. Worst-case
-    # densely-coupled graph still produces values <= 1.
+def test_fully_coupled_triangle_scores_the_symmetric_hand_worked_value():
+    """Every node of a 3-node complete digraph gets the same score, and it is
+    computable by hand.
+
+    For each node: Ce = 2 and Ca = 2, so I = 2 / 4 = 0.5; fan_in = 2 over a
+    denominator of N_internal - 1 = 2, so fan_in_norm = 1.0; every module
+    transitively reaches every module, so propagation_cost = 3 / 3 = 1.0. The
+    composite is (1.0 * 1.0 * 0.5) ** (1/3) = 0.5 ** (1/3) = 0.7937.
+
+    Replaces `all(0.0 <= v <= 1.0 ...)`, which the geometric mean of three
+    factors each structurally in [0, 1] satisfies for any exponent and any
+    weighting, so it could not fail for any graph (#441).
+    """
     g = _g(
         ("a", "b"),
         ("b", "a"),
@@ -84,7 +112,9 @@ def test_risk_bounded_in_unit_interval():
         ("c", "b"),
     )
     risk = compute_edit_risk(g)
-    assert all(0.0 <= v <= 1.0 for v in risk.values())
+    assert set(risk) == {"a", "b", "c"}
+    for node in ("a", "b", "c"):
+        assert risk[node] == pytest.approx(0.5 ** (1 / 3))
 
 
 def test_edit_risk_matches_hand_worked_values():

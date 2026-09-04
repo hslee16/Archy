@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 import networkx as nx
 import pytest
 
@@ -352,12 +350,34 @@ def test_compute_score_geometric_mean_combines_multiplicatively():
     assert s.overall == pytest.approx(expected)
 
 
-def test_compute_score_all_components_in_unit_interval():
-    g = _g(("a", "b"), ("b", "c"), ("c", "a"), ("d", "a"))
-    s = compute_score(g)
-    for value in (s.overall, s.modularity, s.acyclicity, s.depth, s.equality, s.complexity):
-        assert 0.0 <= value <= 1.0
-        assert math.isfinite(value)
+def test_compute_score_axes_are_hand_worked_for_a_cycle_plus_tail():
+    """Every axis of `a -> b -> c -> a` plus `d -> a`, worked by hand.
+
+    modularity: greedy detection finds a single community covering the graph,
+      so raw Q is 0.0 and the axis is (0.0 + 0.5) / 1.5 = 1/3.
+    acyclicity: 3 of the 4 nodes sit in the SCC {a, b, c}, so tangle = 3/4 and
+      the axis is 1 - 0.75 = 0.25.
+    depth: the condensation is `d -> {a, b, c}`, a single edge, so the longest
+      path is 1 and the axis is 1 / (1 + 1/8) = 8/9.
+    equality: every node has out-degree exactly 1, so the Gini coefficient is
+      0.0 and the axis is 1 - 0.0 = 1.0.
+    complexity: the graph is synthetic and carries no function counts, so the
+      axis is its no-functions value, 1.0.
+    overall: (1/3 * 1/4 * 8/9 * 1 * 1) ** 0.2 = (2/27) ** 0.2 = 0.5942.
+
+    Replaces a loop asserting `0.0 <= value <= 1.0` and `math.isfinite`, which
+    every axis satisfies by its own formula (each is clamped, or a ratio whose
+    numerator cannot exceed its denominator), and whose measured values sat
+    nowhere near a boundary. Halving the acyclicity penalty passed it (#441).
+    """
+    s = compute_score(_g(("a", "b"), ("b", "c"), ("c", "a"), ("d", "a")))
+
+    assert s.modularity == pytest.approx(1 / 3)
+    assert s.acyclicity == pytest.approx(0.25)
+    assert s.depth == pytest.approx(8 / 9)
+    assert s.equality == pytest.approx(1.0)
+    assert s.complexity == pytest.approx(1.0)
+    assert s.overall == pytest.approx((2 / 27) ** 0.2)
 
 
 def test_cc_aggregates_roll_up_from_node_attrs():

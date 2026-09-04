@@ -15,7 +15,13 @@ from click.testing import CliRunner
 from archy.cli import main
 from archy.conventions import compute_conventions
 from archy.graph import discover_modules
-from archy.headers import apply_header, compute_headers, existing_block, render_header
+from archy.headers import (
+    MARKER,
+    apply_header,
+    compute_headers,
+    existing_block,
+    render_header,
+)
 
 
 def _project(tmp_path: Path, *, prose: str = "") -> Path:
@@ -240,6 +246,17 @@ def test_render_wraps_long_lists_under_the_value_column(tmp_path: Path):
 
     lines = render_header(wide).splitlines()
     assert len(lines) > 1
-    # Continuations line up under the values, never under the label, so a long
-    # list still reads as one field.
-    assert all(line.startswith(" ") for line in lines[1:] if not line.startswith("archy:"))
+    # The value column starts at len("archy:") + len("mirrored-by") + 1 == 18:
+    # the marker, the widest field label, and one space. Assert the COLUMN, not
+    # just "starts with a space": the indent is a positive constant, so a
+    # continuation starts with a space for ANY non-zero indent, and
+    # `indent = " "` passed the old assertion on every test in this file (#441).
+    column = len(MARKER) + max(len(f) for f in ("owns", "mirrored-by", "gates")) + 1
+    assert column == 18
+    assert lines[0].startswith(f"{MARKER}owns".ljust(column))
+    assert lines[0][column] != " "
+    continuations = [line for line in lines[1:] if not line.startswith(MARKER)]
+    assert continuations, "fixture did not wrap, so the column is not under test"
+    for line in continuations:
+        assert line.startswith(" " * column)
+        assert line[column] != " "
