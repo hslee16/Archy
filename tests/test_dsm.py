@@ -263,10 +263,17 @@ def test_render_ascii_basic_grid_includes_module_names():
     g = _g(("a", "b"), ("b", "c"))
     dsm = build_dsm(g, group_by="topological")
     out = render_ascii(dsm)
-    assert "a" in out
-    assert "b" in out
-    assert "c" in out
-    assert "X" in out
+    # Assert the legend and grid LINES. `"a" in out` and `"c" in out` were both
+    # satisfied by the header string `group=topological` on its own, so they
+    # passed with the entire legend and matrix deleted (#441).
+    squeezed = [" ".join(line.split()) for line in out.splitlines()]
+    assert "1: a" in squeezed
+    assert "2: b" in squeezed
+    assert "3: c" in squeezed
+    # Row i marks an X in the column of each module it imports: a -> b, b -> c.
+    assert "1 a \\ X ." in squeezed
+    assert "2 b . \\ X" in squeezed
+    assert "3 c . . \\" in squeezed
 
 
 def test_render_ascii_diagonal_uses_backslash_marker():
