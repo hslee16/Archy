@@ -45,6 +45,11 @@ What contributors are asked to do:
   retracted, here is the study" before you write it than after.
 - Follow the style rules below (notably the no-em-dash rule; CI does not yet enforce it but reviewers will).
 - Write tests for new behavior, especially anything graph-shape or score-affecting.
+- **Check a new test can actually fail**, by changing the code it covers and
+  confirming it goes red. A test that asserts something true regardless of the
+  implementation is worse than no test: it reads as coverage. Sixteen such tests
+  were found here in one audit, two of them hiding a live bug. `AGENTS.md` has
+  the three shapes they take and `bench/mutate.py` checks in bulk.
 
 The `good first issue` tickets are real, deliberately left open, and a genuinely
 good place to start. Several have already been landed by people who are not me.
