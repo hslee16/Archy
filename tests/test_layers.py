@@ -229,13 +229,24 @@ def test_violations_ignores_allowed_edge(core_cli_config: LayerConfig):
     assert find_violations(g, core_cli_config) == []
 
 
-def test_violations_ignores_unlayered_endpoints():
-    g = _g(("third_party.x", "myapp.cli.y", (1,)))
-    config = LayerConfig(
-        layers=(LayerSpec(name="cli", patterns=("myapp.cli.**",)),),
-        forbid=(),
-    )
-    assert find_violations(g, config) == []
+def test_violations_ignores_unlayered_endpoints(core_cli_config: LayerConfig):
+    """An unlayered endpoint belongs to no layer, so no `forbid` rule can fire
+    on the edge it sits on.
+
+    The config has to be one whose rule CAN fire, and the target has to sit in
+    that rule's `to` layer, so the unlayered source is the only thing standing
+    between the fixture and a violation. The control edge pins that: same
+    target, a `core` source, one violation. The earlier fixture declared
+    `forbid=()`, under which `find_violations` returns `[]` for every graph and
+    every layer-matching behaviour (#440).
+    """
+    assert match_layer("third_party.x", core_cli_config.layers) is None
+
+    unlayered = _g(("third_party.x", "myapp.cli.y", (1,)))
+    assert find_violations(unlayered, core_cli_config) == []
+
+    layered = _g(("myapp.core.x", "myapp.cli.y", (1,)))
+    assert len(find_violations(layered, core_cli_config)) == 1
 
 
 def test_violations_aggregates_per_edge_lines(core_cli_config: LayerConfig):
@@ -720,17 +731,27 @@ def test_no_hint_when_a_bare_pattern_has_no_descendants(tmp_path: Path):
 
 
 def test_glob_patterns_never_hint(tmp_path: Path):
-    """`pkg.**` already covers descendants; anything unlayered under it is
-    a different problem and this hint would be a false positive."""
+    """A glob author got what globbing gives; an unlayered descendant of one is
+    a different problem, and hinting "you wrote an exact pattern" about it would
+    be a false positive.
+
+    `shipping.*` matches a single segment, so `shipping.store` is layered and
+    `shipping.store.repository` is not. That unlayered descendant is the fixture
+    precondition: it is exactly what a bare `shipping.store` pattern would
+    (correctly) be hinted about, so it is asserted first. The earlier fixture
+    used `shipping.store.**`, which matched both nodes and left nothing
+    unlayered, and the hint scan iterates only over unlayered modules (#440).
+    """
     config = _cfg(
         tmp_path,
-        "layers:\n  store:\n    modules: ['shipping.store.**']\nforbid: []\n",
+        "layers:\n  store:\n    modules: ['shipping.*']\nforbid: []\n",
     )
     graph = nx.DiGraph()
     graph.add_nodes_from(["shipping.store", "shipping.store.repository"])
 
     coverage = compute_coverage(graph, config)
 
+    assert coverage.unlayered_modules == ("shipping.store.repository",)
     assert coverage.exact_pattern_hints == ()
 
 

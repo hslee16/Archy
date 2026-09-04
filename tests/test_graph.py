@@ -66,12 +66,27 @@ def test_package_init_edges_point_submodules_at_their_packages(project: Path):
     assert ("myapp.core", "myapp") in edges
 
 
-def test_package_init_edges_skip_external_nodes(project: Path):
-    """`requests` is external and `_external_target` already collapsed it, so
-    there is no parent to point at and no claim to make about its contents."""
-    g = build_graph(project)
+def test_package_init_edges_skip_external_nodes():
+    """An external node gets no implicit `__init__.py` edge in either
+    direction: archy never parsed that package, so it cannot claim what its
+    `__init__.py` imports, nor that anything reaches through it.
 
-    assert not any(src == "requests" or dst == "requests" for src, dst in package_init_edges(g))
+    Hand-built rather than taken from a project because `_external_target`
+    collapses every external import to a SINGLE segment, and a single-segment
+    node has no ancestors to iterate over: the previous fixture asserted about
+    `requests`, for which the loop body never runs with or without the guards
+    (#440). A dotted external node is the only shape that reaches them.
+    """
+    external_child: nx.DiGraph = nx.DiGraph()
+    external_child.add_node("myapp", external=False)
+    external_child.add_node("myapp.core", external=False)
+    external_child.add_node("myapp.vendored", external=True)
+    assert package_init_edges(external_child) == [("myapp.core", "myapp")]
+
+    external_parent: nx.DiGraph = nx.DiGraph()
+    external_parent.add_node("vendor", external=True)
+    external_parent.add_node("vendor.sub", external=False)
+    assert package_init_edges(external_parent) == []
 
 
 def test_with_package_init_edges_leaves_the_original_untouched(project: Path):
@@ -424,11 +439,22 @@ def test_graph_to_dict_is_deterministic(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg.c import x\nfrom pkg.b import y\n")
+    # `abc` is external, so it is discovered last but sorts first; the imports
+    # are written c-then-b so the raw edge order is reversed. Both halves of
+    # the fixture exist to make the raw order differ from the sorted one:
+    # without the external node, discovery already yields sorted node ids and
+    # the node assertion holds with `sorted()` deleted (#440).
+    (pkg / "a.py").write_text("import abc\nfrom pkg.c import x\nfrom pkg.b import y\n")
     (pkg / "b.py").write_text("")
     (pkg / "c.py").write_text("")
 
-    data = graph_to_dict(build_graph(tmp_path))
+    graph = build_graph(tmp_path)
+    raw_nodes = list(graph.nodes())
+    raw_edges = [(u, v) for u, v in graph.edges()]
+    assert raw_nodes != sorted(raw_nodes)
+    assert raw_edges != sorted(raw_edges)
+
+    data = graph_to_dict(graph)
     node_ids = [n["id"] for n in data["nodes"]]
     assert node_ids == sorted(node_ids)
     edges = [(e["source"], e["target"]) for e in data["edges"]]
