@@ -714,7 +714,12 @@ def test_near_miss_clusters_gapped_clone(tmp_path: Path):
     assert len(near) == 1
     g = near[0]
     assert g.category == "near_miss"
-    assert g.similarity is not None and g.similarity >= 0.8
+    # beta's token bag is alpha's 52 tokens plus the 9 the inserted statement
+    # folds to, and a multiset superset makes the intersection alpha's bag and
+    # the union beta's, so Jaccard is 52 / 61. Pinned, because `>= 0.8` is what
+    # `min_similarity=0.8` already guarantees about every group the scan can
+    # return: a containment score would read 1.0 here and still pass (#440).
+    assert g.similarity == pytest.approx(52 / 61)
     assert {m.qualified_name for m in g.members} == {"alpha", "beta"}
 
 

@@ -7,6 +7,7 @@ import pytest
 
 from archy.score import (
     _gini,
+    _normalize_q,
     compute_acyclicity,
     compute_complexity,
     compute_depth,
@@ -64,13 +65,32 @@ def test_modularity_two_disjoint_clusters_is_high():
     assert score > 0.3
 
 
-def test_modularity_clamps_to_zero_on_negative_q():
-    # Pathological tightly-coupled graph: Q can be negative. We clamp to 0.
-    # A complete bipartite "everything points everywhere" graph is a stress
-    # test; we just assert the clamp invariant holds.
+def test_normalize_q_clamps_outside_the_newman_range():
+    """`(Q + 0.5) / 1.5` maps [-0.5, 1.0] onto [0, 1]; anything outside clamps.
+
+    Hand-worked: -0.8 -> -0.3 / 1.5 = -0.2, clamped to 0.0; 1.3 -> 1.8 / 1.5 =
+    1.2, clamped to 1.0; the two endpoints land exactly on 0.0 and 1.0; 0.25 ->
+    0.75 / 1.5 = 0.5. Called directly because no graph in this file produces a
+    negative Q, so the clamp is unreachable through `compute_modularity` and
+    deleting it left the old test green (#440).
+    """
+    assert _normalize_q(-0.8) == 0.0
+    assert _normalize_q(1.3) == 1.0
+    assert _normalize_q(-0.5) == 0.0
+    assert _normalize_q(1.0) == 1.0
+    assert _normalize_q(0.25) == pytest.approx(0.5)
+
+
+def test_modularity_of_a_complete_digraph_is_the_zero_q_baseline():
+    """A 4-node "everything points everywhere" graph has no community structure
+    to find: greedy detection returns one community covering every node, whose
+    raw Q is exactly 0.0, normalizing to (0.0 + 0.5) / 1.5 = 1/3.
+    """
     g = _g(*[(f"n{i}", f"n{j}") for i in range(4) for j in range(4) if i != j])
-    score, _, _ = compute_modularity(g)
-    assert 0.0 <= score <= 1.0
+    score, n_comm, raw_q = compute_modularity(g)
+    assert raw_q == 0.0
+    assert n_comm == 1
+    assert score == pytest.approx(1 / 3)
 
 
 # --- acyclicity ---------------------------------------------------------------

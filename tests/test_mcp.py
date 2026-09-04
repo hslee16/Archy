@@ -764,11 +764,48 @@ def test_snapshot_brief_mirrors_score_and_acyclic_invariant(acyclic_project: Pat
     assert brief.components.complexity == payload.score.complexity
 
 
-def test_snapshot_brief_load_bearing_ranked_and_capped(acyclic_project: Path):
-    brief = _run_snapshot(acyclic_project).invariant_brief
+def test_snapshot_brief_load_bearing_ranked_and_capped(tmp_path: Path):
+    """The brief carries the five riskiest modules, highest first.
+
+    Needs a project the ranking and the cap can both bite on. `acyclic_project`
+    is neither: `compute_edit_risk` is 0.0 for all three of its modules, and a
+    list of equal values is sorted in BOTH directions, so inverting the key
+    passed; three modules also cannot overflow a cap of five, so raising the cap
+    to a million passed too (#440). This chain-plus-fan-in tree has eight
+    modules with five distinct risks, so both assertions have something to fail
+    on, and the fixture preconditions are asserted before the outcome is.
+    """
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "m1.py").write_text("")
+    (pkg / "m2.py").write_text("from pkg.m1 import a\n")
+    (pkg / "m3.py").write_text("from pkg.m2 import a\nfrom pkg.m1 import b\n")
+    (pkg / "m4.py").write_text("from pkg.m3 import a\n")
+    (pkg / "m5.py").write_text("from pkg.m4 import a\nfrom pkg.m2 import c\n")
+    (pkg / "m6.py").write_text("from pkg.m5 import a\n")
+    (pkg / "m7.py").write_text("from pkg.m6 import a\nfrom pkg.m3 import d\n")
+
+    from archy.graph import build_graph
+    from archy.risk import compute_edit_risk
+
+    all_risks = compute_edit_risk(build_graph(tmp_path))
+    assert len(all_risks) == 8  # more modules than the cap, so the cap truncates
+    assert len(set(all_risks.values())) > 2  # distinct risks, so a ranking is visible
+
+    brief = _run_snapshot(tmp_path).invariant_brief
     risks = [m.edit_risk for m in brief.load_bearing]
     assert risks == sorted(risks, reverse=True)
-    assert len(brief.load_bearing) <= 5
+    assert len(brief.load_bearing) == 5
+    # pkg, pkg.m1 and pkg.m7 all score 0.0, so the cap has to drop them, not
+    # three arbitrary modules.
+    assert [m.module for m in brief.load_bearing] == [
+        "pkg.m3",
+        "pkg.m2",
+        "pkg.m4",
+        "pkg.m5",
+        "pkg.m6",
+    ]
 
 
 def test_snapshot_brief_reports_layers_and_forbidden_edges(tmp_path: Path):
