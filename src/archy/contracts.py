@@ -266,10 +266,15 @@ def _expression_coverage(contract: object, graph: ImportGraph) -> tuple[tuple[st
 
     Fields are read off the contract class's declared `*Field` descriptors, so
     every contract type that names modules is covered without this function
-    knowing any of them. `LayersContract.layers` is the one gap: its module
-    names sit inside `Layer` objects rather than in a flat expression
-    collection, so a layers contract naming only absent modules is not flagged
-    here. It is still caught for `containers`.
+    knowing any of them.
+
+    `LayersContract.layers` is deliberately not reached: its names sit inside
+    `Layer` objects rather than a flat expression collection, and it needs no
+    coverage here because import-linter already validates it. A required layer
+    whose module is absent aborts the run (`Missing layer in container 'x'`),
+    which `_drive_import_linter` turns into a `ContractsConfigError`; an
+    OPTIONAL layer, written `(name)`, is absent by design and flagging it would
+    be wrong. `containers` is a flat expression field and is covered normally.
     """
     from importlinter.domain.helpers import module_expression_to_modules
     from importlinter.domain.imports import ModuleExpression
