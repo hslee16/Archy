@@ -611,6 +611,34 @@ def test_run_check_malformed_config_raises(tmp_path: Path):
         _run_check(tmp_path, config_path=None)
 
 
+def test_check_contracts_reports_an_unfalsifiable_contract_as_unverified(tmp_path: Path):
+    """The surface agents actually call. A contract whose pattern matches no
+    module is `kept` by import-linter, so an agent reading `all_kept` concludes
+    it is protected; `verified` is the field that says otherwise (#435)."""
+    pkg = tmp_path / "top"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("VALUE = 1\n")
+    (pkg / "store.py").write_text("from top import api\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        '  api:\n    modules: ["top.api.**"]\n'
+        '  store:\n    modules: ["top.*.handlers"]\n'
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+
+    server = create_server()
+    _c, wire = _call_tool(server, "archy_check", {"path": str(tmp_path), "contracts": True})
+
+    assert isinstance(wire, dict)
+    contracts = wire["result"]["contracts"]
+    assert contracts["all_kept"] is True
+    assert contracts["verified"] is False
+    assert contracts["unverifiable"] == 1
+    assert contracts["contracts"][0]["matched_nothing"] is True
+    assert contracts["contracts"][0]["unmatched_expressions"] == ["top.*.handlers"]
+
+
 def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
     # #268: archy_check(contracts=True) folds the old archy_contracts tool,
     # nesting the transitive import-linter result under CheckPayload.contracts.
@@ -646,6 +674,11 @@ def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
     assert isinstance(result["contracts"], dict)
     assert result["contracts"]["available"] is True
     assert result["contracts"]["all_kept"] is True
+    # `all_kept` is also true of a contract that matched no module, so the
+    # payload carries `verified` separately (#435). Here the contract really
+    # was evaluated, so both are true and `unverifiable` is zero.
+    assert result["contracts"]["verified"] is True
+    assert result["contracts"]["unverifiable"] == 0
 
 
 def _make_sdp_violating_project(tmp_path: Path) -> Path:

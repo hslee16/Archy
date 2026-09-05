@@ -1150,7 +1150,9 @@ def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
         click.echo(json.dumps(_contracts_to_dict(result), indent=2, sort_keys=True))
     else:
         click.echo(_contracts_to_text(result))
-    sys.exit(0 if result.all_kept else 1)
+    # `verified`, not `all_kept`: exiting 0 on a contract that could not have
+    # failed is what let a forbidden transitive path ship green (#435).
+    sys.exit(0 if result.verified else 1)
 
 
 @main.command()
@@ -2720,11 +2722,18 @@ def _contracts_to_dict(result: ContractsResult) -> dict:
         "module_count": result.module_count,
         "import_count": result.import_count,
         "all_kept": result.all_kept,
+        # `all_kept` is true of a contract that matched no module, so a machine
+        # reader needs `verified` to tell "evaluated and held" from "could not
+        # have failed" (#435).
+        "verified": result.verified,
+        "unverifiable": result.unverifiable,
         "contracts": [
             {
                 "name": c.name,
                 "type": c.contract_type,
                 "kept": c.kept,
+                "matched_nothing": c.matched_nothing,
+                "unmatched_expressions": list(c.unmatched_expressions),
                 "metadata": c.metadata,
                 "warnings": list(c.warnings),
             }
@@ -2747,13 +2756,26 @@ def _contracts_outcome_to_text(outcome: ContractsOutcome) -> str:
 
 
 def _contracts_to_text(result: ContractsResult) -> str:
-    lines = [
+    summary = (
         f"# contracts: {result.kept} kept, {result.broken} broken "
         f"({result.module_count} modules, {result.import_count} imports)"
-    ]
+    )
+    if result.unverifiable:
+        summary += f", {result.unverifiable} unverifiable"
+    lines = [summary]
     for c in result.contracts:
-        marker = "OK " if c.kept else "X  "
-        lines.append(f"{marker}{c.name}  [{c.contract_type}]")
+        # A contract that could not have failed gets its own marker. Rendering
+        # it as `OK` is the whole of #435: it reads as protection that is not
+        # there, and the exit code agrees with the marker.
+        marker = "??" if c.matched_nothing else ("OK" if c.kept else "X ")
+        lines.append(f"{marker} {c.name}  [{c.contract_type}]")
+        if c.matched_nothing:
+            lines.append(
+                "    ! could not have failed: no module matched, so this "
+                "contract holds whatever the code does"
+            )
+        for expression in c.unmatched_expressions:
+            lines.append(f"    ! matched no module: {expression}")
         for w in c.warnings:
             lines.append(f"    ! {w}")
         if not c.kept:
