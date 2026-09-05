@@ -220,6 +220,16 @@ def _write_transitive_fixture(root: Path, *, patterns: str) -> None:
     )
 
 
+def _write_two_module_fixture(root: Path) -> None:
+    """top.store imports top.api directly. The layout the layer patterns are
+    varied against, so each test differs only in the archy.yaml it writes."""
+    pkg = root / "top"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("VALUE = 1\n")
+    (pkg / "store.py").write_text("from top import api  # noqa: F401\n")
+
+
 def test_a_glob_layer_pattern_still_catches_the_transitive_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -278,11 +288,7 @@ def test_a_layer_pattern_matching_no_module_is_not_reported_as_kept(
     """A contract with no source modules holds whatever the code does. Calling
     that `kept` at exit 0 is indistinguishable from real protection (#435)."""
     _purge_top(monkeypatch)
-    pkg = tmp_path / "top"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "api.py").write_text("VALUE = 1\n")
-    (pkg / "store.py").write_text("from top import api  # noqa: F401\n")
+    _write_two_module_fixture(tmp_path)
     (tmp_path / "archy.yaml").write_text(
         textwrap.dedent(
             """
@@ -318,11 +324,7 @@ def test_a_contract_naming_an_absent_module_is_a_config_error(
     does not exist.`, which reaches a user as a traceback and reads as archy
     being broken rather than the config."""
     _purge_top(monkeypatch)
-    pkg = tmp_path / "top"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "api.py").write_text("VALUE = 1\n")
-    (pkg / "store.py").write_text("from top import api  # noqa: F401\n")
+    _write_two_module_fixture(tmp_path)
     (tmp_path / "archy.yaml").write_text(
         textwrap.dedent(
             """
