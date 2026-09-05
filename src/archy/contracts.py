@@ -39,14 +39,16 @@ import contextlib
 import os
 import sys
 import warnings
+from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from archy.layers import LayerConfig, LayerConfigError, load_config
 
 if TYPE_CHECKING:
+    from grimp import ImportGraph
     from importlinter.application.user_options import UserOptions
 
 
@@ -62,6 +64,15 @@ class ContractCheck(BaseModel):
     kept: bool
     metadata: dict[str, object]
     warnings: tuple[str, ...]
+    # Module expressions the contract declares that match no module in the
+    # graph. Usually a typo or a pattern written in archy's dialect rather
+    # than import-linter's; either way the author believes something is
+    # governed that is not.
+    unmatched_expressions: tuple[str, ...] = ()
+    # True when a whole module-expression field resolved to nothing, so the
+    # contract could not have failed whatever the code does. Reporting that
+    # as `kept` is #435: "OK" and "not actually checked" are different facts.
+    matched_nothing: bool = False
 
 
 class ContractsResult(BaseModel):
@@ -76,6 +87,26 @@ class ContractsResult(BaseModel):
     @property
     def all_kept(self) -> bool:
         return self.broken == 0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def unverifiable(self) -> int:
+        """How many contracts could not have failed.
+
+        A `@computed_field`, not a plain property: consumers read this off
+        `model_dump()` and a plain property is dropped there silently.
+        """
+        return sum(1 for c in self.contracts if c.matched_nothing)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def verified(self) -> bool:
+        """Every contract was both evaluated and held.
+
+        The verdict callers actually want. `all_kept` cannot answer it: a
+        contract that matched no module is trivially "kept" (#435).
+        """
+        return self.broken == 0 and self.unverifiable == 0
 
 
 class ContractsNotAvailable(RuntimeError):
@@ -186,12 +217,25 @@ def _drive_import_linter(
             os.chdir(config_path.parent)
             user_options = read_user_options(config_filename=config_path.name)
         _register_contract_types(user_options)
-        report = create_report(user_options, cache_dir=None)
+        try:
+            report = create_report(user_options, cache_dir=None)
+        except ValueError as exc:
+            # import-linter aborts the whole run when a contract names a module
+            # that is not in the graph, and the message is just "Module 'x'
+            # does not exist." Reaching a user as a traceback makes archy look
+            # broken rather than the config; say which config and what to do.
+            raise ContractsConfigError(
+                f"a contract names a module that is not in the import graph: {exc}. "
+                "Check the layer patterns in archy.yaml (or the module names in "
+                ".importlinter) against the modules archy discovers, which "
+                "`archy graph . --format json` lists."
+            ) from exc
     finally:
         os.chdir(prior_cwd)
 
     contracts: list[ContractCheck] = []
     for contract, check in report.get_contracts_and_checks():
+        unmatched, matched_nothing = _expression_coverage(contract, report.graph)
         contracts.append(
             ContractCheck(
                 name=str(contract.name),
@@ -199,6 +243,8 @@ def _drive_import_linter(
                 kept=bool(check.kept),
                 metadata=dict(check.metadata),
                 warnings=tuple(check.warnings),
+                unmatched_expressions=unmatched,
+                matched_nothing=matched_nothing,
             )
         )
     return ContractsResult(
@@ -208,6 +254,72 @@ def _drive_import_linter(
         import_count=int(report.import_count),
         contracts=tuple(contracts),
     )
+
+
+def _expression_coverage(contract: object, graph: ImportGraph) -> tuple[tuple[str, ...], bool]:
+    """`(expressions matching no module, whether the contract could not fail)`.
+
+    A contract whose `source_modules` (or any other populated module-expression
+    field) resolves to nothing holds no matter what the code does, and
+    import-linter reports it as kept. That is #435: the verdict is
+    indistinguishable from a contract that was evaluated and held.
+
+    Fields are read off the contract class's declared `*Field` descriptors, so
+    every contract type that names modules is covered without this function
+    knowing any of them. `LayersContract.layers` is the one gap: its module
+    names sit inside `Layer` objects rather than in a flat expression
+    collection, so a layers contract naming only absent modules is not flagged
+    here. It is still caught for `containers`.
+    """
+    from importlinter.domain.helpers import module_expression_to_modules
+    from importlinter.domain.imports import ModuleExpression
+
+    unmatched: list[str] = []
+    matched_nothing = False
+    for name in _module_expression_fields(type(contract)):
+        value = getattr(contract, name, None)
+        expressions = [e for e in _as_iterable(value) if isinstance(e, ModuleExpression)]
+        if not expressions:
+            # An optional field the config never populated governs nothing and
+            # claims nothing. Only a field the author DID fill in can lie.
+            continue
+        field_total = 0
+        for expression in expressions:
+            try:
+                count = len(module_expression_to_modules(graph, expression))
+            except Exception:  # a resolver error is not a verdict either way
+                continue
+            field_total += count
+            if count == 0:
+                unmatched.append(str(expression))
+        if field_total == 0:
+            matched_nothing = True
+    return tuple(dict.fromkeys(unmatched)), matched_nothing
+
+
+def _module_expression_fields(contract_type: type) -> tuple[str, ...]:
+    """Names of the contract's fields that hold module expressions.
+
+    Read from the class's `*Field` descriptors rather than a hardcoded list, so
+    a new contract type in import-linter is covered the day it lands.
+    """
+    from importlinter.domain.fields import ModuleExpressionField
+
+    names: list[str] = []
+    for klass in contract_type.__mro__:
+        for name, field in vars(klass).items():
+            subfield = getattr(field, "subfield", None)
+            if isinstance(field, ModuleExpressionField) or isinstance(
+                subfield, ModuleExpressionField
+            ):
+                names.append(name)
+    return tuple(dict.fromkeys(names))
+
+
+def _as_iterable(value: object) -> tuple[object, ...]:
+    if isinstance(value, (set, frozenset, list, tuple)):
+        return tuple(value)
+    return (value,) if value is not None else ()
 
 
 def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
@@ -249,12 +361,42 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
                 "id": contract_id,
                 "name": f"{rule.from_layer} layer must not reach {rule.to_layer} layer",
                 "type": "forbidden",
-                "source_modules": list(layer_modules.get(rule.from_layer, ())),
-                "forbidden_modules": list(layer_modules.get(rule.to_layer, ())),
+                "source_modules": _to_import_linter_expressions(
+                    layer_modules.get(rule.from_layer, ())
+                ),
+                "forbidden_modules": _to_import_linter_expressions(
+                    layer_modules.get(rule.to_layer, ())
+                ),
             }
         )
 
     return UserOptions(session_options=session_options, contracts_options=contracts_options)
+
+
+def _to_import_linter_expressions(patterns: Iterable[str]) -> list[str]:
+    """Translate archy layer patterns into import-linter module expressions.
+
+    The two dialects disagree on one thing, and it is the one archy tells
+    people to write. archy's `pkg.**` means "pkg AND every descendant"
+    (`layers._translate_pattern` collapses the dot so the bare parent
+    matches); import-linter's `pkg.**` means the descendants ONLY. So
+    `shipping.store.**` on a leaf module resolved to the empty set, the
+    Forbidden contract had no source modules, and a project with a real
+    forbidden transitive path reported a clean pass at exit 0 (#435).
+
+    Dropping the trailing `.**` restores archy's meaning exactly, because
+    import-linter's `as_packages` (on by default) already reads a named
+    package as itself plus its descendants. Emitting the wildcard as well
+    would add nothing and would report `pkg.**` as matching no module every
+    time `pkg` is a leaf, which is noise archy itself generated.
+
+    Nothing else is rewritten. A bare `pkg` keeps whatever `as_packages`
+    gives it, which is how every existing config already behaves.
+    """
+    expressions: list[str] = []
+    for pattern in patterns:
+        expressions.append(pattern[: -len(".**")] if pattern.endswith(".**") else pattern)
+    return list(dict.fromkeys(expressions))
 
 
 class _ProjectOnSysPath:

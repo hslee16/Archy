@@ -186,6 +186,181 @@ def test_run_contracts_falls_back_to_archy_yaml_violation(
     assert result.broken == 1
 
 
+def _write_transitive_fixture(root: Path, *, patterns: str) -> None:
+    """top.store -> top.service -> top.api, with store forbidden from api.
+
+    The violation is reachable ONLY transitively: there is no direct
+    store -> api edge, which is the entire reason `contracts` exists next to
+    `check`. `patterns` selects the dialect the layers are written in.
+    """
+    pkg = root / "top"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("VALUE = 1\n")
+    (pkg / "service.py").write_text("from top import api  # noqa: F401\n")
+    (pkg / "store.py").write_text("from top import service  # noqa: F401\n")
+    (root / "archy.yaml").write_text(
+        textwrap.dedent(
+            f"""
+            layers:
+              api:
+                modules:
+                  - "top.api{patterns}"
+              service:
+                modules:
+                  - "top.service{patterns}"
+              store:
+                modules:
+                  - "top.store{patterns}"
+            forbid:
+              - {{from: store, to: api}}
+            """
+        ).strip()
+        + "\n"
+    )
+
+
+def test_a_glob_layer_pattern_still_catches_the_transitive_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#435. archy's `pkg.**` means "pkg AND its descendants"; import-linter's
+    means the descendants only. Passing the pattern through unchanged left the
+    contract with zero source modules, so it was vacuously kept and a project
+    with a forbidden transitive path reported a clean pass at exit 0.
+
+    `.**` is the form archy's own hint tells users to write, so this was the
+    recommended config, not an exotic one.
+    """
+    _purge_top(monkeypatch)
+    _write_transitive_fixture(tmp_path, patterns=".**")
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        result = run_contracts(tmp_path)
+
+    assert result.broken == 1
+    assert not result.verified
+    contract = result.contracts[0]
+    assert not contract.kept
+    # The chain is the point: no direct store -> api edge exists, so a
+    # contract that only saw direct edges would have nothing to report.
+    chains = cast(list[dict[str, object]], contract.metadata.get("invalid_chains"))
+    assert chains, "expected the transitive chain, not merely a broken verdict"
+    assert chains[0]["downstream_module"] == "top.store"
+    assert chains[0]["upstream_module"] == "top.api"
+
+
+def test_the_bare_and_glob_dialects_reach_the_same_verdict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two ways of writing the same layer must agree. Before #435 they did
+    not: the bare form caught this violation and the `.**` form reported OK."""
+    _purge_top(monkeypatch)
+    _write_transitive_fixture(tmp_path, patterns="")
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        bare = run_contracts(tmp_path)
+
+    _purge_top(monkeypatch)
+    (tmp_path / "archy.yaml").unlink()
+    for stale in ("api.py", "service.py", "store.py", "__init__.py"):
+        (tmp_path / "top" / stale).unlink()
+    (tmp_path / "top").rmdir()
+    _write_transitive_fixture(tmp_path, patterns=".**")
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        glob = run_contracts(tmp_path)
+
+    # Both must actually have found something, or "they agree" is vacuous.
+    assert bare.broken == 1
+    assert (glob.broken, glob.verified) == (bare.broken, bare.verified)
+
+
+def test_a_layer_pattern_matching_no_module_is_not_reported_as_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A contract with no source modules holds whatever the code does. Calling
+    that `kept` at exit 0 is indistinguishable from real protection (#435)."""
+    _purge_top(monkeypatch)
+    pkg = tmp_path / "top"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("VALUE = 1\n")
+    (pkg / "store.py").write_text("from top import api  # noqa: F401\n")
+    (tmp_path / "archy.yaml").write_text(
+        textwrap.dedent(
+            """
+            layers:
+              api:
+                modules:
+                  - "top.api.**"
+              store:
+                modules:
+                  - "top.*.handlers"
+            forbid:
+              - {from: store, to: api}
+            """
+        ).strip()
+        + "\n"
+    )
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        result = run_contracts(tmp_path)
+
+    contract = result.contracts[0]
+    # import-linter still calls it kept, which is why the flag has to exist.
+    assert contract.kept
+    assert contract.matched_nothing
+    assert contract.unmatched_expressions == ("top.*.handlers",)
+    assert result.unverifiable == 1
+    assert result.all_kept and not result.verified
+
+
+def test_a_contract_naming_an_absent_module_is_a_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """import-linter aborts the whole run with a bare `ValueError: Module 'x'
+    does not exist.`, which reaches a user as a traceback and reads as archy
+    being broken rather than the config."""
+    _purge_top(monkeypatch)
+    pkg = tmp_path / "top"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("VALUE = 1\n")
+    (pkg / "store.py").write_text("from top import api  # noqa: F401\n")
+    (tmp_path / "archy.yaml").write_text(
+        textwrap.dedent(
+            """
+            layers:
+              api:
+                modules:
+                  - "top.api.**"
+              store:
+                modules:
+                  - "top.stoer.**"
+            forbid:
+              - {from: store, to: api}
+            """
+        ).strip()
+        + "\n"
+    )
+    with (
+        pytest.warns(UserWarning, match="best-effort fallback"),
+        pytest.raises(ContractsConfigError, match="not in the import graph"),
+    ):
+        run_contracts(tmp_path)
+
+
+def test_the_unverifiable_facts_survive_model_dump(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`verified` and `unverifiable` are derived, and FastMCP sends
+    `model_dump()`, which drops a plain `@property` silently (AGENTS.md)."""
+    _purge_top(monkeypatch)
+    _write_transitive_fixture(tmp_path, patterns=".**")
+    with pytest.warns(UserWarning, match="best-effort fallback"):
+        wire = run_contracts(tmp_path).model_dump()
+
+    assert wire["verified"] is False
+    assert wire["unverifiable"] == 0
+    assert wire["contracts"][0]["matched_nothing"] is False
+
+
 def test_run_contracts_prefers_importlinter_over_archy_yaml(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

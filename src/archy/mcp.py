@@ -316,6 +316,11 @@ class ContractsPayload(BaseModel):
     available: bool
     error: str | None = None
     all_kept: bool | None = None
+    # `all_kept` is true of a contract that matched no module. `verified` is
+    # the field an agent should read: it is False when any contract could not
+    # have failed, which `all_kept` cannot express (#435).
+    verified: bool | None = None
+    unverifiable: int | None = None
     kept: int | None = None
     broken: int | None = None
     module_count: int | None = None
@@ -1375,6 +1380,8 @@ def _run_contracts(path: Path, *, config_filename: Path | None) -> ContractsPayl
     return ContractsPayload(
         available=True,
         all_kept=result.all_kept,
+        verified=result.verified,
+        unverifiable=result.unverifiable,
         kept=result.kept,
         broken=result.broken,
         module_count=result.module_count,

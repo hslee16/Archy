@@ -992,6 +992,71 @@ def test_affected_merges_stdin_and_positional_files(tmp_path: Path):
     assert payload["changed"] == ["app.core", "app.other"]
 
 
+def _write_transitive_violation_project(tmp_path: Path, *, store_pattern: str) -> Path:
+    """top.store -> top.service -> top.api, forbidden store -> api.
+
+    No direct store -> api edge, so only the transitive checker can see it.
+    """
+    pkg = tmp_path / "top"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("VALUE = 1\n")
+    (pkg / "service.py").write_text("from top import api\n")
+    (pkg / "store.py").write_text("from top import service\n")
+    (tmp_path / "archy.yaml").write_text(
+        "layers:\n"
+        '  api:\n    modules: ["top.api.**"]\n'
+        f'  store:\n    modules: ["{store_pattern}"]\n'
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+    return tmp_path
+
+
+def test_contracts_exits_one_on_a_forbidden_transitive_path(tmp_path: Path):
+    """#435: this exact project reported `OK` at exit 0. `contracts` is the
+    surface `check` hands users to when its own coverage is too thin, so a
+    false pass here leaves them more confident and no better protected."""
+    root = _write_transitive_violation_project(tmp_path, store_pattern="top.store.**")
+
+    result = CliRunner().invoke(main, ["contracts", str(root)])
+
+    assert result.exit_code == 1
+    assert "0 kept, 1 broken" in result.output
+    # The chain, not just the verdict: it is what the user acts on.
+    assert "top.store -> top.service -> top.api" in result.output
+
+
+def test_contracts_does_not_render_an_unfalsifiable_contract_as_ok(tmp_path: Path):
+    """A contract whose pattern matches nothing holds whatever the code does.
+    `OK` at exit 0 is indistinguishable from real protection (#435)."""
+    root = _write_transitive_violation_project(tmp_path, store_pattern="top.*.handlers")
+
+    result = CliRunner().invoke(main, ["contracts", str(root)])
+
+    assert result.exit_code == 1
+    assert "1 unverifiable" in result.output
+    assert "could not have failed" in result.output
+    assert "top.*.handlers" in result.output
+    # The marker has to differ from the one a real pass gets, or the line
+    # still reads as protection.
+    assert "OK store" not in result.output
+
+
+def test_contracts_json_says_verified_separately_from_all_kept(tmp_path: Path):
+    """A machine reader needs the two facts apart: import-linter calls an
+    unfalsifiable contract kept, so `all_kept` alone cannot express it."""
+    root = _write_transitive_violation_project(tmp_path, store_pattern="top.*.handlers")
+
+    result = CliRunner().invoke(main, ["contracts", str(root), "--format", "json"])
+
+    payload = json.loads(result.output)
+    assert payload["all_kept"] is True
+    assert payload["verified"] is False
+    assert payload["unverifiable"] == 1
+    assert payload["contracts"][0]["matched_nothing"] is True
+    assert payload["contracts"][0]["unmatched_expressions"] == ["top.*.handlers"]
+
+
 def test_contracts_missing_config_exits_one(tmp_path: Path):
     # Regression for #170 (F8): missing contracts config exits 1 (like
     # check/score gate failures), not 2, and prints a clean message rather
