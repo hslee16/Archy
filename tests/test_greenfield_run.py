@@ -630,13 +630,33 @@ def test_raising_the_limit_only_adds_work(batch, monkeypatch, tmp_path):
     ]
 
 
-def test_every_chunk_contains_both_arms(monkeypatch, tmp_path):
+def test_every_chunk_contains_both_arms(batch, monkeypatch, tmp_path):
     """The reason chunking is safe. All of arm A on Monday and all of arm B on
     Wednesday would put any server-side model change entirely on one arm, where
-    it would read as an effect."""
-    units = [(f"conduit-{i:02d}", arm) for i in range(1, 4) for arm in ("A", "B")]
-    first_chunk = units[:4]
-    assert {arm for _, arm in first_chunk} == {"A", "B"}
+    it would read as an effect.
+
+    Asserted against the order `main()` actually runs, because a list rebuilt
+    here would hold whatever this test says it holds.
+    """
+    seen: list[str] = []
+
+    def record(task_id, arm, **kwargs):
+        seen.append(arm)
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", record)
+    monkeypatch.setattr(
+        sys, "argv", ["greenfield_run.py", "--limit", "3", "--arms", "AB", "--pause", "0"]
+    )
+    assert greenfield_run.main() == 0
+
+    # The fixture has to reach the branch: two arms, or "balanced" is vacuous.
+    assert set(seen) == {"A", "B"}
+    # Every prefix, not just the whole list: a batch stopped after any unit is
+    # balanced to within the one run in flight.
+    for cut in range(0, len(seen) + 1, 2):
+        chunk = seen[:cut]
+        assert chunk.count("A") == chunk.count("B"), f"prefix of {cut} is {chunk}"
 
 
 def test_report_refuses_before_the_pre_registered_n(monkeypatch, tmp_path):
@@ -718,16 +738,29 @@ def test_a_finished_batch_reports_complete_without_another_pass(batch, monkeypat
     assert sum(calls.values()) == 0
 
 
-def test_arms_are_interleaved_so_a_partial_batch_stays_balanced(monkeypatch, tmp_path):
+def test_arms_are_interleaved_so_a_partial_batch_stays_balanced(batch, monkeypatch, tmp_path):
     """A batch stopped halfway must not be all of one arm; an unbalanced partial
-    batch cannot be read against the thresholds at all."""
-    monkeypatch.setattr(greenfield_run, "LEDGER_PATH", tmp_path / "l.jsonl")
-    monkeypatch.setattr(greenfield_run, "preflight", lambda _arms: None)
-    monkeypatch.setattr(sys, "argv", ["greenfield_run.py", "--limit", "3", "--dry-run"])
+    batch cannot be read against the thresholds at all.
+
+    Not `--dry-run`: that returns before the loop, so nothing would be observed.
+    """
     seen: list[tuple[str, str]] = []
+
+    def record(task_id, arm, **kwargs):
+        seen.append((task_id, arm))
+        return batch(task_id, arm)
+
+    monkeypatch.setattr(greenfield_run, "run_with_limit_backoff", record)
     monkeypatch.setattr(
-        greenfield_run, "run_with_limit_backoff", lambda t, a, **k: seen.append((t, a))
+        sys, "argv", ["greenfield_run.py", "--limit", "3", "--arms", "AB", "--pause", "0"]
     )
-    greenfield_run.main()  # --dry-run only plans, so assert on the unit order
-    units = [(f"conduit-{i:02d}", arm) for i in range(1, 4) for arm in ("A", "B")]
-    assert units[:2] == [("conduit-01", "A"), ("conduit-01", "B")]
+    assert greenfield_run.main() == 0
+
+    assert seen == [
+        ("conduit-01", "A"),
+        ("conduit-01", "B"),
+        ("conduit-02", "A"),
+        ("conduit-02", "B"),
+        ("conduit-03", "A"),
+        ("conduit-03", "B"),
+    ]
