@@ -4,23 +4,37 @@ Tracks where archy is listed as an MCP server. Every release, refresh the descri
 
 ## Listed
 
-| Directory | URL | Current version | Last refreshed |
-|---|---|---|---|
-| Official MCP registry | https://registry.modelcontextprotocol.io (`io.github.hslee16/archy`) | **0.13.3, STALE** | 2026-05-13 |
-| Glama | https://glama.ai/mcp/servers/hslee16/archy | (verify) | (verify) |
-| Smithery | https://smithery.ai/skills/alex-1c6e/archy (Smithery uses "skills" terminology in 2026) | (verify) | (verify) |
+| Directory | URL | Current version | Last verified | State |
+|---|---|---|---|---|
+| Official MCP registry | https://registry.modelcontextprotocol.io (`io.github.hslee16/archy`) | 0.46.2 | 2026-09-05 | auto-published on release |
+| Glama | https://glama.ai/mcp/servers/hslee16/archy | tracks PyPI | 2026-09-05 | self-updating, no action |
+| Smithery | https://smithery.ai/skills/alex-1c6e/archy (Smithery uses "skills" terminology in 2026) | listed | 2026-09-05 | **description stale** |
 
-**The official registry entry is live and badly stale.** Verified 2026-07-25:
-`status: active`, `isLatest: true`, version `0.13.3`, published 2026-05-13 and
-never refreshed. archy is on 0.42.0, so the public entry is 29 minor versions
-behind and predates `archy render` and the 11-tool consolidation. It was
-previously (and wrongly) tracked below as a pending submission. Republishing is
-tracked in [#340](https://github.com/hslee16/archy/issues/340); it needs the
-maintainer's GitHub identity, because the registry authenticates ownership
-against the `<!-- mcp-name: io.github.hslee16/archy -->` comment in `README.md`.
+**Verify a listing by querying it, never by reading this table.** That is the
+only method that has found anything here. The official registry sat at 0.13.3
+for 33 minor versions while this file, the release checklist and a passing test
+all said `server.json` was current, because every one of them checked the FILE
+and none of them checked the REGISTRY. What eventually surfaced it was an
+outside robot: `chryaner/does-it-install` had archy recorded as
+`handshake_failed` on macOS, Linux and Windows, three weeks before anyone here
+noticed (#462).
 
-`server.json` is the file the registry consumes. It silently drifted for 23
-releases; `tests/test_server_json.py` now fails the build if it does so again.
+Run the published command too, not just the version. The registry's entry named
+`uvx archy`, which is the bare console script: it printed usage, exited 2, and
+every registry-driven install failed the handshake. A version number can look
+perfect while the command it ships does not start.
+
+Current state, each verified live on 2026-09-05:
+
+- **Official registry** publishes itself now. `publish.yml`'s `registry` job runs
+  on release via GitHub OIDC (#462), so the entry follows `server.json`, which
+  `tests/test_server_json.py` keeps in step with `pyproject.toml` and now also
+  checks declares the `mcp` subcommand.
+- **Glama** renders the README and a live PyPI version badge, so it tracks
+  releases on its own. Nothing to do per release.
+- **Smithery**'s description is stale: it says "four-axis quality score" when the
+  score has five axes (modularity, acyclicity, depth, equality, complexity). It
+  predates the complexity axis. Fixing it needs a login, so it is maintainer-side.
 
 ## Pending
 
@@ -92,11 +106,11 @@ A screencap of a Claude-Code session using archy tools to avoid a regression: sn
 
 When cutting a new version (Nx.y.z):
 
-- [ ] Bump `server.json` (**both** the top-level `version` and
-      `packages[0].version`) and republish the official registry entry. This is
-      the step that was missed for 23 consecutive releases;
-      `tests/test_server_json.py` now fails CI if the file drifts from
-      `pyproject.toml`, but publishing is still manual.
+- [x] ~~Republish the official registry entry.~~ **Automated.** The `registry`
+      job in `publish.yml` publishes `server.json` on every release. Still bump
+      both version fields in `server.json`; `tests/test_server_json.py` fails CI
+      if you forget. After the release, confirm the LIVE entry moved, because a
+      green job is not the same fact as a changed listing.
 - [ ] Update `Current version` columns in the table above.
 - [ ] Glama: log in, navigate to https://glama.ai/mcp/servers/hslee16/archy, edit metadata to match the new tagline / short description if anything changed.
 - [ ] Smithery: same flow at https://smithery.ai/skills/alex-1c6e/archy.
