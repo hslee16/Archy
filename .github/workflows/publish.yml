@@ -54,3 +54,41 @@ jobs:
 
       - name: Publish via Trusted Publishing
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+
+  # The registry listing sat at 0.13.3 while archy shipped 0.46.1, because
+  # `server.json` was bumped by hand every release and never published: #340
+  # added a test that keeps the FILE current and a checklist line, and neither
+  # could make the entry reach the registry. This job is the missing half (#462).
+  #
+  # `needs: publish` because the entry names a PyPI version. Publishing the
+  # listing first would advertise a version nobody can install.
+  registry:
+    name: Publish to MCP registry
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # OIDC proves this repo owns the io.github.hslee16 namespace
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pinned, not `latest`. The comment on the build job applies with equal
+      # force to a tarball: a mutable ref lets whoever controls it run arbitrary
+      # code in the publish pipeline. Bump this deliberately.
+      - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+
+      - name: Authenticate to the registry
+        run: ./mcp-publisher login github-oidc
+
+      # Publishes server.json as committed. It is already asserted against
+      # pyproject.toml by tests/test_server_json.py, which also pins that the
+      # published command carries the `mcp` subcommand -- without it the
+      # registry hands clients `uvx archy`, which exits 2 and fails the
+      # handshake on every platform (#462).
+      - name: Publish server.json
+        run: ./mcp-publisher publish

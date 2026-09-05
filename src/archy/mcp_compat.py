@@ -12,12 +12,15 @@ That is not a hypothetical. archy shipped `mcp>=1.28.1` with no ceiling, mcp
 wrong until an agent tried to start the server. v0.43.0 capped at `<2` to stop
 the bleeding; this module is what lets the cap come back off.
 
-**Supporting both is deliberate, and cheaper than it looks.** The four API
+**Supporting both is deliberate, and cheaper than it looks.** Of the four API
 surfaces archy uses -- the constructor, `.tool()`, `.prompt()`, and `.run()` --
-take the same arguments in both majors, verified signature by signature. So the
-choice was never "port to 2.x or stay on 1.x"; it was "alias one name, or force
-every user to move in lockstep with archy". A user whose agent host pins mcp
-1.x should not need a new archy, and vice versa.
+three take the same arguments in both majors, verified signature by signature.
+So the choice was never "port to 2.x or stay on 1.x"; it was "alias one name, or
+force every user to move in lockstep with archy". A user whose agent host pins
+mcp 1.x should not need a new archy, and vice versa.
+
+The constructor is the one exception, which is why `make_server` exists below:
+2.x takes `version=`, 1.x does not, and the difference is visible on the wire.
 
 What this file does NOT promise is that the two majors behave identically on
 the wire. Signature compatibility is not serialization compatibility, and
@@ -28,7 +31,7 @@ verified against BOTH majors by an actual stdio handshake in
 `tests/test_mcp_protocol.py`, which is the test that would catch a divergence
 this alias cannot.
 
-archy:owns        sdk_major
+archy:owns        make_server, sdk_major
 """
 
 from __future__ import annotations
@@ -47,7 +50,37 @@ try:  # mcp >= 2
 except ImportError:  # mcp 1.x
     from mcp.server.fastmcp import FastMCP as Server
 
-__all__ = ["Server", "ToolError", "sdk_major"]
+__all__ = ["Server", "ToolError", "make_server", "sdk_major"]
+
+
+def make_server(name: str, version: str) -> Server:
+    """Construct the server so it reports OUR version, on either major.
+
+    Left to itself the handshake advertises something that is not archy: on
+    mcp 1.x `FastMCP` takes no `version`, and the wrapped low-level server
+    falls back to reporting the SDK's own version (a client asking archy what
+    it is was told `1.28.1`); on 2.x the same omission yields an empty string.
+    Both are wrong, and they are wrong differently, which is worse -- a client
+    cannot even parse the mistake consistently (#462).
+
+    2.x accepts `version=` on the constructor. 1.x does not, so the value goes
+    onto the low-level server it wraps; that attribute is private because
+    `FastMCP` exposes no setter for it, not because writing it is unsupported.
+    `tests/test_mcp_protocol.py` asserts the result over a real handshake on
+    both majors, which is what would catch either path silently breaking.
+    """
+    if sdk_major() >= 2:
+        # Same suppression convention as the imports above: uv.lock pins 1.x,
+        # so `ty` sees `FastMCP`, which has no `version`. The guard above is
+        # what makes this reachable only on 2.x. Working against a 2.x
+        # environment inverts it; flip the suppression, do not delete it.
+        return Server(name, version=version)  # ty: ignore[unknown-argument]
+    # `_mcp_server` is private because `FastMCP` exposes no setter, not because
+    # the attribute is off limits: its own constructor takes `version` and
+    # passes it straight here.
+    server = Server(name)
+    server._mcp_server.version = version
+    return server
 
 
 def sdk_major() -> int:

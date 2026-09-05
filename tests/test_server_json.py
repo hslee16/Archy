@@ -63,6 +63,25 @@ def test_package_dunder_version_matches_pyproject():
     assert archy.__version__ == _pyproject_version()
 
 
+def test_server_json_declares_the_mcp_subcommand():
+    """Without this the registry hands clients a command that is not a server.
+
+    `runtimeHint: uvx` + `identifier: archy` and no arguments resolves to
+    `uvx archy`, which is the bare console script: Click prints usage and exits
+    2, so the handshake dies with `Connection closed`. An external install
+    checker recorded exactly that on darwin, linux and win32 for three weeks
+    before anyone here noticed, because nothing in this repo runs the command
+    the registry publishes (#462).
+    """
+    package = _server_json()["packages"][0]
+    args = package.get("packageArguments") or []
+    positional = [a.get("value") for a in args if a.get("type") == "positional"]
+    assert positional == ["mcp"], (
+        "server.json must declare the `mcp` subcommand, or the published "
+        f"command is `uvx archy`, which exits 2. Got: {args!r}"
+    )
+
+
 def test_server_json_identity_matches_the_registry_ownership_marker():
     # The registry authenticates ownership by matching this name against the
     # `<!-- mcp-name: ... -->` comment in README.md. If either side is edited
