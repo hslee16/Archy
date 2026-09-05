@@ -107,6 +107,7 @@ from typing import cast
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict
 
+from archy import __version__
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
 from archy.contracts import ContractCheck
 from archy.conventions import (
@@ -181,7 +182,7 @@ from archy.layers import (
     find_violations,
     load_config,
 )
-from archy.mcp_compat import Server
+from archy.mcp_compat import Server, make_server
 from archy.reach import compute_propagation_cost
 from archy.refactor import DEFAULT_MIN_RISK, compute_refactor_priorities
 from archy.risk import compute_edit_risk
@@ -670,7 +671,10 @@ class DuplicatesPayload(BaseModel):
 
 
 def create_server() -> Server:
-    server: Server = Server("archy")
+    # `make_server`, not `Server(...)`: the constructor is the one API surface
+    # the two SDK majors disagree about, and getting it wrong makes the
+    # handshake advertise the SDK's version or nothing at all (#462).
+    server: Server = make_server("archy", __version__)
     _register_tools(server)
     _register_prompts(server)
     return server

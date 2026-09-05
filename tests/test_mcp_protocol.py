@@ -29,6 +29,7 @@ from pathlib import Path
 
 import pytest
 
+import archy
 from archy.mcp_compat import sdk_major
 
 mcp_client = pytest.importorskip("mcp.client.stdio", reason="stdio client not available")
@@ -100,6 +101,27 @@ def test_server_completes_the_handshake_and_lists_tools():
 
     assert "archy_check" in names
     assert len(names) == 13, f"tool count changed: {sorted(names)}"
+
+
+def test_the_handshake_reports_archys_version_not_the_sdks():
+    """What a client is told archy IS, over the wire, on whichever major it has.
+
+    Left to the default the answer is not archy: on mcp 1.x `FastMCP` takes no
+    `version` and the low-level server reports the SDK's own version instead
+    (clients were told `1.28.1`); on 2.x the same omission yields an empty
+    string. Both wrong, and wrong differently (#462).
+
+    Asserted over a real handshake rather than on `make_server`'s return value,
+    because the bug was never in the constructor call: it was in what the SDK
+    serialized afterwards, which only the wire shows.
+    """
+    info = _wire(_run(lambda s: s.initialize()))["serverInfo"]
+
+    assert info["name"] == "archy"
+    assert info["version"] == archy.__version__, (
+        f"handshake advertises {info['version']!r} on mcp {sdk_major()}.x, "
+        f"expected archy's own {archy.__version__!r}"
+    )
 
 
 def test_every_tool_advertises_an_output_schema():

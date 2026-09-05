@@ -17,6 +17,12 @@
       "transport": {
         "type": "stdio"
       },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ],
       "runtimeHint": "uvx"
     }
   ]
