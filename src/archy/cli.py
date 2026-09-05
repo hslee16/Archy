@@ -318,6 +318,7 @@ def check(
                     coverage,
                     violations,
                     no_verdict_error=_no_verdict_error(contracts_result),
+                    unverifiable=_unverifiable_contracts(contracts_result),
                 )
             ),
         }
@@ -1919,6 +1920,7 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
                     coverage,
                     [],
                     no_verdict_error=_no_verdict_error(contracts),
+                    unverifiable=_unverifiable_contracts(contracts),
                 )
                 # brief tolerates a missing or malformed archy.yaml and still
                 # reports; `check` cannot get here without one.
@@ -2437,8 +2439,15 @@ def _transitive_checked(outcome: ContractsOutcome | None) -> bool:
     rules exactly as unverified as never asking, and conflating the two is the
     bug #343 closed. `check` and `brief` both answer it from here so the two
     JSON payloads cannot drift apart on it.
+
+    A contract that could not have failed is not a verdict either, so ANY
+    unverifiable contract makes this false (#457). That matches `verified` on
+    the result itself, so the two fields tell one story rather than two; the
+    reason field carries how many, which is where the precision goes.
     """
-    return outcome is not None and outcome.result is not None
+    if outcome is None or outcome.result is None:
+        return False
+    return outcome.result.unverifiable == 0
 
 
 def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
@@ -2449,6 +2458,15 @@ def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
     the flag to someone who just passed it sends them round a loop).
     """
     return outcome.error if outcome is not None and outcome.result is None else None
+
+
+def _unverifiable_contracts(outcome: ContractsOutcome | None) -> int:
+    """How many contracts this run could not have failed, 0 if none ran.
+
+    Shared so `check` and `brief` cannot disagree about it, the same reason
+    `_transitive_checked` is a function rather than an inline expression.
+    """
+    return outcome.result.unverifiable if outcome is not None and outcome.result else 0
 
 
 def _unverified_forbid_rules(
@@ -2473,6 +2491,7 @@ def _transitive_unverified_reason(
     violations: list[Violation],
     *,
     no_verdict_error: str | None = None,
+    unverifiable: int = 0,
 ) -> str | None:
     """The text handoff's reason, for a reader that cannot parse prose.
 
@@ -2480,11 +2499,23 @@ def _transitive_unverified_reason(
     AGENTS.md rules out on every surface: the consumer needs to know whether the
     rules were merely not requested or could not be proven, and what settles it.
 
-    `no_verdict_error` distinguishes the two ways this run can fail to verify.
+    `no_verdict_error` distinguishes the ways this run can fail to verify.
     Naming `--contracts` to a caller who just passed it and watched it fail is
     worse than saying nothing: it sends them round a loop they have already been
     through, so that case reports the actual cause instead.
+
+    `unverifiable` is the third way, and unlike the others it does not depend on
+    thin coverage: contracts ran, and some of them could not have failed. It is
+    checked before the coverage stem for that reason, or a project whose direct
+    edges are fully governed would report `transitive_checked: false` with no
+    reason at all.
     """
+    if unverifiable:
+        return (
+            f"{unverifiable} contract(s) could not have failed: their module patterns "
+            "matched nothing, so the rule holds whatever the code does. Fix the patterns "
+            "or drop the rule; `archy contracts` names the expressions that matched no module."
+        )
     stem = _unverified_forbid_rules(config, coverage, violations)
     if stem is None:
         return None

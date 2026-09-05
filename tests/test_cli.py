@@ -1057,6 +1057,35 @@ def test_contracts_json_says_verified_separately_from_all_kept(tmp_path: Path):
     assert payload["contracts"][0]["unmatched_expressions"] == ["top.*.handlers"]
 
 
+def test_check_contracts_does_not_claim_a_transitive_check_it_did_not_do(tmp_path: Path):
+    """#457. `transitive_checked` answers "were the forbid rules evaluated
+    transitively". A contract whose patterns matched nothing was not evaluated,
+    so claiming otherwise is the #435 shape one surface further out."""
+    root = _write_transitive_violation_project(tmp_path, store_pattern="top.*.handlers")
+
+    result = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"])
+
+    payload = json.loads(result.output)
+    # The fixture has to reach the branch: contracts ran and produced a result.
+    assert payload["contracts"]["unverifiable"] == 1
+    assert payload["transitive_checked"] is False
+    # A verdict without a reason is indistinguishable from a bug in archy.
+    assert "could not have failed" in payload["transitive_unverified_reason"]
+
+
+def test_check_contracts_still_claims_the_check_when_every_contract_was_real(tmp_path: Path):
+    """The other side, or `transitive_checked` could just be hardcoded False.
+    Same project, a pattern that matches, so the contract is really evaluated."""
+    root = _write_transitive_violation_project(tmp_path, store_pattern="top.store.**")
+
+    result = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"])
+
+    payload = json.loads(result.output)
+    assert payload["contracts"]["unverifiable"] == 0
+    assert payload["transitive_checked"] is True
+    assert payload["transitive_unverified_reason"] is None
+
+
 def test_contracts_missing_config_exits_one(tmp_path: Path):
     # Regression for #170 (F8): missing contracts config exits 1 (like
     # check/score gate failures), not 2, and prints a clean message rather
