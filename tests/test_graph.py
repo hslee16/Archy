@@ -142,6 +142,76 @@ def test_external_imports_recorded_as_external_nodes(project: Path):
     assert g.nodes["json"]["external"] is True
 
 
+def test_mixed_relative_and_absolute_pair_reports_relative(tmp_path: Path, pkg: Path):
+    """`is_relative` is `any`, not first-seen (#450).
+
+    A module can reach the same target twice, once absolute and once relative.
+    The flag documents whether the edge involves leading-dot syntax, and one of
+    these two imports does, so the answer is True whichever was written first.
+    Before the fix this was decided by whichever import created the edge, so
+    the same pair answered False here and True in the next test.
+    """
+    (pkg / "b.py").write_text("")
+    (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\n")
+
+    g = build_graph(tmp_path)
+
+    # The fixture has to reach the extend branch, or the `any` has nothing to
+    # aggregate and this passes on the create branch alone.
+    assert g["pkg.a"]["pkg.b"]["lines"] == (2, 3)
+    assert g["pkg.a"]["pkg.b"]["is_relative"] is True
+
+
+def test_the_mixed_pair_answers_the_same_written_the_other_way_round(tmp_path: Path, pkg: Path):
+    """The other source order, which is the whole point: an agent cannot see
+    which import came first, so the flag must not depend on it."""
+    (pkg / "b.py").write_text("")
+    (pkg / "a.py").write_text("\nfrom .b import y\nfrom pkg.b import x\n")
+
+    g = build_graph(tmp_path)
+
+    assert g["pkg.a"]["pkg.b"]["lines"] == (2, 3)
+    assert g["pkg.a"]["pkg.b"]["is_relative"] is True
+
+
+def test_the_plain_import_and_from_dot_import_forms_aggregate_too(tmp_path: Path, pkg: Path):
+    """The other way a real module writes this pair. `import pkg.b` and
+    `from . import b` take a different route through the parser than the two
+    `from X import name` forms above, and both have to reach the same edge for
+    the aggregation to mean anything."""
+    (pkg / "b.py").write_text("")
+    (pkg / "a.py").write_text("\nimport pkg.b\nfrom . import b\n")
+
+    g = build_graph(tmp_path)
+
+    assert g["pkg.a"]["pkg.b"]["lines"] == (2, 3)
+    assert g["pkg.a"]["pkg.b"]["is_relative"] is True
+
+
+def test_a_later_absolute_import_does_not_clear_the_flag(tmp_path: Path, pkg: Path):
+    """Three sites, relative in the middle. `any` has to hold across every
+    later extend, not just the one that follows the relative import."""
+    (pkg / "b.py").write_text("")
+    (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\nfrom pkg.b import z\n")
+
+    g = build_graph(tmp_path)
+
+    assert g["pkg.a"]["pkg.b"]["lines"] == (2, 3, 4)
+    assert g["pkg.a"]["pkg.b"]["is_relative"] is True
+
+
+def test_an_all_absolute_pair_still_reports_not_relative(tmp_path: Path, pkg: Path):
+    """The counterpart that keeps `any` from collapsing into `True`. An OR that
+    is never False would satisfy both tests above."""
+    (pkg / "b.py").write_text("")
+    (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom pkg.b import y\n")
+
+    g = build_graph(tmp_path)
+
+    assert g["pkg.a"]["pkg.b"]["lines"] == (2, 3)
+    assert g["pkg.a"]["pkg.b"]["is_relative"] is False
+
+
 def test_relative_import_escaping_root_is_dropped(project: Path):
     # `from .. import escapes` from myapp.cli walks above the package.
     g = build_graph(project)

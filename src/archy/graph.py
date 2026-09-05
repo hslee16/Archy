@@ -120,10 +120,12 @@ def build_graph(
     `path`, `is_package`, `external=False`. External modules carry only
     `external=True`. Edges are import relationships (source -> target).
 
-    Edge attribute `is_relative` indicates whether the import was written
-    using leading-dot syntax. Edge attribute `lines` is a tuple of source
-    line numbers where the import appears (a single source/target pair may
-    occur on multiple lines).
+    Edge attribute `is_relative` indicates whether ANY import contributing
+    to the edge was written using leading-dot syntax; a pair with both a
+    relative and an absolute import reports True regardless of the order
+    they appear in. Edge attribute `lines` is a tuple of source line numbers
+    where the import appears (a single source/target pair may occur on
+    multiple lines).
     """
     modules, parse_results = parse_project(
         root,
@@ -647,6 +649,11 @@ def _add_or_extend_edge(
     if graph.has_edge(src, dst):
         data = graph[src][dst]
         data["lines"] = (*data.get("lines", ()), ref.line)
+        # `any`, not first-seen: a pair written `from pkg.b import x` then
+        # `from .b import y` really does contain a relative import, and which
+        # of the two came first is not something a caller can predict. This
+        # aggregates the way `lines` does (#450).
+        data["is_relative"] = bool(data.get("is_relative", False)) or ref.is_relative
         kinds = data.get("kinds") or ("import",)
         if "import" not in kinds:
             data["kinds"] = (*kinds, "import")

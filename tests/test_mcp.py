@@ -1312,7 +1312,7 @@ def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\n")
     (pkg / "b.py").write_text("")
-    (pkg / "d.py").write_text("from .b import w\n")
+    (pkg / "d.py").write_text("from pkg.b import w\n")
 
     payload = _run_graph_focus(
         tmp_path,
@@ -1324,14 +1324,32 @@ def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
     edges = {(e.source, e.target): e for e in payload.edges}
 
     a_b = edges[("pkg.a", "pkg.b")]
+    # Two import sites on one pair, one of them relative, so `is_relative` is
+    # True here by `any` (#450) and False on the all-absolute `pkg.d` pair.
+    # Both values, not `in (True, False)`, which is true of any bool (#441).
     assert a_b.lines == (2, 3)
-    # `is_relative` is set when the edge is first created and left alone when a
-    # later import extends it, so a pair written absolute-then-relative reports
-    # False. `pkg.d` writes the relative form first and reports True, which is
-    # what makes this a value assertion: the old pair, `in (True, False)` and
-    # `isinstance(..., bool)`, is true of any bool (#441).
-    assert a_b.is_relative is False
-    assert edges[("pkg.d", "pkg.b")].is_relative is True
+    assert a_b.is_relative is True
+    assert edges[("pkg.d", "pkg.b")].is_relative is False
+
+
+def test_graph_focus_edge_attributes_survive_model_dump(tmp_path: Path):
+    """The serialized form is what FastMCP actually sends, and it is where a
+    derived value silently goes missing (AGENTS.md). The flag an agent reads
+    off the wire has to be the aggregated one, not the create-branch one."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\n")
+    (pkg / "b.py").write_text("")
+
+    payload = _run_graph_focus(
+        tmp_path, modules=["pkg.a"], depth=1, direction="out", internal_only=True
+    )
+    wire = payload.model_dump()
+
+    edge = next(e for e in wire["edges"] if (e["source"], e["target"]) == ("pkg.a", "pkg.b"))
+    assert edge["lines"] == (2, 3)
+    assert edge["is_relative"] is True
 
 
 def test_graph_focus_internal_only_false_keeps_external_neighbors(tmp_path: Path):

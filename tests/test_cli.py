@@ -748,6 +748,29 @@ def _make_project_with_generated_dir(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def test_graph_json_reports_a_mixed_import_pair_as_relative(tmp_path: Path):
+    """The third surface. `is_relative` aggregates with `any` (#450), and the
+    CLI JSON an agent pipes into `jq` has to say the same thing the MCP payload
+    does."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\n")
+    (pkg / "b.py").write_text("")
+    (pkg / "c.py").write_text("from pkg.b import w\n")
+
+    args = ["graph", str(tmp_path), "--internal-only", "--format", "json"]
+    result = CliRunner().invoke(main, args)
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    edges = {(e["source"], e["target"]): e for e in payload["edges"]}
+    # Two import sites on the a->b pair, so the extend branch runs at all.
+    assert edges[("pkg.a", "pkg.b")]["lines"] == [2, 3]
+    assert edges[("pkg.a", "pkg.b")]["is_relative"] is True
+    assert edges[("pkg.c", "pkg.b")]["is_relative"] is False
+
+
 def test_exclude_drops_directory_from_graph(tmp_path: Path):
     project = _make_project_with_generated_dir(tmp_path)
     (project / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
