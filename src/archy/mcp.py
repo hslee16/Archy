@@ -813,14 +813,30 @@ def _register_tools(server: Server) -> None:
             # import-linter turn out to be missing leaves the rules exactly as
             # unverified as not asking, so reporting transitive_checked=True
             # there would reintroduce the bug this field exists to close (#343).
-            checked = payload.available and payload.error is None
+            # A contract that could not have failed is not a verdict either, so
+            # it leaves the rules as unverified as a missing import-linter does
+            # (#457). Same rule as the CLI's `_transitive_checked`, so the two
+            # surfaces cannot disagree about whether a run was checked.
+            unverifiable = payload.unverifiable or 0
+            checked = payload.available and payload.error is None and unverifiable == 0
             # A stale reason is worse than none. `_run_check` computed its reason
             # before contracts were attempted, so it names contracts=True -- and
             # replaying that at a caller who just passed contracts=True and
             # watched it fail sends them round a loop they have been through.
             # A non-None reason from `_run_check` is also the signal that there
-            # WAS something to verify, so it gates this branch.
-            if checked or result.transitive_unverified_reason is None:
+            # WAS something to verify, so it gates the no-verdict branch.
+            if unverifiable:
+                # Unlike the no-verdict case this does not depend on there
+                # having been a reason already: contracts ran and answered
+                # nothing, which is worth saying however well-governed the
+                # direct edges are.
+                reason = (
+                    f"{unverifiable} contract(s) could not have failed: their module patterns "
+                    "matched nothing, so the rule holds whatever the code does. Fix the "
+                    "patterns or drop the rule; the `contracts` field names the expressions "
+                    "that matched no module."
+                )
+            elif checked or result.transitive_unverified_reason is None:
                 reason = None
             else:
                 reason = (

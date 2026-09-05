@@ -348,6 +348,64 @@ def test_a_contract_naming_an_absent_module_is_a_config_error(
         run_contracts(tmp_path)
 
 
+def _write_layers_config(root: Path, *, layers: tuple[str, ...]) -> None:
+    """A `.importlinter` layers contract over the two-module fixture.
+
+    Written without `textwrap.dedent`: the layer list is a multi-line INI
+    continuation, and interpolating it into a dedented template breaks the
+    common indent dedent computes.
+    """
+    layer_lines = "".join(f"    {layer}\n" for layer in layers)
+    (root / ".importlinter").write_text(
+        "[importlinter]\n"
+        "root_package = top\n"
+        "include_external_packages = False\n"
+        "\n"
+        "[importlinter:contract:layered]\n"
+        "name = top is layered\n"
+        "type = layers\n"
+        "containers =\n"
+        "    top\n"
+        "layers =\n" + layer_lines
+    )
+
+
+def test_a_layers_contract_with_an_absent_required_layer_is_a_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Why `_expression_coverage` does not descend into `LayersContract.layers`.
+
+    import-linter refuses to run at all when a required layer's module is
+    absent, so the vacuity flag has nothing to add: there is no silent pass to
+    catch. Pinned because the reasoning for that omission lives on this
+    behaviour, and a change upstream would turn the omission into a real gap.
+    """
+    _purge_top(monkeypatch)
+    _write_two_module_fixture(tmp_path)
+    _write_layers_config(tmp_path, layers=("nonexistent_a", "nonexistent_b"))
+
+    with pytest.raises(ContractsConfigError, match="not in the import graph"):
+        run_contracts(tmp_path)
+
+
+def test_an_optional_layer_that_is_absent_is_not_reported_as_unverifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half. `(name)` means the layer may be absent, so flagging it
+    would report a config doing exactly what it says as unverifiable."""
+    _purge_top(monkeypatch)
+    _write_two_module_fixture(tmp_path)
+    _write_layers_config(tmp_path, layers=("(nonexistent_a)", "store", "api"))
+
+    result = run_contracts(tmp_path)
+
+    contract = result.contracts[0]
+    assert contract.contract_type == "LayersContract"
+    assert not contract.matched_nothing
+    assert contract.unmatched_expressions == ()
+    assert result.verified
+
+
 def test_the_unverifiable_facts_survive_model_dump(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

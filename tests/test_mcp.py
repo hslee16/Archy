@@ -637,6 +637,11 @@ def test_check_contracts_reports_an_unfalsifiable_contract_as_unverified(tmp_pat
     assert contracts["unverifiable"] == 1
     assert contracts["contracts"][0]["matched_nothing"] is True
     assert contracts["contracts"][0]["unmatched_expressions"] == ["top.*.handlers"]
+    # #457: the run did not evaluate the rule, so it must not say it did. Same
+    # rule as the CLI's `_transitive_checked`, and a verdict without a reason
+    # is indistinguishable from a bug in archy.
+    assert wire["result"]["transitive_checked"] is False
+    assert "could not have failed" in wire["result"]["transitive_unverified_reason"]
 
 
 def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
@@ -679,6 +684,10 @@ def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
     # was evaluated, so both are true and `unverifiable` is zero.
     assert result["contracts"]["verified"] is True
     assert result["contracts"]["unverifiable"] == 0
+    # The other side of #457: a contract that really was evaluated still
+    # reports the transitive check as done, so the flag is not just False.
+    assert result["transitive_checked"] is True
+    assert result["transitive_unverified_reason"] is None
 
 
 def _make_sdp_violating_project(tmp_path: Path) -> Path:
