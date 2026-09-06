@@ -359,6 +359,23 @@ def _fan_out_project(tmp_path: Path, fan: int) -> Path:
     return tmp_path
 
 
+def _myapp_core_cli(tmp_path: Path, *, api: str = "", runner: str = "") -> Path:
+    """A `myapp` package with `core.api` and `cli.runner`, returning the root.
+
+    The three call sites differ only in which leaf imports the other, so that
+    is the parameter; everything else was copied three times (#411).
+    """
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for sub in ("core", "cli"):
+        (pkg / sub).mkdir()
+        (pkg / sub / "__init__.py").write_text("")
+    (pkg / "core" / "api.py").write_text(api)
+    (pkg / "cli" / "runner.py").write_text(runner)
+    return tmp_path
+
+
 def _write_core_cli_forbid_config(root: Path) -> None:
     # The canonical two-layer archy.yaml shared by the check / snapshot / fold
     # tests: a `core` layer forbidden from reaching `cli`. Kept as one helper so
@@ -510,17 +527,7 @@ def test_run_cycles_payload_shape(tmp_path: Path):
 
 
 def test_run_check_payload_shape(tmp_path: Path):
-    pkg = tmp_path / "myapp"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    core = pkg / "core"
-    core.mkdir()
-    (core / "__init__.py").write_text("")
-    (core / "api.py").write_text("from myapp.cli.runner import go\n")
-    cli = pkg / "cli"
-    cli.mkdir()
-    (cli / "__init__.py").write_text("")
-    (cli / "runner.py").write_text("")
+    _myapp_core_cli(tmp_path, api="from myapp.cli.runner import go\n")
     _write_core_cli_forbid_config(tmp_path)
     result = _run_check(tmp_path, config_path=None)
     assert isinstance(result, CheckPayload)
@@ -649,14 +656,7 @@ def test_check_contracts_flag_nests_contract_results(tmp_path: Path):
     # nesting the transitive import-linter result under CheckPayload.contracts.
     # contracts=False (the default) leaves the field None, so a routine check
     # stays a pure direct-edge layer-rule result.
-    pkg = tmp_path / "myapp"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    for sub in ("core", "cli"):
-        (pkg / sub).mkdir()
-        (pkg / sub / "__init__.py").write_text("")
-    (pkg / "core" / "api.py").write_text("")
-    (pkg / "cli" / "runner.py").write_text("")
+    _myapp_core_cli(tmp_path)
     _write_core_cli_forbid_config(tmp_path)
 
     server = create_server()
@@ -867,17 +867,7 @@ def test_snapshot_brief_load_bearing_ranked_and_capped(tmp_path: Path):
 
 
 def test_snapshot_brief_reports_layers_and_forbidden_edges(tmp_path: Path):
-    pkg = tmp_path / "myapp"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    core = pkg / "core"
-    core.mkdir()
-    (core / "__init__.py").write_text("")
-    (core / "api.py").write_text("")
-    cli = pkg / "cli"
-    cli.mkdir()
-    (cli / "__init__.py").write_text("")
-    (cli / "runner.py").write_text("from myapp.core.api import go\n")
+    _myapp_core_cli(tmp_path, runner="from myapp.core.api import go\n")
     _write_core_cli_forbid_config(tmp_path)
     brief = _run_snapshot(tmp_path).invariant_brief
     assert {layer.name for layer in brief.layers} == {"core", "cli"}
@@ -1530,10 +1520,13 @@ def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
     assert _run_cycles(tmp_path, min_size=2, internal_only=True) == []
 
 
-def _git(repo: Path, *args: str) -> None:
-    import subprocess
+def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:
+    """Run one git command in `repo`.
 
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True)
+    `env` exists for the tests that need to backdate a commit; passing None
+    inherits, which is what every other caller wants.
+    """
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=env)
 
 
 def _init_git_repo(repo: Path) -> None:
@@ -1708,7 +1701,6 @@ def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
     # lens and forgot to forward `since`, every other test in this file would
     # still pass.
     import os
-    import subprocess
 
     repo = tmp_path
     _init_git_repo(repo)
@@ -1725,13 +1717,8 @@ def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
         "GIT_AUTHOR_DATE": "2020-01-01T00:00:00",
         "GIT_COMMITTER_DATE": "2020-01-01T00:00:00",
     }
-    subprocess.run(["git", "-C", str(repo), "add", "."], check=True, capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(repo), "commit", "-q", "-m", "old init"],
-        check=True,
-        capture_output=True,
-        env=old_env,
-    )
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "old init", env=old_env)
     # Touch `hot.py` again in a "recent" commit so the since filter keeps it
     # but drops `old.py`, which only appears in the 2020 commit.
     (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# tweak\n")

@@ -614,16 +614,18 @@ def test_doc_gap_matches_a_slug_in_prose_but_not_a_bare_identifier(tmp_path: Pat
     as `[arg-type]` in a section heading and six of them are ordinary English
     words, so both a hyphen rule and a bracket rule are needed; matching a bare
     CamelCase word in a sentence would call anything documented."""
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "codes.py").write_text(
-        "class ErrorCode:\n"
-        "    def __init__(self, code): ...\n"
-        'A = ErrorCode("arg-type")\n'
-        'B = ErrorCode("override")\n'
-        'C = ErrorCode("attr-defined")\n'
-        'D = ErrorCode("no-untyped-call")\n'
+    _project(
+        tmp_path,
+        {
+            "codes.py": (
+                "class ErrorCode:\n"
+                "    def __init__(self, code): ...\n"
+                'A = ErrorCode("arg-type")\n'
+                'B = ErrorCode("override")\n'
+                'C = ErrorCode("attr-defined")\n'
+                'D = ErrorCode("no-untyped-call")\n'
+            )
+        },
     )
     docs = tmp_path / "docs"
     docs.mkdir()
@@ -640,12 +642,14 @@ def test_doc_gap_matches_a_slug_in_prose_but_not_a_bare_identifier(tmp_path: Pat
 
 def test_doc_gap_does_not_report_private_members(tmp_path: Path):
     """A project is entitled to leave `_PydanticGeneralMetadata` out on purpose."""
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "m.py").write_text(
-        "class Base: pass\nclass First(Base): pass\n"
-        "class Second(Base): pass\nclass _Private(Base): pass\n"
+    _project(
+        tmp_path,
+        {
+            "m.py": (
+                "class Base: pass\nclass First(Base): pass\n"
+                "class Second(Base): pass\nclass _Private(Base): pass\n"
+            )
+        },
     )
     docs = tmp_path / "docs"
     docs.mkdir()
@@ -654,10 +658,7 @@ def test_doc_gap_does_not_report_private_members(tmp_path: Path):
 
 
 def test_conventions_reports_nothing_when_a_project_ships_no_docs(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "m.py").write_text("class Base: pass\nclass A(Base): pass\nclass B(Base): pass\n")
+    _project(tmp_path, {"m.py": "class Base: pass\nclass A(Base): pass\nclass B(Base): pass\n"})
     report = compute_conventions(tmp_path)
     assert report.docs_scanned == 0
     assert report.doc_gaps == ()
