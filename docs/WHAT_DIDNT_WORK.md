@@ -554,8 +554,17 @@ same channel. Same direction. **Two payloads, one channel, both more
 expensive** is evidence about the channel rather than the content, which is
 precisely the claim #428 rested on.
 
-With the three pull-surface nulls and one actively negative arm, the delivery
-line stands at **six interventions, none positive**.
+That makes **six interventions on the delivery line, none positive**, and the
+count is worth spelling out rather than leaving to be inferred:
+
+| # | intervention | result |
+| ---: | --- | --- |
+| 1 | `conventions` as a pull surface | 0 of 89 |
+| 2 | `conventions --module` as a pull surface | 0 of 24 |
+| 3 | `contracts` as a pull surface | 0 of 38 |
+| 4 | a prior seeding arm on the same card set | lost to its control |
+| 5 | E1, derived module headers | 1.26x, wrong direction |
+| 6 | E2, hand-written crux payload | 1.128x, wrong direction |
 
 ### Validity, because the first attempt measured nothing
 
