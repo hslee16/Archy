@@ -1156,6 +1156,34 @@ def contracts(path: Path, config_filename: Path | None, fmt: str) -> None:
     sys.exit(0 if result.verified else 1)
 
 
+def _dsm_from_path(
+    path: Path,
+    *,
+    group_by: str,
+    weight: str,
+    focus: str | None,
+    focus_depth: int,
+    package: str | None,
+):
+    """Load the graph and build the DSM, for `dsm` and `render` (#422).
+
+    The six knobs were written out at both call sites, so adding a seventh
+    meant remembering to edit two places. The `archy.dsm` import stays deferred
+    here, as it was at both sites: it pulls the matrix machinery in only for the
+    two commands that need it.
+    """
+    from archy.dsm import GroupBy, Weight, build_dsm
+
+    return build_dsm(
+        _load_graph(path, internal_only=False),
+        group_by=cast(GroupBy, group_by),
+        weight=cast(Weight, weight),
+        focus=focus,
+        focus_depth=focus_depth,
+        package=package,
+    )
+
+
 @main.command()
 @click.argument(
     "path",
@@ -1241,9 +1269,6 @@ def dsm(
     _require(max_nodes >= 1, "max-nodes", ">= 1", max_nodes)
 
     from archy.dsm import (
-        GroupBy,
-        Weight,
-        build_dsm,
         diff_dsm,
         read_dsm,
         render_ascii,
@@ -1251,11 +1276,10 @@ def dsm(
         render_json,
     )
 
-    g = _load_graph(path, internal_only=False)
-    current = build_dsm(
-        g,
-        group_by=cast(GroupBy, group_by),
-        weight=cast(Weight, weight),
+    current = _dsm_from_path(
+        path,
+        group_by=group_by,
+        weight=weight,
         focus=focus,
         focus_depth=focus_depth,
         package=package,
@@ -1375,13 +1399,10 @@ def render(
         _require(focus_depth >= 0, "focus-depth", ">= 0", focus_depth)
         _require(max_nodes >= 1, "max-nodes", ">= 1", max_nodes)
 
-        from archy.dsm import GroupBy, Weight, build_dsm
-
-        g = _load_graph(path, internal_only=False)
-        matrix = build_dsm(
-            g,
-            group_by=cast(GroupBy, group_by),
-            weight=cast(Weight, weight),
+        matrix = _dsm_from_path(
+            path,
+            group_by=group_by,
+            weight=weight,
             focus=focus,
             focus_depth=focus_depth,
             package=package,
