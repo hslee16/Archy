@@ -597,10 +597,11 @@ hands over the expensive part, building the reproduction.
 
 **It does not rescue the null.** The direction is unfavourable: contamination
 should make cells *cheaper*, and the treatment arms still came out more
-expensive than their controls. `/tmp` is now quarantined per run; `TMPDIR` alone
-is insufficient because the agent writes absolute paths. One channel remains
-open and unfixed: a cell was once observed finding a symbol in its worktree that
-exists only in a correct answer.
+expensive than their controls. Both leaks found here are now closed:
+`/tmp` is quarantined per run (`TMPDIR` alone is insufficient, because the agent
+writes absolute paths), and the second channel, a cell finding a symbol in its
+worktree that exists only in a correct answer, has been remedied on the rig.
+Results either side of those fixes should not be pooled.
 
 ### What this licenses
 
