@@ -201,7 +201,10 @@ def print_config(
     Renders against the *real* current files (the dry-run system reads disk),
     so the preview reflects the actual merge result, not a fresh snippet.
     """
-    adapter = get_adapter(adapter_id)
+    try:
+      adapter = get_adapter(adapter_id)
+    except KeyError as err:
+     raise ValueError(str(err)) from err
     ws = DryRunWriteSystem()
     plan = plan_for(adapter, scope, project_root=project_root, seed_permissions=seed_permissions)
     apply_plan(plan, ws)
