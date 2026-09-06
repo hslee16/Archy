@@ -798,6 +798,24 @@ def censused_modules(qualnames: Iterable[str], *, include_tests: bool = False) -
     )
 
 
+def _home_module(by_module: Counter[str]) -> tuple[str, int]:
+    """The module hosting the most members of a family, and how many it hosts.
+
+    One definition for all three family kinds, so "where does a new one go"
+    cannot come out differently depending on which report asked (#415).
+
+    Ties are broken by `Counter.most_common`, which is insertion order, so the
+    winner is whichever module the scan reached first. That is not a meaningful
+    ordering; it is recorded here rather than at three call sites so a caller
+    who needs a deterministic tie-break has one place to change.
+
+    Callers pass a non-empty counter. `_base_families` is the only one that can
+    produce an empty one (its members may all be missing from `home_of`), and it
+    guards before calling.
+    """
+    return by_module.most_common(1)[0]
+
+
 def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[BaseFamily, ...]:
     """Group classes by what they are a kind of, following inheritance to the root.
 
@@ -861,7 +879,7 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
         by_module = Counter(home_of[n] for n in names if n in home_of)
         if not by_module:
             continue
-        home, home_count = by_module.most_common(1)[0]
+        home, home_count = _home_module(by_module)
         out.append(
             BaseFamily(
                 base=base,
@@ -954,7 +972,7 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
         if len(rows) < max(min_count, 3):
             continue
         by_module = Counter(module for _, module, _ in rows)
-        home, home_count = by_module.most_common(1)[0]
+        home, home_count = _home_module(by_module)
         kw: dict[str, list[str]] = defaultdict(list)
         literals: list[str] = []
         for _, _, call in rows:
@@ -1025,6 +1043,24 @@ _DOC_MAX_BYTES = 2_000_000
 _PARTIAL_COVERAGE_FLOOR = 0.5
 
 
+def _is_partial_coverage(covered: int, total: int, *, min_count: int) -> bool:
+    """Is this family covered enough to be worth reporting a gap on, and not fully?
+
+    Three conditions, and `_doc_gaps` and `_export_gaps` need all three to agree
+    (#415/#416): enough members covered to be a promise rather than a passing
+    mention, not already complete (a complete family has no gap), and above the
+    shared floor. They already shared the constant, which is what made the drift
+    risk real: two copies of the arithmetic could disagree about how the one
+    number is applied while still looking governed by it.
+
+    `min_count` is the only part that differs: 2 for exports, `min_documented`
+    for docs.
+    """
+    if covered < min_count or covered == total:
+        return False
+    return covered / total >= _PARTIAL_COVERAGE_FLOOR
+
+
 def _harvest_docs(root: Path, ignored_dirs: frozenset[str]) -> tuple[dict[str, set[str]], int]:
     """Identifiers named in each documentation directory, and the file count.
 
@@ -1088,9 +1124,7 @@ def _doc_gaps(
         best: DocGap | None = None
         for doc_root, names in sorted(docs.items()):
             documented = [m for m in public if m in names]
-            if len(documented) < min_documented or len(documented) == len(public):
-                continue
-            if len(documented) / len(public) < _PARTIAL_COVERAGE_FLOOR:
+            if not _is_partial_coverage(len(documented), len(public), min_count=min_documented):
                 continue
             if best is None or len(documented) > best.documented:
                 best = DocGap(
@@ -1117,9 +1151,7 @@ def _export_gaps(
     for family in families:
         for module, names in exports.items():
             listed = [m for m in family.members if m in names]
-            if len(listed) < 2 or len(listed) == len(family.members):
-                continue
-            if len(listed) / len(family.members) < _PARTIAL_COVERAGE_FLOOR:
+            if not _is_partial_coverage(len(listed), len(family.members), min_count=2):
                 continue
             out.append(
                 ExportGap(
@@ -1145,7 +1177,7 @@ def _naming_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[
         if len(rows) < min_count:
             continue
         by_module = Counter(module for _, module in rows)
-        home, home_count = by_module.most_common(1)[0]
+        home, home_count = _home_module(by_module)
         families.append(
             NamingFamily(
                 suffix=suffix,

@@ -1152,16 +1152,44 @@ def test_dsm_json_output_is_valid_json(tmp_path: Path):
     assert "ordering" in payload
 
 
+def _dsm_json(project: Path, *args: str) -> dict:
+    """`archy dsm --format json`, parsed. Every DSM knob reaches `build_dsm`
+    through one helper shared with `render` (#422), so these assert the wiring,
+    not the matrix maths, which `tests/test_dsm.py` covers directly."""
+    result = CliRunner().invoke(main, ["dsm", str(project), "--format", "json", *args])
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)
+
+
 def test_dsm_focus_filter_narrows_output(tmp_path: Path):
+    """Named for narrowing, so it has to narrow.
+
+    It used to focus `pkg.b` on a three-module chain, where the default depth
+    reaches every module, and then assert the result was all three. That holds
+    with `--focus` removed entirely, so it never tested the filter.
+    """
     project = _make_three_module_project(tmp_path)
-    result = CliRunner().invoke(
-        main,
-        ["dsm", str(project), "--focus", "pkg.b", "--format", "json"],
+    unfocused = _dsm_json(project)
+    focused = _dsm_json(project, "--focus", "pkg.a", "--focus-depth", "1")
+
+    assert set(focused["ordering"]) == {"pkg.a", "pkg.b"}
+    assert len(focused["ordering"]) < len(unfocused["ordering"])
+
+
+def test_dsm_group_flag_reaches_the_matrix(tmp_path: Path):
+    """The CLI threads six knobs into `build_dsm`, and only two were visible to
+    this file: the other four could each be hardcoded with every test still
+    green. This one and `--focus-depth` are now pinned too. `--weight` and the
+    internal-only load still are not, because neither has a visible effect on a
+    fixture this small.
+
+    The orderings differ because topological puts the package node first.
+    """
+    project = _make_three_module_project(tmp_path)
+
+    assert (
+        _dsm_json(project, "--group", "topological")["ordering"] != _dsm_json(project)["ordering"]
     )
-    assert result.exit_code == 0
-    payload = json.loads(result.output)
-    names = set(payload["ordering"])
-    assert names == {"pkg.a", "pkg.b", "pkg.c"}
 
 
 def test_dsm_package_filter_excludes_other_packages(tmp_path: Path):

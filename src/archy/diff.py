@@ -14,8 +14,8 @@ and so the baseline shape is the same one the CLI emits.
 
 archy:owns        CycleSetDiff, DiffReport, DiffSummary, DiffSummaryItem,
                   ReachViolationSetDiff, ScoreDelta, SdpViolationSetDiff, Snapshot,
-                  ViolationSetDiff, compute_diff, discover_config_for, read_snapshot,
-                  snapshot_to_dict, take_snapshot, write_snapshot
+                  ViolationSetDiff, compute_diff, read_snapshot, snapshot_to_dict,
+                  take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
                   DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
                   compute_diff -> archy.cli, archy.mcp, archy.simulate,
@@ -40,13 +40,12 @@ from archy.layers import (
     RequiredRule,
     SdpViolation,
     Violation,
-    discover_config,
     find_reach_violations,
     find_sdp_violations,
     find_violations,
     load_config,
 )
-from archy.score import Score, ScoreInputs, compute_score
+from archy.score import Score, ScoreInputs, compute_complexity, compute_score
 
 
 class Snapshot(BaseModel):
@@ -241,10 +240,6 @@ def _load_config_if_present(config_path: Path | None) -> LayerConfig | None:
     return load_config(config_path)
 
 
-def discover_config_for(path: Path) -> Path | None:
-    return discover_config(path)
-
-
 def _cycle_to_dict(cycle: Cycle) -> dict[str, object]:
     return {
         "modules": list(cycle.modules),
@@ -315,8 +310,6 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
     if "complexity" in components:
         complexity = _expect_float(components["complexity"])
     else:
-        from archy.score import compute_complexity
-
         complexity = compute_complexity(inputs.cc_mean, inputs.function_count)
     score = Score(
         overall=_expect_float(score_dict["overall"]),
