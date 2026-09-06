@@ -178,6 +178,17 @@ def test_calling_a_tool_returns_structured_content(project: Path):
     assert violation["rule"]["reason"].startswith("standalone entrypoints")
 
 
+def _minimal_package(root: Path) -> None:
+    """The smallest importable package archy will build a graph from.
+
+    Two tests need one, and what counts as minimal is a fact about archy, not
+    about either test: if it ever needs more than an `__init__.py`, this is the
+    one place that changes. Same shape as #317 in the CLI tests.
+    """
+    (root / "pkg").mkdir()
+    (root / "pkg" / "__init__.py").write_text("")
+
+
 def test_a_missing_config_is_in_band_not_an_error(tmp_path_factory):
     """Tier 3 of the documented error model (#229), over the wire.
 
@@ -187,8 +198,7 @@ def test_a_missing_config_is_in_band_not_an_error(tmp_path_factory):
     here: in-process, both look like a returned object.
     """
     empty = tmp_path_factory.mktemp("noconfig")
-    (empty / "pkg").mkdir()
-    (empty / "pkg" / "__init__.py").write_text("")
+    _minimal_package(empty)
 
     result = _wire(_run(lambda s: s.call_tool("archy_check", {"path": str(empty)})))
 
@@ -199,8 +209,7 @@ def test_a_missing_config_is_in_band_not_an_error(tmp_path_factory):
 def test_a_malformed_config_is_a_protocol_error(tmp_path_factory):
     """Tier 2: a broken config cannot be checked against, so it raises."""
     bad = tmp_path_factory.mktemp("badconfig")
-    (bad / "pkg").mkdir()
-    (bad / "pkg" / "__init__.py").write_text("")
+    _minimal_package(bad)
     (bad / "archy.yaml").write_text("layers: [not a mapping\n")
 
     result = _wire(_run(lambda s: s.call_tool("archy_check", {"path": str(bad)})))
