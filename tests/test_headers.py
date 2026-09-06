@@ -77,6 +77,20 @@ def _headers(root: Path):
     return compute_headers(report, root, discover_modules(root))
 
 
+def _write(root: Path):
+    """`conventions --emit-headers --write` on `root`.
+
+    The flag triple was spelled out at eight call sites, so a rename to any of
+    them meant editing all eight (#451).
+    """
+    return CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--write"])
+
+
+def _check(root: Path):
+    """`conventions --emit-headers --check` on `root`."""
+    return CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--check"])
+
+
 def test_header_names_what_the_module_owns_and_what_mirrors_it(tmp_path: Path):
     by_module = {h.module: h for h in _headers(_project(tmp_path))}
 
@@ -106,7 +120,7 @@ def test_write_preserves_prose_a_human_wrote(tmp_path: Path):
     """The prose is the part archy cannot derive. A generator that deletes it
     trades a fact it can compute for one it cannot."""
     root = _project(tmp_path, prose="Rule evaluation.\n\nWhy this module exists.\n")
-    CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--write"])
+    _write(root)
 
     after = (root / "myapp" / "core" / "rules.py").read_text()
     assert "Why this module exists." in after
@@ -117,25 +131,24 @@ def test_write_is_idempotent(tmp_path: Path):
     """A second write that churns the file would make the CI check useless: every
     run would show a diff and nobody would read the one that mattered."""
     root = _project(tmp_path, prose="Rule evaluation.\n")
-    args = ["conventions", str(root), "--emit-headers", "--write"]
-    CliRunner().invoke(main, args)
+    _write(root)
     once = (root / "myapp" / "core" / "rules.py").read_text()
-    CliRunner().invoke(main, args)
+    _write(root)
 
     assert (root / "myapp" / "core" / "rules.py").read_text() == once
 
 
 def test_check_passes_after_write_and_fails_on_drift(tmp_path: Path):
     root = _project(tmp_path, prose="Rule evaluation.\n")
-    CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--write"])
+    _write(root)
 
-    clean = CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--check"])
+    clean = _check(root)
     assert clean.exit_code == 0
 
     rules = root / "myapp" / "core" / "rules.py"
     rules.write_text(rules.read_text() + "\n\ndef find_reach_violations(x):\n    return []\n")
 
-    drifted = CliRunner().invoke(main, ["conventions", str(root), "--emit-headers", "--check"])
+    drifted = _check(root)
     assert drifted.exit_code == 1
     # A CI failure whose only content is "something drifted" costs the reader
     # the investigation the check was supposed to save.
@@ -152,10 +165,10 @@ def test_check_passes_after_write_when_a_header_wraps(tmp_path: Path):
     """
     rules = _wrapping_project(tmp_path)
 
-    CliRunner().invoke(main, ["conventions", str(tmp_path), "--emit-headers", "--write"])
+    _write(tmp_path)
     _assert_wraps(rules.read_text())
 
-    result = CliRunner().invoke(main, ["conventions", str(tmp_path), "--emit-headers", "--check"])
+    result = _check(tmp_path)
     assert result.exit_code == 0, result.output
 
 
@@ -167,13 +180,11 @@ def test_repeated_writes_are_idempotent_when_a_header_wraps(tmp_path: Path):
     was meant to refresh. Both readers now share one definition of the block.
     """
     rules = _wrapping_project(tmp_path)
-    args = ["conventions", str(tmp_path), "--emit-headers", "--write"]
-
-    CliRunner().invoke(main, args)
+    _write(tmp_path)
     once = rules.read_text()
     _assert_wraps(once)
 
-    CliRunner().invoke(main, args)
+    _write(tmp_path)
     twice = rules.read_text()
 
     assert twice == once

@@ -93,16 +93,14 @@ def sdk_major() -> int:
     return 2 if Server.__module__.startswith("mcp.server.mcpserver") else 1
 
 
-def _load_tool_error() -> type[Exception]:
-    try:  # mcp >= 2
-        from mcp.server.mcpserver.exceptions import (  # ty: ignore[unresolved-import]
-            ToolError as _ToolError,
-        )
-    except ImportError:  # mcp 1.x
-        from mcp.server.fastmcp.exceptions import ToolError as _ToolError
-    return _ToolError
-
-
-# Resolved eagerly so an import error surfaces here, next to the explanation,
-# rather than inside whichever test first reaches for it.
-ToolError: type[Exception] = _load_tool_error()
+# Same bare try/except shape as `Server` above, rather than a function called
+# once on the next line: one spelling of "resolve a compat symbol" in this file
+# is easier to extend to a third SDK generation than two. Resolving at module
+# scope also surfaces an import error here, next to the explanation, rather
+# than inside whichever test first reaches for it.
+try:  # mcp >= 2
+    from mcp.server.mcpserver.exceptions import (  # ty: ignore[unresolved-import]
+        ToolError as ToolError,
+    )
+except ImportError:  # mcp 1.x
+    from mcp.server.fastmcp.exceptions import ToolError as ToolError

@@ -465,19 +465,13 @@ def test_extra_roots_demotes_inner_init_packages(tmp_path: Path):
     assert "routers.user" not in g_rooted.nodes
 
 
-def test_extra_roots_missing_directory_is_skipped(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_extra_roots_missing_directory_is_skipped(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("")
     g = build_graph(tmp_path, extra_roots=("nonexistent",))
     assert "pkg.a" in g.nodes
 
 
-def test_graph_to_dict_preserves_edge_line_numbers(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_graph_to_dict_preserves_edge_line_numbers(tmp_path: Path, pkg: Path):
     # Three import statements at known lines targeting pkg.b. Edge attribute
     # `lines` must collect all three so agents can pinpoint import sites.
     (pkg / "a.py").write_text(
@@ -490,10 +484,7 @@ def test_graph_to_dict_preserves_edge_line_numbers(tmp_path: Path):
     assert edge["lines"] == (1, 3, 4)
 
 
-def test_graph_to_dict_emits_instability_only_for_internal(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_graph_to_dict_emits_instability_only_for_internal(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("import requests\n")
 
     data = graph_to_dict(build_graph(tmp_path))
@@ -505,10 +496,7 @@ def test_graph_to_dict_emits_instability_only_for_internal(tmp_path: Path):
     assert by_id["requests"]["external"] is True
 
 
-def test_graph_to_dict_is_deterministic(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_graph_to_dict_is_deterministic(tmp_path: Path, pkg: Path):
     # `abc` is external, so it is discovered last but sorts first; the imports
     # are written c-then-b so the raw edge order is reversed. Both halves of
     # the fixture exist to make the raw order differ from the sorted one:
@@ -531,10 +519,7 @@ def test_graph_to_dict_is_deterministic(tmp_path: Path):
     assert edges == sorted(edges)
 
 
-def test_resolve_modules_routes_qualnames_and_paths(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_resolve_modules_routes_qualnames_and_paths(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("")
     (pkg / "b.py").write_text("")
     graph = build_graph(tmp_path)
@@ -548,10 +533,7 @@ def test_resolve_modules_routes_qualnames_and_paths(tmp_path: Path):
     assert unresolved == []
 
 
-def test_resolve_modules_deduplicates_preserving_order(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_resolve_modules_deduplicates_preserving_order(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("")
     (pkg / "b.py").write_text("")
     graph = build_graph(tmp_path)
@@ -567,10 +549,7 @@ def test_resolve_modules_deduplicates_preserving_order(tmp_path: Path):
     assert resolved == ["pkg.a", "pkg.b"]
 
 
-def test_resolve_modules_accepts_absolute_path(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_resolve_modules_accepts_absolute_path(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("")
     graph = build_graph(tmp_path)
 
@@ -686,10 +665,7 @@ def test_cc_attrs_appear_in_graph_to_dict(tmp_path: Path, pkg: Path):
     assert by_id["pkg.a"]["cc_max"] == 2
 
 
-def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
+def test_resolve_modules_does_not_match_external_qualnames(tmp_path: Path, pkg: Path):
     (pkg / "a.py").write_text("import requests\n")
     graph = build_graph(tmp_path)
     assert "requests" in graph.nodes  # sanity: the external node exists

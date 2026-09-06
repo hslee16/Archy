@@ -33,6 +33,9 @@ import archy
 from archy.mcp_compat import sdk_major
 
 mcp_client = pytest.importorskip("mcp.client.stdio", reason="stdio client not available")
+# Deliberately below the guard, not a stray import: `importorskip` has to run
+# FIRST so this module skips cleanly when the stdio client is absent. Moving it
+# up with the other third-party imports turns a skip into a collection error.
 from mcp import ClientSession, StdioServerParameters  # noqa: E402
 
 
@@ -94,10 +97,20 @@ def _wire(model) -> dict:
     return model.model_dump(by_alias=True)
 
 
-def test_server_completes_the_handshake_and_lists_tools():
+@pytest.fixture(scope="module")
+def tools() -> list[dict]:
+    """The advertised tool list, fetched once.
+
+    Module-scoped on purpose: each `_run` starts a real server subprocess, so
+    a function-scoped fixture would pay that cost per test for a value none of
+    them mutate.
+    """
+    return _wire(_run(lambda s: s.list_tools()))["tools"]
+
+
+def test_server_completes_the_handshake_and_lists_tools(tools):
     """The failure #391 shipped: on mcp 2.0 the server died before this point."""
-    tools = _wire(_run(lambda s: s.list_tools()))
-    names = {t["name"] for t in tools["tools"]}
+    names = {t["name"] for t in tools}
 
     assert "archy_check" in names
     assert len(names) == 13, f"tool count changed: {sorted(names)}"
@@ -124,18 +137,18 @@ def test_the_handshake_reports_archys_version_not_the_sdks():
     )
 
 
-def test_every_tool_advertises_an_output_schema():
+def test_every_tool_advertises_an_output_schema(tools):
     """Structured output (#228) is derived by the SDK, so a major bump can drop it."""
-    tools = _wire(_run(lambda s: s.list_tools()))
-
-    missing = [t["name"] for t in tools["tools"] if not t.get("outputSchema")]
+    # "no tool lacks a schema" is vacuously true of no tools, so establish the
+    # fixture reached the server before asserting anything about it.
+    assert tools, "no tools advertised at all"
+    missing = [t["name"] for t in tools if not t.get("outputSchema")]
     assert missing == [], f"tools with no outputSchema on mcp {sdk_major()}.x: {missing}"
 
 
-def test_read_only_annotations_survive_to_the_wire():
+def test_read_only_annotations_survive_to_the_wire(tools):
     """Without these a client cannot auto-approve archy's reads (#225)."""
-    tools = _wire(_run(lambda s: s.list_tools()))
-    check = next(t for t in tools["tools"] if t["name"] == "archy_check")
+    check = next(t for t in tools if t["name"] == "archy_check")
 
     assert check["annotations"] is not None
     assert check["annotations"]["readOnlyHint"] is True
@@ -165,6 +178,17 @@ def test_calling_a_tool_returns_structured_content(project: Path):
     assert violation["rule"]["reason"].startswith("standalone entrypoints")
 
 
+def _minimal_package(root: Path) -> None:
+    """The smallest importable package archy will build a graph from.
+
+    Two tests need one, and what counts as minimal is a fact about archy, not
+    about either test: if it ever needs more than an `__init__.py`, this is the
+    one place that changes. Same shape as #317 in the CLI tests.
+    """
+    (root / "pkg").mkdir()
+    (root / "pkg" / "__init__.py").write_text("")
+
+
 def test_a_missing_config_is_in_band_not_an_error(tmp_path_factory):
     """Tier 3 of the documented error model (#229), over the wire.
 
@@ -174,8 +198,7 @@ def test_a_missing_config_is_in_band_not_an_error(tmp_path_factory):
     here: in-process, both look like a returned object.
     """
     empty = tmp_path_factory.mktemp("noconfig")
-    (empty / "pkg").mkdir()
-    (empty / "pkg" / "__init__.py").write_text("")
+    _minimal_package(empty)
 
     result = _wire(_run(lambda s: s.call_tool("archy_check", {"path": str(empty)})))
 
@@ -186,8 +209,7 @@ def test_a_missing_config_is_in_band_not_an_error(tmp_path_factory):
 def test_a_malformed_config_is_a_protocol_error(tmp_path_factory):
     """Tier 2: a broken config cannot be checked against, so it raises."""
     bad = tmp_path_factory.mktemp("badconfig")
-    (bad / "pkg").mkdir()
-    (bad / "pkg" / "__init__.py").write_text("")
+    _minimal_package(bad)
     (bad / "archy.yaml").write_text("layers: [not a mapping\n")
 
     result = _wire(_run(lambda s: s.call_tool("archy_check", {"path": str(bad)})))

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json as _json
 import subprocess
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -673,8 +674,6 @@ def test_cli_duplicates_co_change_on_non_git_is_noop(tmp_path: Path):
 
 
 def test_jaccard_multiset_math():
-    from collections import Counter
-
     assert _jaccard(Counter("aabbc"), Counter("aabbc")) == 1.0
     # inter = min per token = a:2,b:1 -> 3; union = max = a:2,b:2,c:1 -> 5
     assert _jaccard(Counter("aab"), Counter("abbc")) == pytest.approx(2 / 5)
