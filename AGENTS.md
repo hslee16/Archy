@@ -136,8 +136,11 @@ several have landed. Filing new ones is welcome, taking them is not.
 ## Measurement and benches
 
 Read [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md) before proposing any
-study. Three pre-registered claims have been measured and all three came back
-null, and the write-up explains what that does and does not license.
+study. Every pre-registered claim measured here has come back null, and the
+write-up explains what that does and does not license. The delivery line alone
+now stands at **six interventions, none positive**, two of which were measured
+as costing MORE than their control. A seventh idea for pushing a fact at the
+model needs a reason it differs from those six.
 
 **Build and validate the measurement before spending agent time.** Live agent
 runs are the only expensive part of any bench here. Every harness bug found
@@ -191,6 +194,29 @@ have reported 57% where the truth was 11%.
 
 **Unmeasurable runs are dropped, never scored clean.** Counting a run that could
 not be analysed as a pass biases the rate by exactly the runs that broke.
+
+**Isolate `/tmp` per run, and setting `TMPDIR` is not enough.** Agents build
+reproduction fixtures at hardcoded ABSOLUTE paths (`/tmp/repro`, `/tmp/repro2`),
+so they write outside whatever `TMPDIR` says. Those fixtures persist, and a
+later cell finds the work already done and says so in its own reasoning: *"the
+`top/` directory is a leftover from a previous evaluation session"*. Audited
+across 181 archived transcripts, **42 (23%) show cross-run artifact discovery**,
+rising to 43% on the most-used card, and that is a floor because it counts only
+the cells that remarked on it.
+
+This breaks repeats' independence, so `n` was never the `n` claimed, and it
+biases *later* cells rather than distributing evenly. Worse, it preferentially
+hands over the expensive part: building the reproduction. Quarantine `/tmp`
+before each agent starts, and state whether a result is pre- or post-isolation
+rather than pooling the two.
+
+**A treatment must be verified present from the SUBJECT's record, not the
+harness's intent.** One arm was void because the harness deleted its own
+treatment before the agent started, while an inline guard grepped a POOLED
+transcript archive and so reported the treatment present in control cells too.
+Both bugs pointed the same way: toward believing the run happened. Confirm from
+the model's own session (the headers arm showed 15/19/23 `archy:owns` hits in
+its own transcripts; the control showed 0/0/0).
 
 ## Config and rules
 

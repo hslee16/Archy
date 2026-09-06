@@ -516,6 +516,104 @@ looking number.
 
 [`bench/mirror_precision.py`]: ../bench/mirror_precision.py
 
+## Study 8: pushing the fact at the model costs more, twice
+
+`conventions --emit-headers` (#428) shipped in v0.46.1 with an explicit
+pre-commitment in the README: *"No claim that it helps... the result is
+published either way."* This is that result.
+
+The reasoning behind it was the strongest on this line. Over 132 agent
+transcripts on a pinned tree, `read` fired in 132/132 runs with a median of 9.5
+calls before the first edit, while `archy` fired in 84/132 with a median of
+**zero** before it. Every archy surface is pull; the model reaches for it after
+deciding. Three pushes against that corpus had already returned 0 of 89, 0 of 24
+and 0 of 38. So the headers write into the one channel archy owns and the model
+demonstrably reads: the file itself.
+
+### The measurement
+
+`archy-02` card, Qwen3.8-27B UD-Q4_K_XL, budget 1536, effort `medium`, pinned
+`base_commit`, 3+3 interleaved, one blind round per arm, seven fresh no-context
+judges under a frozen rubric, judges never shown cost. Cost is the
+pre-registered primary.
+
+| arm | median `eval_tokens` | ratio vs control | blind scores |
+| --- | ---: | ---: | --- |
+| E1, derived module headers | 116,622 | **1.26x** | 2 / 3 / 3 |
+| E1 control | 92,318 | | 3 / 3 / 1 |
+| E2, hand-written crux payload | 93,580 | **1.128x** | 2 / 3 / 3 |
+| E2 control | 82,937 | | 3 / 3 / 3 |
+
+**Both are null on the primary, and the point estimate is in the wrong
+direction.** Not "no effect": more expensive. Correctness cannot separate the
+arms, and at n=3 it never could.
+
+E2 exists to answer the obvious objection, that module headers were simply the
+wrong fact. It hand-delivers the specific insight the card turns on, through the
+same channel. Same direction. **Two payloads, one channel, both more
+expensive** is evidence about the channel rather than the content, which is
+precisely the claim #428 rested on.
+
+With the three pull-surface nulls and one actively negative arm, the delivery
+line stands at **six interventions, none positive**.
+
+### Validity, because the first attempt measured nothing
+
+An earlier run of the same A/B was void twice over: the harness deleted its own
+treatment before the agent started, and the arm's inline guard grepped a
+*pooled* transcript archive, so it reported the treatment present in the control
+cells too. Both bugs pointed toward believing the run had happened.
+
+Both were fixed before the numbers above, and presence was then verified from
+the model's own session record rather than the harness's intent: 15 / 19 / 23
+`archy:owns` hits in the headers cells, 0 / 0 / 0 in the controls. Diff-bytes
+per eval token ran 0.55-0.68 across every cell, inside the band that separates
+authored work from a phantom-deletion artifact.
+
+### A contamination finding that touches everything above
+
+The harness never isolated `/tmp` between runs. Agents build reproduction
+fixtures at hardcoded absolute paths, those persist, and later cells find the
+work already done:
+
+> *"There's already a `top/` directory in /tmp/repro (leftover from a previous
+> session?)"*
+
+Auditing every archived transcript with a tight pattern that excludes a model
+describing its own edits:
+
+| card | sessions | with cross-run evidence |
+| --- | ---: | ---: |
+| `archy-02` | 80 | **34 (43%)** |
+| `archy-11` | 6 | 3 (50%) |
+| `archy-10` | 31 | 4 (13%) |
+| others | 63 | 0 |
+| **total** | **181** | **42 (23%)** |
+
+A floor, not a ceiling: it counts only cells that remarked on what they found.
+It breaks the independence of repeats, so `n` was never the `n` claimed, and it
+biases later cells rather than distributing randomly. It also preferentially
+hands over the expensive part, building the reproduction.
+
+**It does not rescue the null.** The direction is unfavourable: contamination
+should make cells *cheaper*, and the treatment arms still came out more
+expensive than their controls. `/tmp` is now quarantined per run; `TMPDIR` alone
+is insufficient because the agent writes absolute paths. One channel remains
+open and unfixed: a cell was once observed finding a symbol in its worktree that
+exists only in a correct answer.
+
+### What this licenses
+
+The feature stays. It is cheap, it is derived rather than hand-authored, and
+`--check` keeps it from rotting; this repository gates itself on it because a
+stale generated block is worse than none. What does not stay is any claim that
+it helps a model, and the README entry now says so with the number attached.
+
+The transferable finding is narrower and more useful than the feature: **on this
+rig, at this size, delivering a fact to the model costs more than letting it
+derive one.** That is now six results pointing one way, and a seventh
+intervention on this line needs an argument for why it differs.
+
 ## What survived, and why archy still exists
 
 Two nulls on agent-side benefit, one retracted premise, a study saying the
