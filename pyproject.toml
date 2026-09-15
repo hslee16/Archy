@@ -59,7 +59,7 @@ contracts = [
     # entry point (`_register_contract_types`) and on the `UserOptions`
     # constructor shape, both of which can shift across minors. The
     # contract test in tests/test_contracts.py is the canary.
-    "import-linter>=2.11,<2.15",
+    "import-linter>=2.11,<2.16",
 ]
 
 [project.scripts]
@@ -75,7 +75,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.6",
     "ty>=0.0.1a1",
-    "import-linter>=2.11,<2.15",
+    "import-linter>=2.11,<2.16",
     # Used by tests/test_mcp.py to validate each tool's returned
     # `structuredContent` against its declared `outputSchema` (the 2025-06-18
     # MCP structured-output contract). Ships transitively with `mcp` already;
