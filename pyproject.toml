@@ -39,6 +39,9 @@ dependencies = [
     # Pydantic is already pulled in transitively by `mcp`; declared
     # explicitly because all archy value types are pydantic models.
     "pydantic>=2.0",
+    # PyJWT is pulled in transitively by `mcp`; pinned here to close
+    # CVE-2026-49202 and related advisories fixed in 2.14.0/2.15.0.
+    "pyjwt>=2.15.1",
     # `archy install` writes Codex's `~/.codex/config.toml`. There is no
     # stdlib TOML *writer*, so `tomli-w` is a hard runtime dep. Reading an
     # existing config to merge into uses stdlib `tomllib` on 3.11+ and the
