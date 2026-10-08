@@ -179,8 +179,8 @@ def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
         "*foo",  # wildcard not a whole segment
         "foo**bar",  # ** not a whole segment -> previously a wrong regex
         ".foo",  # leading dot -> empty root segment
-        "foo.",  # trailing dot
-        "a..b",  # doubled dot
+        "foo.",  # trailing dot -> empty trailing segment
+        "a..b",  # doubled dot -> empty segment between them
         "import",  # Python keyword -> never an importable package name
         "class.foo",  # keyword root would defer to a cryptic import-linter error
     ],

@@ -24,9 +24,9 @@ import re
 from pathlib import Path
 
 import networkx as nx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.impact import _index_by_path
+from archy.impact import STATIC_ONLY_CAVEAT, _index_by_path
 
 DEFAULT_DEPTH = 5
 
@@ -53,6 +53,15 @@ class Affected(BaseModel):
     impacted_tests: tuple[str, ...]
     depth: int
     test_filter: str | None = None
+
+    # `computed_field` for the same reason as `Impact.empty_caveat`: a plain
+    # property is dropped by `model_dump()` and so never reaches the MCP wire.
+    @computed_field
+    @property
+    def empty_caveat(self) -> str | None:
+        if self.changed and not self.impacted_tests:
+            return STATIC_ONLY_CAVEAT
+        return None
 
 
 def find_affected(

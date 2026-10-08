@@ -22,11 +22,23 @@ from itertools import pairwise
 from pathlib import Path
 
 import networkx as nx
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from archy.coupling import CoChangeHint
 
 DEFAULT_MAX_CHAINS = 20
+
+# What an empty result does and does not license. Names the constructs the
+# graph cannot see so the sentence is falsifiable: a reader can check the
+# repository for any of them with `rg` instead of trusting a bare zero.
+STATIC_ONLY_CAVEAT = (
+    "Empty means no statically resolvable import or call edge reaches the "
+    "changed module(s); it does not mean safe to remove. archy cannot see "
+    "edges built at runtime: importlib.import_module / __import__, entry "
+    "points and plugin registries, Django INSTALLED_APPS, pytest plugins, "
+    "config-driven dispatch, module __getattr__ hooks, string-keyed "
+    "factories. Search for those with rg before deleting."
+)
 
 
 class CausalHop(BaseModel):
@@ -72,6 +84,16 @@ class Impact(BaseModel):
     # unless requested and git history is available; `find_impact` never fills
     # it (it is git-free), the MCP layer attaches it.
     co_changed: tuple[CoChangeHint, ...] = ()
+
+    # `computed_field`, not a bare property: FastMCP sends `model_dump()`, which
+    # drops a plain property, so the qualifier would reach the CLI and not the
+    # agent. Present only when there is a zero to qualify.
+    @computed_field
+    @property
+    def empty_caveat(self) -> str | None:
+        if self.changed and not self.impacted:
+            return STATIC_ONLY_CAVEAT
+        return None
 
 
 def find_impact(

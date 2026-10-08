@@ -44,6 +44,16 @@ Activate this skill when any of the following is true:
 
 Do *not* activate this skill for: single-file scripts, non-Python projects, code-style or lint questions (use ruff/mypy), or test failures (use the test runner).
 
+Do not open with `archy_graph` on a vague question either ("where is auth handled?", "what does the user mean by X?"). Grep to find the module, then bring archy in to find what it connects to.
+
+### Where archy sits in a task
+
+Discovery, navigation, verification. **Discovery** is `rg` / `find`: you do not yet know the vocabulary, module or symbol, and config, SQL, YAML and docs are not in archy's import graph. **Navigation** starts once a module is named, and is archy's job: direction, transitive reach, cycles, blast radius and chains, which a file tree and a text search cannot show. **Verification** is `archy_diff` / `archy_check` after the edit, alongside the tests.
+
+### What an empty result means
+
+"Is this safe to remove" is the trigger where a zero is most dangerous. An empty `impacted` (or an empty `imported_by`, or no `impacted_tests`) means no *statically resolvable* import or call edge reaches the module. It does not see `importlib.import_module` / `__import__`, entry points and plugin registries, Django `INSTALLED_APPS`, pytest plugins, config-driven dispatch, module `__getattr__` hooks or string-keyed factories. Run `rg` for the module's name as a string before deleting anything; the payload's `empty_caveat` field repeats this whenever it applies.
+
 ## The loop
 
 Use this five-step cadence for any editing session that crosses module boundaries.

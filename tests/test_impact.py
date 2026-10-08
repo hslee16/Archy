@@ -199,3 +199,30 @@ def test_impact_no_changed_modules_has_no_chains(tmp_path: Path):
     result = find_impact(g, [bogus])
     assert result.chains == ()
     assert result.chains_omitted == 0
+
+
+def test_empty_impact_carries_static_only_caveat_in_the_serialized_form(chain):
+    """An empty `impacted` must say what the zero means, on the wire.
+
+    `app.routers.user` is the leaf of the chain: nothing imports it, so its
+    blast radius is genuinely empty. Asserts on `model_dump()` because FastMCP
+    sends that and drops a plain property.
+    """
+    project, graph = chain
+    leaf = find_impact(graph, [project / "app" / "routers" / "user.py"])
+    assert (
+        leaf.changed == ("app.routers.user",) and leaf.impacted == ()
+    )  # fixture reaches the branch
+    caveat = leaf.model_dump()["empty_caveat"]
+    assert "importlib.import_module" in caveat and "not mean safe to remove" in caveat
+
+
+def test_nonempty_or_unresolved_impact_has_no_caveat(chain):
+    project, graph = chain
+    hit = find_impact(graph, [project / "app" / "libs" / "db.py"])
+    assert hit.impacted  # fixture reaches the branch
+    assert hit.model_dump()["empty_caveat"] is None
+    # Nothing resolved: `unresolved` already explains the zero, no second reason.
+    nothing = find_impact(graph, [project / "README.md"])
+    assert nothing.changed == () and nothing.unresolved
+    assert nothing.model_dump()["empty_caveat"] is None

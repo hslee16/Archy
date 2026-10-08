@@ -2859,6 +2859,7 @@ def _affected_to_dict(result: Affected) -> dict:
         "impacted_tests": list(result.impacted_tests),
         "depth": result.depth,
         "test_filter": result.test_filter,
+        "empty_caveat": result.empty_caveat,
     }
 
 
@@ -2893,6 +2894,9 @@ def _affected_to_text(result: Affected) -> str:
         lines.append("Other modules touched:")
         for q in result.impacted_modules:
             lines.append(f"  - {q}")
+    if result.empty_caveat:
+        lines.append("")
+        lines.append(f"# {result.empty_caveat}")
     return "\n".join(lines)
 
 
@@ -2926,6 +2930,7 @@ def _impact_to_dict(result: Impact) -> dict:
             for c in result.chains
         ],
         "chains_omitted": result.chains_omitted,
+        "empty_caveat": result.empty_caveat,
     }
 
 
@@ -3222,6 +3227,9 @@ def _impact_to_text(result: Impact) -> str:
         lines.append("Impacted (transitive dependents):")
         for q in result.impacted:
             lines.append(f"  - {q}")
+    if result.empty_caveat:
+        lines.append("")
+        lines.append(f"# {result.empty_caveat}")
     if result.chains:
         lines.append("")
         lines.append("Why (shortest import path to a changed module):")
