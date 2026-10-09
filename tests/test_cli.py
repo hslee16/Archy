@@ -7,7 +7,8 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from archy.cli import _parse_edge_spec, main
+from archy.cli import _duplicates_to_text, _parse_edge_spec, main
+from archy.duplicates import DuplicateGroup, DuplicateMember
 
 
 def _make_two_module_project(tmp_path: Path, *, cyclic: bool) -> Path:
@@ -1841,3 +1842,79 @@ def test_impact_empty_result_says_what_the_zero_means_in_text_and_json(tmp_path:
     assert "does not mean safe to remove" in text
     populated = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--format", "json"]
     assert json.loads(CliRunner().invoke(main, populated).output)["empty_caveat"] is None
+
+
+@pytest.mark.parametrize("command", ["impact", "affected"])
+def test_impact_and_affected_text_share_the_unresolved_and_changed_block(
+    tmp_path: Path, command: str
+):
+    """Pins the lines both renderers emit for a file that is not a module.
+
+    These strings had no assertion anywhere, so a refactor of the shared block
+    could change them with the suite green. The expected block is spelled out
+    here, not derived from the renderer.
+    """
+    _make_libs_to_routers_chain(tmp_path)
+    (tmp_path / "README.md").write_text("")
+    if command == "impact":
+        args = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--file", "README.md"]
+    else:
+        args = ["affected", str(tmp_path), "app/libs/db.py", "README.md"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    expected = (
+        "# 1 file(s) did not resolve to a module "
+        "(non-Python, excluded, or outside any package):\n"
+        f"  ? {tmp_path / 'README.md'}\n"
+        "\n"
+        "Changed:\n"
+        "  - app.libs.db\n"
+    )
+    assert expected in result.output
+
+
+def _dup_group(category: str, *, exact: bool = False, similarity: float | None = None):
+    members = (
+        DuplicateMember(module="pkg.a", qualified_name="alpha", path="pkg/a.py", line=3),
+        DuplicateMember(module="pkg.b", qualified_name="beta", path="pkg/b.py", line=7),
+    )
+    return DuplicateGroup(
+        shape_hash="h",
+        size=12,
+        member_count=2,
+        redundancy=12,
+        members=members,
+        category=category,
+        exact=exact,
+        similarity=similarity,
+        variant_reason="test" if category == "variant" else None,
+    )
+
+
+def test_duplicates_text_sections_have_header_blank_columns_then_rows():
+    rows = [
+        _dup_group("duplicate", exact=True),
+        _dup_group("variant"),
+        _dup_group("near_miss", similarity=0.75),
+    ]
+    text = _duplicates_to_text(rows, top_n=5, min_nodes=5)
+    assert text.splitlines() == [
+        "# 1 exact duplicate(s) (byte-identical; high confidence); showing top 1 (min-nodes 5)",
+        "",
+        "  redund  size  count  members",
+        "      12    12      2  pkg.a:3 alpha",
+        "                       pkg.b:7 beta",
+        "",
+        "# 1 likely-intentional variant(s) (same-class / boilerplate / "
+        "test / vendored / independent; showing top 1)",
+        "",
+        "  redund  size  count  reason      members",
+        "      12    12      2  test        pkg.a:3 alpha",
+        "                                   pkg.b:7 beta",
+        "",
+        "# 1 possible near-miss (Type-3, gapped) cluster(s) (LOWER confidence; showing top 1)",
+        "",
+        "   sim  count  members",
+        "  0.75      2  pkg.a:3 alpha",
+        "               pkg.b:7 beta",
+    ]

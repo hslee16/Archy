@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
@@ -2863,6 +2864,22 @@ def _affected_to_dict(result: Affected) -> dict:
     }
 
 
+def _unresolved_and_changed_lines(unresolved: Sequence[str], changed: Sequence[str]) -> list[str]:
+    """The `did not resolve` block and the `Changed:` list shared by `impact` and `affected`."""
+    lines: list[str] = []
+    if unresolved:
+        lines.append(
+            f"# {len(unresolved)} file(s) did not resolve to a module "
+            "(non-Python, excluded, or outside any package):"
+        )
+        lines.extend(f"  ? {f}" for f in unresolved)
+    if changed:
+        lines.append("")
+        lines.append("Changed:")
+        lines.extend(f"  - {q}" for q in changed)
+    return lines
+
+
 def _affected_to_text(result: Affected) -> str:
     lines = [
         f"# depth={result.depth}, "
@@ -2872,18 +2889,7 @@ def _affected_to_text(result: Affected) -> str:
     ]
     if result.test_filter:
         lines.append(f"# test filter: {result.test_filter}")
-    if result.unresolved:
-        lines.append(
-            f"# {len(result.unresolved)} file(s) did not resolve to a module "
-            "(non-Python, excluded, or outside any package):"
-        )
-        for f in result.unresolved:
-            lines.append(f"  ? {f}")
-    if result.changed:
-        lines.append("")
-        lines.append("Changed:")
-        for q in result.changed:
-            lines.append(f"  - {q}")
+    lines.extend(_unresolved_and_changed_lines(result.unresolved, result.changed))
     if result.impacted_tests:
         lines.append("")
         lines.append("Tests to run:")
@@ -3059,13 +3065,18 @@ def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
     }
 
 
-def _near_miss_section(out: list[str], header: str, groups: list[DuplicateGroup]) -> None:
-    """Render the Type-3 near-miss tier: a `sim` column instead of redund/size."""
+def _section_preamble(out: list[str], header: str, columns: str) -> None:
+    """Blank separator (unless first), header, blank line, then the column row."""
     if out:
         out.append("")
     out.append(header)
     out.append("")
-    out.append("   sim  count  members")
+    out.append(columns)
+
+
+def _near_miss_section(out: list[str], header: str, groups: list[DuplicateGroup]) -> None:
+    """Render the Type-3 near-miss tier: a `sim` column instead of redund/size."""
+    _section_preamble(out, header, "   sim  count  members")
     for g in groups:
         first, *rest = g.members
         out.append(
@@ -3078,11 +3089,9 @@ def _near_miss_section(out: list[str], header: str, groups: list[DuplicateGroup]
 def _duplicates_section(
     out: list[str], header: str, groups: list[DuplicateGroup], *, with_reason: bool
 ) -> None:
-    if out:
-        out.append("")
-    out.append(header)
-    out.append("")
-    out.append(f"  redund  size  count  {'reason      ' if with_reason else ''}members")
+    _section_preamble(
+        out, header, f"  redund  size  count  {'reason      ' if with_reason else ''}members"
+    )
     for g in groups:
         out.extend(_duplicate_group_lines(g, with_reason=with_reason))
 
@@ -3210,18 +3219,7 @@ def _impact_to_text(result: Impact) -> str:
     lines = [
         f"# {len(result.impacted)} module(s) depend on {len(result.changed)} changed module(s)"
     ]
-    if result.unresolved:
-        lines.append(
-            f"# {len(result.unresolved)} file(s) did not resolve to a module "
-            "(non-Python, excluded, or outside any package):"
-        )
-        for f in result.unresolved:
-            lines.append(f"  ? {f}")
-    if result.changed:
-        lines.append("")
-        lines.append("Changed:")
-        for q in result.changed:
-            lines.append(f"  - {q}")
+    lines.extend(_unresolved_and_changed_lines(result.unresolved, result.changed))
     if result.impacted:
         lines.append("")
         lines.append("Impacted (transitive dependents):")
