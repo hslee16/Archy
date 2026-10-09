@@ -162,7 +162,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.46.2, working, installed and maintained; in active development on the local-model line (see the top of this page). Usable today via:
+**Status:** v0.47.0, working, installed and maintained. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -482,7 +482,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.46.2
+- uses: hslee16/archy@v0.47.0
   with:
     command: score      # score | check | cycles
     path: .
@@ -508,7 +508,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.46.2
+    rev: v0.47.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
