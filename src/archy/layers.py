@@ -333,16 +333,20 @@ class LayerCoverage(BaseModel):
 def governed_roots(config: LayerConfig) -> frozenset[str]:
     """The top-level packages the config's LAYER PATTERNS talk about.
 
-    A pattern is a dotted-name glob rooted at a real package (`_validate_layer_pattern`
-    enforces that), so its first segment names the namespace the author intended
-    to govern.
+    A pattern is a dotted-name glob whose first segment names the namespace the
+    author intended to govern, except a floating one (`**.services.**`), which
+    names no namespace. Any floating pattern makes the scope unbounded, so this
+    returns the empty set and `compute_coverage` does not scope by root.
 
     NOT `LayerConfig.roots`, despite the name proximity. That field declares
     extra PEP 420 scan roots so the graph builder can find namespace packages at
     all; this function asks which namespaces the rules claim authority over.
     Neither reads the other.
     """
-    return frozenset(pattern.split(".")[0] for layer in config.layers for pattern in layer.patterns)
+    patterns = [pattern for layer in config.layers for pattern in layer.patterns]
+    if any(is_floating_pattern(pattern) for pattern in patterns):
+        return frozenset()
+    return frozenset(pattern.split(".")[0] for pattern in patterns)
 
 
 def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:

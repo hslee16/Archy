@@ -18,6 +18,7 @@ from archy.layers import (
     discover_config,
     find_reach_violations,
     find_violations,
+    governed_roots,
     load_config,
     match_layer,
 )
@@ -212,6 +213,26 @@ def test_floating_pattern_matches_whole_segments_at_any_depth(tmp_path: Path):
     assert match_layer("myservices.x", layers) is None  # whole segment only
     assert match_layer("conduit.myservices", layers) is None
     assert match_layer("conduit.services_x", layers) is None
+
+
+def test_coverage_counts_modules_a_floating_pattern_reaches(tmp_path: Path):
+    """A floating pattern names no root, so coverage must not scope by one.
+
+    `lib.services.z` sits under a root (`lib`) that no pattern's first segment
+    names. Scoping by the bogus root `**` counted it as outside and zeroed the
+    coverage of a config whose only layer is floating.
+    """
+    config = _cfg(tmp_path, 'layers:\n  svc: {modules: ["**.services.**"]}\nforbid: []\n')
+    graph = nx.DiGraph()
+    graph.add_edge("lib.services.z", "lib.services.y")
+    graph.add_edge("lib.other", "lib.services.y")
+    coverage = compute_coverage(graph, config)
+    assert governed_roots(config) == frozenset()
+    assert coverage.modules_outside_declared_roots == 0
+    assert coverage.modules_total == 3
+    assert coverage.modules_matched == 2
+    assert coverage.unlayered_modules == ("lib.other",)
+    assert coverage.edges_governed == 1
 
 
 def test_floating_pattern_overlap_is_a_loud_error(tmp_path: Path):
