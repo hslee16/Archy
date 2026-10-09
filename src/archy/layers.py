@@ -8,7 +8,8 @@ archy:owns        ExactPatternHint, ForbidRule, LayerConfig, LayerConfigError,
                   LayerCoverage, LayerSpec, ReachViolation, RequiredRule, SdpConfig,
                   SdpViolation, Violation, compute_coverage, contracts_unverified,
                   discover_config, find_reach_violations, find_sdp_violations,
-                  find_violations, governed_roots, load_config, match_layer
+                  find_violations, governed_roots, is_floating_pattern, load_config,
+                  match_layer
 archy:mirrored-by LayerConfig -> archy.cli, archy.contracts, archy.diff,
                   bench.greenfield_eval, LayerConfigError -> archy.cli,
                   archy.contracts, LayerCoverage -> archy.cli, archy.mcp,
@@ -332,16 +333,20 @@ class LayerCoverage(BaseModel):
 def governed_roots(config: LayerConfig) -> frozenset[str]:
     """The top-level packages the config's LAYER PATTERNS talk about.
 
-    A pattern is a dotted-name glob rooted at a real package (`_validate_layer_pattern`
-    enforces that), so its first segment names the namespace the author intended
-    to govern.
+    A pattern is a dotted-name glob whose first segment names the namespace the
+    author intended to govern, except a floating one (`**.services.**`), which
+    names no namespace. Any floating pattern makes the scope unbounded, so this
+    returns the empty set and `compute_coverage` does not scope by root.
 
     NOT `LayerConfig.roots`, despite the name proximity. That field declares
     extra PEP 420 scan roots so the graph builder can find namespace packages at
     all; this function asks which namespaces the rules claim authority over.
     Neither reads the other.
     """
-    return frozenset(pattern.split(".")[0] for layer in config.layers for pattern in layer.patterns)
+    patterns = [pattern for layer in config.layers for pattern in layer.patterns]
+    if any(is_floating_pattern(pattern) for pattern in patterns):
+        return frozenset()
+    return frozenset(pattern.split(".")[0] for pattern in patterns)
 
 
 def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
@@ -735,10 +740,22 @@ def _parse_layers(raw: object, path: Path) -> list[LayerSpec]:
 
 
 def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
-    _validate_pattern(pattern, f"layer {layer_name!r} has an invalid module pattern", path)
+    _validate_pattern(
+        pattern, f"layer {layer_name!r} has an invalid module pattern", path, allow_floating=True
+    )
 
 
-def _validate_pattern(pattern: str, prefix: str, path: Path) -> None:
+_FLOATING_PREFIX = "**."
+
+
+def is_floating_pattern(pattern: str) -> bool:
+    """True for a pattern that starts with `**.`: it has no fixed root package."""
+    return pattern.startswith(_FLOATING_PREFIX)
+
+
+def _validate_pattern(
+    pattern: str, prefix: str, path: Path, *, allow_floating: bool = False
+) -> None:
     """Reject malformed dotted-name globs at config load with a clear error.
 
     A pattern is a dotted-name glob: a leading valid-identifier root package,
@@ -751,6 +768,11 @@ def _validate_pattern(pattern: str, prefix: str, path: Path) -> None:
     `prefix` names the offending config entry, so the same rules serve both
     `layers:` patterns and `required:` rule patterns without either borrowing
     the other's error wording.
+
+    `allow_floating` admits one more shape, for `layers:` only: a leading `**.`
+    followed by a real package name (`**.services.**`, "a `services` package
+    wherever it sits"). It has no root package for the contracts fallback to
+    derive, so that fallback refuses it with its own message instead.
     """
     segments = pattern.split(".")
     if any(seg == "" for seg in segments):
@@ -758,11 +780,19 @@ def _validate_pattern(pattern: str, prefix: str, path: Path) -> None:
             f"{prefix} {pattern!r} in {path}: "
             "empty path segment (no leading, trailing, or doubled dots)."
         )
+    if allow_floating and is_floating_pattern(pattern):
+        if len(segments) < 2 or not _is_package_segment(segments[1]):
+            raise LayerConfigError(
+                f"{prefix} {pattern!r} in {path}: "
+                "a leading '**' must be followed by a Python package name "
+                '(e.g. "**.services.**").'
+            )
+        segments = segments[1:]
     # A package-name segment must be an identifier that is not a Python keyword:
     # no importable package is named `import`/`class`, so accepting one here
     # would just defer the failure to a cryptic import-linter error instead of
     # the clean message this validation exists to give.
-    if not _is_package_segment(segments[0]):
+    elif not _is_package_segment(segments[0]):
         raise LayerConfigError(
             f"{prefix} {pattern!r} in {path}: "
             f"must start with a Python package name, not {segments[0]!r} "
@@ -915,6 +945,11 @@ def _translate_pattern(pattern: str) -> str:
     # the trailing `**` into "(\..*)?$" so the package itself is covered.
     parts: list[str] = []
     i = 0
+    if is_floating_pattern(pattern):
+        # Leading `**.` is zero or more WHOLE segments: `**.services.**` matches
+        # `services` and `app.services.x` but not `myservices.x`.
+        parts.append(r"(?:.*\.)?")
+        i = len(_FLOATING_PREFIX)
     while i < len(pattern):
         ch = pattern[i]
         if ch == "*" and i + 1 < len(pattern) and pattern[i + 1] == "*":

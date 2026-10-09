@@ -540,7 +540,7 @@ forbid:
   - {from: application, to: infra}
 ```
 
-**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. Modules must belong to at most one layer.
+**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. A layer pattern may start with `**.` to mean "this package wherever it sits" (`**.services.**` matches `services`, `conduit.services.user`, not `myservices.x`); `archy contracts` cannot derive import-linter contracts from such a layer, so it refuses with a message when a `forbid` rule uses one. Modules must belong to at most one layer.
 
 **Required reach (`required:`).** The inverse of `forbid:`. A forbid rule catches an edge that should not exist; a required rule catches one that should exist and does not, which forbidding cannot express:
 
@@ -613,7 +613,7 @@ $ archy check .
 #   layer coverage: 9 of 42 modules (21%), 16 of 117 internal edges (14%); 33 module(s) match no layer (`archy check --show-unlayered`)
 ```
 
-That line exists because **a rule set that cannot fire is indistinguishable from a clean codebase**: without it, a config governing 14% of your import edges prints the same "No layer violations" as one governing all of them. The edge percentage is the one to watch, since a config can put most modules in layers while ruling almost none of the edges between them. Coverage is scoped to the root packages your patterns name, so scripts and benchmarks sitting beside your package are counted separately rather than dragging the number down. `--show-unlayered` lists the modules no layer matches.
+That line exists because **a rule set that cannot fire is indistinguishable from a clean codebase**: without it, a config governing 14% of your import edges prints the same "No layer violations" as one governing all of them. The edge percentage is the one to watch, since a config can put most modules in layers while ruling almost none of the edges between them. Coverage is scoped to the root packages your patterns name (every module is counted if a layer uses a floating `**.` pattern), so scripts and benchmarks sitting beside your package are counted separately rather than dragging the number down. `--show-unlayered` lists the modules no layer matches.
 
 The numbers above are archy's own, and they are not flattering. They are printed here because the alternative is not knowing.
 

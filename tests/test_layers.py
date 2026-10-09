@@ -18,6 +18,7 @@ from archy.layers import (
     discover_config,
     find_reach_violations,
     find_violations,
+    governed_roots,
     load_config,
     match_layer,
 )
@@ -176,6 +177,9 @@ def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
     [
         "**",  # leading ** -> contracts root extraction would yield "**"
         "*",  # leading * -> root "*"
+        "**.*",  # floating needs a real package name after the **
+        "**.",  # nothing after the **
+        "**.import",  # keyword is never a package name
         "*foo",  # wildcard not a whole segment
         "foo**bar",  # ** not a whole segment -> previously a wrong regex
         ".foo",  # leading dot -> empty root segment
@@ -197,6 +201,56 @@ def test_load_config_rejects_malformed_layer_pattern(tmp_path: Path, bad: str):
 def test_load_config_accepts_canonical_layer_patterns(tmp_path: Path, good: str):
     config = _cfg(tmp_path, f'layers:\n  core: {{modules: ["{good}"]}}\nforbid: []\n')
     assert config.layers[0].patterns == (good,)
+
+
+def test_floating_pattern_matches_whole_segments_at_any_depth(tmp_path: Path):
+    config = _cfg(tmp_path, 'layers:\n  svc: {modules: ["**.services.**"]}\nforbid: []\n')
+    layers = config.layers
+    assert match_layer("services", layers) == "svc"  # zero leading segments
+    assert match_layer("conduit.services", layers) == "svc"
+    assert match_layer("conduit.services.user", layers) == "svc"
+    assert match_layer("a.b.services.user.deep", layers) == "svc"
+    assert match_layer("myservices.x", layers) is None  # whole segment only
+    assert match_layer("conduit.myservices", layers) is None
+    assert match_layer("conduit.services_x", layers) is None
+
+
+def test_coverage_counts_modules_a_floating_pattern_reaches(tmp_path: Path):
+    """A floating pattern names no root, so coverage must not scope by one.
+
+    `lib.services.z` sits under a root (`lib`) that no pattern's first segment
+    names. Scoping by the bogus root `**` counted it as outside and zeroed the
+    coverage of a config whose only layer is floating.
+    """
+    config = _cfg(tmp_path, 'layers:\n  svc: {modules: ["**.services.**"]}\nforbid: []\n')
+    graph = nx.DiGraph()
+    graph.add_edge("lib.services.z", "lib.services.y")
+    graph.add_edge("lib.other", "lib.services.y")
+    coverage = compute_coverage(graph, config)
+    assert governed_roots(config) == frozenset()
+    assert coverage.modules_outside_declared_roots == 0
+    assert coverage.modules_total == 3
+    assert coverage.modules_matched == 2
+    assert coverage.unlayered_modules == ("lib.other",)
+    assert coverage.edges_governed == 1
+
+
+def test_floating_pattern_overlap_is_a_loud_error(tmp_path: Path):
+    config = _cfg(
+        tmp_path,
+        'layers:\n  api: {modules: ["**.api.**"]}\n  data: {modules: ["**.data.**"]}\nforbid: []\n',
+    )
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("conduit.api.data", config.layers)
+
+
+def test_required_rule_still_rejects_floating_pattern(tmp_path: Path):
+    body = (
+        "layers:\n  a: {modules: [app.**]}\nforbid: []\n"
+        'required:\n  - {source: "**.x.**", must_reach: "app.**"}\n'
+    )
+    with pytest.raises(LayerConfigError, match="must start with a Python package name"):
+        _cfg(tmp_path, body)
 
 
 # --- discover_config ----------------------------------------------------------

@@ -45,7 +45,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.layers import LayerConfig, LayerConfigError, load_config
+from archy.layers import LayerConfig, LayerConfigError, is_floating_pattern, load_config
 
 if TYPE_CHECKING:
     from grimp import ImportGraph
@@ -344,8 +344,22 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
     config: LayerConfig = load_config(archy_yaml_path)
     layer_modules = {layer.name: list(layer.patterns) for layer in config.layers}
 
+    forbidden_layers = {name for rule in config.forbid for name in (rule.from_layer, rule.to_layer)}
+    for layer in config.layers:
+        floating = [p for p in layer.patterns if is_floating_pattern(p)]
+        if floating and layer.name in forbidden_layers:
+            raise LayerConfigError(
+                f"layer {layer.name!r} pattern {floating[0]!r} has no root package, so "
+                "import-linter contracts cannot be derived from it. Use `archy check` "
+                "(it enforces floating patterns), or write a `.importlinter` file."
+            )
     roots = sorted(
-        {pattern.split(".", 1)[0] for layer in config.layers for pattern in layer.patterns}
+        {
+            pattern.split(".", 1)[0]
+            for layer in config.layers
+            for pattern in layer.patterns
+            if not is_floating_pattern(pattern)
+        }
     )
     if not roots:
         raise LayerConfigError(
