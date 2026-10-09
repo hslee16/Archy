@@ -966,6 +966,52 @@ reach for all cheap syntactic methods. The full honest picture is now **~74%
 source precision on the exact tiers; recall 100% Type-1/2, and (with
 `--near-miss`) ~60-100% Type-3 by edit type, up from ~0%.**
 
+### 12h. Why duplicates matter to an agent, not only to a maintainer (2026-10-08, #262)
+
+Everything above justifies duplicate detection by **human maintenance cost**:
+two copies drift, a fix lands in one. There is a second, separate reason that
+applies only when an agent navigates the repository, and it is worth stating
+because it changes who the output is for.
+
+**The mechanism practitioners report.** An agent finds code by search. When a
+legacy or duplicated copy still looks live (it is intertwined with current
+code, or marked obsolete while the services that implement it are not), the
+search returns the wrong or stale copy, the agent builds on it, and the result
+is broken in a way a deterministic linter does not flag. This is the
+rebuttal to "linters already handle dead and duplicate code": linters handle
+the trivial cases, and the cases that mislead an agent are the intertwined,
+non-trivial ones that shape-hash and near-miss clustering (§12d, §12g) exist
+to surface. Two comments in the HN thread on the cleanliness paper
+(https://news.ycombinator.com/item?id=48798815) put it directly: comment
+48800345 ("agent greps those, builds off of them - produces half legacy
+garbage") answering comment 48800118 ("dead code removal, code duplication,
+unreachable code are already solved using deterministic linters").
+
+**How strong the claim is.** Weak, and it should be written that way.
+
+- The quotes are real but they are **practitioner anecdote**.
+- **No peer-reviewed study isolates duplication as the cause** of an agent
+  editing the wrong copy. Indirect support exists for the failure mode in
+  general: context misalignment (arXiv 2510.13859) and lexically noisy,
+  hard-to-disambiguate grep results (arXiv 2606.26979, 2405.15793, and MASAI,
+  2406.11638).
+- **Do not cite arXiv 2605.20049 (§14c.6) for the duplication-specific
+  claim.** It folds duplication into a general "cleanliness" treatment built
+  from synthetically degraded repositories and does not isolate it; its
+  methodology is also contested in the same thread.
+
+So the supportable wording is "reported by practitioners and consistent with
+observed context-misalignment failure modes", not "shown to cause".
+
+**What this does and does not license.** It is a reason a reader of
+`archy duplicates` output might be an agent, and a reason the near-miss tier
+matters beyond refactoring. It is **not** a measured benefit of archy:
+archy's own agent-footprint line closed with nulls (§14c.7), and this section
+does not reopen it. The optional follow-up in #262, ranking likely
+stale-but-live clusters higher for agent consumers, is **not taken here**: it
+would have to clear the precision work already shipped (§12c, §12e, §12f)
+without regressing it, and nothing above is a measurement that it would.
+
 ---
 
 ## 13. Type-hint coverage (Python-specific)
@@ -1503,6 +1549,9 @@ it does not license a per-module change-spread number, so archy does not
 manufacture one. The reusable rule: an external paper motivates a
 *claim*; a shippable metric additionally needs a *validated proxy* and a
 stake beyond the noise floor, and #260 had neither.
+
+The duplication-specific version of the agent-navigation argument, which this
+paper does not isolate, is in §12h.
 
 ### 14c.7. The agent-cost axis, and archy's own two nulls against it (#261)
 

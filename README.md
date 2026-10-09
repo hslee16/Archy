@@ -540,7 +540,7 @@ forbid:
   - {from: application, to: infra}
 ```
 
-**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. A layer pattern may start with `**.` to mean "this package wherever it sits" (`**.services.**` matches `services`, `conduit.services.user`, not `myservices.x`); `archy contracts` cannot derive import-linter contracts from such a layer, so it refuses with a message when a `forbid` rule uses one. Modules must belong to at most one layer.
+**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant, whereas a bare `myapp.domain` matches that one module exactly and silently leaves its submodules unlayered (import-linter contracts, by contrast, match a named package together with its descendants). `archy check` flags the bare form when it leaves descendants out; see Coverage below. A layer pattern may start with `**.` to mean "this package wherever it sits" (`**.services.**` matches `services`, `conduit.services.user`, not `myservices.x`); `archy contracts` cannot derive import-linter contracts from such a layer, so it refuses with a message when a `forbid` rule uses one. Modules must belong to at most one layer.
 
 **Required reach (`required:`).** The inverse of `forbid:`. A forbid rule catches an edge that should not exist; a required rule catches one that should exist and does not, which forbidding cannot express:
 
@@ -614,6 +614,18 @@ $ archy check .
 ```
 
 That line exists because **a rule set that cannot fire is indistinguishable from a clean codebase**: without it, a config governing 14% of your import edges prints the same "No layer violations" as one governing all of them. The edge percentage is the one to watch, since a config can put most modules in layers while ruling almost none of the edges between them. Coverage is scoped to the root packages your patterns name (every module is counted if a layer uses a floating `**.` pattern), so scripts and benchmarks sitting beside your package are counted separately rather than dragging the number down. `--show-unlayered` lists the modules no layer matches.
+
+When the reach is degenerate, the verdict says so instead of leaving it to the next line. A config whose patterns are bare qualnames, so they match one module each and none of the code beneath it, looks like this (exit code unchanged):
+
+```console
+$ archy check .
+# No layer violations, but this config governs 0 of 1 internal edges (0%), so no forbid rule can fire (config: archy.yaml).
+#   layer coverage: 2 of 5 modules (40%), 0 of 1 internal edges (0%); 3 module(s) match no layer (`archy check --show-unlayered`)
+#   layer 'domain' matches myapp.domain exactly; 1 descendant module is unlayered (myapp.domain.models). Did you mean "myapp.domain.**"?
+#   layer 'web' matches myapp.web exactly; 1 descendant module is unlayered (myapp.web.views). Did you mean "myapp.web.**"?
+```
+
+If no module in the tree falls under any root the config names, the verdict says that no rule can fire.
 
 The numbers above are archy's own, and they are not flattering. They are printed here because the alternative is not knowing.
 

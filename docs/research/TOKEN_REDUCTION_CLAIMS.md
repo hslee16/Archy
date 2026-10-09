@@ -112,7 +112,7 @@ that reduces nothing and one that changes cost without changing tokens.
 | 4 | **Progressive disclosure** | Anthropic Agent Skills | Only `name` + `description` sit in the system prompt; SKILL.md loads on trigger; bundled files "stay on the filesystem and cost zero tokens" until read. |
 | 5 | **Compaction / summarization** | Claude Code `/compact`, memory tool | Replace a long history with a summary and reinitialize. Costs a summarization call to save future turns. |
 | 6 | **Sub-agent isolation** | Claude Code subagents, multi-agent harnesses | Exploration happens in a throwaway context; only a distillate returns. Anthropic's own figure: a subagent may spend "tens of thousands of tokens or more" and return "often 1,000-2,000 tokens". |
-| 7 | **Tool-surface reduction** | MCP consolidation, deferred/searchable tool schemas | Shrink the always-resident tool-definition prefix. **archy already did this** (#227, #265): 19 tools to 11. |
+| 7 | **Tool-surface reduction** | MCP consolidation, deferred/searchable tool schemas | Shrink the always-resident tool-definition prefix. **archy already did this** (#227, #265): 19 tools to 11 (13 today, see §7). |
 | 8 | **Output-format efficiency** | token-efficient tool use, concise response formats | Same information, fewer tokens on the wire. archy ships `response_format="summary"` defaults; DSM summary is ~89% smaller. |
 | 9 | **Code retrieval / embeddings** | Cursor-style codebase indexing | Fetch ranked chunks instead of whole files. |
 | 10 | **Prompt caching** | Anthropic prompt caching | **Reduces cost, not tokens.** The prefix is still sent and still occupies context; it is billed differently. See §4. |
@@ -432,11 +432,23 @@ costs fewer always-in-context tokens and improves tool-selection accuracy".
 
 | component | tokens | note |
 | --- | --- | --- |
-| descriptions | 2,256 | |
-| `inputSchema` | 1,662 | |
-| **model-visible total** | **3,918** | **1.96% of a 200k window, ~356 tokens/tool** |
-| `outputSchema` | 14,427 | **client-side only, see caveat** |
-| full MCP payload | 18,345 | 9.17% of a 200k window |
+| descriptions | 3,308 | |
+| `inputSchema` | 1,827 | |
+| **model-visible total** | **5,135** | **2.57% of a 200k window, ~395 tokens/tool** |
+| `outputSchema` | 23,934 | **client-side only, see caveat** |
+| full MCP payload | 29,069 | 14.53% of a 200k window |
+
+Re-measured on 2026-10-08 against the current surface of **13 tools** (#417).
+The first measurement, at 11 tools, was 2,256 / 1,662 / 3,918 (1.96%, ~356 per
+tool) / 14,427 / 18,345 (9.17%). The surface has grown by `archy_conventions`
+and `archy_module_view` since, and the figures were re-derived, not scaled:
+descriptions differ in length per tool, so the per-tool average is not a
+constant. Method, which reproduces the 11-tool numbers digit for digit when run
+at commit `8c8c348`: sum `len(enc.encode(...))` over every tool of
+`create_server().list_tools()` with `tiktoken` `cl100k_base`, on the
+description text, `json.dumps(inputSchema)` and `json.dumps(outputSchema)` with
+default separators. Compact separators would give 1,316 and 19,280 instead, so
+the serialization is part of the method.
 
 **The caveat that decides how to read this, and it matters.** MCP
 `outputSchema` (adopted in #228 for `structuredContent`) is **consumed
@@ -449,7 +461,7 @@ it only to compile a validator for `structuredContent`. On the dominant client,
 
 An earlier draft of this section reported the 18,345 figure as archy's context
 cost and called archy a major bloat contributor. **That was wrong**, and the
-corrected number is 5x smaller.
+corrected number is roughly 5x smaller (5.7x on today's 13-tool surface).
 
 **But do not derive this from the API shape, which an earlier draft also did.**
 "The Anthropic tool spec has no output-schema field, therefore MCP
@@ -458,7 +470,7 @@ protocol-wide work, and it is false in general. **Gemini's
 `FunctionDeclaration` has a per-tool output-schema field**
 (`responseJsonSchema`), and **google/adk-python populates it directly from MCP
 `outputSchema`**, behind a feature gate that is default-on. So on a
-Gemini-plus-ADK client, archy's 14,427 `outputSchema` tokens **do** enter the
+Gemini-plus-ADK client, archy's 23,934 `outputSchema` tokens **do** enter the
 tool declaration. The correct statement is an **observed property of client
 implementations**, not a consequence of the spec. The MCP spec itself is
 ambiguous in archy's favour but not decisively: its normative language is
@@ -466,7 +478,7 @@ validation-only ("Clients **SHOULD** validate structured results against this
 schema"), while its rationale says an output schema helps guide "clients and
 LLMs" to parse returned data.
 
-Two related notes, since #228 ships `outputSchema` on all 11 tools:
+Two related notes, since #228 ships `outputSchema` on all 13 tools:
 
 - **A historical compatibility hazard, now closed.** Some clients silently
   dropped *every* tool from a server that sent `outputSchema`
@@ -485,13 +497,13 @@ Two related notes, since #228 ships `outputSchema` on all 11 tools:
   only tools Claude actually uses enter context. `ENABLE_TOOL_SEARCH=auto`
   loads upfront when tools fit within **10% of the context window**. So on the
   dominant client, archy's surface is deferred, and even under the threshold
-  mode its 1.96% loads comfortably.
-- **archy's per-tool cost looks lean, with the same caveat attached.** ~356
+  mode its 2.57% loads comfortably.
+- **archy's per-tool cost looks lean, with the same caveat attached.** ~395
   model-visible tokens per tool against GitHub MCP's ~18,000 for 27 tools
   (~667/tool). These are **not like-for-like**: archy's figure is cl100k over
   description plus `inputSchema`, while #11364's is Claude Code's own
   `/context` accounting of the full serialized block. A client counting the
-  whole MCP payload would put archy at ~1,668/tool and reverse the comparison.
+  whole MCP payload would put archy at ~2,236/tool and reverse the comparison.
   The favourable reading depends on the same client behaviour flagged as
   unverified above.
 
@@ -579,7 +591,7 @@ each half is already settled:
 
 - **Prefix bloat** (tool definitions). The one real, independently measured
   problem. **archy already solved its share** (#227, #265) and now measures
-  **3,918 model-visible tokens, 1.96% of a 200k window, ~356 tokens per tool**.
+  **5,135 model-visible tokens, 2.57% of a 200k window, ~395 tokens per tool**.
   The platform has also moved underneath it: Claude Code defers MCP tools by
   default. Nothing to build.
 - **Comprehension context** (briefs, maps, retrieval). Unmeasured by its own
@@ -592,8 +604,8 @@ each half is already settled:
 | candidate | anti-theater | discriminant | usage signal | beats the null? | verdict |
 | --- | --- | --- | --- | --- | --- |
 | `archy brief` / repo map (redo) | Fails. Measured null already; the strongest precedent (aider) publishes no token evidence | No | None | **No.** Nothing addresses the measured zero headroom | **Wontfix on this evidence.** Shipped anyway in v0.46 ([#421](https://github.com/hslee16/archy/issues/421)) on maintainer judgment, ahead of the local-model arm that would test it; this row's verdict was overridden, not met |
-| Compress archy's tool descriptions further | Passes (deterministic, in-repo measurable) | Marginal | None | n/a | **Not worth it.** 1.96% is already lean; effort better spent elsewhere |
-| Trim `outputSchema` | **Fails on premise for token cost**: client-side on Claude Code, zero context (§7). Not zero everywhere: Gemini + ADK forwards it | No | None | n/a | **Wontfix for tokens.** Revisit only if archy targets a Gemini-class client, where its 14,427 tokens do land in the tool declaration |
+| Compress archy's tool descriptions further | Passes (deterministic, in-repo measurable) | Marginal | None | n/a | **Not worth it.** 2.57% is already lean; effort better spent elsewhere |
+| Trim `outputSchema` | **Fails on premise for token cost**: client-side on Claude Code, zero context (§7). Not zero everywhere: Gemini + ADK forwards it | No | None | n/a | **Wontfix for tokens.** Revisit only if archy targets a Gemini-class client, where its 23,934 tokens do land in the tool declaration |
 | Token-savings marketing claim | Fails hard. We have two nulls of our own | No | None | No | **Forbidden.** See §14c.7 |
 | Structural-Q&A footprint bench | Passes (falsifiable, real headroom per §8) | Yes | **None** | **Yes**, different task class | **Recorded as reopen path, not scheduled** |
 
@@ -685,7 +697,8 @@ whole thesis is "check the denominator" has to show its own.
 | 15 | "archy is the only party that measured the mechanism" | Contradicted §2 and §8 of this same file. Scoped to **editing tasks** | §6 |
 | 16 | archy 356 tokens/tool vs GitHub MCP 667/tool | **Not like-for-like.** Different tokenizer and different payload boundary; a client counting the full payload puts archy at ~1,668/tool and reverses it | §7 |
 
-What survived intact: the 3,918 / 1.96% self-measurement (reproduced
+What survived intact: the 3,918 / 1.96% self-measurement at 11 tools (re-measured
+at 13 tools in §7: 5,135 / 2.57%) (reproduced
 digit-for-digit, and tokenizer choice moves it under 8%), the aider
 no-ablation conclusion, the codegraph task-class argument, the §14c.7 #282/#289
 figures and SWE-Effi citation, and the prefix-bloat baseline from issue #11364.
