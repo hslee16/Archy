@@ -540,7 +540,7 @@ forbid:
   - {from: application, to: infra}
 ```
 
-**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. Modules must belong to at most one layer.
+**Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant. A layer pattern may start with `**.` to mean "this package wherever it sits" (`**.services.**` matches `services`, `conduit.services.user`, not `myservices.x`); `archy contracts` cannot derive import-linter contracts from such a layer, so it refuses with a message. Modules must belong to at most one layer.
 
 **Required reach (`required:`).** The inverse of `forbid:`. A forbid rule catches an edge that should not exist; a required rule catches one that should exist and does not, which forbidding cannot express:
 

@@ -514,3 +514,16 @@ def test_importlinter_pinned_to_supported_minor() -> None:
         f"import-linter {installed} is outside the supported pin (2.11.x). "
         "Update pyproject.toml and re-verify the wrap before bumping the pin."
     )
+
+
+def test_a_floating_layer_pattern_in_a_forbid_rule_is_refused_clearly(tmp_path: Path) -> None:
+    """#377. `**.api.**` has no root package for the fallback to hand
+    import-linter, so deriving contracts from it must say so rather than
+    crash on a bogus root or silently contract nothing."""
+    _write_two_module_fixture(tmp_path)
+    (tmp_path / "archy.yaml").write_text(
+        'layers:\n  api: {modules: ["**.api.**"]}\n  store: {modules: ["top.store.**"]}\n'
+        "forbid:\n  - {from: store, to: api}\n"
+    )
+    with pytest.raises(ContractsConfigError, match="has no root package"):
+        run_contracts(tmp_path)
