@@ -237,3 +237,17 @@ def test_compile_glob_is_total_over_regex_metachars():
     p = _compile_glob("[abc].py")
     assert p.fullmatch("[abc].py")
     assert not p.fullmatch("a.py")
+
+
+def test_affected_without_tests_carries_static_only_caveat(tmp_path: Path):
+    """No impacted tests means no test imports it statically, not that none exercises it."""
+    project = _make_project(tmp_path)
+    graph = build_graph(project)
+    covered = find_affected(graph, [project / "app" / "libs" / "db.py"], project_root=project)
+    assert covered.impacted_tests  # fixture reaches the branch
+    assert covered.model_dump()["empty_caveat"] is None
+    # Nothing imports the suffix-style test file itself, so no test reaches it.
+    orphan = project / "app" / "services" / "auth_test.py"
+    none = find_affected(graph, [orphan], project_root=project)
+    assert none.impacted_tests == ()
+    assert "importlib.import_module" in none.model_dump()["empty_caveat"]

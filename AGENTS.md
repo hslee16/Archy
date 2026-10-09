@@ -44,7 +44,9 @@ with the reason, rather than weakening a rule.
 **Some failures only appear in CI's environment.** The bench caches under
 `bench/cache/` are gitignored, so a test that depends on one passes locally and
 fails on the runner. Before pushing a test that touches one, run
-`mv bench/cache /tmp/bench-cache-aside`, re-run the test, then move it back. Assert the invariant, not the message: a test that checks *which*
+`mv bench/cache /tmp/bench-cache-aside`, re-run the test, then move it back.
+
+**Assert the invariant, not the message.** A test that checks *which*
 precondition failed is asserting a fact about your laptop.
 
 **Open the failing check, never the tally.** A summary line saying "1 failed"
@@ -223,7 +225,7 @@ its own transcripts; the control showed 0/0/0).
 **A rule set that cannot fire looks exactly like a clean codebase.** Two shipped
 bench configs had patterns matching one empty `__init__.py` instead of a
 338-module package, so every rule in them was dead and `check` exited 0. Layer
-patterns are `pkg.**`, not `pkg`, which matches an exact dotted name.
+patterns are `pkg.**`; a bare `pkg` matches only an exact dotted name, not its submodules.
 
 Whenever you author rules for a codebase, **canary them**: add one deliberately
 violating import, confirm exit 1, revert. `bench/q1b_layers_check.py --canary`

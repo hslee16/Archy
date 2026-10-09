@@ -1829,3 +1829,15 @@ def test_brief_json_reason_is_absent_without_an_archy_yaml(tmp_path: Path):
 
     assert payload["transitive_checked"] is False
     assert payload["transitive_unverified_reason"] is None
+
+
+def test_impact_empty_result_says_what_the_zero_means_in_text_and_json(tmp_path: Path):
+    _make_libs_to_routers_chain(tmp_path)
+    leaf = ["impact", str(tmp_path), "--file", "app/routers/user.py"]
+    as_json = json.loads(CliRunner().invoke(main, [*leaf, "--format", "json"]).output)
+    assert as_json["impacted"] == []  # fixture reaches the branch
+    assert "importlib.import_module" in as_json["empty_caveat"]
+    text = CliRunner().invoke(main, leaf).output
+    assert "does not mean safe to remove" in text
+    populated = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--format", "json"]
+    assert json.loads(CliRunner().invoke(main, populated).output)["empty_caveat"] is None

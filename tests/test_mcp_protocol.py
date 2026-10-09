@@ -215,3 +215,19 @@ def test_a_malformed_config_is_a_protocol_error(tmp_path_factory):
     result = _wire(_run(lambda s: s.call_tool("archy_check", {"path": str(bad)})))
 
     assert result["isError"] is True
+
+
+def test_empty_impact_caveat_reaches_the_wire(project: Path):
+    """`empty_caveat` is a computed field, so it survives `model_dump()` to the agent."""
+    result = _wire(
+        _run(
+            lambda s: s.call_tool(
+                "archy_impact",
+                {"path": str(project), "files": ["app/commands/setup_user.py"]},
+            )
+        )
+    )
+    # Union return (Impact | Affected), so the SDK wraps it under `result`.
+    payload = result["structuredContent"]["result"]
+    assert payload["impacted"] == []  # fixture reaches the branch
+    assert "importlib.import_module" in payload["empty_caveat"]

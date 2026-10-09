@@ -35,6 +35,8 @@ import networkx as nx
 import yaml
 from pydantic import BaseModel, ConfigDict, computed_field
 
+from archy.instability import compute_instability
+
 
 class LayerSpec(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -686,8 +688,6 @@ def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[Sd
     things, more likely to change) is a violation. Only internal-to-
     internal edges are considered; external dependencies have no I.
     """
-    from archy.instability import compute_instability
-
     instability = compute_instability(graph)
     violations: list[SdpViolation] = []
     for source, target, data in graph.edges(data=True):
