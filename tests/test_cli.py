@@ -8,6 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from archy.cli import _duplicates_to_text, _parse_edge_spec, main
+from archy.contracts import ContractsConfigError, ContractsNotAvailable
 from archy.duplicates import DuplicateGroup, DuplicateMember
 
 
@@ -156,10 +157,8 @@ def test_check_says_so_when_the_config_governs_nothing(tmp_path: Path):
     assert "100%" not in result.output
 
 
-def test_check_fails_when_declared_layers_are_absent(tmp_path: Path):
-    """The Constraint Decay paper's other half: forbidding edges between layers
-    says nothing about whether the layers exist, and a single-module solution
-    satisfies every forbid rule by having no cross-layer edges at all."""
+def _make_absent_layers_project(tmp_path: Path) -> Path:
+    """One module under `app`, and two declared layers that match nothing."""
     project = tmp_path / "proj"
     (project / "app").mkdir(parents=True)
     (project / "app" / "__init__.py").write_text("")
@@ -171,6 +170,14 @@ def test_check_fails_when_declared_layers_are_absent(tmp_path: Path):
         "  services:\n    modules: ['app.services.**']\n"
         "forbid:\n  - {from: services, to: routes}\n"
     )
+    return project
+
+
+def test_check_fails_when_declared_layers_are_absent(tmp_path: Path):
+    """The Constraint Decay paper's other half: forbidding edges between layers
+    says nothing about whether the layers exist, and a single-module solution
+    satisfies every forbid rule by having no cross-layer edges at all."""
+    project = _make_absent_layers_project(tmp_path)
     result = CliRunner().invoke(main, ["check", str(project)])
     assert result.exit_code == 1
     assert "No layer violations" in result.output  # no forbidden edge exists
@@ -184,17 +191,7 @@ def test_check_json_explains_a_presence_failure(tmp_path: Path):
     A JSON consumer has no text output to fall back on, so the payload has to
     say why the gate failed.
     """
-    project = tmp_path / "proj"
-    (project / "app").mkdir(parents=True)
-    (project / "app" / "__init__.py").write_text("")
-    (project / "app" / "everything.py").write_text("x = 1\n")
-    (project / "archy.yaml").write_text(
-        "min_layers_present: 2\n"
-        "layers:\n"
-        "  routes:\n    modules: ['app.routes.**']\n"
-        "  services:\n    modules: ['app.services.**']\n"
-        "forbid:\n  - {from: services, to: routes}\n"
-    )
+    project = _make_absent_layers_project(tmp_path)
     result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
     assert result.exit_code == 1
     payload = json.loads(result.output)
@@ -1277,7 +1274,6 @@ def test_index_sync_reports_stats_and_caches(tmp_path: Path):
     assert first.exit_code == 0
     assert "reparsed" in first.output
     assert (project / ".archy" / "index.db").exists()
-    # Second sync reuses the cache: nothing reparsed.
     second = CliRunner().invoke(main, ["index", "sync", str(project)])
     assert second.exit_code == 0
     assert "0 reparsed" in second.output
@@ -1289,7 +1285,6 @@ def test_index_clear_removes_db(tmp_path: Path):
     result = CliRunner().invoke(main, ["index", "clear", str(project)])
     assert result.exit_code == 0
     assert not (project / ".archy" / "index.db").exists()
-    # Clearing again is a clean no-op.
     again = CliRunner().invoke(main, ["index", "clear", str(project)])
     assert again.exit_code == 0
     assert "no cache" in again.output
@@ -1307,7 +1302,7 @@ def test_parse_edge_spec_rejects_bad_input(spec: str):
 
 
 def test_simulate_cli_predicts_cycle(tmp_path: Path):
-    project = _make_acyclic_project(tmp_path)  # pkg.a -> pkg.b
+    project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["simulate", str(project), "--add", "pkg.b:pkg.a"])
     assert result.exit_code == 0
     assert "no files written" in result.output
@@ -1629,6 +1624,11 @@ def _invoke_json(args: list[str]) -> dict:
     return json.loads(out[out.index("{") :])
 
 
+_SHIPPING_LAYERS_NO_FORBID = (
+    "layers:\n  api:\n    modules: [shipping.api]\n  store:\n    modules: [shipping.store]\n"
+)
+
+
 def _make_uncovered_forbid_project(tmp_path: Path) -> Path:
     """A config whose layers govern a little, but not the edge that matters."""
     root = tmp_path / "proj"
@@ -1674,9 +1674,7 @@ def test_check_handoff_is_silent_without_forbid_rules(tmp_path: Path):
     """Nothing to verify means nothing to hand off. A line printed on every run
     is one a reader learns to skip."""
     root = _make_uncovered_forbid_project(tmp_path)
-    (root / "archy.yaml").write_text(
-        "layers:\n  api:\n    modules: [shipping.api]\n  store:\n    modules: [shipping.store]\n"
-    )
+    (root / "archy.yaml").write_text(_SHIPPING_LAYERS_NO_FORBID)
     result = CliRunner().invoke(main, ["check", str(root)])
     assert "--contracts" not in result.output
 
@@ -1705,7 +1703,6 @@ def test_brief_answers_the_four_questions_and_stays_small(tmp_path: Path):
         "cannot see",
     ):
         assert heading in result.output
-    # the co-update set and the coverage gap are the two actionable parts
     assert "layer coverage" in result.output
     assert len(result.output) < 20_000
 
@@ -1715,19 +1712,29 @@ def test_brief_is_advisory_and_never_gates(tmp_path: Path):
     assert CliRunner().invoke(main, ["brief", str(root)]).exit_code == 0
 
 
+def _stub_run_contracts_raising(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
+    """Make `run_contracts` raise `exc`, to exercise the no-verdict branch.
+
+    The substitution has to land on the `archy.contracts` module object because
+    `_run_check_contracts` resolves `run_contracts` through it at call time; a
+    stub bound anywhere else would never be called.
+    """
+    import archy.contracts
+
+    def _boom(*args, **kwargs):
+        raise exc
+
+    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+
+
 def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: Path, monkeypatch):
     """A verdict without a reason is not actionable. When import-linter is
     absent, `contracts` missing from the JSON entirely is indistinguishable from
     a bug in archy, and a reason on stderr is carried by neither structured
     stream. The MCP surface has always reported `available`/`error` here."""
-    # Local: the substitution has to land on the module object that
-    # `_run_check_contracts` imports from at call time.
-    import archy.contracts
-
-    def _boom(*args, **kwargs):
-        raise archy.contracts.ContractsNotAvailable("import-linter is not installed")
-
-    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    _stub_run_contracts_raising(
+        monkeypatch, ContractsNotAvailable("import-linter is not installed")
+    )
     root = _make_uncovered_forbid_project(tmp_path)
 
     payload = _invoke_json(["check", str(root), "--contracts", "--format", "json"])
@@ -1741,14 +1748,7 @@ def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: P
 def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch):
     """An unreadable contracts config is `available=True` with a reason, the way
     `mcp._run_contracts` distinguishes it from a missing dependency."""
-    # Local: the substitution has to land on the module object that
-    # `_run_check_contracts` imports from at call time.
-    import archy.contracts
-
-    def _boom(*args, **kwargs):
-        raise archy.contracts.ContractsConfigError("no contracts config found")
-
-    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    _stub_run_contracts_raising(monkeypatch, ContractsConfigError("no contracts config found"))
     root = _make_uncovered_forbid_project(tmp_path)
 
     payload = _invoke_json(["brief", str(root), "--contracts", "--format", "json"])
@@ -1775,9 +1775,7 @@ def test_check_json_says_whether_it_looked_transitively(tmp_path: Path):
 
 def test_check_json_reason_is_absent_without_forbid_rules(tmp_path: Path):
     root = _make_uncovered_forbid_project(tmp_path)
-    (root / "archy.yaml").write_text(
-        "layers:\n  api:\n    modules: [shipping.api]\n  store:\n    modules: [shipping.store]\n"
-    )
+    (root / "archy.yaml").write_text(_SHIPPING_LAYERS_NO_FORBID)
 
     payload = _invoke_json(["check", str(root), "--format", "json"])
 
@@ -1791,12 +1789,7 @@ def test_check_json_keeps_a_reason_when_contracts_could_not_run(tmp_path: Path, 
     unverified as never asking, so dropping the reason there would be the same
     silent clean pass in a different disguise. It must not name `--contracts`
     back at a caller who just passed it and watched it fail."""
-    import archy.contracts
-
-    def _boom(*args, **kwargs):
-        raise archy.contracts.ContractsConfigError("no contracts config found")
-
-    monkeypatch.setattr(archy.contracts, "run_contracts", _boom)
+    _stub_run_contracts_raising(monkeypatch, ContractsConfigError("no contracts config found"))
     root = _make_uncovered_forbid_project(tmp_path)
 
     payload = _invoke_json(["check", str(root), "--contracts", "--format", "json"])
