@@ -23,7 +23,7 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import networkx as nx
@@ -612,9 +612,7 @@ def _build_reexport_maps(
             source = _reexport_source(ref, m, internal_qualnames)
             if source is None:
                 continue
-            for i, name in enumerate(ref.imported_names):
-                alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
-                local = alias or name
+            for _, local in _local_bindings(ref):
                 pkg_map[local] = source
         if pkg_map:
             maps[m.qualname] = pkg_map
@@ -753,9 +751,7 @@ def _build_alias_table(
         if ref.imported_names:
             base_internal = base in internal_qualnames
             pkg_map = reexport_maps.get(base, {}) if base_internal else {}
-            for i, name in enumerate(ref.imported_names):
-                alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
-                local = alias or name
+            for name, local in _local_bindings(ref):
                 if not local:
                     continue
                 if base_internal:
@@ -769,25 +765,34 @@ def _build_alias_table(
                 # `import X.Y as Z` binds Z to the deepest module (X.Y), unlike
                 # bare `import X.Y` which only binds the top-level name X --
                 # the alias short-circuits Python's attribute-walk semantics.
-                if base in internal_qualnames:
-                    table[alias] = base
-                else:
-                    table[alias] = _external_target(base, internal_qualnames)
+                table[alias] = _external_target(base, internal_qualnames)
             else:
                 # `import X.Y` binds only the top-level name `X` per Python's
                 # actual import semantics (X.Y is accessed via attribute on X).
                 top = base.split(".")[0]
                 if not top:
                     continue
-                if top in internal_qualnames:
-                    table[top] = top
-                else:
-                    table[top] = _external_target(top, internal_qualnames)
+                table[top] = _external_target(top, internal_qualnames)
     return table
 
 
+def _local_bindings(ref: ImportRef) -> Iterator[tuple[str, str]]:
+    """Yield `(imported_name, local_name)` for each name a `from X import ...` binds.
+
+    `imported_aliases` may be shorter than `imported_names`; a name with no
+    alias binds under itself. Kept in one place so the re-export map and the
+    call-resolution alias table cannot disagree on that padding rule.
+    """
+    for i, name in enumerate(ref.imported_names):
+        alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
+        yield name, alias or name
+
+
 def _external_target(base: str, internal_qualnames: set[str]) -> str:
-    """Collapse an external dotted path to the longest internal prefix or top-level pkg."""
+    """Collapse a dotted path to its longest internal prefix, else its top-level pkg.
+
+    Returns `base` itself when `base` is internal, so callers need no
+    `in internal_qualnames` branch of their own."""
     parts = base.split(".")
     for end in range(len(parts), 0, -1):
         candidate = ".".join(parts[:end])
