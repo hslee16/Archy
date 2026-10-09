@@ -8,6 +8,7 @@ import pytest
 from archy.graph import (
     DEFAULT_MAX_MODULES,
     ScanTooLargeError,
+    _add_kind,
     build_graph,
     effective_max_modules,
     graph_to_dict,
@@ -826,3 +827,38 @@ def test_graph_to_dict_shape_is_pinned_by_hand():
             },
         ],
     }
+
+
+def test_submodule_beats_a_same_named_reexport_for_edges_and_calls(tmp_path: Path, pkg: Path):
+    """`from pkg import sub` where `sub` is BOTH a submodule and a re-exported name.
+
+    The import edge and the call edge route through one shared rule, so they
+    must agree. Hand-worked: `pkg.sub` exists, and `pkg/__init__.py` also
+    re-exports a name `sub` from `pkg.impl`; the submodule wins. If the rule
+    were reversed both edges would land on `pkg.impl`.
+    """
+    (pkg / "__init__.py").write_text("from .impl import sub\n")
+    (pkg / "impl.py").write_text("sub = 1\n")
+    (pkg / "sub.py").write_text("def do():\n    pass\n")
+    (pkg / "consumer.py").write_text("from pkg import sub\nsub.do()\n")
+    g = build_graph(tmp_path)
+    assert g.has_edge("pkg.consumer", "pkg.sub")  # fixture reaches the both-apply branch
+    assert not g.has_edge("pkg.consumer", "pkg.impl")
+    assert g["pkg.consumer"]["pkg.sub"]["call_count"] == 1
+
+
+def test_add_kind_defaults_a_missing_kinds_to_import_for_either_kind():
+    """A kinds-less edge predates call edges, so it was an import edge.
+
+    Unreachable through `build_graph` (every builder-made edge carries `kinds`),
+    which is why this goes to the helper directly: the default is the only
+    behavior the helper adds over a membership check.
+    """
+    call: dict = {}
+    _add_kind(call, "call")
+    assert call["kinds"] == ("import", "call")
+    already: dict = {"kinds": ("call",)}
+    _add_kind(already, "import")
+    assert already["kinds"] == ("call", "import")
+    _add_kind(already, "import")
+    assert already["kinds"] == ("call", "import")  # idempotent

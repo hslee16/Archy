@@ -488,14 +488,34 @@ def resolve_from_import(
     targets: list[str] = []
     pkg_map = reexports.get(base, {})
     for name in imported_names:
-        submodule = f"{base}.{name}"
-        if submodule in known:
-            targets.append(submodule)
-        elif name in pkg_map:
-            targets.append(pkg_map[name])
+        target = _resolve_imported_name(base, name, known, pkg_map)
+        if target is not None:
+            targets.append(target)
     if not targets and base in known:
         targets.append(base)
     return targets
+
+
+def _resolve_imported_name(
+    base: str,
+    name: str,
+    known: set[str] | frozenset[str],
+    pkg_map: dict[str, str],
+) -> str | None:
+    """Where `name` in `from base import name` lands, or None when neither rule applies.
+
+    One copy of the routing decision, because `resolve_from_import` (edges) and
+    `_build_alias_table` (call resolution) each need it and must not drift: an
+    import edge and a call edge for the same name that disagreed would put two
+    different targets in front of every downstream metric. The None case is
+    deliberately left to the caller, since the edge path drops the name and
+    only falls back to `base` when NO name resolved, while the alias path binds
+    the local name to `base` immediately.
+    """
+    submodule = f"{base}.{name}"
+    if submodule in known:
+        return submodule
+    return pkg_map.get(name)
 
 
 def resolve_relative_import(module: str | None, level: int, package: str) -> str | None:
@@ -640,6 +660,17 @@ def _reexport_source(
     return base
 
 
+def _add_kind(data: dict, kind: str) -> None:
+    """Record `kind` on an existing edge's `kinds`, defaulting a missing one to import.
+
+    The default is `("import",)` for BOTH callers: an edge that exists without
+    `kinds` predates call edges, so it was an import edge.
+    """
+    kinds = data.get("kinds") or ("import",)
+    if kind not in kinds:
+        data["kinds"] = (*kinds, kind)
+
+
 def _add_or_extend_edge(
     graph: nx.DiGraph,
     src: str,
@@ -654,9 +685,7 @@ def _add_or_extend_edge(
         # of the two came first is not something a caller can predict. This
         # aggregates the way `lines` does (#450).
         data["is_relative"] = bool(data.get("is_relative", False)) or ref.is_relative
-        kinds = data.get("kinds") or ("import",)
-        if "import" not in kinds:
-            data["kinds"] = (*kinds, "import")
+        _add_kind(data, "import")
     else:
         graph.add_edge(
             src,
@@ -683,9 +712,7 @@ def _add_or_extend_call_edge(
         data = graph[src][dst]
         data["call_lines"] = (*data.get("call_lines", ()), call.line)
         data["call_count"] = data.get("call_count", 0) + 1
-        kinds = data.get("kinds") or ("import",)
-        if "call" not in kinds:
-            data["kinds"] = (*kinds, "call")
+        _add_kind(data, "call")
     else:
         graph.add_edge(
             src,
@@ -706,7 +733,7 @@ def _build_alias_table(
 ) -> dict[str, str]:
     """Map each name a source module has in scope after its imports to its target qualname.
 
-    Mirrors `_expand_with_imported_names`'s routing decisions so call
+    Shares `_resolve_imported_name` with the import-edge path so call
     resolution and import resolution agree on where each name comes from.
     `from X import a, b` populates one entry per imported name; `import
     X.Y` binds only the top-level name `X` per Python's actual import
@@ -725,20 +752,15 @@ def _build_alias_table(
             base = ref.module
         if ref.imported_names:
             base_internal = base in internal_qualnames
-            reexports = reexport_maps.get(base, {}) if base_internal else {}
+            pkg_map = reexport_maps.get(base, {}) if base_internal else {}
             for i, name in enumerate(ref.imported_names):
                 alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
                 local = alias or name
                 if not local:
                     continue
                 if base_internal:
-                    submodule = f"{base}.{name}"
-                    if submodule in internal_qualnames:
-                        table[local] = submodule
-                    elif name in reexports:
-                        table[local] = reexports[name]
-                    else:
-                        table[local] = base
+                    resolved = _resolve_imported_name(base, name, internal_qualnames, pkg_map)
+                    table[local] = base if resolved is None else resolved
                 else:
                     table[local] = _external_target(base, internal_qualnames)
         else:
