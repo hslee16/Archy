@@ -547,7 +547,7 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> No
     g = _load_graph(path, internal_only=True)
     result = find_impact(
         g,
-        [path / f if not f.is_absolute() else f for f in files],
+        [path / f for f in files],
         max_chains=max_chains,
     )
 
@@ -641,7 +641,7 @@ def affected(
         )
 
     g = _load_graph(path, internal_only=True)
-    resolved = [path / f if not f.is_absolute() else f for f in file_list]
+    resolved = [path / f for f in file_list]
     result = find_affected(g, resolved, project_root=path, depth=depth, test_filter=test_filter)
 
     if as_json:
@@ -2313,7 +2313,7 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
     it, does it gate, and what can this configuration not see. The last is the
     one an agent skips and then re-derives at length.
     """
-    L = [f"# archy brief: {report.root}"]
+    lines = [f"# archy brief: {report.root}"]
     p = report.partition
     if p:
         aside = ", ".join(
@@ -2325,61 +2325,61 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
             )
             if x
         )
-        L.append(
+        lines.append(
             f"#   {report.modules_scanned} module(s)"
             + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else "")
             + (f"; set aside: {aside}" if aside else "")
         )
 
-    L.append("")
-    L.append("## what kind of thing am I adding, and where does it go")
+    lines.append("")
+    lines.append("## what kind of thing am I adding, and where does it go")
     kinds = [b for b in report.bases if b.count >= 3][:top_n]
     if not kinds:
-        L.append("  (no base class in this project has enough subclasses to be a convention)")
+        lines.append("  (no base class in this project has enough subclasses to be a convention)")
     for b in kinds:
         note = (
             ""
             if b.suffix_agreement >= 0.8
             else f"  <- name is NOT the rule ({b.suffix_agreement:.0%})"
         )
-        L.append(f"  {b.base:<26} {b.count:>3} @ {b.home_module}{note}")
+        lines.append(f"  {b.base:<26} {b.count:>3} @ {b.home_module}{note}")
         for c in b.shared_constants[:2]:
             dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
-            L.append(f"  {'':<26}     {c.name} = {dist}  ({c.setters} of {b.count} set it)")
+            lines.append(f"  {'':<26}     {c.name} = {dist}  ({c.setters} of {b.count} set it)")
 
-    L.append("")
-    L.append("## what must change WITH it")
+    lines.append("")
+    lines.append("## what must change WITH it")
     # 🔴 Cross-module first and never truncated below the fold: a co-update set is
     # the one thing here that is actionable rather than descriptive, and a
     # half-wired feature is this project's most-replicated defect.
     co = [x for x in report.surfaces if x.kind == "consumer"][:top_n]
     if not co:
-        L.append("  (no symbol is consumed by 2-5 internal modules)")
+        lines.append("  (no symbol is consumed by 2-5 internal modules)")
     for x in co:
-        L.append(f"  {x.stem:<26} {x.module} -> {', '.join(x.surfaces)}")
+        lines.append(f"  {x.stem:<26} {x.module} -> {', '.join(x.surfaces)}")
     for g in report.export_gaps[:top_n]:
-        L.append(
+        lines.append(
             f"  🔴 {g.export_module}: {g.family} "
             f"{g.exported}/{g.defined}, missing {', '.join(g.missing)}"
         )
     for g in report.doc_gaps[:top_n]:
-        L.append(
+        lines.append(
             f"  🔴 {g.doc_root}/: {g.family} "
             f"{g.documented}/{g.defined}, missing {', '.join(g.missing)}"
         )
 
-    L.append("")
+    lines.append("")
     codes = ", ".join(str(c) for c in report.gate_codes) or "none literal"
-    L.append(
+    lines.append(
         f"## does a new finding gate ({len(report.gates)} "
         f"finding-failure exit(s); code(s): {codes})"
     )
-    L += [_gate_row(g) for g in report.gates[:top_n]] or [
+    lines += [_gate_row(g) for g in report.gates[:top_n]] or [
         "  (nothing here fails a build on a finding)"
     ]
 
-    L.append("")
-    L.append("## what this configuration cannot see")
+    lines.append("")
+    lines.append("## what this configuration cannot see")
 
     def indent(block: str) -> list[str]:
         # Per LINE, not per block: these renderers emit multi-line text and a
@@ -2388,20 +2388,20 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
         return ["  " + ln.lstrip("# ").rstrip() for ln in block.split("\n") if ln.strip()]
 
     if coverage is None:
-        L.append("  (no archy.yaml discovered, so no layer rule governs anything)")
+        lines.append("  (no archy.yaml discovered, so no layer rule governs anything)")
     else:
-        L += indent(_coverage_to_text(coverage))
+        lines += indent(_coverage_to_text(coverage))
         hints = _pattern_hints_to_text(coverage)
         if hints:
-            L += indent(hints)
+            lines += indent(hints)
         if config is not None:
             handoff = _contracts_handoff_to_text(config, coverage, [])
             if handoff:
-                L += indent(handoff)
+                lines += indent(handoff)
     if contracts is not None:
-        L.append("")
-        L.append(_contracts_outcome_to_text(contracts))
-    return "\n".join(L)
+        lines.append("")
+        lines.append(_contracts_outcome_to_text(contracts))
+    return "\n".join(lines)
 
 
 class ContractsOutcome(BaseModel):
@@ -2437,11 +2437,11 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsO
     them: a missing dependency is `available=False`, while a config archy could
     not read is `available=True` with the reason attached.
     """
-    # Function-local on purpose, and load-bearing twice over: it keeps the
-    # optional import-linter dependency off the module-import path, and it
-    # resolves `run_contracts` through the module at CALL time, which is what
-    # lets a test substitute a raising stub to exercise the no-verdict branch.
-    from archy.contracts import ContractsConfigError, ContractsNotAvailable, run_contracts
+    # Function-local on purpose: it resolves `run_contracts` through the module
+    # at CALL time, which is what lets a test substitute a raising stub to
+    # exercise the no-verdict branch. (The module-level import already binds the
+    # name early, so it would not see the stub.)
+    from archy.contracts import run_contracts
 
     try:
         return ContractsOutcome(result=run_contracts(path, config_filename=config_filename))
