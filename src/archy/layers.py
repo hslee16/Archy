@@ -221,7 +221,8 @@ class ExactPatternHint(BaseModel):
     # Unlayered modules under `pattern`. Sorted, and carried in full rather
     # than as a count: naming the module is what makes the hint actionable.
     unlayered_descendants: tuple[str, ...]
-    # The pattern that would cover the package and its descendants.
+    # Always `<pattern>.**`, the spelling that adds the descendants. Stored on
+    # the hint rather than recomputed, so the renderers quote one string.
     suggestion: str
 
 

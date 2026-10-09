@@ -320,7 +320,7 @@ codebase where its rules governed 21% of modules and 14% of import edges, and a
 real violation (`archy.diff -> archy.layers`) sat on `main` underneath that
 clean pass.
 
-1. **Coverage (#362).** A config's reach is not observable from its verdict.
+1. **Coverage (#362).** A config's reach was not observable from its verdict.
    Three numbers get reported now, because the loosest one flatters the config:
    modules matched, modules in a layer some rule actually names, and **import
    edges with both endpoints layered**, which is the honest one. A config can
@@ -328,6 +328,14 @@ clean pass.
    them. Coverage is scoped to the root packages the patterns name, since
    counting the `bench/` scripts beside the package reported 7% for a config
    that never claimed them: a fact about the scan path, not the config.
+
+   Later in #362 the reach was promoted from a footnote into the verdict
+   itself. When a config governs zero edges (`governs_no_edges`) or matches no
+   module at all (`governs_nothing`), "No layer violations" is followed by a
+   clause naming that fact, and a bare-qualname pattern whose descendants fell
+   outside it gets an `ExactPatternHint` ("Did you mean `myapp.domain.**`?").
+   The substring "No layer violations" is kept and the exit code is untouched,
+   so the qualification is a clause, not a new gate.
 
 2. **Presence (#123).** Forbidding edges *between* layers says nothing about
    whether the layers exist. A codebase that collapsed four layers into one
