@@ -745,9 +745,12 @@ def _validate_layer_pattern(pattern: str, layer_name: str, path: Path) -> None:
     )
 
 
+_FLOATING_PREFIX = "**."
+
+
 def is_floating_pattern(pattern: str) -> bool:
     """True for a pattern that starts with `**.`: it has no fixed root package."""
-    return pattern.startswith("**.")
+    return pattern.startswith(_FLOATING_PREFIX)
 
 
 def _validate_pattern(
@@ -777,10 +780,6 @@ def _validate_pattern(
             f"{prefix} {pattern!r} in {path}: "
             "empty path segment (no leading, trailing, or doubled dots)."
         )
-    # A package-name segment must be an identifier that is not a Python keyword:
-    # no importable package is named `import`/`class`, so accepting one here
-    # would just defer the failure to a cryptic import-linter error instead of
-    # the clean message this validation exists to give.
     if allow_floating and is_floating_pattern(pattern):
         if len(segments) < 2 or not _is_package_segment(segments[1]):
             raise LayerConfigError(
@@ -789,6 +788,10 @@ def _validate_pattern(
                 '(e.g. "**.services.**").'
             )
         segments = segments[1:]
+    # A package-name segment must be an identifier that is not a Python keyword:
+    # no importable package is named `import`/`class`, so accepting one here
+    # would just defer the failure to a cryptic import-linter error instead of
+    # the clean message this validation exists to give.
     elif not _is_package_segment(segments[0]):
         raise LayerConfigError(
             f"{prefix} {pattern!r} in {path}: "
@@ -942,11 +945,11 @@ def _translate_pattern(pattern: str) -> str:
     # the trailing `**` into "(\..*)?$" so the package itself is covered.
     parts: list[str] = []
     i = 0
-    if pattern.startswith("**."):
+    if is_floating_pattern(pattern):
         # Leading `**.` is zero or more WHOLE segments: `**.services.**` matches
         # `services` and `app.services.x` but not `myservices.x`.
         parts.append(r"(?:.*\.)?")
-        i = 3
+        i = len(_FLOATING_PREFIX)
     while i < len(pattern):
         ch = pattern[i]
         if ch == "*" and i + 1 < len(pattern) and pattern[i + 1] == "*":
