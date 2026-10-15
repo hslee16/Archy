@@ -1253,8 +1253,8 @@ def _surface_families(
     # the bare name and taking the first definition is a WRONG ANSWER, not a
     # missing one: with `foo` defined in both `pkg.a` and `pkg.b`, an importer
     # of `pkg.b.foo` was reported as consuming `pkg.a`, pointing an agent at a
-    # module it must not edit. This repository carries seven such collisions
-    # (`_load_graph`, `_graph_kwargs` and `_score_to_dict` among them).
+    # module it must not edit. This repository carries five such collisions
+    # (`_load_graph`, `_load_graph_pair` and `_score_to_dict` among them).
     defined_in: dict[str, set[str]] = defaultdict(set)
     for f in facts:
         for node in f.classes:
