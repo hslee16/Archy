@@ -301,15 +301,29 @@ ledger `bench/reach_asymmetry_precision.jsonl`. `--canary` rebuilds the incident
 and was checked by mutation. It goes red when any of these is broken:
 - the package-`__init__` edges, in the sensor and in the oracle;
 - the sibling exclusion;
-- either band edge;
-- the control's membership (an above-band class is in the fixture so that
-  "everything not fired is control" is caught);
+- either band edge moved or dropped (the fixture has classes at 6/34 and 7/34
+  either side of the lower edge, and at 30/34 above the upper one);
+- the control's membership (the above-band class catches "everything not fired
+  is control");
 - the test filter's snapshot-relative path (the fixture sits under a `tests`
   directory);
 - each oracle outcome: `tp`, `fp`, `fp_retracted`, and `unscorable` with either
   side gone.
 
-One mutant was found inert and is not claimed: widening the control's upper
-bound to 0.5 changes nothing, because an in-band class takes the firing branch
-first. The final ledger comes from the harness as committed, and it reproduces
+**Not pinned, and not claimed.** A second review tried 40 mutants. These
+survive and are left as stated limits rather than tested:
+- whether each band edge is strict (with 34 siblings no class sits exactly on
+  0.2 or 0.8);
+- `MIN_SIBLINGS` (the fixture's only package has 34);
+- the test filter as a whole (no test module inside the fixture), as opposed to
+  its relative-path handling;
+- the external-node and `& internal` filters (the fixture imports nothing
+  external);
+- the `_ancestors` exclusion (ancestors fall into classes that exist anyway);
+- `score`'s guard for a reaching side that vanished entirely.
+
+Some mutants are inert by arithmetic rather than untested: `MIN_SIDE` at 1 or 2
+changes nothing once `n >= 6` and the band is 0.2 to 0.8, and widening the
+control's upper bound to 0.5 changes nothing because an in-band class takes the
+firing branch first. The final ledger comes from the harness as committed, and it reproduces
 the first run's headline exactly.

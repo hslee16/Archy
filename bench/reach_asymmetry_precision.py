@@ -244,6 +244,8 @@ def _canary() -> bool:
             (root / path).write_text("")
         (root / "core" / "registry.py").write_text("")
         (root / "core" / "log.py").write_text("")
+        (root / "core" / "cache.py").write_text("")
+        (root / "core" / "audit.py").write_text("")
         (root / "core" / "billing.py").write_text("from app.core import registry\n")
         # The second transitive reacher gets there only through a package
         # `__init__`, so the canary goes red if the init edges are dropped.
@@ -266,6 +268,12 @@ def _canary() -> bool:
             # control, and the canary goes red if the control takes every class.
             if i < 30:
                 body += "from app.core import log\n"
+            # Straddling the lower band edge: 6 of 34 (0.18) is control, 7 of 34
+            # (0.21) fires, so moving or dropping that edge goes red.
+            if 13 <= i < 19:
+                body += "from app.core import cache\n"
+            if 19 <= i < 26:
+                body += "from app.core import audit\n"
             (root / "commands" / f"cmd{i:02}.py").write_text(body)
         fired, control = firings(build_graph(root, max_modules=0), root)
         hit = [f for f in fired if "app.core.registry" in f.targets]
@@ -274,13 +282,15 @@ def _canary() -> bool:
             len(hit) == 1
             and len(hit[0].missing) == 21
             and transitive <= hit[0].reaching
-            and len(fired) == 1
+            and {f.targets for f in fired}
+            == {frozenset({"app.core.registry"}), frozenset({"app.core.audit"})}
         )
         # The control is exactly the two single-reacher classes, and never the
         # in-band registry class.
         ok = ok and {c.targets for c in control} == {
             frozenset({"app.core.billing"}),
             frozenset({"app.core.models", "app.core.models.user"}),
+            frozenset({"app.core.cache"}),
         }
         firing = hit[0] if hit else None
 
