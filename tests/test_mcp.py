@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -1518,6 +1519,43 @@ def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
     (gen / "b.py").write_text("from myapp.baml_client import other\n")
     (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
     assert _run_cycles(tmp_path, min_size=2, internal_only=True) == []
+
+
+def test_archy_yaml_roots_plumbed_through_mcp(tmp_path: Path):
+    # The MCP twin of test_cli's namespace-package roots test. Without it the
+    # MCP path could drop `roots:` with every test still green (#395).
+    app = tmp_path / "app"
+    (app / "libs").mkdir(parents=True)
+    (app / "libs" / "db.py").write_text("import os\n")
+    (app / "main.py").write_text("from app.libs.db import x\n")
+    (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nroots: [app]\n")
+    payload = _run_graph_dump(tmp_path, internal_only=True, max_nodes=100)
+    assert isinstance(payload, GraphPayload)
+    assert {"app.main", "app.libs.db"} <= {n.id for n in payload.nodes}
+
+
+@pytest.mark.parametrize("error", [sqlite3.OperationalError("locked"), PermissionError("ro")])
+def test_warm_paths_fall_back_cold_when_the_cache_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, error: Exception
+):
+    # The index is an optimization, never a dependency: a cache that cannot open
+    # (read-only filesystem, locked database) must still yield an answer (#395).
+    import archy.mcp as mcp_module
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg import b\n")
+    (pkg / "b.py").write_text("")
+
+    def broken(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(mcp_module, "_manager_for", broken)
+    graph = mcp_module._build_graph(tmp_path)
+    assert graph.has_edge("pkg.a", "pkg.b")
+    modules, _ = mcp_module._parse_project(tmp_path)
+    assert {m.qualname for m in modules} >= {"pkg.a", "pkg.b"}
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:

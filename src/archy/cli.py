@@ -93,7 +93,9 @@ from archy.layers import (
     find_reach_violations,
     find_sdp_violations,
     find_violations,
+    graph_kwargs,
     load_config,
+    resolve_max_modules,
 )
 from archy.refactor import (
     DEFAULT_MIN_RISK,
@@ -881,7 +883,7 @@ def duplicates(
     _require(min_members >= 2, "members", ">= 2", min_members)
     try:
         modules, parse_results = parse_project(
-            path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path)
+            path, **graph_kwargs(path), max_modules=resolve_max_modules(path)
         )
     except ScanTooLargeError as exc:
         raise click.ClickException(str(exc)) from exc
@@ -1455,11 +1457,11 @@ def index_sync(path: Path) -> None:
 
     conn = open_index(default_db_path(path))
     try:
-        modules = discover_modules(path, **_graph_kwargs(path))
+        modules = discover_modules(path, **graph_kwargs(path))
         # Apply the same scan-size backstop as the graph commands: `index sync`
         # reparses every changed file, so a stray 40k-file vendored dir would
         # wedge here too even though it never builds the graph (#216).
-        limit = _resolve_max_modules(path)
+        limit = resolve_max_modules(path)
         if limit and len(modules) > limit:
             raise click.ClickException(str(ScanTooLargeError(len(modules), path.resolve(), limit)))
         _results, stats = sync_index(conn, modules)
@@ -1834,7 +1836,7 @@ def conventions(
         # absence from one is an answer rather than an artefact of truncation.
         try:
             view = compute_module_view(
-                path, module, **_graph_kwargs(path), include_tests=include_tests
+                path, module, **graph_kwargs(path), include_tests=include_tests
             )
         except LookupError as exc:
             raise click.ClickException(str(exc)) from exc
@@ -1845,7 +1847,7 @@ def conventions(
         )
         return
     report = compute_conventions(
-        path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
+        path, **graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
     if emit_headers:
         _emit_headers(
@@ -1908,7 +1910,7 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
     a gap to close on symmetry alone.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
-    kw = _graph_kwargs(path)
+    kw = graph_kwargs(path)
     report = compute_conventions(path, **kw, include_tests=include_tests)
 
     coverage = config = None
@@ -1959,7 +1961,7 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
 
 def _load_graph(path: Path, *, internal_only: bool) -> nx.DiGraph:
     try:
-        g = build_graph(path, **_graph_kwargs(path), max_modules=_resolve_max_modules(path))
+        g = build_graph(path, **graph_kwargs(path), max_modules=resolve_max_modules(path))
     except ScanTooLargeError as exc:
         raise click.ClickException(str(exc)) from exc
     if internal_only:
@@ -1981,27 +1983,6 @@ def _load_graph_pair(path: Path) -> tuple[nx.DiGraph, nx.DiGraph]:
 
 def _effective_max_modules(config: LayerConfig | None) -> int | None:
     return effective_max_modules(config.max_modules if config is not None else None)
-
-
-def _resolve_max_modules(path: Path) -> int | None:
-    config_path = discover_config(path)
-    config = load_config(config_path) if config_path is not None else None
-    return _effective_max_modules(config)
-
-
-def _graph_kwargs(path: Path) -> dict:
-    # Best-effort: pick up `exclude:` and `roots:` from a discovered archy.yaml
-    # so every analysis (graph, cycles, score, check) sees the same surface.
-    # Missing config is fine; malformed config is a real bug the user wants to
-    # see, so we let LayerConfigError propagate.
-    config_path = discover_config(path)
-    if config_path is None:
-        return {}
-    config = load_config(config_path)
-    return {
-        "ignored_dirs": DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
-        "extra_roots": config.roots,
-    }
 
 
 def _format_lines(lines: tuple[int, ...]) -> str:
@@ -3411,7 +3392,7 @@ def _emit_headers(
     headers = compute_headers(
         report,
         path,
-        discover_modules(path, **_graph_kwargs(path)),
+        discover_modules(path, **graph_kwargs(path)),
         include_tests=include_tests,
     )
     stale: list[str] = []

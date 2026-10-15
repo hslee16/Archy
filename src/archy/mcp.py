@@ -101,8 +101,9 @@ from __future__ import annotations
 
 import sqlite3
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import TypeVar, cast
 
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, ConfigDict
@@ -180,7 +181,9 @@ from archy.layers import (
     find_reach_violations,
     find_sdp_violations,
     find_violations,
+    graph_kwargs,
     load_config,
+    resolve_max_modules,
 )
 from archy.mcp_compat import Server, make_server
 from archy.reach import compute_propagation_cost
@@ -1266,7 +1269,7 @@ def _run_conventions(path: Path, *, min_family: int, include_tests: bool) -> Con
     if min_family < 2:
         raise ValueError(f"min_family must be >= 2; got {min_family}")
     return compute_conventions(
-        path, **_graph_kwargs(path), min_family=min_family, include_tests=include_tests
+        path, **graph_kwargs(path), min_family=min_family, include_tests=include_tests
     )
 
 
@@ -1278,7 +1281,7 @@ def _run_module_view(path: Path, module: str, *, include_tests: bool) -> ModuleV
     `result` key, silently changing the wire format of a released tool for
     consumers that never asked for this feature.
     """
-    return compute_module_view(path, module, **_graph_kwargs(path), include_tests=include_tests)
+    return compute_module_view(path, module, **graph_kwargs(path), include_tests=include_tests)
 
 
 def _run_score(
@@ -1886,7 +1889,7 @@ def _run_duplicates(
         raise ValueError(f"top_n must be >= 1; got {top_n}")
     # members < 2 is validated by compute_duplicates (raises ValueError).
     modules, results = _parse_project(
-        path, max_modules=_resolve_max_modules(path), **_graph_kwargs(path)
+        path, max_modules=resolve_max_modules(path), **graph_kwargs(path)
     )
     rows = classify_variants(
         compute_duplicates(modules, results, min_size=min_nodes, min_members=members)
@@ -2170,34 +2173,42 @@ def _build_graph(path: Path, *, max_modules: int | None = None, **kwargs):
     A `ScanTooLargeError` from the guard is NOT a cache failure, so it propagates
     rather than being retried by the cold path (which would re-raise anyway).
     """
-    try:
-        return _manager_for(path, max_modules=max_modules, **kwargs).build_graph()
-    except (sqlite3.Error, OSError):
-        return build_graph(path, max_modules=max_modules, **kwargs)
+    return _warm_or_cold(path, max_modules, kwargs, IndexManager.build_graph, build_graph)
 
 
 def _parse_project(path: Path, *, max_modules: int | None = None, **kwargs):
     """Function-grained warm path: `(modules, parse_results)` for archy_duplicates.
 
-    Mirrors `_build_graph` -- routes through the per-root IndexManager's
-    `parse_map` (persistent cache + background watcher) and falls back to a cold
-    `graph.parse_project` if the cache cannot be used. A `ScanTooLargeError` from
-    the guard propagates rather than being retried by the cold path.
+    The same warm-then-cold routing as `_build_graph`, through the manager's
+    `parse_map` and falling back to `graph.parse_project`.
+    """
+    return _warm_or_cold(path, max_modules, kwargs, IndexManager.parse_map, parse_project)
+
+
+_T = TypeVar("_T")
+
+
+def _warm_or_cold(
+    path: Path,
+    max_modules: int | None,
+    kwargs: dict,
+    warm: Callable[[IndexManager], _T],
+    cold: Callable[..., _T],
+) -> _T:
+    """`warm(manager)` via the per-root IndexManager, else `cold(path, ...)`.
+
+    Only a cache failure (`sqlite3.Error`, `OSError`) takes the cold path. A
+    `ScanTooLargeError` from the guard is not one, so it propagates rather than
+    being retried by a cold scan that would raise it again.
     """
     try:
-        return _manager_for(path, max_modules=max_modules, **kwargs).parse_map()
+        return warm(_manager_for(path, max_modules=max_modules, **kwargs))
     except (sqlite3.Error, OSError):
-        return parse_project(path, max_modules=max_modules, **kwargs)
-
-
-def _resolve_max_modules(path: Path) -> int | None:
-    config_path = discover_config(path)
-    configured = load_config(config_path).max_modules if config_path is not None else None
-    return effective_max_modules(configured)
+        return cold(path, max_modules=max_modules, **kwargs)
 
 
 def _load_graph(path: Path, *, internal_only: bool):
-    graph = _build_graph(path, max_modules=_resolve_max_modules(path), **_graph_kwargs(path))
+    graph = _build_graph(path, max_modules=resolve_max_modules(path), **graph_kwargs(path))
     if internal_only:
         external = {n for n, d in graph.nodes(data=True) if d.get("external")}
         graph.remove_nodes_from(external)
@@ -2212,16 +2223,3 @@ def _load_graph_pair(path: Path):
     """
     full = _load_graph(path, internal_only=False)
     return internal_subgraph(full), full
-
-
-def _graph_kwargs(path: Path) -> dict:
-    # Best-effort archy.yaml discovery so MCP tools honor `exclude:` and
-    # `roots:` the same way the CLI does. See cli._graph_kwargs.
-    config_path = discover_config(path)
-    if config_path is None:
-        return {}
-    config = load_config(config_path)
-    return {
-        "ignored_dirs": DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
-        "extra_roots": config.roots,
-    }
