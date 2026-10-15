@@ -61,7 +61,7 @@ archy:mirrored-by DuplicateGroup -> archy.cli, archy.mcp,
                   bench.near_duplicates_sweep, demote_independent -> archy.cli,
                   archy.mcp, bench.duplicates_cochange_sweep,
                   is_test_path -> archy.cli, archy.mcp, bench.coupling_sweep,
-                  bench.duplicates_cochange_sweep
+                  bench.duplicates_cochange_sweep, bench.reach_asymmetry_precision
 """
 
 from __future__ import annotations

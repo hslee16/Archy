@@ -164,3 +164,121 @@ are not independent. Half come from one project, and firings in one package
 share siblings. So a pass would be a weak pass, and the write-up must report
 precision with `django` excluded alongside the headline. A fail is the cleaner
 of the two outcomes, as in the mirror study.
+
+---
+
+# Result (amendment, 2026-10-15)
+
+**Everything above this line is unchanged from the two commits that recorded it
+before the oracle ran.** No threshold or definition was edited after the run.
+This section is appended.
+
+## A correction to the population section, first
+
+The arithmetic above says "152 firings from **18** projects" and "**nine**
+projects fire zero times". Both were transcription errors on my part, made when
+summarising the `--count-only` output. The output itself shows **14** projects
+with at least one firing and **13** with none: `django` 75, `ansible` 26,
+`home-assistant` 17, `mypy` 10, then 10 more with 1 to 7 each. The totals (152
+firings, 1,096 control classes) were right. The error changes no gate: the power
+condition needs 5 projects, and 14 cleared it.
+
+## Headline
+
+| | |
+|---|---|
+| firings | 152 (149 scorable, 3 unscorable) |
+| true positives (propagation) | **32** |
+| **precision** | **0.215** (gate: >= 0.40) |
+| control: scorable classes / propagated | 1,084 / 80 |
+| control rate | 0.074 |
+| lift | 2.91 (gate: >= 2.0) |
+| projects with scorable firings | 14 (gate: >= 5) |
+| retracted (reported, not gating) | 2 |
+| **verdict** | **FAIL. Does not ship.** |
+
+The run was powered and the lift condition held, so this is a verdict and not a
+no-result. Precision missed the threshold by about half. Re-running after an
+efficiency change to the harness (the later graph is now widened once per
+project instead of once per firing) reproduced every number above exactly.
+
+**Reported alongside, as the population section required:**
+
+- **Without `django`:** 74 scorable, 19 true positives, precision **0.257**.
+  Still a fail; the result is not a `django` artifact.
+- **Control without `home-assistant`:** 180 scorable, 23 propagated, rate 0.128.
+  Against that rate the lift is 1.7, which would also miss the lift gate. The
+  pooled control is the pre-registered one and the headline uses it.
+- **Per project** (scorable firings / true positives): django 75/13, ansible
+  26/9, home-assistant 17/3, mypy 10/3, setuptools 5/0, scrapy 3/1, botocore 3/0,
+  pygments 3/0, pytorch 2/2, and five projects with a single firing (starlette,
+  pytest, sqlalchemy, mkdocs 0 each; datasette 1).
+- **Volume is not the problem.** The median firing names one target, and no
+  project produces more than 75. A reader would not drown; they would be wrong
+  four times in five.
+
+## What the false positives are
+
+A seeded sample of twelve (`random.seed(387)`), in full:
+
+```
+django    django.db.backends.oracle                    5/10  django.db.backends.base.creation
+django    django.contrib.gis.db.backends.spatialite    6/8   django.contrib.gis.gdal (+51)
+django    django.contrib.flatpages                     6/10  django.contrib.auth (+20)
+ansible   ansible.utils                               19/26  ansible.module_utils
+django    django.contrib.gis.db.backends.postgis       6/9   django.db.backends.postgresql
+ansible   ansible.utils                               17/26  ansible.module_utils.six
+django    django.contrib.gis.db.backends.spatialite    4/8   django.db.backends.base.base (+11)
+django    django.contrib.gis.db.backends.postgis       2/9   django.db.backends.base.introspection (+1)
+django    django.db.backends.mysql                     2/9   django.db.backends.base.features
+django    django.contrib.gis.db.backends.spatialite    5/8   django.db.backends.base.client (+1)
+sqlalchemy sqlalchemy.dialects                         2/6   sqlalchemy.connectors.pyodbc
+botocore  botocore                                    35/44  botocore.vendored.six
+```
+
+The dominant shape is a **role-structured** package. The siblings of
+`django.db.backends.mysql` are `base`, `client`, `compiler`, `creation`,
+`features`, `introspection`, `operations`, `schema` and `validation`: nine modules
+with nine different jobs. Two of the nine reach `base.features`; a client or a
+compiler has no use for a feature table. Nothing is missing
+there, and no later commit "fixed" it, because there was nothing to fix. The
+rest are ordinary uneven need: some of `ansible.utils` uses `six` and some does
+not.
+
+The motivating incident was a **peer-structured** package: 34 command modules,
+each an entrypoint, each with the same obligation. In a package like that a
+split *is* an inconsistency. In a role-structured one it is the design. The
+import graph cannot tell the two apart, for the same reason Study 7 found that
+"caller" is the wrong relation: it records that a module reaches a target, not
+why.
+
+## The finding
+
+**Sibling modules are peers only sometimes, and the graph does not say when.**
+The sensor works on the package it was designed from, and that package is the
+minority shape among the firings: the false positives above are dominated by
+role-structured packages, and a role split looks exactly like a missed
+convention. (How common each shape is across all packages was not measured.)
+
+The lift of 2.91 says there is *some* signal. A split in the band propagates
+about three times as often as a rare reach does. But that is a fact about how
+conventions spread, not a usable alarm. At 0.215 a reader acting on the list
+would chase four non-problems for every real one.
+
+## What a null means here
+
+It kills item 4 as specified, as the pre-registration said a miss would. It does
+not touch items 1 and 2 (`required:` rules and package-`__init__` edges), which
+are declared, not inferred, and shipped in v0.43.0. Those already cover the
+incident once someone knows to look.
+
+A narrower sensor, for example one limited to packages whose siblings are all
+entrypoints (a `__main__` guard or a `console_scripts` entry, which is #387 item
+3's declaration), is a **different hypothesis**. It would need its own
+pre-registration and its own pilot. Writing this sentence is not permission to
+fit one to this data.
+
+Harness: [`bench/reach_asymmetry_precision.py`](../../bench/reach_asymmetry_precision.py),
+ledger `bench/reach_asymmetry_precision.jsonl`. `--canary` rebuilds the incident
+and goes red if the package-`__init__` edges, the sibling exclusion, the band or
+the oracle are broken; each was checked by mutation.

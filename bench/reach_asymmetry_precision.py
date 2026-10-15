@@ -14,7 +14,7 @@ and never checked out or modified.
     uv run --with pyyaml python bench/reach_asymmetry_precision.py --count-only
     uv run --with pyyaml python bench/reach_asymmetry_precision.py
 
-archy:owns        Firing, firings, main
+archy:owns        Firing, firings, main, run_project, score, summarize
 """
 
 from __future__ import annotations
@@ -127,10 +127,11 @@ def firings(graph: nx.DiGraph, src_root: Path) -> tuple[list[Firing], list[Firin
     return fired, control
 
 
-def score(item: Firing, later: nx.DiGraph, later_internal: set[str]) -> str:
+def score(item: Firing, reach_graph: nx.DiGraph, later_internal: set[str]) -> str:
     """'tp' / 'fp' / 'unscorable' under the propagation oracle, plus whether the
-    split was retracted instead (reported, never gating)."""
-    reach_graph = with_package_init_edges(later)
+    split was retracted instead (reported, never gating). `reach_graph` is the
+    LATER snapshot already widened by `with_package_init_edges`; it is built once
+    per project, not per firing, because the copy dominates on large graphs."""
     missing = item.missing & later_internal
     targets = item.targets & later_internal
     if not missing or not targets:
@@ -202,8 +203,9 @@ def run_project(proj: dict, count_only: bool) -> dict:
             return {**row, "status": "skipped", "reason": f"{src_dir} absent at T1"}
         later, later_root = after
         later_internal = _internal(later, later_root)
-        row["fired"] = [_record(f, score(f, later, later_internal)) for f in fired]
-        row["control_scores"] = [score(c, later, later_internal) for c in control]
+        later_reach = with_package_init_edges(later)
+        row["fired"] = [_record(f, score(f, later_reach, later_internal)) for f in fired]
+        row["control_scores"] = [score(c, later_reach, later_internal) for c in control]
     return row
 
 
@@ -261,10 +263,14 @@ def _canary() -> bool:
 
         def verdict() -> str:
             later = build_graph(root, max_modules=0)
-            return score(firing, later, _internal(later, root)) if firing else "none"
+            if firing is None:
+                return "none"
+            return score(firing, with_package_init_edges(later), _internal(later, root))
 
         unchanged = verdict()
-        (root / "commands" / "cmd20.py").write_text("from app.core import registry\n")
+        # Propagates only through a package `__init__`, so the oracle is tested on
+        # init-edge reach too, not just on a direct import.
+        (root / "commands" / "cmd20.py").write_text("from app.core.models import user\n")
         propagated = verdict()
         (root / "commands" / "cmd20.py").write_text("")
         # Unscorable when every missing module is gone. (Deleting the registry

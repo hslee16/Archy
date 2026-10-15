@@ -29,6 +29,8 @@ See `docs/research/RESEARCH_METRICS.md` section 3 for the relationship to Lakos'
 NCCD (same metric family, different normalization).
 
 archy:owns        compute_propagation_cost, package_init_edges, with_package_init_edges
+archy:mirrored-by with_package_init_edges -> archy.layers,
+                  bench.reach_asymmetry_precision
 """
 
 from __future__ import annotations

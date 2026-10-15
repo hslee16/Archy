@@ -624,6 +624,40 @@ rig, at this size, delivering a fact to the model costs more than letting it
 derive one.** That is now six results pointing one way, and a seventh
 intervention on this line needs an argument for why it differs.
 
+## Study 9: can archy spot a convention that did not propagate, cold?
+
+[#387](https://github.com/hslee16/archy/issues/387) came from a production
+incident: 34 command modules, 13 of which reached an SQLAlchemy model registry
+and 21 of which did not, and the 21 crashed when run as entrypoints. Items 1 and
+2 of that ticket, `required:` rules and package-`__init__` edges, shipped in
+v0.43.0. They catch the bug once someone knows to write the rule. Item 4 asked
+whether archy could find it *without* being told: flag any package where some
+siblings reach a target and the rest do not.
+
+**Pre-registered before the harness existed**
+([`research/REACH_ASYMMETRY_PRECISION.md`](research/REACH_ASYMMETRY_PRECISION.md)):
+precision >= 0.40 under a git-history oracle (a firing is true if, within a
+year, a module on the missing side came to reach the target), at least twice the
+propagation rate of a below-band control, and at least 30 scorable firings from
+5 projects.
+
+**Over 27 bench projects: 149 scorable firings, 32 true positives, precision
+0.215.** Lift over the control was 2.91, so the signal is not zero. But a
+reader acting on the list would chase four non-problems for every real one.
+Without `django`, which supplied half the firings, precision was 0.257.
+
+The false positives are not unfixed bugs. They are **role-structured
+packages**: `django.db.backends.mysql` has nine siblings with nine different jobs
+(`base`, `client`, `compiler`, `features` and so on), and two of them reaching
+`base.features` is the design, not a gap. The incident's package was
+**peer-structured**, every module an entrypoint with the same obligation, and
+there a split really is an inconsistency. The import graph cannot tell a peer
+package from a role package. That is the same wall Study 7 hit: the graph
+records that a module reaches something, not why.
+
+A sensor limited to packages of declared entrypoints is a different hypothesis
+and would need its own pre-registration. The declared half of #387 stands.
+
 ## What survived, and why archy still exists
 
 Two nulls on agent-side benefit, one retracted premise, a study saying the
