@@ -8,8 +8,8 @@ archy:owns        ExactPatternHint, ForbidRule, LayerConfig, LayerConfigError,
                   LayerCoverage, LayerSpec, ReachViolation, RequiredRule, SdpConfig,
                   SdpViolation, Violation, compute_coverage, contracts_unverified,
                   discover_config, find_reach_violations, find_sdp_violations,
-                  find_violations, governed_roots, graph_kwargs, is_floating_pattern,
-                  load_config, match_layer, resolve_max_modules
+                  find_violations, governed_roots, is_floating_pattern, load_config,
+                  match_layer
 archy:mirrored-by LayerConfig -> archy.cli, archy.contracts, archy.diff,
                   bench.greenfield_eval, LayerConfigError -> archy.cli,
                   archy.contracts, LayerCoverage -> archy.cli, archy.mcp,
@@ -18,12 +18,11 @@ archy:mirrored-by LayerConfig -> archy.cli, archy.contracts, archy.diff,
                   archy.diff, archy.mcp, Violation -> archy.cli, archy.diff, archy.mcp,
                   compute_coverage -> archy.cli, archy.mcp, bench.greenfield_eval,
                   contracts_unverified -> archy.cli, archy.mcp,
-                  discover_config -> archy.cli, archy.mcp,
+                  discover_config -> archy.cli, archy.mcp, archy.scan_config,
                   find_reach_violations -> archy.cli, archy.diff, archy.mcp,
                   find_sdp_violations -> archy.cli, archy.diff, archy.mcp,
                   find_violations -> archy.cli, archy.diff, archy.mcp,
-                  bench.greenfield_eval, bench.q1b_run, graph_kwargs -> archy.cli,
-                  archy.mcp, resolve_max_modules -> archy.cli, archy.mcp
+                  bench.greenfield_eval, bench.q1b_run
 """
 
 from __future__ import annotations
@@ -37,7 +36,6 @@ import networkx as nx
 import yaml
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.graph import DEFAULT_IGNORED_DIRS, effective_max_modules
 from archy.instability import compute_instability
 
 
@@ -557,32 +555,6 @@ def discover_config(start: Path) -> Path | None:
         if current == current.parent:
             return None
         current = current.parent
-
-
-def graph_kwargs(path: Path) -> dict:
-    """`build_graph` / `discover_modules` kwargs from the archy.yaml governing `path`.
-
-    The one translation of `exclude:` and `roots:` into the scan, shared by the
-    CLI and the MCP server so the two surfaces cannot see different module sets
-    (#395: they used to carry byte-identical copies). Missing config means `{}`;
-    malformed config is a real bug the user wants to see, so `LayerConfigError`
-    propagates.
-    """
-    config_path = discover_config(path)
-    if config_path is None:
-        return {}
-    config = load_config(config_path)
-    return {
-        "ignored_dirs": DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
-        "extra_roots": config.roots,
-    }
-
-
-def resolve_max_modules(path: Path) -> int | None:
-    """The scan-size guard for `path`: archy.yaml's `max_modules`, else the default."""
-    config_path = discover_config(path)
-    configured = load_config(config_path).max_modules if config_path is not None else None
-    return effective_max_modules(configured)
 
 
 def match_layer(qualname: str, layers: tuple[LayerSpec, ...]) -> str | None:

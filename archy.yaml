@@ -26,6 +26,7 @@ layers:
     modules:
       - "archy.cli"
       - "archy.mcp"
+      - "archy.scan_config"
 
 forbid:
   - {from: parser, to: graph}

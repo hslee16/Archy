@@ -93,9 +93,7 @@ from archy.layers import (
     find_reach_violations,
     find_sdp_violations,
     find_violations,
-    graph_kwargs,
     load_config,
-    resolve_max_modules,
 )
 from archy.refactor import (
     DEFAULT_MIN_RISK,
@@ -104,6 +102,7 @@ from archy.refactor import (
 )
 from archy.render import DEFAULT_MAX_NODES as RENDER_MAX_NODES
 from archy.render import render_dsm_html, render_trend_html
+from archy.scan_config import graph_kwargs, resolve_max_modules
 from archy.score import Score, compute_score
 from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend

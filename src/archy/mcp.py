@@ -181,14 +181,13 @@ from archy.layers import (
     find_reach_violations,
     find_sdp_violations,
     find_violations,
-    graph_kwargs,
     load_config,
-    resolve_max_modules,
 )
 from archy.mcp_compat import Server, make_server
 from archy.reach import compute_propagation_cost
 from archy.refactor import DEFAULT_MIN_RISK, compute_refactor_priorities
 from archy.risk import compute_edit_risk
+from archy.scan_config import graph_kwargs, resolve_max_modules
 from archy.score import Score, ScoreInputs, compute_score
 from archy.simulate import EdgeSpec, SimulateReport, find_simulate
 from archy.watcher import IndexManager

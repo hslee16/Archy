@@ -47,6 +47,7 @@ from archy.mcp import (
     _run_what_to_refactor_next,
     create_server,
 )
+from archy.scan_config import graph_kwargs
 from archy.simulate import EdgeSpec, SimulateReport
 
 
@@ -1547,15 +1548,24 @@ def test_warm_paths_fall_back_cold_when_the_cache_fails(
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("from pkg import b\n")
     (pkg / "b.py").write_text("")
+    # Config must survive the fallback too: the cold path still honors exclude.
+    (pkg / "generated").mkdir()
+    (pkg / "generated" / "__init__.py").write_text("")
+    (pkg / "generated" / "stub.py").write_text("")
+    (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [generated]\n")
 
     def broken(*args, **kwargs):
         raise error
 
     monkeypatch.setattr(mcp_module, "_manager_for", broken)
-    graph = mcp_module._build_graph(tmp_path)
+    kwargs = graph_kwargs(tmp_path)
+    graph = mcp_module._build_graph(tmp_path, **kwargs)
     assert graph.has_edge("pkg.a", "pkg.b")
-    modules, _ = mcp_module._parse_project(tmp_path)
-    assert {m.qualname for m in modules} >= {"pkg.a", "pkg.b"}
+    assert "pkg.generated.stub" not in graph
+    modules, _ = mcp_module._parse_project(tmp_path, **kwargs)
+    qualnames = {m.qualname for m in modules}
+    assert {"pkg.a", "pkg.b"} <= qualnames
+    assert "pkg.generated.stub" not in qualnames
 
 
 def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:
