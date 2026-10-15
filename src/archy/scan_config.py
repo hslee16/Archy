@@ -1,8 +1,11 @@
 """What archy.yaml says about the scan itself: which directories, which roots, how many modules.
 
-The one translation of `exclude:`, `roots:` and `max_modules:` into scan
-arguments, shared by the CLI and the MCP server so the two surfaces cannot see
-different module sets (#395: they used to carry byte-identical copies).
+The translation of a DISCOVERED archy.yaml's `exclude:`, `roots:` and
+`max_modules:` into scan arguments, shared by the CLI and the MCP server so the
+two surfaces cannot see different module sets (#395: they used to carry
+byte-identical copies). The `check` paths still build the same arguments inline,
+from a config they have already loaded (possibly an explicit `--config`); those
+two sites are the remaining copies #395 tracks.
 
 It lives in its own module, beside the two boundaries, rather than in
 `archy.layers`: the translation needs `archy.graph`'s defaults, and making the
