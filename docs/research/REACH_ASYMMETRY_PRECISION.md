@@ -139,3 +139,28 @@ which shipped in v0.43.0 and are rules a maintainer writes, not inferences. It
 also does not show that the incident was not real: the 21 modules crashed. A null
 says only that "some siblings reach it and some do not" is too common a shape,
 in ordinary codebases, to be worth printing.
+
+## Population arithmetic, done BEFORE the oracle ran
+
+Recorded after the harness passed its canary and before any `T1` snapshot was
+scored. `--count-only` measures the population at `T0` only and computes no
+outcome. Nothing above this section was edited after it ran.
+
+- 29 manifest projects. 2 were skipped (`msgspec`: its `src_dir` did not exist at
+  `T0`; `archy`: no commit a year before its pin). That leaves 27 scanned.
+- **152 firings from 18 projects; 1,096 control classes.**
+- Concentrated: `django` 75, `ansible` 26, `home-assistant` 17, `mypy` 10, then
+  9 more projects with 1 to 7 each. Nine projects fire zero times. That is
+  structural, not a harness fault. In a flat package every module is a sibling,
+  and siblings are excluded as targets (canary-tested), so `rich`, `click`,
+  `flask` and similar layouts have no out-of-package targets to split on.
+- The control is dominated by `home-assistant` (913 of 1,096), so the pooled
+  base rate is mostly that project's. The per-project control rate is reported
+  alongside, as with the firings.
+
+**Consequence, accepted in advance.** The gate is reachable: precision 0.40 on
+152 firings needs about 61 true positives, if most are scorable. But the firings
+are not independent. Half come from one project, and firings in one package
+share siblings. So a pass would be a weak pass, and the write-up must report
+precision with `django` excluded alongside the headline. A fail is the cleaner
+of the two outcomes, as in the mirror study.
