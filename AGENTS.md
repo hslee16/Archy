@@ -3,14 +3,26 @@
 Notes for a coding agent working *on* this repository. For using archy as a
 tool, see [`skills/archy/SKILL.md`](skills/archy/SKILL.md) and the README.
 
-Everything here was learned by getting it wrong. Each rule names the failure it
-came from, so you can judge whether it applies to what you are doing rather than
-following it blindly.
+## Hard rules
 
-Two rules in [Git and GitHub](#git-and-github) are worth reading before you
-touch anything, because both fail quietly: never push to `main` (branch and open
-a PR instead), and use `gh api` REST, because `gh pr edit` and `--json` go
-through GraphQL, which can fail while still exiting 0.
+These are not situational. Follow them every time, whatever the task.
+
+1. **Never push to `main`.** Branch and open a PR.
+2. **Use `gh api` REST for GitHub.** `gh pr edit` and `--json` flags go through
+   GraphQL, which can fail while still exiting 0.
+3. **Run `uv run ruff check` with no path argument.** A per-file run passes
+   while CI fails.
+4. **Never hand-edit a derived header block.** Regenerate it with
+   `uv run archy conventions . --emit-headers --write`.
+5. **When CI fails, open the failing step's log, never the tally.**
+
+All five are equally binding. The first two lead because they go wrong
+quietly: a push to `main` skips review without any error, and a GraphQL call can
+exit 0 having changed nothing. The reasons for each are in the sections below.
+
+Everything else here was learned by getting it wrong. Each rule names the
+failure it came from, so you can judge whether it applies to what you are doing
+rather than following it blindly.
 
 ## Before you push: run what CI runs
 
