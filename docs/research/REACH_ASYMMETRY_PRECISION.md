@@ -213,34 +213,52 @@ project instead of once per firing) reproduced every number above exactly.
   26/9, home-assistant 17/3, mypy 10/3, setuptools 5/0, scrapy 3/1, botocore 3/0,
   pygments 3/0, pytorch 2/2, and five projects with a single firing (starlette,
   pytest, sqlalchemy, mkdocs 0 each; datasette 1).
+- **Per-project control rate** (propagated / scorable): home-assistant 57/904
+  (0.063), django 3/49 (0.061), pytorch 8/28 (0.286), ansible 4/25 (0.160),
+  scrapy 1/18 (0.056), scikit-learn 3/15 (0.200), sqlalchemy 0/12, setuptools
+  0/9, mypy 1/5, datasette 3/4, and 0 in seven projects with four or fewer
+  classes each.
+- **Counting each package once** (a package is a hit if any of its firings is):
+  15 of 62, 0.24. **Averaging precision per project:** 0.238. Neither correlation
+  correction rescues it.
+- **The oracle's growth bias points the same way.** True positives have larger
+  missing sets than false positives (mean 18.2 modules against 7.6), so they had
+  more chances to gain reach by accident. Corrected for that, precision would be
+  lower, not higher.
 - **Volume is not the problem.** The median firing names one target, and no
   project produces more than 75. A reader would not drown; they would be wrong
   four times in five.
 
 ## What the false positives are
 
-A seeded sample of twelve (`random.seed(387)`), in full:
+Twelve misses drawn with `random.seed(387)`, in full. They are reproducible
+with `--examples`, which also prints the per-project control rates below. The
+firing order in the ledger is sorted, so the draw does not depend on Python's
+hash seed. (An earlier draw, made before that sort existed, could not be
+reproduced. The review caught it, and this list replaces it.)
 
 ```
-django    django.db.backends.oracle                    5/10  django.db.backends.base.creation
-django    django.contrib.gis.db.backends.spatialite    6/8   django.contrib.gis.gdal (+51)
-django    django.contrib.flatpages                     6/10  django.contrib.auth (+20)
-ansible   ansible.utils                               19/26  ansible.module_utils
-django    django.contrib.gis.db.backends.postgis       6/9   django.db.backends.postgresql
-ansible   ansible.utils                               17/26  ansible.module_utils.six
-django    django.contrib.gis.db.backends.spatialite    4/8   django.db.backends.base.base (+11)
-django    django.contrib.gis.db.backends.postgis       2/9   django.db.backends.base.introspection (+1)
-django    django.db.backends.mysql                     2/9   django.db.backends.base.features
-django    django.contrib.gis.db.backends.spatialite    5/8   django.db.backends.base.client (+1)
-sqlalchemy sqlalchemy.dialects                         2/6   sqlalchemy.connectors.pyodbc
-botocore  botocore                                    35/44  botocore.vendored.six
+fp           django     django.db.backends.oracle                    5/10  django.db.backends.base.validation
+fp           django     django.contrib.gis.db.backends.spatialite    5/8   django.db.backends.base.client (+1)
+fp           django     django.contrib.flatpages                     6/10  django.contrib.auth (+20)
+fp           ansible    ansible.utils                                19/26  ansible.module_utils
+fp           django     django.contrib.gis.db.backends.postgis       4/9   django.contrib.gis.db.models (+11)
+fp_retracted ansible    ansible.utils                                17/26  ansible.module_utils.six
+fp           django     django.contrib.gis.db.backends.spatialite    5/8   django.db.backends.base.introspection (+1)
+fp           django     django.contrib.gis.db.backends.postgis       2/9   django.db.backends.base.introspection (+1)
+fp           django     django.db.backends.mysql                     2/9   django.db.backends.base.introspection
+fp           django     django.contrib.gis.db.backends.spatialite    3/8   django.contrib.gis.db.backends.base.operations
+fp           sqlalchemy sqlalchemy.dialects                          2/6   sqlalchemy.connectors.pyodbc
+fp           botocore   botocore                                     14/44  botocore.crt.auth
 ```
 
 The dominant shape is a **role-structured** package. The siblings of
 `django.db.backends.mysql` are `base`, `client`, `compiler`, `creation`,
 `features`, `introspection`, `operations`, `schema` and `validation`: nine modules
-with nine different jobs. Two of the nine reach `base.features`; a client or a
-compiler has no use for a feature table. Nothing is missing
+with nine different jobs. That one package produces seven firings, one per
+`django.db.backends.base.*` module: `mysql.features` reaches `base.features`,
+`mysql.client` reaches `base.client`, and so on, each a 2-of-9 or 3-of-9 split.
+A client has no use for a feature table. Nothing is missing
 there, and no later commit "fixed" it, because there was nothing to fix. The
 rest are ordinary uneven need: some of `ansible.utils` uses `six` and some does
 not.
@@ -280,5 +298,18 @@ fit one to this data.
 
 Harness: [`bench/reach_asymmetry_precision.py`](../../bench/reach_asymmetry_precision.py),
 ledger `bench/reach_asymmetry_precision.jsonl`. `--canary` rebuilds the incident
-and goes red if the package-`__init__` edges, the sibling exclusion, the band or
-the oracle are broken; each was checked by mutation.
+and was checked by mutation. It goes red when any of these is broken:
+- the package-`__init__` edges, in the sensor and in the oracle;
+- the sibling exclusion;
+- either band edge;
+- the control's membership (an above-band class is in the fixture so that
+  "everything not fired is control" is caught);
+- the test filter's snapshot-relative path (the fixture sits under a `tests`
+  directory);
+- each oracle outcome: `tp`, `fp`, `fp_retracted`, and `unscorable` with either
+  side gone.
+
+One mutant was found inert and is not claimed: widening the control's upper
+bound to 0.5 changes nothing, because an in-band class takes the firing branch
+first. The final ledger comes from the harness as committed, and it reproduces
+the first run's headline exactly.

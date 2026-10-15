@@ -23,16 +23,17 @@ import argparse
 import datetime as dt
 import io
 import json
+import random
 import subprocess
 import sys
 import tarfile
 import tempfile
 from collections import defaultdict
-from dataclasses import dataclass, field
 from pathlib import Path
 
 import networkx as nx
 from _common import REPO_ROOT, load_manifest
+from pydantic import BaseModel, ConfigDict
 
 from archy.duplicates import is_test_path
 from archy.graph import build_graph
@@ -53,14 +54,15 @@ GATE_FIRINGS = 30
 GATE_PROJECTS = 5
 
 
-@dataclass(frozen=True)
-class Firing:
+class Firing(BaseModel):
     """One reach-set class inside one package: the unit a reader would see."""
+
+    model_config = ConfigDict(frozen=True)
 
     package: str
     siblings: frozenset[str]
     reaching: frozenset[str]
-    targets: frozenset[str] = field(compare=False)
+    targets: frozenset[str]
 
     @property
     def missing(self) -> frozenset[str]:
@@ -117,9 +119,16 @@ def firings(graph: nx.DiGraph, src_root: Path) -> tuple[list[Firing], list[Firin
         classes: dict[frozenset[str], set[str]] = defaultdict(set)
         for target, reaching in reached_by.items():
             classes[frozenset(reaching)].add(target)
-        for reaching, targets in classes.items():
+        # Sorted so the ledger order does not depend on the per-process hash seed
+        # of the frozenset keys; a seeded sample of the ledger is then reproducible.
+        for reaching, targets in sorted(classes.items(), key=lambda kv: sorted(kv[0])):
             k = len(reaching)
-            item = Firing(package, frozenset(siblings), reaching, frozenset(targets))
+            item = Firing(
+                package=package,
+                siblings=frozenset(siblings),
+                reaching=reaching,
+                targets=frozenset(targets),
+            )
             if BAND[0] <= k / n <= BAND[1] and min(k, n - k) >= MIN_SIDE:
                 fired.append(item)
             elif k / n < BAND[0]:
@@ -223,14 +232,18 @@ def _record(item: Firing, verdict: str) -> dict:
 
 def _canary() -> bool:
     """The incident, rebuilt: 34 commands, 11 import the registry, 2 reach it via
-    an unrelated module, 21 do not. Then remove one reaching edge."""
+    an unrelated module, 21 do not. Then score it against edited futures, and
+    remove one reaching edge. Every branch below was checked by mutation."""
     with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp) / "app"
+        # Under a directory named `tests`, so test filtering on the absolute path
+        # instead of the snapshot-relative one would drop every module.
+        root = Path(tmp) / "tests" / "app"
         (root / "commands").mkdir(parents=True)
         (root / "core").mkdir()
         for path in ("__init__.py", "commands/__init__.py", "core/__init__.py"):
             (root / path).write_text("")
         (root / "core" / "registry.py").write_text("")
+        (root / "core" / "log.py").write_text("")
         (root / "core" / "billing.py").write_text("from app.core import registry\n")
         # The second transitive reacher gets there only through a package
         # `__init__`, so the canary goes red if the init edges are dropped.
@@ -249,8 +262,12 @@ def _canary() -> bool:
             # if siblings stop being excluded as targets.
             if i < 8:
                 body += "from app.commands import cmd33\n"
+            # 30 of 34 use a logger: above the band, so neither a firing nor a
+            # control, and the canary goes red if the control takes every class.
+            if i < 30:
+                body += "from app.core import log\n"
             (root / "commands" / f"cmd{i:02}.py").write_text(body)
-        fired, _ = firings(build_graph(root, max_modules=0), root)
+        fired, control = firings(build_graph(root, max_modules=0), root)
         hit = [f for f in fired if "app.core.registry" in f.targets]
         transitive = {"app.commands.cmd11", "app.commands.cmd12"}
         ok = (
@@ -259,6 +276,12 @@ def _canary() -> bool:
             and transitive <= hit[0].reaching
             and len(fired) == 1
         )
+        # The control is exactly the two single-reacher classes, and never the
+        # in-band registry class.
+        ok = ok and {c.targets for c in control} == {
+            frozenset({"app.core.billing"}),
+            frozenset({"app.core.models", "app.core.models.user"}),
+        }
         firing = hit[0] if hit else None
 
         def verdict() -> str:
@@ -276,13 +299,30 @@ def _canary() -> bool:
         # Unscorable when every missing module is gone. (Deleting the registry
         # alone is not enough: `app.core` shares its reach class, via the init
         # edges, and survives as a target.)
-        missing = sorted(firing.missing) if firing else []
-        for module in missing:
-            (root / "commands" / f"{module.rsplit('.', 1)[1]}.py").unlink()
+        missing = (
+            [root / "commands" / f"{m.rsplit('.', 1)[1]}.py" for m in firing.missing]
+            if firing
+            else []
+        )
+        for path in missing:
+            path.unlink()
         gone = verdict()
-        for module in missing:
-            (root / "commands" / f"{module.rsplit('.', 1)[1]}.py").write_text("")
-        ok = ok and (unchanged, propagated, gone) == ("fp", "tp", "unscorable")
+        for path in missing:
+            path.write_text("")
+        # Unscorable when every target is gone, even with the missing side intact.
+        (root / "core").rename(root.parent / "core_aside")
+        no_targets = verdict()
+        (root.parent / "core_aside").rename(root / "core")
+        # Retracted when the reaching side stops reaching, rather than plain fp.
+        reaching = sorted(root / "commands" / f"cmd{i:02}.py" for i in range(13))
+        bodies = {path: path.read_text() for path in reaching}
+        for path in reaching:
+            path.write_text("")
+        retracted = verdict()
+        for path, body in bodies.items():
+            path.write_text(body)
+        outcomes = (unchanged, propagated, gone, no_targets, retracted)
+        ok = ok and outcomes == ("fp", "tp", "unscorable", "unscorable", "fp_retracted")
 
         (root / "commands" / "cmd00.py").write_text("")
         fired, _ = firings(build_graph(root, max_modules=0), root)
@@ -297,6 +337,30 @@ def _done() -> dict[str, dict]:
         return {}
     rows = [json.loads(line) for line in LEDGER.read_text().splitlines() if line.strip()]
     return {r["project"]: r for r in rows if r.get("status") in {"ok", "skipped"}}
+
+
+def _examples() -> None:
+    """The seeded sample quoted in the results doc: 12 non-true-positive firings
+    and 5 true positives, drawn in ledger order with `random.seed(387)`."""
+    rows = [r for r in _done().values() if r.get("status") == "ok"]
+    misses = [(r["project"], f) for r in rows for f in r.get("fired", []) if f["verdict"] != "tp"]
+    misses = [m for m in misses if m[1]["verdict"] != "unscorable"]
+    hits = [(r["project"], f) for r in rows for f in r.get("fired", []) if f["verdict"] == "tp"]
+    rng = random.Random(387)
+    for label, pool, size in (("miss", misses, 12), ("tp", hits, 5)):
+        for project, f in rng.sample(pool, min(size, len(pool))):
+            extra = f" (+{f['target_count'] - 1})" if f["target_count"] > 1 else ""
+            print(
+                f"{label:4} {f['verdict']:12} {project:10} {f['package']:44} "
+                f"{f['k']}/{f['n']:<3} {f['targets'][0]}{extra}"
+            )
+    by_project = {}
+    for r in rows:
+        scores = [v for v in r.get("control_scores", []) if v != "unscorable"]
+        if scores:
+            by_project[r["project"]] = (sum(v == "tp" for v in scores), len(scores))
+    for project, (tp, n) in sorted(by_project.items()):
+        print(f"control {project:15} {tp:3}/{n:<4} {tp / n:.3f}")
 
 
 def summarize(rows: list[dict]) -> dict:
@@ -335,7 +399,14 @@ def main() -> int:
     parser.add_argument("--canary", action="store_true", help="Run only the incident canary.")
     parser.add_argument("--count-only", action="store_true", help="T0 population sizes, no oracle.")
     parser.add_argument("--only", nargs="*", help="Restrict to these project names.")
+    parser.add_argument(
+        "--examples", action="store_true", help="Print the seeded FP/TP sample from the ledger."
+    )
     args = parser.parse_args()
+
+    if args.examples:
+        _examples()
+        return 0
 
     if not _canary():
         return 1
