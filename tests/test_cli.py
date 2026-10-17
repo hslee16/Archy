@@ -1385,6 +1385,16 @@ def test_score_default_limit_does_not_trip_small_project(tmp_path: Path):
     assert result.exit_code == 0
 
 
+def test_check_errors_on_oversized_scan(tmp_path: Path):
+    # `check` loads its config itself (possibly from --config) rather than
+    # through `graph_kwargs`, so the guard reaches it by a separate path.
+    project = _make_many_module_project(tmp_path, 5)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    result = CliRunner().invoke(main, ["check", str(project)])
+    assert result.exit_code != 0
+    assert "max_modules" in result.output
+
+
 def test_index_sync_errors_on_oversized_scan(tmp_path: Path):
     # `index sync` reparses every changed file, so it gets the same backstop.
     project = _make_many_module_project(tmp_path, 5)

@@ -158,7 +158,6 @@ from archy.graph import (
     ScanTooLargeError,
     build_graph,
     discover_modules,
-    effective_max_modules,
     graph_to_dict,
     internal_subgraph,
     parse_project,
@@ -187,7 +186,7 @@ from archy.mcp_compat import Server, make_server
 from archy.reach import compute_propagation_cost
 from archy.refactor import DEFAULT_MIN_RISK, compute_refactor_priorities
 from archy.risk import compute_edit_risk
-from archy.scan_config import graph_kwargs, resolve_max_modules
+from archy.scan_config import graph_kwargs, resolve_max_modules, scan_kwargs
 from archy.score import Score, ScoreInputs, compute_score
 from archy.simulate import EdgeSpec, SimulateReport, find_simulate
 from archy.watcher import IndexManager
@@ -1348,12 +1347,7 @@ def _run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckE
             )
         config_path = discovered
     config = load_config(config_path)
-    graph = _build_graph(
-        path,
-        ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
-        extra_roots=config.roots,
-        max_modules=effective_max_modules(config.max_modules),
-    )
+    graph = _build_graph(path, **scan_kwargs(config))
     violations = find_violations(graph, config)
     reach_violations = find_reach_violations(graph, config)
     sdp_violations: list[SdpViolation] = []

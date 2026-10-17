@@ -1813,6 +1813,55 @@ def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):
         _load_graph(tmp_path, internal_only=True)
 
 
+def test_mcp_check_trips_scan_size_guard(tmp_path: Path):
+    # `_run_check` builds its scan arguments from the config it loaded, not via
+    # `graph_kwargs`, so the guard needs pinning on this path separately.
+    from archy.graph import ScanTooLargeError
+
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for i in range(5):
+        (pkg / f"mod{i}.py").write_text("x = 1\n")
+    (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    with pytest.raises(ScanTooLargeError):
+        _run_check(tmp_path, config_path=None)
+
+
+def test_mcp_check_applies_config_roots(tmp_path: Path):
+    """`roots: [app]` is what makes the `app.*` patterns match, on the MCP path too.
+
+    Run both ways: without `roots:` the namespace-package modules are bare
+    `libs.db` / `routers.user`, the rule matches nothing and the check passes. A
+    fixture where that first arm also failed would not be testing `roots:`.
+    """
+    app = tmp_path / "app"
+    (app / "routers").mkdir(parents=True)
+    (app / "libs").mkdir(parents=True)
+    (app / "libs" / "db.py").write_text("from app.routers.user import handler\n")
+    (app / "routers" / "user.py").write_text("")
+    rules = (
+        "layers:\n"
+        "  routers: {modules: [app.routers.**]}\n"
+        "  libs: {modules: [app.libs.**]}\n"
+        "forbid:\n"
+        "  - {from: libs, to: routers}\n"
+    )
+    config = tmp_path / "archy.yaml"
+
+    config.write_text(rules)
+    without = _run_check(tmp_path, config_path=None)
+    assert isinstance(without, CheckPayload)
+    assert without.violations == ()
+
+    config.write_text(rules + "roots: [app]\n")
+    with_roots = _run_check(tmp_path, config_path=None)
+    assert isinstance(with_roots, CheckPayload)
+    assert [(v.source, v.target) for v in with_roots.violations] == [
+        ("app.libs.db", "app.routers.user")
+    ]
+
+
 def test_conventions_tool_returns_the_derived_house_style(acyclic_project: Path):
     # The wire contract an agent reads BEFORE naming a new class: the family,
     # its home module, and the derived `concentration` that says how much to

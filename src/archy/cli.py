@@ -65,11 +65,9 @@ from archy.duplicates import (
     is_test_path,
 )
 from archy.graph import (
-    DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
     build_graph,
     discover_modules,
-    effective_max_modules,
     graph_to_dict,
     internal_subgraph,
     parse_project,
@@ -103,7 +101,7 @@ from archy.refactor import (
 )
 from archy.render import DEFAULT_MAX_NODES as RENDER_MAX_NODES
 from archy.render import render_dsm_html, render_trend_html
-from archy.scan_config import graph_kwargs, resolve_max_modules
+from archy.scan_config import graph_kwargs, resolve_max_modules, scan_kwargs
 from archy.score import Score, compute_score
 from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend
@@ -272,12 +270,7 @@ def check(
         raise click.ClickException(str(exc)) from exc
 
     try:
-        g = build_graph(
-            path,
-            ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
-            extra_roots=config.roots,
-            max_modules=_effective_max_modules(config),
-        )
+        g = build_graph(path, **scan_kwargs(config))
     except ScanTooLargeError as exc:
         raise click.ClickException(str(exc)) from exc
     try:
@@ -1979,10 +1972,6 @@ def _load_graph_pair(path: Path) -> tuple[nx.DiGraph, nx.DiGraph]:
     """
     full = _load_graph(path, internal_only=False)
     return internal_subgraph(full), full
-
-
-def _effective_max_modules(config: LayerConfig | None) -> int | None:
-    return effective_max_modules(config.max_modules if config is not None else None)
 
 
 def _format_lines(lines: tuple[int, ...]) -> str:
