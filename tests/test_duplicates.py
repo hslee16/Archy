@@ -721,13 +721,16 @@ _NEAR_BODY = (
 )
 
 
+def _near_variant(name: str, *, after: str = "kept = []", insert: str = "seen = set()") -> str:
+    """`_NEAR_BODY` with one statement inserted: a Type-3 clone with its own shape_hash."""
+    return _NEAR_BODY.format(n=name).replace(f"    {after}\n", f"    {after}\n    {insert}\n")
+
+
 def test_near_miss_clusters_gapped_clone(tmp_path: Path):
     pkg = _make_pkg(tmp_path)
     (pkg / "a.py").write_text(_NEAR_BODY.format(n="alpha"))
     # beta = alpha + one inserted statement -> different shape_hash (Type-3).
-    (pkg / "b.py").write_text(
-        _NEAR_BODY.format(n="beta").replace("    kept = []\n", "    kept = []\n    seen = set()\n")
-    )
+    (pkg / "b.py").write_text(_near_variant("beta"))
     modules, results = parse_project(tmp_path)
     assert compute_duplicates(modules, results, min_size=10) == []  # shapes differ
     near = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8)
@@ -752,13 +755,8 @@ def test_near_miss_members_order_by_module_then_line_then_name(tmp_path: Path):
     pass cannot claim them.
     """
     pkg = _make_pkg(tmp_path)
-    alpha = _NEAR_BODY.format(n="alpha").replace(
-        "    kept = []\n", "    kept = []\n    seen = set()\n"
-    )
-    (pkg / "a.py").write_text(_NEAR_BODY.format(n="zeta") + "\n" + alpha)
-    (pkg / "b.py").write_text(
-        _NEAR_BODY.format(n="beta").replace("    total = 0\n", "    total = 0\n    count = 1\n")
-    )
+    (pkg / "a.py").write_text(_NEAR_BODY.format(n="zeta") + "\n" + _near_variant("alpha"))
+    (pkg / "b.py").write_text(_near_variant("beta", after="total = 0", insert="count = 1"))
     modules, results = parse_project(tmp_path)
     assert compute_duplicates(modules, results, min_size=10) == []
     (group,) = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8)
@@ -799,9 +797,7 @@ def test_near_miss_excludes_exact_clustered(tmp_path: Path):
 def test_cli_duplicates_near_miss_json(tmp_path: Path):
     pkg = _make_pkg(tmp_path)
     (pkg / "a.py").write_text(_NEAR_BODY.format(n="alpha"))
-    (pkg / "b.py").write_text(
-        _NEAR_BODY.format(n="beta").replace("    kept = []\n", "    kept = []\n    seen = set()\n")
-    )
+    (pkg / "b.py").write_text(_near_variant("beta"))
     result = CliRunner().invoke(
         main,
         ["duplicates", str(tmp_path), "--min-nodes", "10", "--near-miss", "--format", "json"],
