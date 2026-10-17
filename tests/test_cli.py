@@ -7,9 +7,28 @@ import click
 import pytest
 from click.testing import CliRunner
 
-from archy.cli import _duplicates_to_text, _parse_edge_spec, main
+from archy.cli import (
+    _coupling_to_text,
+    _diff_to_text,
+    _duplicates_to_text,
+    _hotspots_to_text,
+    _parse_edge_spec,
+    _simulate_to_text,
+    main,
+)
 from archy.contracts import ContractsConfigError, ContractsNotAvailable
+from archy.coupling import CouplingPair
+from archy.diff import (
+    CycleSetDiff,
+    DiffReport,
+    DiffSummary,
+    ScoreDelta,
+    SdpViolationSetDiff,
+    ViolationSetDiff,
+)
 from archy.duplicates import DuplicateGroup, DuplicateMember
+from archy.hotspots import Hotspot
+from archy.simulate import AppliedDelta, PropagationDelta, SimulateReport
 
 
 def _make_two_module_project(tmp_path: Path, *, cyclic: bool) -> Path:
@@ -1911,3 +1930,81 @@ def test_duplicates_text_sections_have_header_blank_columns_then_rows():
         "  0.75      2  pkg.a:3 alpha",
         "               pkg.b:7 beta",
     ]
+
+
+# Signs, padding and precision chosen so every axis is distinguishable: a
+# renderer that drops, reorders or reformats one fails on that line.
+_DELTA = ScoreDelta(
+    overall=0.012, modularity=-0.5, acyclicity=0.0, depth=0.25, equality=-0.001, complexity=1.0
+)
+_DELTA_LINES = [
+    "  overall     +0.012",
+    "  modularity  -0.500",
+    "  acyclicity  +0.000",
+    "  depth       +0.250",
+    "  equality    -0.001",
+    "  complexity  +1.000",
+]
+
+
+def test_diff_text_lists_every_score_axis_in_order():
+    report = DiffReport(score_delta=_DELTA, cycles=CycleSetDiff(), violations=ViolationSetDiff())
+    assert _diff_to_text(report).splitlines() == [
+        "# score deltas (current - baseline):",
+        *_DELTA_LINES,
+        "",
+        "# cycles: +0 added, -0 resolved",
+        "",
+        "# violations: +0 added, -0 resolved",
+    ]
+
+
+def test_simulate_text_lists_every_score_axis_then_blast_radius():
+    report = SimulateReport(
+        applied=AppliedDelta(
+            added_edges=(),
+            removed_edges=(),
+            unresolved=(),
+            no_op_adds=(),
+            no_op_removes=(),
+            rejected=(),
+        ),
+        score_delta=_DELTA,
+        cycles=CycleSetDiff(),
+        violations=ViolationSetDiff(),
+        sdp_violations=SdpViolationSetDiff(),
+        new_back_edges=(),
+        propagation_cost=PropagationDelta(before=0.1, after=0.25, delta=0.15),
+        summary=DiffSummary(headline="no change", top_regressions=(), top_improvements=()),
+    )
+    lines = _simulate_to_text(report).splitlines()
+    start = lines.index("# would-be score deltas:")
+    # "blast radius" is 12 characters, so the 11-wide pad adds nothing.
+    assert lines[start + 1 : start + 8] == [
+        *_DELTA_LINES,
+        "  blast radius 0.100 -> 0.250 (+0.150)",
+    ]
+
+
+@pytest.mark.parametrize(("since", "suffix"), [(None, ""), ("2026-01-01", " since 2026-01-01")])
+def test_hotspots_and_coupling_headers_count_total_and_shown(since, suffix):
+    hotspots = [
+        Hotspot(module=f"pkg.m{i}", path=f"m{i}.py", cc_sum=2, churn=3, score=6) for i in range(3)
+    ]
+    pairs = [
+        CouplingPair(
+            module_a=f"pkg.a{i}",
+            module_b=f"pkg.b{i}",
+            path_a="a.py",
+            path_b="b.py",
+            support=4,
+            confidence=0.5,
+            count_a=8,
+            count_b=8,
+        )
+        for i in range(3)
+    ]
+    hot = _hotspots_to_text(hotspots, top_n=2, since=since).splitlines()[0]
+    cpl = _coupling_to_text(pairs, top_n=2, since=since, min_support=2).splitlines()[0]
+    assert hot == f"# 3 hotspot(s); showing top 2{suffix}"
+    assert cpl == f"# 3 hidden-coupling pair(s); showing top 2{suffix}"

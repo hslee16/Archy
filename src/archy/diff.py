@@ -18,11 +18,12 @@ archy:owns        CycleSetDiff, DiffReport, DiffSummary, DiffSummaryItem,
                   take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
                   DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
-                  compute_diff -> archy.cli, archy.mcp, archy.simulate,
-                  bench.delta_direction, bench.simulate_oracle,
-                  read_snapshot -> archy.cli, archy.mcp, take_snapshot -> archy.cli,
+                  ScoreDelta -> archy.cli, archy.simulate, compute_diff -> archy.cli,
                   archy.mcp, archy.simulate, bench.delta_direction,
-                  bench.simulate_oracle, write_snapshot -> archy.cli, archy.mcp
+                  bench.simulate_oracle, read_snapshot -> archy.cli, archy.mcp,
+                  take_snapshot -> archy.cli, archy.mcp, archy.simulate,
+                  bench.delta_direction, bench.simulate_oracle,
+                  write_snapshot -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations

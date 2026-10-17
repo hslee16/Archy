@@ -48,6 +48,7 @@ from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     DiffReport,
     DiffSummary,
+    ScoreDelta,
     Snapshot,
     compute_diff,
     read_snapshot,
@@ -2632,15 +2633,23 @@ def _snapshot_to_text(snap: Snapshot) -> str:
     )
 
 
+def _score_delta_lines(delta: ScoreDelta, header: str) -> list[str]:
+    """One signed line per score axis, under ``header``, for `diff` and `simulate`.
+
+    The axes come from ``ScoreDelta``'s own fields, in declaration order, so a
+    new axis shows up in both renderers without editing either (#335).
+    """
+    return [header] + [
+        f"  {name:11s} {getattr(delta, name):+.3f}" for name in ScoreDelta.model_fields
+    ]
+
+
 def _diff_to_text(result: DiffReport) -> str:
     lines: list[str] = []
     if result.summary is not None:
         lines.extend(_summary_to_text(result.summary))
         lines.append("")
-    deltas = result.score_delta
-    lines.append("# score deltas (current - baseline):")
-    for name in ("overall", "modularity", "acyclicity", "depth", "equality", "complexity"):
-        lines.append(f"  {name:11s} {getattr(deltas, name):+.3f}")
+    lines.extend(_score_delta_lines(result.score_delta, "# score deltas (current - baseline):"))
     cycles = result.cycles
     lines.append("")
     lines.append(f"# cycles: +{len(cycles.added)} added, -{len(cycles.resolved)} resolved")
@@ -2711,9 +2720,7 @@ def _simulate_to_text(result: SimulateReport) -> str:
     lines.extend(_summary_to_text(result.summary))
 
     lines.append("")
-    lines.append("# would-be score deltas:")
-    for name in ("overall", "modularity", "acyclicity", "depth", "equality", "complexity"):
-        lines.append(f"  {name:11s} {getattr(result.score_delta, name):+.3f}")
+    lines.extend(_score_delta_lines(result.score_delta, "# would-be score deltas:"))
     p = result.propagation_cost
     lines.append(f"  {'blast radius':11s} {p.before:.3f} -> {p.after:.3f} ({p.delta:+.3f})")
 
@@ -2929,15 +2936,22 @@ def _hotspots_to_dict(rows: list[Hotspot], *, top_n: int, since: str | None) -> 
     }
 
 
+def _count_header(count: int, noun: str, shown: int, since: str | None) -> str:
+    """`# N <noun>; showing top M`, plus ` since <ref>` when the history was bounded."""
+    header = f"# {count} {noun}; showing top {shown}"
+    return f"{header} since {since}" if since else header
+
+
 def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> str:
     if not rows:
         suffix = f" since {since}" if since else ""
         return f"# No hotspots found{suffix} (need both cc_sum > 0 and churn > 0)."
     shown = rows[:top_n]
-    header = f"# {len(rows)} hotspot(s); showing top {len(shown)}"
-    if since:
-        header += f" since {since}"
-    lines = [header, "", "  score  churn  cc_sum  module"]
+    lines = [
+        _count_header(len(rows), "hotspot(s)", len(shown), since),
+        "",
+        "  score  churn  cc_sum  module",
+    ]
     for r in shown:
         lines.append(f"  {r.score:>5}  {r.churn:>5}  {r.cc_sum:>6}  {r.module}")
     return "\n".join(lines)
@@ -2979,10 +2993,11 @@ def _coupling_to_text(
     if not rows:
         return f"# {_coupling_note(rows, min_support=min_support, since=since)}"
     shown = rows[:top_n]
-    header = f"# {len(rows)} hidden-coupling pair(s); showing top {len(shown)}"
-    if since:
-        header += f" since {since}"
-    lines = [header, "", "  conf  commits  modules (no import/call edge)"]
+    lines = [
+        _count_header(len(rows), "hidden-coupling pair(s)", len(shown), since),
+        "",
+        "  conf  commits  modules (no import/call edge)",
+    ]
     for r in shown:
         lines.append(f"  {r.confidence:>4.2f}  {r.support:>7}  {r.module_a} <-> {r.module_b}")
     return "\n".join(lines)
