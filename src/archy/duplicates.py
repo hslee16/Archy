@@ -71,7 +71,7 @@ from collections import Counter
 from collections.abc import Callable, Iterator
 from itertools import combinations
 from pathlib import Path
-from typing import TypeVar
+from typing import NamedTuple, TypeVar
 
 from pydantic import BaseModel, ConfigDict
 
@@ -215,6 +215,15 @@ def _sized_functions(
                 yield qual, path, fn
 
 
+def _member(qual: str, path: str, fn: FunctionComplexity) -> DuplicateMember:
+    return DuplicateMember(module=qual, qualified_name=fn.qualified_name, path=path, line=fn.line)
+
+
+def _member_sort_key(m: DuplicateMember) -> tuple[str, int, str]:
+    """Order within a group, shared so the exact and near-miss tiers cannot drift."""
+    return (m.module, m.line, m.qualified_name)
+
+
 def compute_duplicates(
     modules: list[Module],
     parse_results: dict[str, ParseResult],
@@ -239,21 +248,14 @@ def compute_duplicates(
     buckets: dict[str, list[DuplicateMember]] = {}
     size_by_hash: dict[str, int] = {}
     for qual, path, fn in _sized_functions(modules, parse_results, min_size):
-        buckets.setdefault(fn.shape_hash, []).append(
-            DuplicateMember(
-                module=qual,
-                qualified_name=fn.qualified_name,
-                path=path,
-                line=fn.line,
-            )
-        )
+        buckets.setdefault(fn.shape_hash, []).append(_member(qual, path, fn))
         size_by_hash[fn.shape_hash] = fn.size
 
     groups: list[DuplicateGroup] = []
     for shape_hash, members in buckets.items():
         if len(members) < min_members:
             continue
-        ordered = tuple(sorted(members, key=lambda m: (m.module, m.line, m.qualified_name)))
+        ordered = tuple(sorted(members, key=_member_sort_key))
         size = size_by_hash[shape_hash]
         groups.append(
             DuplicateGroup(
@@ -281,6 +283,13 @@ def _jaccard(a: Counter[str], b: Counter[str]) -> float:
     inter = sum((a & b).values())
     union = sum((a | b).values())
     return inter / union if union else 0.0
+
+
+class _Candidate(NamedTuple):
+    qual: str
+    path: str
+    fn: FunctionComplexity
+    bag: Counter[str]
 
 
 def compute_near_duplicates(
@@ -316,15 +325,15 @@ def compute_near_duplicates(
     # Candidates: singleton-shaped functions (exact-hash already surfaces the
     # rest). Attach each one's token bag, re-parsing each file at most once.
     bags_by_path: dict[str, dict[int, Counter[str]]] = {}
-    items: list[tuple[str, str, FunctionComplexity, Counter[str]]] = []
+    items: list[_Candidate] = []
     for qual, path, fn in sized:
         if shape_counts[fn.shape_hash] >= DEFAULT_MIN_MEMBERS:
             continue
         bag = _read_cached(bags_by_path, path, extract_token_bags).get(fn.line)
         if bag:
-            items.append((qual, path, fn, bag))
+            items.append(_Candidate(qual, path, fn, bag))
 
-    items.sort(key=lambda it: it[2].size)
+    items.sort(key=lambda it: it.fn.size)
     parent = list(range(len(items)))
 
     def find(x: int) -> int:
@@ -337,16 +346,16 @@ def compute_near_duplicates(
     budget = max_comparisons
     truncated = False
     for i in range(len(items)):
-        size_i = items[i][2].size
+        size_i = items[i].fn.size
         limit = size_i / min_similarity  # sizes above this cannot reach the floor
         for j in range(i + 1, len(items)):
-            if items[j][2].size > limit:
+            if items[j].fn.size > limit:
                 break  # sorted ascending: no later j is in band either
             if budget <= 0:
                 truncated = True
                 break
             budget -= 1
-            sim = _jaccard(items[i][3], items[j][3])
+            sim = _jaccard(items[i].bag, items[j].bag)
             if sim >= min_similarity:
                 parent[find(i)] = find(j)
                 edge_weight[frozenset((i, j))] = sim
@@ -372,20 +381,12 @@ def compute_near_duplicates(
         similarity = min(sims) if sims else min_similarity
         # A near-miss group's members differ in size (unlike an exact cluster's
         # one shared size), so use the median as the representative for ranking.
-        sizes = sorted(items[k][2].size for k in members_idx)
+        sizes = sorted(items[k].fn.size for k in members_idx)
         rep_size = sizes[len(sizes) // 2]
         members = tuple(
             sorted(
-                (
-                    DuplicateMember(
-                        module=items[k][0],
-                        qualified_name=items[k][2].qualified_name,
-                        path=items[k][1],
-                        line=items[k][2].line,
-                    )
-                    for k in members_idx
-                ),
-                key=lambda m: (m.module, m.line, m.qualified_name),
+                (_member(items[k].qual, items[k].path, items[k].fn) for k in members_idx),
+                key=_member_sort_key,
             )
         )
         groups.append(
