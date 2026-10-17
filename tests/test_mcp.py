@@ -93,7 +93,6 @@ def test_check_passed_respects_the_layer_presence_floor(tmp_path: Path):
     passed=True for the degenerate single-module solution the floor exists to
     catch: precisely the case an agent in a correction loop needs told.
     """
-    from archy.mcp import CheckPayload, _run_check
 
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("")
@@ -127,14 +126,9 @@ def test_create_server_registers_expected_tools():
     server = create_server()
     tools = asyncio.run(server.list_tools())
     names = {t.name for t in tools}
-    # v0.36 (#227): 13 tools after the consolidation. The 6 removed tools
-    # (archy_affected, archy_record_baseline, archy_graph_focus,
-    # archy_graph_summary, archy_high_risk_modules, archy_hotspots) are folded
-    # into survivors via mode/lens/param switches; see the module docstring.
-    # archy_duplicates (#242) added the 14th. v0.41 (#265): 11 after the v2
-    # consolidation folded archy_trend into archy_score(view="history") (#266),
-    # demoted archy_status to the CLI `archy index status` (#267), and folded
-    # archy_contracts into archy_check(contracts=True) (#268).
+    # The tool set is pinned exactly: adding or removing a tool without a
+    # deliberate decision fails here. Folded tools live behind mode/view/param
+    # switches on the survivors; see the module docstring.
     assert names == {
         "archy_score",
         "archy_cycles",
@@ -147,11 +141,11 @@ def test_create_server_registers_expected_tools():
         "archy_dsm",
         "archy_simulate",
         "archy_duplicates",
-        # `archy_conventions` is the 12th: it reports a project's derived house
-        # style (naming families, mirrored surfaces, gate inventory, model
-        # census) so an agent stops re-deriving conventions by reading source.
+        # `archy_conventions` reports a project's derived house style (naming
+        # families, mirrored surfaces, gate inventory, model census) so an
+        # agent stops re-deriving conventions by reading source.
         "archy_conventions",
-        # `archy_module_view` is the 13th: the same census as a LOOKUP on one
+        # `archy_module_view` is the same census as a LOOKUP on one module,
         # module, complete and unranked. Kept a separate tool rather than a
         # parameter on `archy_conventions` because a union return type makes
         # FastMCP wrap every payload under a `result` key, which would change
@@ -1959,7 +1953,6 @@ def test_check_payload_carries_the_exact_pattern_hint(tmp_path: Path):
     empty `violations` list has no other way to learn that the config governs
     nothing and why.
     """
-    from archy.mcp import CheckPayload, _run_check
 
     app = tmp_path / "app"
     (app / "store").mkdir(parents=True)
@@ -2014,7 +2007,6 @@ def test_check_says_it_only_saw_direct_edges(tmp_path: Path):
     clean" from "never looked" on exactly the case archy claims as its
     differentiator.
     """
-    from archy.mcp import CheckPayload, _run_check
 
     payload = _run_check(_transitive_project(tmp_path), config_path=None)
 
@@ -2031,7 +2023,6 @@ def test_check_says_it_only_saw_direct_edges(tmp_path: Path):
 def test_check_stays_quiet_when_there_is_nothing_to_verify(tmp_path: Path):
     """No `forbid` rule means no unproven rule. A reason printed on every clean
     run is one a reader learns to skip."""
-    from archy.mcp import CheckPayload, _run_check
 
     (tmp_path / "app").mkdir()
     (tmp_path / "app" / "__init__.py").write_text("")
