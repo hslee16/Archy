@@ -51,6 +51,19 @@ def node_bin() -> str:
     return node
 
 
+@pytest.fixture
+def posix_bin_dir(node_bin: str, tmp_path: Path) -> Path:
+    """An empty `bin/` holding only a `node` symlink, for PATH-restricted launcher runs.
+
+    The launcher tests run the shim with PATH set to this directory alone, so
+    the only candidates it can resolve are the fakes each test drops in here.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "node").symlink_to(node_bin)
+    return bin_dir
+
+
 def test_plugin_skill_matches_canonical():
     """The plugin's SKILL.md must be byte-identical to the canonical copy.
 
@@ -139,90 +152,80 @@ def _fake_exe(path: Path, body: str) -> None:
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
-def test_plugin_launcher_resolution_order(node_bin: str, tmp_path: Path):
+def test_plugin_launcher_resolution_order(posix_bin_dir: Path):
     """The shim resolves archy -> uvx -> python -> actionable error, in that order.
 
     The whole point of #150: with a real `archy` it uses that; else `uvx` with the
     pinned spec; else `python -m archy`; with none it exits non-zero with a hint
     instead of failing silently.
     """
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "node").symlink_to(node_bin)
-
     # 1. A real `archy` wins and is called as `archy mcp`.
-    archy = bin_dir / "archy"
+    archy = posix_bin_dir / "archy"
     _fake_exe(archy, 'echo "FAKE-ARCHY [$*]"')
-    r1 = _run_launcher(bin_dir)
+    r1 = _run_launcher(posix_bin_dir)
     assert r1.returncode == 0 and "FAKE-ARCHY [mcp]" in r1.stdout, r1.stderr
 
     # 2. No archy, only uvx -> `uvx <spec> mcp`.
     archy.unlink()
-    uvx = bin_dir / "uvx"
+    uvx = posix_bin_dir / "uvx"
     _fake_exe(uvx, 'echo "FAKE-UVX [$*]"')
-    r2 = _run_launcher(bin_dir)
+    r2 = _run_launcher(posix_bin_dir)
     assert r2.returncode == 0, r2.stderr
     assert f"FAKE-UVX [{EXPECTED_SPEC} mcp]" in r2.stdout
 
     # 3. Only python3 -> `python3 -m archy mcp` (the last-resort fallback).
     uvx.unlink()
-    py = bin_dir / "python3"
+    py = posix_bin_dir / "python3"
     _fake_exe(py, 'echo "FAKE-PY [$*]"')
-    r3 = _run_launcher(bin_dir)
+    r3 = _run_launcher(posix_bin_dir)
     assert r3.returncode == 0, r3.stderr
     assert "FAKE-PY [-m archy mcp]" in r3.stdout
 
     # 4. Nothing resolvable -> actionable error, non-zero exit (not a silent hang).
     py.unlink()
-    r4 = _run_launcher(bin_dir)
+    r4 = _run_launcher(posix_bin_dir)
     assert r4.returncode == 1
     assert "could not start" in r4.stderr and "astral.sh/uv/install.sh" in r4.stderr
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
-def test_plugin_launcher_skips_unlaunchable_candidate(node_bin: str, tmp_path: Path):
+def test_plugin_launcher_skips_unlaunchable_candidate(posix_bin_dir: Path):
     """A non-executable file (or directory) named `archy` must not mask a real `uvx`.
 
     `which` uses a stat that requires a real, executable, non-empty file, so a
     stray `archy` directory or 0644 file on PATH is skipped rather than resolved
     and then dying at spawn with no fallthrough.
     """
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "node").symlink_to(node_bin)
     # A non-executable file literally named `archy` sitting earlier in resolution.
-    (bin_dir / "archy").write_text("not an executable")
-    (bin_dir / "archy").chmod(0o644)
-    _fake_exe(bin_dir / "uvx", 'echo "FAKE-UVX [$*]"')
+    (posix_bin_dir / "archy").write_text("not an executable")
+    (posix_bin_dir / "archy").chmod(0o644)
+    _fake_exe(posix_bin_dir / "uvx", 'echo "FAKE-UVX [$*]"')
 
-    result = _run_launcher(bin_dir)
+    result = _run_launcher(posix_bin_dir)
     assert result.returncode == 0, result.stderr
     assert f"FAKE-UVX [{EXPECTED_SPEC} mcp]" in result.stdout
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX signal + /proc-free liveness check")
-def test_plugin_launcher_forwards_termination(node_bin: str, tmp_path: Path):
+def test_plugin_launcher_forwards_termination(posix_bin_dir: Path, tmp_path: Path):
     """SIGTERM to the shim must kill the MCP child, not orphan it.
 
     Claude Code sends SIGTERM to the spawned process (the shim) on stop/restart.
     The shim must forward it so the real archy process dies; the previous version
     killed only itself and leaked a stranded child holding the old stdio pipes.
     """
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    (bin_dir / "node").symlink_to(node_bin)
     pidfile = tmp_path / "child.pid"
-    # Absolute path to sleep: the shim runs the child with PATH=bin_dir only, so a
+    # Absolute path to sleep: the shim runs the child with PATH=posix_bin_dir only, so a
     # bare `sleep` would not resolve. `exec` so the recorded PID IS the long-lived
     # process the shim spawned (no intermediate shell to confuse liveness).
     sleep_bin = shutil.which("sleep")
     if sleep_bin is None:
         pytest.skip("sleep not available")
-    _fake_exe(bin_dir / "archy", f'echo $$ > "{pidfile}"\nexec "{sleep_bin}" 30')
+    _fake_exe(posix_bin_dir / "archy", f'echo $$ > "{pidfile}"\nexec "{sleep_bin}" 30')
 
     proc = subprocess.Popen(
         ["node", str(PLUGIN_LAUNCHER)],
-        env={**os.environ, "PATH": str(bin_dir)},
+        env={**os.environ, "PATH": str(posix_bin_dir)},
     )
 
     def _alive(pid: int) -> bool:

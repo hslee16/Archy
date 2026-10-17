@@ -350,7 +350,8 @@ def _hub_project(tmp_path: Path, spokes: int = 3) -> Path:
 
 
 def _fan_out_project(tmp_path: Path, fan: int) -> Path:
-    # pkg.a imports `fan` leaf modules -> `fan` cells, no cycle.
+    # Exactly `fan` non-zero DSM cells and no cycles, so the oversized-matrix
+    # guard tests have a predictable cell count to trip against.
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")

@@ -1118,9 +1118,6 @@ def test_check_layer_rules_match_namespace_package_modules(tmp_path: Path):
     assert "libs -> routers" in result.output
 
 
-# --- dsm command --------------------------------------------------------------
-
-
 def _make_three_module_project(tmp_path: Path) -> Path:
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -1215,7 +1212,8 @@ def test_dsm_diff_against_baseline_snapshot(tmp_path: Path):
     )
     assert before.exit_code == 0
     baseline.write_text(before.output)
-    # Introduce a back-edge.
+    # c.py now imports a.py, reversing the topological order, so the diff must
+    # surface a new back-edge against the baseline.
     (project / "pkg" / "c.py").write_text("from pkg.a import _\n")
     result = CliRunner().invoke(
         main,
