@@ -229,6 +229,7 @@ def test_check_violations_exit_one_and_listed(tmp_path: Path):
     assert "core -> cli (forbidden)" in result.output
     assert "myapp.core.api -> myapp.cli.runner" in result.output
 
+
 def test_check_respects_config_exclude(tmp_path: Path):
     """Excluding a directory must remove its forbidden imports from CLI check."""
     project = tmp_path / "project"
@@ -245,9 +246,7 @@ def test_check_respects_config_exclude(tmp_path: Path):
     (cli / "__init__.py").write_text("")
     (core / "api.py").write_text("")
     (cli / "runner.py").write_text("")
-    (generated / "bad.py").write_text(
-        "from myapp.cli.runner import go\n"
-    )
+    (generated / "bad.py").write_text("from myapp.cli.runner import go\n")
 
     rules = (
         "layers:\n"

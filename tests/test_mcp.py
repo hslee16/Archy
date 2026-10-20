@@ -1855,6 +1855,7 @@ def test_mcp_check_applies_config_roots(tmp_path: Path):
         ("app.libs.db", "app.routers.user")
     ]
 
+
 def test_mcp_check_respects_config_exclude(tmp_path: Path):
     """MCP check must honor exclude when scanning forbidden imports."""
     project = tmp_path / "project"
@@ -1871,9 +1872,7 @@ def test_mcp_check_respects_config_exclude(tmp_path: Path):
     (cli / "__init__.py").write_text("")
     (core / "api.py").write_text("")
     (cli / "runner.py").write_text("")
-    (generated / "bad.py").write_text(
-        "from myapp.cli.runner import go\n"
-    )
+    (generated / "bad.py").write_text("from myapp.cli.runner import go\n")
 
     rules = (
         "layers:\n"
