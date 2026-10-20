@@ -1855,6 +1855,51 @@ def test_mcp_check_applies_config_roots(tmp_path: Path):
         ("app.libs.db", "app.routers.user")
     ]
 
+def test_mcp_check_respects_config_exclude(tmp_path: Path):
+    """MCP check must honor exclude when scanning forbidden imports."""
+    project = tmp_path / "project"
+    core = project / "myapp" / "core"
+    cli = project / "myapp" / "cli"
+    generated = core / "generated"
+
+    generated.mkdir(parents=True)
+    cli.mkdir(parents=True)
+
+    (project / "myapp" / "__init__.py").write_text("")
+    (core / "__init__.py").write_text("")
+    (generated / "__init__.py").write_text("")
+    (cli / "__init__.py").write_text("")
+    (core / "api.py").write_text("")
+    (cli / "runner.py").write_text("")
+    (generated / "bad.py").write_text(
+        "from myapp.cli.runner import go\n"
+    )
+
+    rules = (
+        "layers:\n"
+        "  core: {modules: [myapp.core.**]}\n"
+        "  cli: {modules: [myapp.cli.**]}\n"
+        "forbid:\n"
+        "  - {from: core, to: cli}\n"
+    )
+    config = project / "archy.yaml"
+
+    config.write_text(rules)
+    without_exclude = _run_check(project, config_path=None)
+
+    assert isinstance(without_exclude, CheckPayload)
+    assert without_exclude.passed is False
+    assert [(v.source, v.target) for v in without_exclude.violations] == [
+        ("myapp.core.generated.bad", "myapp.cli.runner")
+    ]
+
+    config.write_text(rules + "exclude: [generated]\n")
+    with_exclude = _run_check(project, config_path=None)
+
+    assert isinstance(with_exclude, CheckPayload)
+    assert with_exclude.passed is True
+    assert with_exclude.violations == ()
+
 
 def test_conventions_tool_returns_the_derived_house_style(acyclic_project: Path):
     # The wire contract an agent reads BEFORE naming a new class: the family,
