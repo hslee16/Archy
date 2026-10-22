@@ -707,12 +707,9 @@ def test_extract_token_bags_folds_like_shape_hash():
     t2 = b"def g(ys):\n    s = 9\n    for y in ys:\n        s = s + y\n    return s\n"
     assert extract_token_bags(seed)[1] == extract_token_bags(t2)[1]
 
+
 _COLLECT_BODY = (
-    "def {n}(xs):\n"
-    "    out = []\n"
-    "    for x in xs:\n"
-    "        out.append(x)\n"
-    "    return out\n"
+    "def {n}(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n"
 )
 _NEAR_BODY = (
     "def {n}(items):\n"
