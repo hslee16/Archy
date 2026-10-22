@@ -382,9 +382,9 @@ def test_demoted_test_cluster_still_flagged_exact(tmp_path: Path):
     tests = pkg / "tests"
     tests.mkdir()
     (tests / "__init__.py").write_text("")
-    body = "def {n}(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n"
-    (tests / "test_a.py").write_text(body.format(n="alpha"))
-    (tests / "test_b.py").write_text(body.format(n="beta"))
+
+    (tests / "test_a.py").write_text(_COLLECT_BODY.format(n="alpha"))
+    (tests / "test_b.py").write_text(_COLLECT_BODY.format(n="beta"))
     modules, results = parse_project(tmp_path)
     [out] = classify_variants(compute_duplicates(modules, results, min_size=5))
     assert out.category == "variant"
@@ -503,9 +503,8 @@ def test_concrete_hash_identical_bodies_match_differ_by_literal_do_not():
 
 def test_exact_marks_byte_identical_not_parameterized(tmp_path: Path):
     pkg = _make_pkg(tmp_path)
-    same = "def {n}(xs):\n    out = []\n    for x in xs:\n        out.append(x)\n    return out\n"
-    (pkg / "a.py").write_text(same.format(n="alpha"))  # byte-identical bodies
-    (pkg / "b.py").write_text(same.format(n="beta"))
+    (pkg / "a.py").write_text(_COLLECT_BODY.format(n="alpha"))
+    (pkg / "b.py").write_text(_COLLECT_BODY.format(n="beta"))
     param = "def {n}(xs):\n    t = 0\n    for x in xs:\n        t = t + {k}\n    return t\n"
     (pkg / "c.py").write_text(param.format(n="gamma", k="1"))  # same shape,
     (pkg / "d.py").write_text(param.format(n="delta", k="9"))  # differ by a literal
@@ -708,7 +707,13 @@ def test_extract_token_bags_folds_like_shape_hash():
     t2 = b"def g(ys):\n    s = 9\n    for y in ys:\n        s = s + y\n    return s\n"
     assert extract_token_bags(seed)[1] == extract_token_bags(t2)[1]
 
-
+_COLLECT_BODY = (
+    "def {n}(xs):\n"
+    "    out = []\n"
+    "    for x in xs:\n"
+    "        out.append(x)\n"
+    "    return out\n"
+)
 _NEAR_BODY = (
     "def {n}(items):\n"
     "    total = 0\n"
