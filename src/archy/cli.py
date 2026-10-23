@@ -11,11 +11,12 @@ archy:gates       exit 1 (flag:--strict), exit 1 (flag:--strict-tolerance),
 
 from __future__ import annotations
 
+import difflib
 import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import click
 import networkx as nx
@@ -105,6 +106,10 @@ from archy.scan_config import graph_kwargs, resolve_max_modules, scan_kwargs
 from archy.score import Score, compute_score
 from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend
+
+if TYPE_CHECKING:
+    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
+    from archy.install import ConfigPreview
 
 
 @click.group()
@@ -1534,28 +1539,69 @@ def _confirm_targets(adapters, location: str, action: str) -> bool:
     return True
 
 
-def _config_change(path: Path, content: str) -> str:
-    """What install would change in `path`, as a zero-context unified diff.
+def _config_change(preview: ConfigPreview) -> str:
+    """What install would change in one file, showing archy's lines only.
 
     Shared files such as ~/.claude.json hold the user's whole client config,
-    other servers' secrets included, so the preview shows archy's lines only
-    (#519). Zero context because a neighbouring line is exactly where another
-    server's token sits. A file that does not exist yet is archy's own, so it
-    prints whole.
+    other servers' secrets included (#519). Diffing the on-disk file would print
+    every line the writer reformats (re-indented JSON, `\\u` escapes, TOML inline
+    tables), so archy's lines come from diffing against `without_archy`, the
+    same content in the writer's own format. Other rewritten lines are counted,
+    never printed. A file that does not exist yet is archy's own: it prints whole.
     """
-    import difflib
-
-    if not path.exists():
-        return content
-    before = path.read_text(encoding="utf-8")
-    diff = difflib.unified_diff(
-        before.splitlines(keepends=True),
-        content.splitlines(keepends=True),
-        fromfile=str(path),
-        tofile=str(path),
-        n=0,
+    if preview.existing is None:
+        return preview.rendered
+    if preview.existing == preview.rendered:
+        return "(no changes)"
+    out = _changed_lines(
+        preview.without_archy or "",
+        preview.rendered,
+        fromfile=f"{preview.path} (without archy)",
+        tofile=str(preview.path),
+    ) or ["(archy's own lines are unchanged)"]
+    rewritten = sum(
+        line.startswith("-")
+        for line in _changed_lines(preview.existing, preview.rendered)
+        if not line.startswith("---")
     )
-    return "".join(diff) or "(no changes)"
+    if rewritten:
+        out.append(
+            f"# install also rewrites {rewritten} other existing line(s) here "
+            "(formatting, or an older archy entry); --full prints the whole result."
+        )
+    return "\n".join(out)
+
+
+def _changed_lines(before: str, after: str, *, fromfile: str = "", tofile: str = "") -> list[str]:
+    """Zero-context unified diff lines, minus lines that only gained a comma.
+
+    Zero context because a neighbouring line is exactly where another server's
+    token sits; the comma filter because appending an entry to a JSON object or
+    list adds a comma to the user's previous last line. Split on "\\n" alone so
+    a CRLF file counts as rewritten, which it is.
+    """
+    diff = list(
+        difflib.unified_diff(
+            before.split("\n"), after.split("\n"), fromfile, tofile, n=0, lineterm=""
+        )
+    )
+
+    def body(line: str) -> str | None:
+        if line.startswith(("---", "+++", "@@")) or line[:1] not in ("-", "+"):
+            return None
+        return line[1:].rstrip(",")
+
+    removed = {body(line) for line in diff if line.startswith("-")}
+    added = {body(line) for line in diff if line.startswith("+")}
+    comma_only = (removed & added) - {None}
+    kept = [line for line in diff if body(line) not in comma_only]
+    # Drop a hunk header whose every change was comma-only, then headers alone.
+    hunks = [
+        line
+        for i, line in enumerate(kept)
+        if not line.startswith("@@") or (i + 1 < len(kept) and not kept[i + 1].startswith("@@"))
+    ]
+    return hunks if any(body(line) is not None for line in hunks) else []
 
 
 @main.command()
@@ -1615,7 +1661,7 @@ def install(
     from archy.install import (
         InstallError,
         Scope,
-        print_config,
+        preview_config,
         resolve_targets,
         run_install,
     )
@@ -1625,15 +1671,15 @@ def install(
 
     try:
         if print_id is not None:
-            files = print_config(
+            previews = preview_config(
                 print_id,
                 scope,
                 project_root=project_root,
                 seed_permissions=seed_permissions,
             )
-            for path, content in files:
-                click.echo(f"# {path}")
-                click.echo(content if full else _config_change(path, content))
+            for preview in previews:
+                click.echo(f"# {preview.path}")
+                click.echo(preview.rendered if full else _config_change(preview))
             return
 
         adapters = resolve_targets(target)

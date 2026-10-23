@@ -13,9 +13,11 @@ from __future__ import annotations
 from archy.install.base import AgentAdapter, FileAction, Scope
 from archy.install.registry import adapter_ids, all_adapters, get_adapter
 from archy.install.runner import (
+    ConfigPreview,
     Detection,
     InstallResult,
     detect_all,
+    preview_config,
     print_config,
     resolve_targets,
     run_install,
@@ -25,6 +27,7 @@ from archy.install.writer import InstallError
 
 __all__ = [
     "AgentAdapter",
+    "ConfigPreview",
     "Detection",
     "FileAction",
     "InstallError",
@@ -34,6 +37,7 @@ __all__ = [
     "all_adapters",
     "detect_all",
     "get_adapter",
+    "preview_config",
     "print_config",
     "resolve_targets",
     "run_install",

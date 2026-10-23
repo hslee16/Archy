@@ -4,10 +4,12 @@ CLI-agnostic on purpose. The Click command in ``archy.cli`` parses flags and
 formats output; everything here returns structured results so the same logic is
 driven directly by unit tests without going through ``CliRunner``.
 
-archy:owns        AdapterResult, Detection, InstallResult, detect_all, plan_for,
-                  print_config, resolve_targets, run_install, run_uninstall
-archy:mirrored-by detect_all -> archy.cli, archy.install, print_config -> archy.cli,
-                  archy.install, resolve_targets -> archy.cli, archy.install,
+archy:owns        AdapterResult, ConfigPreview, Detection, InstallResult, detect_all,
+                  plan_for, preview_config, print_config, resolve_targets, run_install,
+                  run_uninstall
+archy:mirrored-by ConfigPreview -> archy.cli, archy.install, detect_all -> archy.cli,
+                  archy.install, preview_config -> archy.cli, archy.install,
+                  resolve_targets -> archy.cli, archy.install,
                   run_install -> archy.cli, archy.install, run_uninstall -> archy.cli,
                   archy.install
 """
@@ -201,8 +203,52 @@ def print_config(
     Renders against the *real* current files (the dry-run system reads disk),
     so the preview reflects the actual merge result, not a fresh snippet.
     """
+    previews = preview_config(
+        adapter_id, scope, project_root=project_root, seed_permissions=seed_permissions
+    )
+    return [(p.path, p.rendered) for p in previews]
+
+
+class ConfigPreview(BaseModel):
+    """One file as install would leave it, with what to diff it against.
+
+    ``without_archy`` is ``unrender(rendered)``: the user's content in the
+    writer's own formatting, archy's part removed. Diffing it against
+    ``rendered`` isolates archy's lines however the writer reformats the rest
+    (#519). ``existing`` is the raw on-disk text, line endings kept, or ``None``
+    when the file does not exist yet.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    path: Path
+    existing: str | None
+    rendered: str
+    without_archy: str | None
+
+
+def preview_config(
+    adapter_id: str,
+    scope: Scope,
+    *,
+    project_root: Path | None = None,
+    seed_permissions: bool = True,
+) -> list[ConfigPreview]:
+    """Dry-run a single adapter and pair each rendered file with its baselines."""
     adapter = get_adapter(adapter_id)
     ws = DryRunWriteSystem()
     plan = plan_for(adapter, scope, project_root=project_root, seed_permissions=seed_permissions)
-    apply_plan(plan, ws)
-    return [(record.path, record.content) for record in ws.records]
+    previews: list[ConfigPreview] = []
+    for action in plan:
+        rendered = action.render(ws.read_text(action.path))
+        # Bytes, not read_text: universal newlines would hide a CRLF rewrite.
+        existing = action.path.read_bytes().decode("utf-8") if action.path.exists() else None
+        previews.append(
+            ConfigPreview(
+                path=action.path,
+                existing=existing,
+                rendered=rendered,
+                without_archy=action.unrender(rendered),
+            )
+        )
+    return previews
