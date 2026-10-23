@@ -1540,73 +1540,67 @@ def _confirm_targets(adapters, location: str, action: str) -> bool:
 
 
 def _config_change(preview: ConfigPreview) -> str:
-    """What install would change in one file, showing archy's lines only.
+    """The lines archy writes into one file, and a count of what else changes.
 
     Shared files such as ~/.claude.json hold the user's whole client config,
     other servers' secrets included (#519). Diffing the on-disk file would print
     every line the writer reformats (re-indented JSON, `\\u` escapes, TOML inline
-    tables), so archy's lines come from diffing against `without_archy`, the
-    same content in the writer's own format, and only ADDED lines print: a
-    removed line there is user content or a container the stripper left behind.
-    Other rewritten lines are counted, never printed. A file that does not
-    exist yet is archy's own: it prints whole.
+    tables), so archy's lines come from comparing against `without_archy`, the
+    user's content in the writer's own format. Only those lines print; every
+    other changed line is counted, never shown. A file that does not exist yet
+    is archy's own, so it prints whole.
     """
     if preview.existing is None:
         return preview.rendered
     if preview.existing == preview.rendered:
         return "(no changes)"
-    added = [
-        (header, lines)
-        for header, _, lines in _hunks(preview.without_archy or "", preview.rendered)
-        if lines
-    ]
-    on_disk = {_bare(line) for line in preview.existing.splitlines()}
-    if not added:
-        out = ["(archy's own lines are unchanged)"]
-    elif all(_bare(line) in on_disk for _, lines in added for line in lines):
-        # The entry is already installed; only the file's formatting differs.
-        out = ["(archy's lines are already present)"]
-    else:
-        out = [f"--- {preview.path} (without archy)", f"+++ {preview.path}"]
-        for header, lines in added:
-            out += [header, *(f"+{line}" for line in lines)]
-    rewritten = sum(len(removed) for _, removed, _ in _hunks(preview.existing, preview.rendered))
-    if rewritten:
+    rendered = preview.rendered.split("\n")
+    out = ["archy writes these lines (line numbers are in the result):"]
+    for start, end in _inserted(preview.without_archy.split("\n"), rendered):
+        out.append(f"@@ +{start + 1},{end - start} @@")
+        out += [f"+{line}" for line in rendered[start:end]]
+    changed = _removed_count(preview.existing.split("\n"), rendered)
+    if changed:
         out.append(
-            f"# install also rewrites {rewritten} other existing line(s) here "
-            "(formatting, or an older archy entry); --full prints the whole result."
+            f"# install also changes {changed} other existing line(s) here: formatting, "
+            "or an older archy entry it replaces, custom args or env included. "
+            "--full prints the whole result."
         )
     return "\n".join(out)
 
 
-def _bare(line: str) -> str:
-    return line.strip().rstrip(",")
+def _matcher(before: list[str], after: list[str]) -> difflib.SequenceMatcher[str]:
+    """Match lines ignoring one trailing comma.
 
-
-def _hunks(before: str, after: str) -> list[tuple[str, list[str], list[str]]]:
-    """Zero-context diff hunks as (header, removed, added), minus comma-only pairs.
-
-    Zero context because a neighbouring line is exactly where another server's
-    token sits. A removed line paired in the same hunk with itself plus a
-    trailing comma is dropped with its partner: appending to a JSON object or
-    list only adds a comma to the user's previous last line. Split on "\\n"
-    alone so a CRLF file counts as rewritten, which it is.
+    Appending an entry to a JSON object or list adds a comma to the user's
+    previous last line; ignoring it keeps that line matched, so it neither
+    prints nor pairs off with archy's own closing brace. Lines are split on
+    "\\n" alone, so a CRLF file still counts as changed, which it is.
     """
-    diff = difflib.unified_diff(before.split("\n"), after.split("\n"), n=0, lineterm="")
-    hunks: list[tuple[str, list[str], list[str]]] = []
-    for line in list(diff)[2:]:  # past the ---/+++ file header
-        if line.startswith("@@"):
-            hunks.append((line, [], []))
-        elif line.startswith("-"):
-            hunks[-1][1].append(line[1:])
-        else:  # zero context, so anything else is an addition
-            hunks[-1][2].append(line[1:])
-    for _, removed, added in hunks:
-        for line in list(removed):
-            if line + "," in added:
-                removed.remove(line)
-                added.remove(line + ",")
-    return hunks
+    return difflib.SequenceMatcher(
+        None,
+        [line.removesuffix(",") for line in before],
+        [line.removesuffix(",") for line in after],
+        autojunk=False,
+    )
+
+
+def _inserted(before: list[str], after: list[str]) -> list[tuple[int, int]]:
+    """Line ranges of `after` that are new relative to `before`."""
+    return [
+        (j1, j2)
+        for tag, _, _, j1, j2 in _matcher(before, after).get_opcodes()
+        if tag in ("insert", "replace")
+    ]
+
+
+def _removed_count(before: list[str], after: list[str]) -> int:
+    """How many lines of `before` are deleted or rewritten in `after`."""
+    return sum(
+        i2 - i1
+        for tag, i1, i2, _, _ in _matcher(before, after).get_opcodes()
+        if tag in ("delete", "replace")
+    )
 
 
 @main.command()
@@ -1641,7 +1635,7 @@ def _hunks(before: str, after: str) -> list[tuple[str, list[str], list[str]]]:
     "print_id",
     default=None,
     metavar="<id>",
-    help="Print what install would change for one agent, as a diff, then exit.",
+    help="Print the lines install would write for one agent, then exit.",
 )
 @click.option(
     "--full",

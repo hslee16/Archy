@@ -231,20 +231,21 @@ class ConfigPreview(BaseModel):
     path: Path
     existing: str | None
     rendered: str
-    without_archy: str | None
+    without_archy: str
 
 
-def _without_archy(action: FileAction, existing: str | None, rendered: str) -> str | None:
-    """``unrender(rendered)``, except for a file archy owns that already exists.
+def _without_archy(action: FileAction, rendered: str) -> str:
+    """``unrender(rendered)``, or for a file archy owns, its non-archy text.
 
-    An owned file's unrender deletes it (``None``), but install keeps any user
-    text outside the marker block (``upsert_instructions``), so against an empty
-    baseline that text would print. Strip just the marker block instead.
+    An owned file's unrender deletes it (``None``). If install keeps user text
+    outside a marker block (``upsert_instructions``), that text is the baseline,
+    so it never prints; a file with no markers is archy's whole (``""``).
     """
     stripped = action.unrender(rendered)
-    if stripped is None and existing is not None:
-        return remove_instructions(rendered) or ""
-    return stripped
+    if stripped is not None:
+        return stripped
+    kept = remove_instructions(rendered)
+    return "" if kept is None or kept == rendered else kept
 
 
 def preview_config(
@@ -268,7 +269,7 @@ def preview_config(
                 path=action.path,
                 existing=existing,
                 rendered=rendered,
-                without_archy=_without_archy(action, existing, rendered),
+                without_archy=_without_archy(action, rendered),
             )
         )
     return previews

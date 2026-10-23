@@ -12,6 +12,7 @@ import json
 from click.testing import CliRunner
 
 from archy.cli import main
+from archy.install.base import TOOL_NAMES
 
 SENTINEL = "SENTINEL_SECRET"
 
@@ -60,7 +61,7 @@ def test_a_file_the_writer_reformats_still_shows_only_archys_lines(simulate_os):
 
     assert '"archy"' in out
     assert SENTINEL not in out
-    assert "also rewrites" in out
+    assert "also changes" in out
 
 
 def test_a_codex_inline_env_table_rewritten_by_the_writer_does_not_leak(simulate_os):
@@ -140,7 +141,7 @@ def test_a_crlf_file_is_not_reported_as_unchanged(simulate_os):
     out = _print_config()
 
     assert ".claude.json\n(no changes)" not in out
-    assert "also rewrites" in out
+    assert "also changes" in out
 
 
 def test_user_text_kept_in_an_archy_owned_rules_file_is_not_printed(simulate_os):
@@ -171,20 +172,22 @@ def test_only_added_lines_print_so_a_stripped_empty_container_does_not(simulate_
     assert not [line for line in mcp.splitlines() if line[:1] == "-" and line[:3] != "---"]
 
 
-def test_archys_printed_entry_is_balanced_after_another_server(simulate_os):
-    """Comma pairing is exact and per hunk: matching the user's `}` against
-    archy's own closing brace printed a stray `},` and dropped archy's `}`."""
+def test_archys_entry_prints_exactly_after_another_server(simulate_os):
+    """The user's `}` gains a comma. A line diff paired it with archy's own
+    closing brace, printing a stray `},` and dropping archy's `}`; a brace
+    count could not see that, since the two errors cancel out."""
     fake = simulate_os("linux")
     _claude_json(fake.home)
 
     out = _print_config()
 
-    added = [line for line in out.splitlines() if line[:1] == "+" and line[:3] != "+++"]
-    assert '+    "archy": {' in added
-    assert sum(line.count("{") for line in added) == sum(line.count("}") for line in added)
+    section = out.split(".claude.json", 1)[1].split("# ", 1)[0]
+    added = [line for line in section.splitlines() if line.startswith("+")]
+    assert added[0] == '+    "archy": {'
+    assert added[-1] == "+    }"
 
 
-def test_an_installed_entry_in_a_reformatted_file_reads_as_already_present(simulate_os):
+def test_an_installed_entry_in_a_reformatted_file_prints_archy_not_the_user(simulate_os):
     fake = simulate_os("linux")
     installed = CliRunner().invoke(main, ["install", "--target", "claude", "--yes"])
     assert installed.exit_code == 0, installed.output
@@ -195,8 +198,9 @@ def test_an_installed_entry_in_a_reformatted_file_reads_as_already_present(simul
 
     out = _print_config()
 
-    assert "(archy's lines are already present)" in out
-    assert "rewrites 1 other" in out
+    assert '+    "archy": {' in out
+    assert "note" not in out
+    assert "changes 1 other" in out
 
 
 def test_the_rewrite_count_includes_lines_that_start_with_dashes(simulate_os):
@@ -209,7 +213,7 @@ def test_the_rewrite_count_includes_lines_that_start_with_dashes(simulate_os):
 
     out = _print_config()
 
-    assert "rewrites 4 other" in out
+    assert "changes 4 other" in out
 
 
 def test_full_without_print_config_is_a_usage_error_and_writes_nothing(simulate_os):
@@ -220,3 +224,36 @@ def test_full_without_print_config_is_a_usage_error_and_writes_nothing(simulate_
     assert result.exit_code == 2
     assert "--full only applies with --print-config" in result.output
     assert not (fake.home / ".cursor").exists()
+
+
+def test_archy_tool_names_elsewhere_do_not_hide_the_allow_entries(simulate_os):
+    """The tool names sit in `deny`, so install still adds them to `allow`.
+    A line-presence check called that "already present" and printed nothing."""
+    fake = simulate_os("linux")
+    deny = [f"mcp__archy__{name}" for name in TOOL_NAMES]
+    path = fake.home / ".claude" / "settings.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"permissions": {"deny": deny}}, indent=2) + "\n")
+
+    out = _print_config()
+
+    section = out.split("settings.json", 1)[1]
+    assert f'+      "mcp__archy__{TOOL_NAMES[0]}",' in section
+
+
+def test_an_owned_file_without_markers_prints_whole_and_drops_the_old_env(simulate_os):
+    """Continue's archy.yaml is archy's own and has no marker block. The old
+    version's user `env` is deleted, so it must be counted, never printed."""
+    fake = simulate_os("linux")
+    _seed(
+        fake.home / ".continue" / "mcpServers" / "archy.yaml",
+        f"name: archy\nmcpServers:\n  - name: archy\n    command: /opt/old/archy\n"
+        f"    env:\n      TOKEN: {SENTINEL}\n",
+    )
+
+    out = _print_config("continue")
+
+    section = out.split("archy.yaml", 1)[1].split("# ", 1)[0]
+    assert "+mcpServers:" in section
+    assert SENTINEL not in out
+    assert "also changes" in out
