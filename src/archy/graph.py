@@ -424,7 +424,13 @@ def _is_ignored(path: Path, ignored: frozenset[str]) -> bool:
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
     abs_path = py_file.resolve()
-    for pkg_root in package_roots:
+    # A root that contains the file names it. Without this, a repo-root
+    # package (benchmarks/, examples/) that sorts before src/mypkg captures
+    # src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
+    # (#516). Files under no root (init-less tests/, top-level scripts) still
+    # fall back to the first root whose parent holds them.
+    owners = [r for r in package_roots if abs_path.is_relative_to(r)]
+    for pkg_root in owners or package_roots:
         try:
             rel = abs_path.relative_to(pkg_root.parent)
         except ValueError:

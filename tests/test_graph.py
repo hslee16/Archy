@@ -6,9 +6,11 @@ import networkx as nx
 import pytest
 
 from archy.graph import (
+    DEFAULT_IGNORED_DIRS,
     DEFAULT_MAX_MODULES,
     ScanTooLargeError,
     _add_kind,
+    _find_package_roots,
     build_graph,
     effective_max_modules,
     graph_to_dict,
@@ -862,3 +864,64 @@ def test_add_kind_defaults_a_missing_kinds_to_import_for_either_kind():
     assert already["kinds"] == ("call", "import")
     _add_kind(already, "import")
     assert already["kinds"] == ("call", "import")  # idempotent
+
+
+def _src_layout_with_cycle(tmp_path: Path, *, decoy: bool) -> Path:
+    """src/mypkg/core/db.py and src/mypkg/api/views.py import each other.
+
+    With `decoy`, an empty repo-root `benchmarks/` package sorts before `src`.
+    """
+    pkg = tmp_path / "src" / "mypkg"
+    for sub in ("core", "api"):
+        (pkg / sub).mkdir(parents=True)
+        (pkg / sub / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core" / "db.py").write_text("from mypkg.api import views\n")
+    (pkg / "api" / "views.py").write_text("from mypkg.core import db\n")
+    if decoy:
+        (tmp_path / "benchmarks").mkdir()
+        (tmp_path / "benchmarks" / "__init__.py").write_text("")
+    return tmp_path
+
+
+def test_a_repo_root_package_sorting_before_src_does_not_rename_the_library(
+    tmp_path: Path,
+):
+    """#516: the decoy used to capture every file, renaming the library to
+    `src.mypkg.*`, turning its self-imports external and hiding the cycle."""
+    root = _src_layout_with_cycle(tmp_path, decoy=True)
+    roots = _find_package_roots(root.resolve(), DEFAULT_IGNORED_DIRS, ())
+    # The fixture reaches the branch: the decoy is a root and sorts first.
+    assert [r.name for r in roots] == ["benchmarks", "mypkg"]
+
+    g = build_graph(root)
+
+    assert "mypkg.core.db" in g and "src.mypkg.core.db" not in g
+    assert g.has_edge("mypkg.core.db", "mypkg.api.views")
+    assert g.has_edge("mypkg.api.views", "mypkg.core.db")
+    assert not g.nodes["mypkg.core.db"].get("external")
+
+
+def test_the_decoy_does_not_change_the_graph_of_the_library(tmp_path: Path):
+    """Adding an empty sibling package adds one node and nothing else."""
+    without = build_graph(_src_layout_with_cycle(tmp_path / "a", decoy=False))
+    with_decoy = build_graph(_src_layout_with_cycle(tmp_path / "b", decoy=True))
+
+    assert set(with_decoy.nodes) - set(without.nodes) == {"benchmarks"}
+    assert set(with_decoy.edges) == set(without.edges)
+
+
+def test_a_file_under_no_package_root_still_falls_back_to_a_root_parent(
+    tmp_path: Path,
+):
+    """Flat layout with an init-less tests/: tests are named via the fallback,
+    which the #516 fix must keep (dropping it zeroes `affected` here)."""
+    (tmp_path / "mypkg").mkdir()
+    (tmp_path / "mypkg" / "__init__.py").write_text("")
+    (tmp_path / "mypkg" / "core.py").write_text("")
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_core.py").write_text("from mypkg import core\n")
+
+    g = build_graph(tmp_path)
+
+    assert g.has_edge("tests.test_core", "mypkg.core")
