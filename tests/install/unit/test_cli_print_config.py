@@ -141,3 +141,82 @@ def test_a_crlf_file_is_not_reported_as_unchanged(simulate_os):
 
     assert ".claude.json\n(no changes)" not in out
     assert "also rewrites" in out
+
+
+def test_user_text_kept_in_an_archy_owned_rules_file_is_not_printed(simulate_os):
+    """Cursor's rules file unrenders by deletion, but install keeps text outside
+    the marker block, so an empty baseline would print it."""
+    fake = simulate_os("linux")
+    _seed(
+        fake.home / ".cursor" / "rules" / "archy.mdc",
+        f"my notes: token={SENTINEL}\n\n<!-- archy:begin -->\nold\n<!-- archy:end -->\n",
+    )
+
+    out = _print_config("cursor")
+
+    assert "archy:begin" in out
+    assert SENTINEL not in out
+
+
+def test_only_added_lines_print_so_a_stripped_empty_container_does_not(simulate_os):
+    fake = simulate_os("linux")
+    (fake.home / ".cursor").mkdir(parents=True)
+    (fake.home / ".cursor" / "mcp.json").write_text("{}\n")
+
+    out = _print_config("cursor")
+
+    # The rules file is new and prints whole; its markdown bullets start with "-".
+    mcp = out.split("mcp.json", 1)[1].split("archy.mdc", 1)[0]
+    assert '"archy"' in mcp
+    assert not [line for line in mcp.splitlines() if line[:1] == "-" and line[:3] != "---"]
+
+
+def test_archys_printed_entry_is_balanced_after_another_server(simulate_os):
+    """Comma pairing is exact and per hunk: matching the user's `}` against
+    archy's own closing brace printed a stray `},` and dropped archy's `}`."""
+    fake = simulate_os("linux")
+    _claude_json(fake.home)
+
+    out = _print_config()
+
+    added = [line for line in out.splitlines() if line[:1] == "+" and line[:3] != "+++"]
+    assert '+    "archy": {' in added
+    assert sum(line.count("{") for line in added) == sum(line.count("}") for line in added)
+
+
+def test_an_installed_entry_in_a_reformatted_file_reads_as_already_present(simulate_os):
+    fake = simulate_os("linux")
+    installed = CliRunner().invoke(main, ["install", "--target", "claude", "--yes"])
+    assert installed.exit_code == 0, installed.output
+    path = fake.home / ".claude.json"
+    config = json.loads(path.read_text())
+    config["note"] = "café"  # Claude Code writes this raw; archy's writer escapes it
+    path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
+
+    out = _print_config()
+
+    assert "(archy's lines are already present)" in out
+    assert "rewrites 1 other" in out
+
+
+def test_the_rewrite_count_includes_lines_that_start_with_dashes(simulate_os):
+    """CRLF front matter: all four lines are rewritten, `---` lines included.
+    Skipping every line starting `---` (the file header) undercounted to 2."""
+    fake = simulate_os("linux")
+    path = fake.home / ".claude" / "CLAUDE.md"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"---\r\ntitle: x\r\n---\r\nbody\r\n")
+
+    out = _print_config()
+
+    assert "rewrites 4 other" in out
+
+
+def test_full_without_print_config_is_a_usage_error_and_writes_nothing(simulate_os):
+    fake = simulate_os("linux")
+
+    result = CliRunner().invoke(main, ["install", "--full", "--target", "cursor", "--yes"])
+
+    assert result.exit_code == 2
+    assert "--full only applies with --print-config" in result.output
+    assert not (fake.home / ".cursor").exists()

@@ -21,6 +21,7 @@ archy:mirrored-by delete_file -> archy.install.adapters.continue_,
                   archy.install.adapters.cursor, archy.install.adapters.opencode,
                   remove_instructions -> archy.install.adapters.claude,
                   archy.install.adapters.codex, archy.install.adapters.opencode,
+                  archy.install.runner,
                   upsert_instructions -> archy.install.adapters.claude,
                   archy.install.adapters.codex, archy.install.adapters.continue_,
                   archy.install.adapters.cursor, archy.install.adapters.opencode

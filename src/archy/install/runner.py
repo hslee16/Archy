@@ -21,7 +21,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
-from archy.install.base import AgentAdapter, FileAction, Scope, apply_plan, apply_uninstall
+from archy.install.base import (
+    AgentAdapter,
+    FileAction,
+    Scope,
+    apply_plan,
+    apply_uninstall,
+    remove_instructions,
+)
 from archy.install.registry import all_adapters, get_adapter
 from archy.install.writer import (
     DryRunWriteSystem,
@@ -227,6 +234,19 @@ class ConfigPreview(BaseModel):
     without_archy: str | None
 
 
+def _without_archy(action: FileAction, existing: str | None, rendered: str) -> str | None:
+    """``unrender(rendered)``, except for a file archy owns that already exists.
+
+    An owned file's unrender deletes it (``None``), but install keeps any user
+    text outside the marker block (``upsert_instructions``), so against an empty
+    baseline that text would print. Strip just the marker block instead.
+    """
+    stripped = action.unrender(rendered)
+    if stripped is None and existing is not None:
+        return remove_instructions(rendered) or ""
+    return stripped
+
+
 def preview_config(
     adapter_id: str,
     scope: Scope,
@@ -248,7 +268,7 @@ def preview_config(
                 path=action.path,
                 existing=existing,
                 rendered=rendered,
-                without_archy=action.unrender(rendered),
+                without_archy=_without_archy(action, existing, rendered),
             )
         )
     return previews
