@@ -50,7 +50,7 @@ uvx archy install                              # detect, confirm, wire all
 uvx archy install --target cursor,codex --yes  # non-interactive, specific clients
 uvx archy install --target all --yes           # every known client, detected or not
 uvx archy install --location local             # configure just the current project
-uvx archy install --print-config claude        # preview one client's config, write nothing
+uvx archy install --print-config claude        # preview archy's lines for one client, write nothing
 uvx archy install --no-permissions             # skip the Claude allowlist seed
 ```
 
@@ -162,7 +162,10 @@ Uninstall is idempotent: running it on a clean machine does nothing.
 ## Flag reference
 
 Both commands share `--target`, `--location`, `--project-root`, `--yes`, and
-`--no-permissions`. `install` adds `--print-config <id>` (preview one client);
+`--no-permissions`. `install` adds `--print-config <id>` (the lines archy would
+write into one client's files, plus a count of any other lines install would
+change there, so your other servers' settings never print; `--full` prints each
+whole file instead, secrets included);
 `uninstall` adds `--dry-run` (preview all removals).
 
 - `--target` accepts `auto` (detected clients only), `all` (every known client),

@@ -11,11 +11,12 @@ archy:gates       exit 1 (flag:--strict), exit 1 (flag:--strict-tolerance),
 
 from __future__ import annotations
 
+import difflib
 import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import click
 import networkx as nx
@@ -105,6 +106,10 @@ from archy.scan_config import graph_kwargs, resolve_max_modules, scan_kwargs
 from archy.score import Score, compute_score
 from archy.simulate import SimulateReport, find_simulate
 from archy.trend import render_text as render_trend
+
+if TYPE_CHECKING:
+    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
+    from archy.install import ConfigPreview
 
 
 @click.group()
@@ -1534,6 +1539,70 @@ def _confirm_targets(adapters, location: str, action: str) -> bool:
     return True
 
 
+def _config_change(preview: ConfigPreview) -> str:
+    """The lines archy writes into one file, and a count of what else changes.
+
+    Shared files such as ~/.claude.json hold the user's whole client config,
+    other servers' secrets included (#519). Diffing the on-disk file would print
+    every line the writer reformats (re-indented JSON, `\\u` escapes, TOML inline
+    tables), so archy's lines come from comparing against `without_archy`, the
+    user's content in the writer's own format. Only those lines print; every
+    other changed line is counted, never shown. A file that does not exist yet
+    is archy's own, so it prints whole.
+    """
+    if preview.existing is None:
+        return preview.rendered
+    if preview.existing == preview.rendered:
+        return "(no changes)"
+    rendered = preview.rendered.split("\n")
+    out = ["archy writes these lines (line numbers are in the result):"]
+    for start, end in _inserted(preview.without_archy.split("\n"), rendered):
+        out.append(f"@@ +{start + 1},{end - start} @@")
+        out += [f"+{line}" for line in rendered[start:end]]
+    changed = _removed_count(preview.existing.split("\n"), rendered)
+    if changed:
+        out.append(
+            f"# install also changes {changed} other existing line(s) here: formatting, "
+            "or an older archy entry it replaces, custom args or env included. "
+            "--full prints the whole result."
+        )
+    return "\n".join(out)
+
+
+def _matcher(before: list[str], after: list[str]) -> difflib.SequenceMatcher[str]:
+    """Match lines ignoring one trailing comma.
+
+    Appending an entry to a JSON object or list adds a comma to the user's
+    previous last line; ignoring it keeps that line matched, so it neither
+    prints nor pairs off with archy's own closing brace. Lines are split on
+    "\\n" alone, so a CRLF file still counts as changed, which it is.
+    """
+    return difflib.SequenceMatcher(
+        None,
+        [line.removesuffix(",") for line in before],
+        [line.removesuffix(",") for line in after],
+        autojunk=False,
+    )
+
+
+def _inserted(before: list[str], after: list[str]) -> list[tuple[int, int]]:
+    """Line ranges of `after` that are new relative to `before`."""
+    return [
+        (j1, j2)
+        for tag, _, _, j1, j2 in _matcher(before, after).get_opcodes()
+        if tag in ("insert", "replace")
+    ]
+
+
+def _removed_count(before: list[str], after: list[str]) -> int:
+    """How many lines of `before` are deleted or rewritten in `after`."""
+    return sum(
+        i2 - i1
+        for tag, i1, i2, _, _ in _matcher(before, after).get_opcodes()
+        if tag in ("delete", "replace")
+    )
+
+
 @main.command()
 @click.option(
     "--target",
@@ -1566,7 +1635,12 @@ def _confirm_targets(adapters, location: str, action: str) -> bool:
     "print_id",
     default=None,
     metavar="<id>",
-    help="Print the config that would be written for one agent, then exit.",
+    help="Print the lines install would write for one agent, then exit.",
+)
+@click.option(
+    "--full",
+    is_flag=True,
+    help="With --print-config, print each whole file instead of the diff.",
 )
 def install(
     target: str,
@@ -1575,6 +1649,7 @@ def install(
     yes: bool,
     no_permissions: bool,
     print_id: str | None,
+    full: bool,
 ) -> None:
     """Wire archy's MCP server into your AI coding agents.
 
@@ -1585,7 +1660,7 @@ def install(
     from archy.install import (
         InstallError,
         Scope,
-        print_config,
+        preview_config,
         resolve_targets,
         run_install,
     )
@@ -1593,17 +1668,20 @@ def install(
     scope = Scope.LOCAL if location == "local" else Scope.GLOBAL
     seed_permissions = not no_permissions
 
+    if full and print_id is None:
+        raise click.UsageError("--full only applies with --print-config.")
+
     try:
         if print_id is not None:
-            files = print_config(
+            previews = preview_config(
                 print_id,
                 scope,
                 project_root=project_root,
                 seed_permissions=seed_permissions,
             )
-            for path, content in files:
-                click.echo(f"# {path}")
-                click.echo(content)
+            for preview in previews:
+                click.echo(f"# {preview.path}")
+                click.echo(preview.rendered if full else _config_change(preview))
             return
 
         adapters = resolve_targets(target)
