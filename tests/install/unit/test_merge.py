@@ -45,6 +45,26 @@ def test_json_mcp_preserves_unrelated_keys_and_servers():
     assert obj["mcpServers"]["archy"]["command"] == "uvx"
 
 
+def test_json_mcp_keeps_non_ascii_lines_byte_identical():
+    # #538: the default ensure_ascii escaped the user's own non-ASCII text, so
+    # install rewrote lines it does not own and the --print-config diff filled
+    # with unrelated hunks.
+    existing = json.dumps(
+        {
+            "mcpServers": {"other": {"command": "x"}},
+            "userNote": "café - naïve",
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+    user_line = next(line for line in existing.splitlines() if "userNote" in line)
+    assert "café" in user_line  # the fixture must not already be escaped
+
+    rendered = render_json_mcp(existing)
+
+    assert user_line in rendered.splitlines()
+
+
 def test_json_mcp_idempotent():
     first = render_json_mcp(None)
     assert render_json_mcp(first) == first

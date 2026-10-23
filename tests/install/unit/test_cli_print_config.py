@@ -193,14 +193,33 @@ def test_an_installed_entry_in_a_reformatted_file_prints_archy_not_the_user(simu
     assert installed.exit_code == 0, installed.output
     path = fake.home / ".claude.json"
     config = json.loads(path.read_text())
-    config["note"] = "café"  # Claude Code writes this raw; archy's writer escapes it
-    path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
+    config["note"] = "rewritten by the client, not by archy"
+    path.write_text(json.dumps(config, indent=4) + "\n")
 
     out = _print_config()
 
     assert '+    "archy": {' in out
     assert "note" not in out
-    assert "changes 1 other" in out
+    assert "install also changes" in out  # re-indenting every line changes more
+
+
+def test_raw_non_ascii_written_by_the_client_is_not_reported_as_a_change(simulate_os):
+    # #538: install used to re-escape the user's own non-ASCII text, so a file
+    # the client had just written appeared changed on the next --print-config.
+    fake = simulate_os("linux")
+    installed = CliRunner().invoke(main, ["install", "--target", "claude", "--yes"])
+    assert installed.exit_code == 0, installed.output
+    path = fake.home / ".claude.json"
+    config = json.loads(path.read_text())
+    config["note"] = "café"
+    # Bytes, LF: the preview compares against the raw file, and Windows writes
+    # CRLF by default, which is the separate CRLF-is-a-rewrite case.
+    path.write_bytes((json.dumps(config, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
+
+    out = _print_config()
+
+    assert "café" not in out
+    assert "(no changes)" in out.split(".claude.json", 1)[1].split("# ", 1)[0]
 
 
 def test_the_rewrite_count_includes_lines_that_start_with_dashes(simulate_os):

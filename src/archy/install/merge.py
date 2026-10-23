@@ -52,7 +52,9 @@ def _mcp_entry() -> JsonObj:
 def _dump_json(obj: JsonObj) -> str:
     # No sort_keys: a round-trip must preserve the user's existing key order
     # rather than reshuffle their config. Trailing newline keeps git/POSIX happy.
-    return json.dumps(obj, indent=2) + "\n"
+    # ensure_ascii=False: the default rewrites every non-ASCII character as a
+    # \uXXXX escape, so archy install would churn lines it does not own (#538).
+    return json.dumps(obj, indent=2, ensure_ascii=False) + "\n"
 
 
 def _load_json_obj(existing: str | None) -> JsonObj:
