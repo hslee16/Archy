@@ -1534,6 +1534,30 @@ def _confirm_targets(adapters, location: str, action: str) -> bool:
     return True
 
 
+def _config_change(path: Path, content: str) -> str:
+    """What install would change in `path`, as a zero-context unified diff.
+
+    Shared files such as ~/.claude.json hold the user's whole client config,
+    other servers' secrets included, so the preview shows archy's lines only
+    (#519). Zero context because a neighbouring line is exactly where another
+    server's token sits. A file that does not exist yet is archy's own, so it
+    prints whole.
+    """
+    import difflib
+
+    if not path.exists():
+        return content
+    before = path.read_text(encoding="utf-8")
+    diff = difflib.unified_diff(
+        before.splitlines(keepends=True),
+        content.splitlines(keepends=True),
+        fromfile=str(path),
+        tofile=str(path),
+        n=0,
+    )
+    return "".join(diff) or "(no changes)"
+
+
 @main.command()
 @click.option(
     "--target",
@@ -1566,7 +1590,12 @@ def _confirm_targets(adapters, location: str, action: str) -> bool:
     "print_id",
     default=None,
     metavar="<id>",
-    help="Print the config that would be written for one agent, then exit.",
+    help="Print what install would change for one agent, as a diff, then exit.",
+)
+@click.option(
+    "--full",
+    is_flag=True,
+    help="With --print-config, print each whole file instead of the diff.",
 )
 def install(
     target: str,
@@ -1575,6 +1604,7 @@ def install(
     yes: bool,
     no_permissions: bool,
     print_id: str | None,
+    full: bool,
 ) -> None:
     """Wire archy's MCP server into your AI coding agents.
 
@@ -1603,7 +1633,7 @@ def install(
             )
             for path, content in files:
                 click.echo(f"# {path}")
-                click.echo(content)
+                click.echo(content if full else _config_change(path, content))
             return
 
         adapters = resolve_targets(target)
