@@ -925,3 +925,24 @@ def test_a_file_under_no_package_root_still_falls_back_to_a_root_parent(
     g = build_graph(tmp_path)
 
     assert g.has_edge("tests.test_core", "mypkg.core")
+
+
+def test_when_two_roots_contain_a_file_the_outermost_names_it(tmp_path: Path):
+    """A namespace gap (`app/plugins/` has no `__init__.py`) makes `foo` a root
+    nested inside `app`, so both contain `x.py`. The outer root must win, or
+    `x` becomes `foo.x` and its `from app import core` edge stops linking up."""
+    app = tmp_path / "app"
+    foo = app / "plugins" / "foo"
+    foo.mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "core.py").write_text("from app.plugins.foo import x\n")
+    (foo / "__init__.py").write_text("")
+    (foo / "x.py").write_text("from app import core\n")
+    roots = _find_package_roots(tmp_path.resolve(), DEFAULT_IGNORED_DIRS, ())
+    # The fixture reaches the branch: both roots contain foo/x.py.
+    assert [r.name for r in roots] == ["app", "foo"]
+
+    g = build_graph(tmp_path)
+
+    assert g.has_edge("app.plugins.foo.x", "app.core")
+    assert g.has_edge("app.core", "app.plugins.foo.x")
