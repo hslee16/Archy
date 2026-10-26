@@ -40,8 +40,10 @@ from archy.parser import ParseResult, parse_file
 # dropped rather than silently deserialized with defaults. v2 added
 # `FunctionComplexity.shape_hash` / `size` (duplicate-function detection); old
 # v1 rows would validate with empty hashes and yield zero duplicates on a warm
-# cache until incidental reparse.
-SCHEMA_VERSION = 2
+# cache until incidental reparse. v3 added `ParseResult.has_main_guard`: a v2
+# row would validate with False and silently drop every guarded script from
+# the `@entrypoints` set until the file happened to change.
+SCHEMA_VERSION = 3
 
 
 class SyncStats(BaseModel):

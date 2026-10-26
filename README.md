@@ -559,6 +559,18 @@ This came from a production incident: 34 command modules run standalone, each ne
 
 Be honest about what this does: archy cannot *derive* such a requirement (that is framework semantics, not graph structure). Someone has to know the constraint and write it down. What the rule then does is find every other module that violates it and stop the next edit from undoing the fix -- a ratchet, not a detector.
 
+**Derived entrypoints (`source: "@entrypoints"`).** A glob covers the entrypoints its author knew about. A script added later outside it (`app/worker.py` next to `app/commands/`) is not governed, and that is exactly the module most likely to miss the bootstrap import. `@entrypoints` binds the modules archy derives as runnable instead:
+
+```yaml
+required:
+  - source: "@entrypoints"
+    within: "app.**"          # optional: keep only entrypoints matching this
+    must_reach: app.core.database.model_registry
+    reason: standalone entrypoints need the full mapper registry
+```
+
+An entrypoint is a module with a top-level `if __name__ == "__main__":` guard, a `__main__.py`, or a target of `[project.scripts]`, `[project.gui-scripts]` or `[tool.poetry.scripts]` in the `pyproject.toml` at the scan root. Each violation says which of these made the module an entrypoint. Derivation finds every runnable file, guarded test modules and one-off scripts included, so most rules want `within:` to scope it to the part of the tree that carries the obligation; `within` is rejected on any other `source`, where editing the pattern does the same job. A rule that derives nothing is reported as a violation, and so is a `pyproject.toml` that cannot be parsed, since dropping its script targets would let the rule pass over the modules they name.
+
 **Excluding directories.** Add an optional `exclude:` list of directory basenames to skip codegen output, vendored code, etc. Each name is matched anywhere in the project tree (same mechanism as the built-in skips for `.venv`, `node_modules`, `__pycache__`):
 
 ```yaml

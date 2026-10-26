@@ -384,6 +384,63 @@ def test_check_stays_silent_about_required_reach_when_none_declared(tmp_path: Pa
     assert "required-reach" not in result.output
 
 
+def _make_entrypoint_project(tmp_path: Path, *, worker_body: str) -> Path:
+    """The registry project, plus a runnable `app/worker.py` no glob names and
+    a guarded test module the rule's `within` must leave alone."""
+    project = _make_registry_project(
+        tmp_path, bootstrap="from app.core.database import model_registry\n"
+    )
+    (project / "app" / "worker.py").write_text(
+        worker_body + 'if __name__ == "__main__":\n    pass\n'
+    )
+    (project / "tests").mkdir()
+    (project / "tests" / "__init__.py").write_text("")
+    (project / "tests" / "test_worker.py").write_text('if __name__ == "__main__":\n    pass\n')
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: '@entrypoints'\n"
+        "    within: 'app.**'\n"
+        "    must_reach: app.core.database.model_registry\n"
+        "    reason: entrypoints need the mapper registry\n"
+    )
+    return project
+
+
+def test_check_entrypoints_exit_code_tracks_the_worker_import(tmp_path: Path):
+    """End-to-end on real files: the guard is parsed, the entrypoint derived,
+    and one import in the worker moves the exit code."""
+    fixed = _make_entrypoint_project(
+        tmp_path / "fixed", worker_body="from app.core.database import model_registry\n"
+    )
+    broken = _make_entrypoint_project(tmp_path / "broken", worker_body="")
+
+    assert CliRunner().invoke(main, ["check", str(fixed)]).exit_code == 0
+    result = CliRunner().invoke(main, ["check", str(broken)])
+    assert result.exit_code == 1
+    assert "@entrypoints within app.** must reach app.core.database.model_registry:" in (
+        result.output
+    )
+    assert "app.worker does not transitively reach" in result.output
+    assert 'It is an entrypoint: top-level `if __name__ == "__main__":` guard.' in result.output
+    assert "tests.test_worker" not in result.output
+
+
+def test_check_json_carries_the_entrypoints_rule_scope(tmp_path: Path):
+    project = _make_entrypoint_project(tmp_path, worker_body="")
+    result = CliRunner().invoke(main, ["check", str(project), "--format", "json"])
+    assert result.exit_code == 1
+    [violation] = json.loads(result.output)["required_violations"]
+    assert violation["module"] == "app.worker"
+    assert violation["rule"] == {
+        "source": "@entrypoints",
+        "within": "app.**",
+        "must_reach": "app.core.database.model_registry",
+        "reason": "entrypoints need the mapper registry",
+    }
+    assert "It is an entrypoint" in violation["detail"]
+
+
 def test_check_fails_on_a_required_rule_that_cannot_fire(tmp_path: Path):
     """A typo'd pattern must not read as "every module satisfies it"."""
     project = _make_registry_project(tmp_path, bootstrap="")

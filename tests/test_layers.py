@@ -696,6 +696,122 @@ def test_required_reach_parses_the_rule(tmp_path: Path):
     )
 
 
+_ENTRYPOINTS_CONFIG = (
+    "layers: {}\nforbid: []\n"
+    "required:\n"
+    "  - source: '@entrypoints'\n"
+    "    within: 'app.**'\n"
+    "    must_reach: app.core.registry\n"
+    "    reason: entrypoints need the mapper registry\n"
+)
+
+
+def _entrypoint_graph(*edges: tuple[str, str], entrypoints: dict[str, str]) -> nx.DiGraph:
+    """A reach graph carrying the derived set `assemble_graph` would attach."""
+    graph = _reach_graph(*edges, nodes=tuple(entrypoints))
+    graph.graph["entrypoints"] = entrypoints
+    return graph
+
+
+def test_required_reach_entrypoints_catch_a_script_no_glob_named(tmp_path: Path):
+    """The reason `@entrypoints` exists, with its negative control.
+
+    `app.worker` sits outside `app.commands`, so the glob a careful author
+    would have written (`app.commands.*`) never sees it. Derived entrypoints
+    do. Then the same graph with the one import that fixes it: the rule must
+    move, or it is decorative.
+    """
+    config = _cfg(tmp_path, _ENTRYPOINTS_CONFIG)
+    entrypoints = {"app.commands.setup_user": "guard", "app.worker": "guard"}
+    broken = _entrypoint_graph(("app.commands", "app.core.registry"), entrypoints=entrypoints)
+
+    [violation] = find_reach_violations(broken, config)
+    assert violation.module == "app.worker"
+    assert violation.detail.endswith("It is an entrypoint: guard.")
+
+    fixed = broken.copy()
+    fixed.add_edge("app.worker", "app.core.registry", lines=(1,))
+    assert find_reach_violations(fixed, config) == []
+
+
+def test_required_reach_entrypoints_honour_within(tmp_path: Path):
+    """A guarded test module is an entrypoint too; `within` is how a rule leaves it out.
+
+    The fixture's out-of-scope module is a violation without `within`, which is
+    what makes the scoped pass mean something.
+    """
+    entrypoints = {"app.worker": "guard", "tests.test_worker": "guard"}
+    graph = _entrypoint_graph(("app.worker", "app.core.registry"), entrypoints=entrypoints)
+    unscoped = _cfg(tmp_path, _ENTRYPOINTS_CONFIG.replace("    within: 'app.**'\n", ""))
+    assert [v.module for v in find_reach_violations(graph, unscoped)] == ["tests.test_worker"]
+
+    assert find_reach_violations(graph, _cfg(tmp_path, _ENTRYPOINTS_CONFIG)) == []
+
+
+def test_required_reach_entrypoints_reach_through_the_package_init(tmp_path: Path):
+    """Same transitive semantics as a written source: the bootstrap covers a
+    derived entrypoint that imports nothing itself."""
+    config = _cfg(tmp_path, _ENTRYPOINTS_CONFIG)
+    graph = _entrypoint_graph(
+        ("app.commands", "app.core.registry"),
+        entrypoints={"app.commands.setup_user": "guard"},
+    )
+
+    assert find_reach_violations(graph, config) == []
+
+
+@pytest.mark.parametrize(
+    "entrypoints",
+    [
+        pytest.param({}, id="nothing-derived"),
+        pytest.param({"tests.test_worker": "guard"}, id="nothing-within"),
+        pytest.param(None, id="graph-without-derivation"),
+    ],
+)
+def test_required_reach_entrypoints_that_bind_nothing_are_a_dead_rule(
+    tmp_path: Path, entrypoints: dict[str, str] | None
+):
+    """Silence would read as "every entrypoint reaches the registry"."""
+    config = _cfg(tmp_path, _ENTRYPOINTS_CONFIG)
+    graph = _reach_graph(("app.core", "app.core.registry"), nodes=("tests.test_worker",))
+    if entrypoints is not None:
+        graph.graph["entrypoints"] = entrypoints
+
+    [violation] = find_reach_violations(graph, config)
+
+    assert violation.module is None
+    assert "no entrypoint was derived within 'app.**'" in violation.detail
+
+
+def test_required_reach_entrypoints_refuse_a_verdict_on_a_partial_derivation(tmp_path: Path):
+    """Satisfied modules plus a pyproject that could not be read is not a pass."""
+    config = _cfg(tmp_path, _ENTRYPOINTS_CONFIG)
+    graph = _entrypoint_graph(
+        ("app.worker", "app.core.registry"), entrypoints={"app.worker": "guard"}
+    )
+    assert find_reach_violations(graph, config) == []
+
+    graph.graph["entrypoint_errors"] = ("pyproject.toml could not be read",)
+    [violation] = find_reach_violations(graph, config)
+
+    assert violation.module is None
+    assert "could not be fully derived: pyproject.toml could not be read" in violation.detail
+
+
+def test_required_reach_parses_an_entrypoints_rule(tmp_path: Path):
+    config = _cfg(tmp_path, _ENTRYPOINTS_CONFIG)
+
+    assert config.required == (
+        RequiredRule(
+            source="@entrypoints",
+            must_reach="app.core.registry",
+            reason="entrypoints need the mapper registry",
+            within="app.**",
+        ),
+    )
+    assert config.required[0].describe_source() == "@entrypoints within app.**"
+
+
 @pytest.mark.parametrize(
     ("body", "message"),
     [
@@ -713,6 +829,22 @@ def test_required_reach_parses_the_rule(tmp_path: Path):
         (
             "required:\n  - source: 'commands.**'\n    must_reach: core.registry\n    reason: 3\n",
             "`reason` must be a string",
+        ),
+        (
+            "required:\n  - source: '@entrypoints'\n    within: '**'\n    must_reach: a.b\n",
+            "invalid `within` pattern",
+        ),
+        (
+            "required:\n  - source: '@entrypoints'\n    within: 3\n    must_reach: a.b\n",
+            "`within` must be a string",
+        ),
+        (
+            "required:\n  - source: 'app.**'\n    within: 'app.x.**'\n    must_reach: a.b\n",
+            "`within` only applies to `source: '@entrypoints'`",
+        ),
+        (
+            "required:\n  - source: '@main'\n    must_reach: a.b\n",
+            "invalid `source` pattern",
         ),
     ],
 )

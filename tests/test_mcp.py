@@ -593,6 +593,27 @@ def test_run_check_required_reach_passes_through_the_package_init(tmp_path: Path
     assert result.required_violations == ()
 
 
+def test_run_check_entrypoints_rule_survives_model_dump(tmp_path: Path):
+    """The derived reason and the rule's `within` reach the wire form."""
+    project = _write_registry_project(tmp_path, bootstrap="from app.core import model_registry\n")
+    (project / "app" / "worker.py").write_text('if __name__ == "__main__":\n    pass\n')
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: '@entrypoints'\n"
+        "    within: 'app.**'\n"
+        "    must_reach: app.core.model_registry\n"
+    )
+    result = _run_check(project, config_path=None)
+    assert isinstance(result, CheckPayload)
+    dumped = result.model_dump()
+    assert dumped["passed"] is False
+    [violation] = dumped["required_violations"]
+    assert violation["module"] == "app.worker"
+    assert violation["rule"]["within"] == "app.**"
+    assert "It is an entrypoint" in violation["detail"]
+
+
 def test_run_check_missing_config_returns_in_band(tmp_path: Path):
     # Tier-3 recoverable precondition: no archy.yaml -> in-band CheckErrorPayload
     # (isError:false), NOT a raise, so the agent can branch and create a config.
@@ -889,8 +910,23 @@ def test_snapshot_brief_reports_required_reach_rules(tmp_path: Path):
             "source": "app.commands.*",
             "must_reach": "app.core.model_registry",
             "reason": "standalone entrypoints need the full mapper registry",
+            "within": None,
         },
     )
+
+
+def test_snapshot_brief_carries_an_entrypoints_rule_scope(tmp_path: Path):
+    project = _write_registry_project(tmp_path, bootstrap="")
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: '@entrypoints'\n"
+        "    within: 'app.**'\n"
+        "    must_reach: app.core.model_registry\n"
+    )
+    [rule] = _run_snapshot(project).invariant_brief.model_dump()["required_reach"]
+    assert rule["source"] == "@entrypoints"
+    assert rule["within"] == "app.**"
 
 
 def test_run_simulate_parses_from_alias(acyclic_project: Path):

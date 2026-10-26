@@ -141,12 +141,22 @@ class CallRef(BaseModel):
 
 
 class ParseResult(BaseModel):
+    """Everything archy reads from one file in a single parse.
+
+    `has_main_guard` is True when the module body has a top-level
+    `if __name__ == "__main__":` (either operand order), i.e. the file is
+    written to be run directly. It is one of the facts `required:` rules use to
+    derive the `@entrypoints` set, so a script added outside every declared
+    glob is still governed.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     imports: tuple[ImportRef, ...]
     has_errors: bool
     calls: tuple[CallRef, ...] = ()
     functions: tuple[FunctionComplexity, ...] = ()
+    has_main_guard: bool = False
 
 
 def parse_file(path: Path) -> ParseResult:
@@ -183,7 +193,32 @@ def parse_source(source: bytes) -> ParseResult:
         has_errors=tree.root_node.has_error,
         calls=tuple(calls),
         functions=functions,
+        has_main_guard=_has_main_guard(tree.root_node, source),
     )
+
+
+def _has_main_guard(root, source: bytes) -> bool:
+    """True if a TOP-LEVEL statement is `if __name__ == "__main__":`.
+
+    Only direct children of the module are checked: a guard nested in a
+    function or class never runs as a script entry, so it does not make the
+    file an entrypoint.
+    """
+    for stmt in root.children:
+        if stmt.type != "if_statement":
+            continue
+        cond = stmt.child_by_field_name("condition")
+        if cond is None or cond.type != "comparison_operator" or len(cond.children) != 3:
+            continue
+        left, op, right = cond.children
+        if op.type != "==":
+            continue
+        operands = {(left.type, _node_text(left, source)), (right.type, _node_text(right, source))}
+        if ("identifier", "__name__") in operands and any(
+            kind == "string" and text.strip("'\"") == "__main__" for kind, text in operands
+        ):
+            return True
+    return False
 
 
 def _handle_import(node, source: bytes) -> list[ImportRef]:

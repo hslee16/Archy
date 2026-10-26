@@ -2190,6 +2190,7 @@ def _reach_violations_to_json(violations: list[ReachViolation]) -> list[dict]:
                 "source": v.rule.source,
                 "must_reach": v.rule.must_reach,
                 "reason": v.rule.reason,
+                "within": v.rule.within,
             },
             "module": v.module,
             "detail": v.detail,
@@ -2211,9 +2212,9 @@ def _reach_violations_to_text(
     lines = [f"# {len(violations)} required-reach violation(s)"]
     current: tuple[str, str] | None = None
     for v in violations:
-        pair = (v.rule.source, v.rule.must_reach)
+        pair = (v.rule.describe_source(), v.rule.must_reach)
         if pair != current:
-            header = f"\n{v.rule.source} must reach {v.rule.must_reach}:"
+            header = f"\n{v.rule.describe_source()} must reach {v.rule.must_reach}:"
             if v.rule.reason:
                 header += f"\n  reason: {v.rule.reason}"
             lines.append(header)

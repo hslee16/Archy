@@ -228,18 +228,17 @@ def _collect_regressions(
         )
     for v in diff.required_violations.added:
         modules = _reach_modules(v.module)
+        # A dead rule has no module; name the rule, with its `within` scope.
+        subject = v.module or v.rule.describe_source()
         items.append(
             DiffSummaryItem(
                 kind="required_reach_violation_added",
                 risk=_max_module_risk(modules, risk),
                 modules=modules,
                 description=(
-                    f"new required-reach violation: {v.module or v.rule.source} no longer "
-                    f"reaches {v.rule.must_reach}"
+                    f"new required-reach violation: {subject} no longer reaches {v.rule.must_reach}"
                 ),
-                prompt=_reach_added_prompt(
-                    v.module or v.rule.source, v.rule.must_reach, v.rule.reason, hypothetical
-                ),
+                prompt=_reach_added_prompt(subject, v.rule.must_reach, v.rule.reason, hypothetical),
             )
         )
     for name in _COMPONENT_NAMES:
@@ -295,18 +294,17 @@ def _collect_improvements(
         )
     for v in diff.required_violations.resolved:
         modules = _reach_modules(v.module)
+        # A dead rule has no module; name the rule, with its `within` scope.
+        subject = v.module or v.rule.describe_source()
         items.append(
             DiffSummaryItem(
                 kind="required_reach_violation_resolved",
                 risk=_max_module_risk(modules, risk),
                 modules=modules,
                 description=(
-                    f"required-reach violation resolved: {v.module or v.rule.source} now "
-                    f"reaches {v.rule.must_reach}"
+                    f"required-reach violation resolved: {subject} now reaches {v.rule.must_reach}"
                 ),
-                prompt=_reach_resolved_prompt(
-                    v.module or v.rule.source, v.rule.must_reach, hypothetical
-                ),
+                prompt=_reach_resolved_prompt(subject, v.rule.must_reach, hypothetical),
             )
         )
     for name in _COMPONENT_NAMES:

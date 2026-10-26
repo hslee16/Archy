@@ -29,6 +29,7 @@ import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
 from archy.complexity import FunctionComplexity
+from archy.entrypoints import derive_entrypoints
 from archy.instability import compute_instability
 from archy.parser import CallRef, ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
@@ -252,6 +253,15 @@ def assemble_graph(
 
     graph.graph["root"] = str(root)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
+    # Graph-level, not per-node: a node attribute would reach every node of
+    # `archy graph --format json` for the benefit of one `required:` source.
+    entrypoints, entrypoint_errors = derive_entrypoints(
+        root,
+        guarded=(m.qualname for m in modules if parse_results[m.qualname].has_main_guard),
+        internal=qualname_set,
+    )
+    graph.graph["entrypoints"] = entrypoints
+    graph.graph["entrypoint_errors"] = entrypoint_errors
     return graph
 
 

@@ -224,6 +224,21 @@ def test_touch_without_content_change_is_unchanged(project: Path, tmp_path: Path
 # --- schema versioning -----------------------------------------------------
 
 
+def test_warm_cache_keeps_the_main_guard(project: Path, tmp_path: Path):
+    """`has_main_guard` lives only in the cached `ParseResult`, and
+    `graph_to_dict` does not carry the derived set, so `_equal` cannot see it
+    go missing. A warm read that dropped it would silently empty `@entrypoints`.
+    """
+    _write(project, "pkg/run.py", 'if __name__ == "__main__":\n    pass\n')
+    db = tmp_path / "index.db"
+    build_graph_cached(project, db_path=db)
+
+    warm = build_graph_cached(project, db_path=db)
+
+    assert warm.graph["entrypoints"] == build_graph(project).graph["entrypoints"]
+    assert "pkg.run" in warm.graph["entrypoints"]
+
+
 def test_schema_bump_rebuilds(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
     conn = open_index(db)

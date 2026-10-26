@@ -5,6 +5,7 @@ from pathlib import Path
 
 from archy.diff import compute_diff, read_snapshot, take_snapshot, write_snapshot
 from archy.graph import build_graph
+from archy.layers import ReachViolation, RequiredRule
 
 
 def _make_clean(tmp_path: Path) -> Path:
@@ -215,6 +216,47 @@ def test_snapshot_roundtrips_required_violations(tmp_path: Path):
 
     assert restored is not None
     assert restored.required_violations == snap.required_violations
+
+
+def test_snapshot_roundtrips_an_entrypoints_rule_scope(tmp_path: Path):
+    """`within` is part of the rule's identity on disk, not dropped on write."""
+    project = _make_registry_project(tmp_path, bootstrap="")
+    (project / "app" / "worker.py").write_text('if __name__ == "__main__":\n    pass\n')
+    (project / "archy.yaml").write_text(
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: '@entrypoints'\n"
+        "    within: 'app.**'\n"
+        "    must_reach: app.core.database.model_registry\n"
+    )
+    snap = take_snapshot(build_graph(project), config_path=project / "archy.yaml")
+    target = tmp_path / ".archy" / "baseline.json"
+    write_snapshot(snap, target)
+
+    restored = read_snapshot(target)
+
+    assert restored is not None
+    assert [v.rule.within for v in snap.required_violations] == ["app.**"]
+    assert restored.required_violations == snap.required_violations
+
+
+def test_diff_keys_reach_violations_by_rule_scope(tmp_path: Path):
+    """Two rules that differ only in `within` are different rules: moving a
+    module's failure from one to the other is a resolve plus an add."""
+    rule = RequiredRule(source="@entrypoints", must_reach="core.registry", within="app.**")
+    old = ReachViolation(rule=rule, module="app.worker", detail="x")
+    new = ReachViolation(
+        rule=rule.model_copy(update={"within": "app.workers.**"}), module="app.worker", detail="x"
+    )
+
+    base = take_snapshot(build_graph(_make_clean(tmp_path)))
+    result = compute_diff(
+        base.model_copy(update={"required_violations": (old,)}),
+        base.model_copy(update={"required_violations": (new,)}),
+    )
+
+    assert result.required_violations.added == (new,)
+    assert result.required_violations.resolved == (old,)
 
 
 def test_snapshot_reads_a_baseline_written_before_required_reach_existed(tmp_path: Path):

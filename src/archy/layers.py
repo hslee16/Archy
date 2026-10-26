@@ -54,6 +54,12 @@ class ForbidRule(BaseModel):
     to_layer: str
 
 
+# The `required:` source that binds DERIVED entrypoints instead of a written
+# pattern (#387 item 3). The `@` keeps it disjoint from every dotted-name glob,
+# which must start with a package name.
+ENTRYPOINTS_SOURCE = "@entrypoints"
+
+
 class RequiredRule(BaseModel):
     """Every module matching `source` must transitively reach `must_reach`.
 
@@ -93,6 +99,19 @@ class RequiredRule(BaseModel):
     source: str
     must_reach: str
     reason: str = ""
+    # Only with `source: "@entrypoints"`: keep the derived entrypoints that
+    # match this pattern. Derivation finds every runnable file, bench scripts
+    # and guarded test modules included, so a rule over all of them would fail
+    # on files that were never meant to carry the obligation. `within` scopes it
+    # to the part of the tree that does, while still catching a new script
+    # anywhere in that part, which an explicit `source` glob cannot.
+    within: str | None = None
+
+    def describe_source(self) -> str:
+        """`source` as a reader should see it, with `within` when set."""
+        if self.within is None:
+            return self.source
+        return f"{self.source} within {self.within}"
 
 
 class ReachViolation(BaseModel):
@@ -639,7 +658,29 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
         # Targets may be external: "every entrypoint must reach `sqlalchemy`" is
         # a legitimate thing to require, and external nodes are real nodes here.
         targets = {n for n in all_nodes if _qualname_matches_any(n, (rule.must_reach,))}
-        sources = sorted(n for n in internal if _qualname_matches_any(n, (rule.source,)))
+        why: dict[str, str] = {}
+        if rule.source == ENTRYPOINTS_SOURCE:
+            errors = graph.graph.get("entrypoint_errors", ())
+            if errors:
+                # The derived set is incomplete, so a pass would be a pass over
+                # a subset nobody chose. Refuse the verdict rather than give it.
+                violations.append(
+                    ReachViolation(
+                        rule=rule,
+                        module=None,
+                        detail=f"entrypoints could not be fully derived: {'; '.join(errors)}",
+                    )
+                )
+                continue
+            derived = graph.graph.get("entrypoints", {})
+            why = {
+                n: reason
+                for n, reason in derived.items()
+                if rule.within is None or _qualname_matches_any(n, (rule.within,))
+            }
+            sources = sorted(n for n in internal if n in why)
+        else:
+            sources = sorted(n for n in internal if _qualname_matches_any(n, (rule.source,)))
         if not targets:
             violations.append(
                 ReachViolation(
@@ -650,6 +691,20 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
                         "scanned tree: either the pattern is wrong, or -- for an external "
                         "package -- no module imports it any more, which is itself the "
                         "failure the rule is about."
+                    ),
+                )
+            )
+            continue
+        if not sources and rule.source == ENTRYPOINTS_SOURCE:
+            scope = "" if rule.within is None else f" within {rule.within!r}"
+            violations.append(
+                ReachViolation(
+                    rule=rule,
+                    module=None,
+                    detail=(
+                        f"rule cannot fire: no entrypoint was derived{scope}. An entrypoint is a "
+                        'module with a top-level `if __name__ == "__main__":` guard, a '
+                        "`__main__.py`, or a script target in pyproject.toml at the scan root."
                     ),
                 )
             )
@@ -679,10 +734,13 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
                     detail=(
                         f"{module} does not transitively reach {rule.must_reach!r} "
                         "(package __init__ imports included)."
+                        + (f" It is an entrypoint: {why[module]}." if module in why else "")
                     ),
                 )
             )
-    violations.sort(key=lambda v: (v.rule.source, v.rule.must_reach, v.module or ""))
+    violations.sort(
+        key=lambda v: (v.rule.source, v.rule.within or "", v.rule.must_reach, v.module or "")
+    )
     return violations
 
 
@@ -867,9 +925,24 @@ def _parse_required(raw: object, path: Path) -> list[RequiredRule]:
         reason = entry.get("reason", "")
         if not isinstance(reason, str):
             raise LayerConfigError(f"required `reason` must be a string in {path}")
-        _validate_pattern(source, "required rule has an invalid `source` pattern", path)
+        within = entry.get("within")
+        if within is not None and not isinstance(within, str):
+            raise LayerConfigError(f"required `within` must be a string in {path}")
+        if source == ENTRYPOINTS_SOURCE:
+            if within is not None:
+                _validate_pattern(within, "required rule has an invalid `within` pattern", path)
+        else:
+            if within is not None:
+                # Accepting it would make `within` a second spelling of an
+                # intersection the `source` glob already expresses, and a reader
+                # could not tell which of the two the author meant to bind.
+                raise LayerConfigError(
+                    f"required `within` only applies to `source: {ENTRYPOINTS_SOURCE!r}` in "
+                    f"{path}; narrow a written pattern by editing `source` instead."
+                )
+            _validate_pattern(source, "required rule has an invalid `source` pattern", path)
         _validate_pattern(must_reach, "required rule has an invalid `must_reach` pattern", path)
-        out.append(RequiredRule(source=source, must_reach=must_reach, reason=reason))
+        out.append(RequiredRule(source=source, must_reach=must_reach, reason=reason, within=within))
     return out
 
 

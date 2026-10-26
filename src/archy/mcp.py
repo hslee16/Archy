@@ -417,6 +417,9 @@ class RequiredReach(BaseModel):
     source: str
     must_reach: str
     reason: str = ""
+    # Set only when `source` is "@entrypoints": the pattern the derived
+    # entrypoints are narrowed to.
+    within: str | None = None
 
 
 class LoadBearingModule(BaseModel):
@@ -1444,7 +1447,12 @@ def _build_invariant_brief(
             for rule in config.forbid
         )
         required = tuple(
-            RequiredReach(source=rule.source, must_reach=rule.must_reach, reason=rule.reason)
+            RequiredReach(
+                source=rule.source,
+                must_reach=rule.must_reach,
+                reason=rule.reason,
+                within=rule.within,
+            )
             for rule in config.required
         )
 
