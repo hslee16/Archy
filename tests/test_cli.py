@@ -2323,7 +2323,7 @@ def test_diff_with_a_missing_committed_baseline_says_how_to_create_it(tmp_path: 
     )
 
     assert result.exit_code == 1
-    assert f"archy snapshot --findings-only --out {missing}" in result.output
+    assert f"archy snapshot {project} --findings-only --out {missing}" in result.output
 
 
 def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
@@ -2336,15 +2336,13 @@ def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
     (project / "pkg" / "e.py").write_text("import pkg.a\nimport pkg.b\n")
     assert _snapshot_findings_only(project).exit_code == 0
     before = (project / "base.json").read_text()
-    full = json.loads(
-        CliRunner()
-        .invoke(
-            main,
-            ["diff", str(project), "--format", "json", "--baseline", str(project / "base.json")],
-        )
-        .output
+    full_path = project / "full.json"
+    assert (
+        CliRunner().invoke(main, ["snapshot", str(project), "--out", str(full_path)]).exit_code == 0
     )
-    assert full["sdp_violations"]["added"], "fixture must carry an SDP violation"
+    assert json.loads(full_path.read_text())["sdp_violations"], (
+        "fixture must carry an SDP violation"
+    )
 
     # An existing module gains an importer: ratios move, the module list and
     # every finding stay the same.
@@ -2352,3 +2350,64 @@ def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
     assert _snapshot_findings_only(project).exit_code == 0
 
     assert (project / "base.json").read_text() == before
+
+
+def test_diff_against_a_findings_only_baseline_does_not_invent_sdp_regressions(tmp_path: Path):
+    """The committed form records no SDP violations, so comparing them would
+    call every current one new on an unchanged tree. The fixture has some."""
+    project = _make_ratchet_project(tmp_path)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nsdp: {enabled: true}\n")
+    (project / "pkg" / "d.py").write_text("import pkg.e\n")
+    (project / "pkg" / "e.py").write_text("import pkg.a\nimport pkg.b\n")
+    full_path = project / "full.json"
+    CliRunner().invoke(main, ["snapshot", str(project), "--out", str(full_path)])
+    assert json.loads(full_path.read_text())["sdp_violations"], "fixture must carry SDP"
+    assert _snapshot_findings_only(project).exit_code == 0
+
+    result = _strict(project, "--format", "json")
+    text = _strict(project).output
+
+    payload = json.loads(result.output)
+    assert payload["sdp_violations"] == {"added": [], "resolved": []}
+    assert payload["baseline_findings_only"] is True
+    assert payload["summary"]["top_regressions"] == []
+    assert "# sdp: not compared" in text
+
+
+def test_diff_strict_refuses_when_the_layer_rules_disappeared(tmp_path: Path):
+    """The baseline recorded a violation; with archy.yaml gone no rule runs,
+    and a pass would be a rule set that cannot fire reading as clean."""
+    project = _make_layered_project(tmp_path, with_violation=True)
+    assert _snapshot_findings_only(project).exit_code == 0
+    assert json.loads((project / "base.json").read_text())["violations"]
+    (project / "archy.yaml").unlink()
+
+    result = _strict(project)
+
+    assert result.exit_code == 1
+    assert "no archy.yaml was found" in result.output
+
+
+def test_diff_strict_refuses_a_hard_link_to_the_snapshot_file(tmp_path: Path):
+    """A hard link keeps tracking every re-snapshot, so it is the same file."""
+    project = _make_ratchet_project(tmp_path)
+    CliRunner().invoke(main, ["snapshot", str(project)])
+    link = project / "linked.json"
+    link.hardlink_to(project / ".archy" / "baseline.json")
+
+    result = CliRunner().invoke(main, ["diff", str(project), "--strict", "--baseline", str(link)])
+
+    assert result.exit_code == 2
+    assert "the file `archy snapshot` overwrites" in result.output
+
+
+def test_findings_only_baseline_drops_required_reach_detail(tmp_path: Path):
+    """`detail` is prose that can embed an absolute path; rows are keyed
+    without it, so the committed file must not carry it."""
+    project = _make_registry_project(tmp_path, bootstrap="")
+    assert _snapshot_findings_only(project).exit_code == 0
+
+    rows = json.loads((project / "base.json").read_text())["required_violations"]
+
+    assert rows, "fixture must carry a required-reach violation"
+    assert all("detail" not in row for row in rows)

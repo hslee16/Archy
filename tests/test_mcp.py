@@ -2218,3 +2218,35 @@ def test_run_diff_strict_refuses_the_default_snapshot_file(tmp_path: Path):
 
     assert isinstance(result, DiffErrorPayload)
     assert "the file `archy snapshot` overwrites" in result.error
+
+
+def test_run_diff_missing_committed_baseline_says_it_resolves_against_path(tmp_path: Path):
+    project = _write_cyclic_ratchet_project(tmp_path)
+
+    result = _run_diff(project, baseline="nope.json", strict=True)
+
+    assert isinstance(result, DiffErrorPayload)
+    assert f"archy snapshot {project} --findings-only --out {project / 'nope.json'}" in result.error
+    assert "relative to `path`" in result.error
+
+
+def test_run_diff_strict_refuses_when_the_layer_rules_disappeared(tmp_path: Path):
+    """Same refusal as the CLI, on the surface agents call."""
+    project = _write_cyclic_ratchet_project(tmp_path)
+    (project / "pkg" / "a.py").write_text("import pkg.b\nimport pkg.d\n")
+    (project / "archy.yaml").write_text(
+        "layers:\n  low: {modules: [pkg.a]}\n  high: {modules: [pkg.d]}\n"
+        "forbid:\n  - {from: low, to: high}\n"
+    )
+    snap = take_snapshot(
+        internal_subgraph(build_graph(project)), config_path=project / "archy.yaml"
+    )
+    assert snap.violations, "fixture must record a layer violation"
+    write_snapshot(snap, project / "archy-baseline.json", findings_only=True)
+    (project / "archy.yaml").unlink()
+
+    result = _run_diff(project, baseline="archy-baseline.json", strict=True)
+
+    assert isinstance(result, DiffReport)
+    assert result.model_dump()["strict"]["passed"] is False
+    assert "no archy.yaml was found" in result.model_dump()["strict"]["reason"]

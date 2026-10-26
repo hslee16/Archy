@@ -1497,7 +1497,7 @@ def _run_snapshot(path: Path) -> SnapshotPayload:
     graph, full = _load_graph_pair(path)
     config_path = discover_config(path)
     snap = take_snapshot(graph, config_path=config_path, reach_graph=full)
-    target = path / ".archy" / "baseline.json"
+    target = default_baseline_path(path)
     write_snapshot(snap, target)
     return SnapshotPayload(
         score=snap.score,
@@ -1531,17 +1531,26 @@ def _run_diff(
     snapshot = read_snapshot(target)
     if snapshot is None:
         if baseline is not None:
-            return DiffErrorPayload(error=missing_baseline_hint(target, committed=True))
+            # A relative `baseline` resolves against `path` here, unlike the
+            # CLI's cwd; say so, or the hint creates a second, drifting file.
+            hint = missing_baseline_hint(path, target, committed=True)
+            return DiffErrorPayload(error=f"{hint} (`baseline` is resolved relative to `path`.)")
         return DiffErrorPayload(
             error=f"no baseline at {target}; call archy_snapshot first to capture one."
         )
     graph, full = _load_graph_pair(path)
-    current = take_snapshot(graph, config_path=discover_config(path), reach_graph=full)
+    config_path = discover_config(path)
+    current = take_snapshot(graph, config_path=config_path, reach_graph=full)
     report = compute_diff(snapshot, current)
     update: dict[str, object] = {"summary": summarize_diff(report, graph)}
     if strict:
         update["strict"] = strict_verdict(
-            snapshot, current, graph=graph, root=path, label=baseline or str(target)
+            snapshot,
+            current,
+            graph=graph,
+            root=path,
+            label=baseline or str(target),
+            rules_found=config_path is not None,
         )
     return report.model_copy(update=update)
 

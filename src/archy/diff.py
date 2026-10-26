@@ -15,9 +15,9 @@ and so the baseline shape is the same one the CLI emits.
 archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
                   DiffSummaryItem, ReachViolationSetDiff, ScoreDelta,
                   SdpViolationSetDiff, Snapshot, ViolationSetDiff, compute_diff,
-                  default_baseline_path, missing_baseline_hint, read_snapshot,
-                  score_delta, snapshot_to_dict, strict_baseline_problem,
-                  strict_verdict, take_snapshot, write_snapshot
+                  create_baseline_command, default_baseline_path,
+                  missing_baseline_hint, read_snapshot, score_delta, snapshot_to_dict,
+                  strict_baseline_problem, strict_verdict, take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
                   DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
                   ScoreDelta -> archy.cli, archy.simulate, compute_diff -> archy.cli,
@@ -34,6 +34,7 @@ archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -69,6 +70,9 @@ class Snapshot(BaseModel):
     # a new file joining a tangle (carried) from an existing module pulled
     # into one (new). Empty on snapshots written before it was recorded.
     modules: tuple[str, ...] = ()
+    # True when read from a `--findings-only` file, which records no SDP
+    # violations. Diffing SDP against it would call every current one new.
+    findings_only: bool = False
 
 
 class CapturedSnapshot(Snapshot):
@@ -159,6 +163,9 @@ class DiffReport(BaseModel):
     required_violations: ReachViolationSetDiff = ReachViolationSetDiff()
     # Set only by `--strict`: the no-new-cycles, no-new-violations verdict.
     strict: StrictVerdict | None = None
+    # True when the baseline is a findings-only file: it has no score and no
+    # SDP violations, so neither was compared (both read as absent, not zero).
+    baseline_findings_only: bool = False
     # Populated by callers via `diff_summary.summarize_diff(report, graph)`;
     # left None for the pure `compute_diff` path so the function stays
     # graph-free.
@@ -257,10 +264,15 @@ def compute_diff(baseline: Snapshot, current: Snapshot) -> DiffReport:
         ),
         cycles=_cycle_set_diff(baseline.cycles, current.cycles),
         violations=_violation_set_diff(baseline.violations, current.violations),
-        sdp_violations=_sdp_violation_set_diff(baseline.sdp_violations, current.sdp_violations),
+        sdp_violations=(
+            SdpViolationSetDiff()
+            if baseline.findings_only
+            else _sdp_violation_set_diff(baseline.sdp_violations, current.sdp_violations)
+        ),
         required_violations=_reach_violation_set_diff(
             baseline.required_violations, current.required_violations
         ),
+        baseline_findings_only=baseline.findings_only,
     )
 
 
@@ -277,28 +289,47 @@ def strict_baseline_problem(root: Path, target: Path) -> str | None:
     against it would grandfather a new cycle on the next snapshot, so it is
     refused even when named explicitly.
     """
-    if target.resolve() == default_baseline_path(root).resolve():
+    default = default_baseline_path(root)
+    same = target.resolve() == default.resolve()
+    # `resolve()` misses a hard link and, on a case-insensitive filesystem, a
+    # differently-cased spelling; `samefile` compares the files themselves.
+    if not same and target.exists() and default.exists():
+        same = os.path.samefile(target, default)
+    if same:
         return (
             f"{target} is the file `archy snapshot` overwrites, so it cannot hold a "
-            "ratchet. Commit a separate baseline with `archy snapshot --findings-only "
-            "--out archy-baseline.json` and pass that."
+            f"ratchet. Commit a separate baseline with "
+            f"`{create_baseline_command(root, Path('archy-baseline.json'))}` and pass that."
         )
     return None
 
 
-def missing_baseline_hint(target: Path, *, committed: bool) -> str:
+def create_baseline_command(root: Path, target: Path) -> str:
+    """The command that writes a committed baseline for the tree at `root`.
+
+    Names `root` explicitly: run from elsewhere, a bare `archy snapshot` scans
+    the current directory, misses an `archy.yaml` under `root`, and records a
+    baseline that makes every existing violation read as new.
+    """
+    return f"archy snapshot {root} --findings-only --out {target}"
+
+
+def missing_baseline_hint(root: Path, target: Path, *, committed: bool) -> str:
     """The fix for a missing baseline. A committed one is created with
     `--findings-only --out`; a bare `archy snapshot` would write elsewhere."""
     if committed:
-        return (
-            f"no baseline at {target}; create it with "
-            f"`archy snapshot --findings-only --out {target}`."
-        )
-    return f"no baseline at {target}; run `archy snapshot` first."
+        return f"no baseline at {target}; create it with `{create_baseline_command(root, target)}`."
+    return f"no baseline at {target}; run `archy snapshot {root}` first."
 
 
 def strict_verdict(
-    baseline: Snapshot, current: Snapshot, *, graph, root: Path, label: str
+    baseline: Snapshot,
+    current: Snapshot,
+    *,
+    graph,
+    root: Path,
+    label: str,
+    rules_found: bool,
 ) -> StrictVerdict:
     """The `--strict` ratchet verdict for `current` against a committed `baseline`.
 
@@ -313,6 +344,7 @@ def strict_verdict(
         current_cycles=current.cycles,
         current_violations=current.violations,
         module_paths=module_paths_for(graph, root),
+        rules_found=rules_found,
     )
 
 
@@ -413,6 +445,7 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
         sdp_violations=sdp_violations,
         required_violations=reach_violations,
         modules=tuple(str(m) for m in _expect_list(payload.get("modules", []))),
+        findings_only=payload.get("findings_only") is True,
     )
 
 
@@ -435,6 +468,17 @@ def _findings_only(payload: dict[str, object]) -> dict[str, object]:
         for key, value in payload.items()
         if key not in ("modules", "cycles", "sdp_violations")
     }
+    # `detail` on a required-reach row is prose that can embed an absolute
+    # path or a derived reason; rows are keyed without it, so drop it here.
+    if "required_violations" in out:
+        out["required_violations"] = sorted(
+            (
+                {k: v for k, v in _expect_dict(row).items() if k != "detail"}
+                for row in _expect_list(out["required_violations"])
+            ),
+            key=_canonical,
+        )
+    out["findings_only"] = True
     out["modules"] = sorted(str(m) for m in _expect_list(payload["modules"]))
     out["cycles"] = sorted(
         (
@@ -513,7 +557,7 @@ def _reach_violation_from_dict(d: dict[str, object]) -> ReachViolation:
             within=None if rule.get("within") is None else str(rule["within"]),
         ),
         module=None if module is None else str(module),
-        detail=str(d["detail"]),
+        detail=str(d.get("detail", "")),
     )
 
 

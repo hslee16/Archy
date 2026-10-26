@@ -53,6 +53,7 @@ from archy.diff import (
     DiffSummary,
     ScoreDelta,
     compute_diff,
+    create_baseline_command,
     default_baseline_path,
     missing_baseline_hint,
     read_snapshot,
@@ -1012,7 +1013,7 @@ def snapshot(path: Path, out_path: Path | None, findings_only: bool) -> None:
     """Capture score, cycles, and layer violations as a baseline for `archy diff`."""
     g, full = _load_graph_pair(path)
     snap = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
-    target = out_path or (path / ".archy" / "baseline.json")
+    target = out_path or default_baseline_path(path)
     write_snapshot(snap, target, findings_only=findings_only)
     click.echo(f"# baseline written to {target}")
     click.echo(_snapshot_to_text(snap))
@@ -1070,8 +1071,8 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: b
         # gate reading it would let any re-snapshot grandfather a new cycle.
         raise click.UsageError(
             "--strict needs --baseline pointing at a committed file (create one with "
-            "`archy snapshot --findings-only --out archy-baseline.json`); it never reads "
-            ".archy/baseline.json, which `archy snapshot` overwrites."
+            f"`{create_baseline_command(path, Path('archy-baseline.json'))}`); it never "
+            "reads .archy/baseline.json, which `archy snapshot` overwrites."
         )
     target = baseline_path or default_baseline_path(path)
     if strict and (problem := strict_baseline_problem(path, target)):
@@ -1079,14 +1080,22 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: b
     baseline = read_snapshot(target)
     if baseline is None:
         raise click.ClickException(
-            missing_baseline_hint(target, committed=baseline_path is not None)
+            missing_baseline_hint(path, target, committed=baseline_path is not None)
         )
     g, full = _load_graph_pair(path)
-    current = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
+    config_path = discover_config(path)
+    current = take_snapshot(g, config_path=config_path, reach_graph=full)
     result = compute_diff(baseline, current)
     update: dict[str, object] = {"summary": summarize_diff(result, g, top_n=top_n)}
     if strict:
-        update["strict"] = strict_verdict(baseline, current, graph=g, root=path, label=str(target))
+        update["strict"] = strict_verdict(
+            baseline,
+            current,
+            graph=g,
+            root=path,
+            label=str(target),
+            rules_found=config_path is not None,
+        )
     result = result.model_copy(update=update)
     if fmt == "json":
         click.echo(result.model_dump_json(indent=2))
@@ -2773,6 +2782,8 @@ def _diff_to_text(result: DiffReport) -> str:
         lines.append("# score deltas: not available (the baseline records findings only)")
     else:
         lines.extend(_score_delta_lines(result.score_delta, "# score deltas (current - baseline):"))
+    if result.baseline_findings_only:
+        lines.append("# sdp: not compared (the baseline records findings only)")
     cycles = result.cycles
     lines.append("")
     lines.append(f"# cycles: +{len(cycles.added)} added, -{len(cycles.resolved)} resolved")

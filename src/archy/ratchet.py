@@ -113,6 +113,7 @@ def evaluate_strict(
     current_cycles: Iterable[Cycle],
     current_violations: Iterable[Violation],
     module_paths: Mapping[str, str],
+    rules_found: bool = True,
 ) -> StrictVerdict:
     """Compare current findings against a committed baseline.
 
@@ -127,6 +128,18 @@ def evaluate_strict(
                 "existed, or from an empty scan), so a new file cannot be told from an "
                 "existing module. Regenerate it with `archy snapshot --findings-only "
                 f"--out {baseline_label}`."
+            ),
+        )
+    baseline_violations = list(baseline_violations)
+    if baseline_violations and not rules_found:
+        # The baseline recorded layer violations but no archy.yaml was found
+        # now, so no layer rule ran. A pass here would be a rule set that
+        # cannot fire reading as clean.
+        return StrictVerdict(
+            baseline=baseline_label,
+            refused=(
+                f"the baseline records {len(baseline_violations)} layer violation(s), but "
+                "no archy.yaml was found for this scan, so no layer rule was checked."
             ),
         )
     known = set(baseline_modules)
