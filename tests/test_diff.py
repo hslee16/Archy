@@ -23,6 +23,7 @@ def test_snapshot_round_trip_through_disk(tmp_path: Path):
     write_snapshot(take_snapshot(build_graph(project)), target)
     loaded = read_snapshot(target)
     assert loaded is not None
+    assert loaded.score is not None
     assert loaded.score.overall > 0
 
 
@@ -35,6 +36,7 @@ def test_diff_clean_baseline_clean_current_is_zero(tmp_path: Path):
     g = build_graph(project)
     snap = take_snapshot(g)
     result = compute_diff(snap, snap)
+    assert result.score_delta is not None
     assert result.score_delta.overall == 0.0
     assert result.cycles.added == ()
     assert result.cycles.resolved == ()
@@ -50,6 +52,7 @@ def test_diff_flags_newly_introduced_cycle(tmp_path: Path):
     (project / "pkg" / "b.py").write_text("from pkg.a import thing\n")
     current = take_snapshot(build_graph(project))
     result = compute_diff(baseline, current)
+    assert result.score_delta is not None
     assert result.score_delta.acyclicity < 0
     assert len(result.cycles.added) == 1
     assert set(result.cycles.added[0].modules) == {"pkg.a", "pkg.b"}
@@ -300,3 +303,36 @@ def test_snapshot_reads_a_baseline_written_before_required_reach_existed(tmp_pat
     assert restored is not None
     assert restored.required_violations == ()
     assert len(compute_diff(restored, snap).required_violations.added) == 1
+
+
+def test_findings_only_baseline_round_trips_without_score_or_lines(tmp_path: Path):
+    """The committed form keeps what identifies a finding and nothing that
+    churns: the cycle, its edges and the module list survive, the score and
+    line numbers do not."""
+    project = _make_clean(tmp_path)
+    (project / "pkg" / "b.py").write_text("from pkg.a import thing\n")
+    snap = take_snapshot(build_graph(project))
+    assert snap.cycles and snap.cycles[0].edges[0].lines  # the fixture has lines to drop
+    target = tmp_path / "archy-baseline.json"
+    write_snapshot(snap, target, findings_only=True)
+
+    restored = read_snapshot(target)
+
+    assert restored is not None
+    assert restored.score is None
+    assert restored.modules == snap.modules
+    assert [c.modules for c in restored.cycles] == [c.modules for c in snap.cycles]
+    assert all(e.lines == () for c in restored.cycles for e in c.edges)
+
+
+def test_diff_against_a_findings_only_baseline_has_no_score_delta(tmp_path: Path):
+    project = _make_clean(tmp_path)
+    snap = take_snapshot(build_graph(project))
+    target = tmp_path / "archy-baseline.json"
+    write_snapshot(snap, target, findings_only=True)
+    restored = read_snapshot(target)
+    assert restored is not None
+
+    result = compute_diff(restored, snap)
+
+    assert result.score_delta is None

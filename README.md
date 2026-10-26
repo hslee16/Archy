@@ -433,7 +433,7 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 | `archy_check` | Run direct-edge layer rules from `archy.yaml`. Pass `contracts=True` to also run the transitive import-linter contracts (Layers, Forbidden, Independence, Protected, AcyclicSiblings; stricter than the direct edges), nested under the `contracts` field (replaces the removed `archy_contracts`; requires `archy[contracts]`, and degrades to `available=false` with an advisory if the extra is absent). Contracts are skipped when no `archy.yaml` is found (you get a `CheckErrorPayload` first). Always returns `coverage`: how many modules and import edges the rules actually reach, so `passed=true` can be told apart from a config that governs almost nothing. `transitive_checked` says whether this run actually evaluated the `forbid` rules transitively; it is false when contracts were never requested, when they produced no verdict, and when any contract could not have failed, since none of the three evaluated the rules. `transitive_unverified_reason` then says which, naming `archy_check(contracts=True)` if it was never requested, the actual failure if it produced no verdict, and how many contracts matched nothing if that is what happened. So a clean pass is never silent about having seen direct edges only. `min_layers_present:` in `archy.yaml` also gates `passed` here, not just the CLI exit code. `required_violations` reports unsatisfied `required:` rules (module X must transitively reach Y, counting the implicit package-`__init__` import), and gates `passed` too; fix by adding the missing import, not by deleting the rule. Within `contracts`, read `verified`, not `all_kept`: a contract whose module expressions match nothing in the graph is `kept` because it could not have failed, `unverifiable` counts those, and each one carries `matched_nothing` and `unmatched_expressions` naming the patterns that matched no module. |
 | `archy_impact` | Given changed file paths, return what they affect. `mode="blast"` (**default**) returns the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. `mode="affected"` (replaces the removed `archy_affected`) is the CI-shaped lookup instead: modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes; `test_filter` overrides pytest test detection with a recursive glob. `co_change=true` (blast mode, opt-in) adds a `co_changed` list: modules that historically co-change with the edit in git but have no import/call edge to it, so the structural blast radius misses them (`archy coupling` scoped to your edit; source-only, best-effort, the only path that reads git). |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. Also returns an `invariant_brief` (declared layers, forbidden edges, declared `required:` reach rules, acyclic invariant, baseline score, load-bearing modules) to read before the first edit. |
-| `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations, per-component score deltas, and a risk-weighted `summary` whose items carry a `prompt` reframing each delta as a judgment question ("new cycle a -> b; intended, or invert an edge?"). |
+| `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations, per-component score deltas, and a risk-weighted `summary` whose items carry a `prompt` reframing each delta as a judgment question ("new cycle a -> b; intended, or invert an edge?"). `strict=True` with `baseline` (a committed file) adds a `strict` verdict whose `passed` is false on any cycle or layer violation that baseline does not carry, with `reason` naming the closing edges. |
 | `archy_simulate` | Counterfactual pre-edit check: given a proposed import-edge delta (`add`/`remove` of `{from, to}` pairs), return the would-be cycles, back-edges, layer/SDP/required-reach violations, per-axis score delta, and blast-radius change, with no file written. Test a refactoring hypothesis before committing to it. |
 | `archy_graph` | Inspect the dependency graph. With no `focus`, `response_format="summary"` (**default**) returns the top-N overview by fan-in / fan-out / PageRank plus top external deps (replaces the removed `archy_graph_summary`; `top_n` controls N); `response_format="full"` returns the complete node/edge dump matching `archy graph --format json`, refusing graphs larger than `max_nodes` (default 500) with an explicit `GraphTooLargePayload`. Pass `focus=[...]` (replaces the removed `archy_graph_focus`) for a bounded subgraph around one or more modules (qualnames or file paths): `depth` caps hops, `direction` is `in`/`out`/`both`, each edge carries import line numbers, and `response_format`/`max_nodes`/`top_n` do not apply. |
 | `archy_what_to_refactor_next` | Ranked refactor-priority list (replaces the removed `archy_hotspots` and `archy_high_risk_modules` via `lens`). `lens="fused"` (**default**) sums the behavioral lens (CC x churn) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal can still rank first). `lens="behavioral"` ranks CC x churn hotspots only (needs git); `lens="structural"` ranks the edit-risk composite only (git-free; pass `min_risk=0` for no floor). Each entry names which lenses fired and carries a one-line `rationale`. An empty list plus a `note` is a real answer. |
@@ -448,7 +448,7 @@ The `archy mcp` server still keeps a debounced filesystem watcher warming `.arch
 
 #### Tool output contract (structured output)
 
-Every tool declares an `outputSchema` (JSON Schema, derived from its return model) in `tools/list`, and every `tools/call` returns both a `structuredContent` object (validated against that schema) and a text block with the same JSON, per the [2025-06-18 MCP structured-output spec](https://modelcontextprotocol.io/specification/2025-06-18). All tools are also annotated `readOnlyHint: true` (closed-domain, idempotent, non-destructive), so trusted clients can auto-approve archy's calls instead of prompting on every read. Sequence returns (`archy_cycles`, `archy_score(view="history")`) and union returns (`archy_diff`, `archy_graph`, `archy_dsm`) are wrapped under a top-level `result` key since `structuredContent` must be a JSON object; for unions every branch (including the in-band `*ErrorPayload` shapes) is a conforming `anyOf` member.
+Every tool declares an `outputSchema` (JSON Schema, derived from its return model) in `tools/list`, and every `tools/call` returns both a `structuredContent` object (validated against that schema) and a text block with the same JSON, per the [2025-06-18 MCP structured-output spec](https://modelcontextprotocol.io/specification/2025-06-18). Every tool except `archy_snapshot` is annotated `readOnlyHint: true` (closed-domain, idempotent, non-destructive), so trusted clients can auto-approve archy's calls instead of prompting on every read. `archy_snapshot` overwrites `.archy/baseline.json`, so it declares `readOnlyHint: false, destructiveHint: true` and clients may ask before running it. Sequence returns (`archy_cycles`, `archy_score(view="history")`) and union returns (`archy_diff`, `archy_graph`, `archy_dsm`) are wrapped under a top-level `result` key since `structuredContent` must be a JSON object; for unions every branch (including the in-band `*ErrorPayload` shapes) is a conforming `anyOf` member.
 
 #### Error model (recovery contract)
 
@@ -484,7 +484,7 @@ archy ships a composite action you can drop into any workflow:
 ```yaml
 - uses: hslee16/archy@v0.49.0
   with:
-    command: score      # score | check | cycles
+    command: score      # score | check | cycles | diff
     path: .
     strict: "true"      # fail on regression (score) or any cycle (cycles)
 ```
@@ -493,9 +493,10 @@ Inputs (all optional unless noted):
 
 | Input | Default | Notes |
 |---|---|---|
-| `command` | `score` | `score`, `check`, or `cycles` |
+| `command` | `score` | `score`, `check`, `cycles`, or `diff` |
 | `path` | `.` | Project root to analyze |
-| `strict` | `true` | `score`/`cycles`: fail on regression / any cycle |
+| `strict` | `true` | `score`/`cycles`/`diff`: fail on regression / any cycle / a new finding |
+| `baseline` | `archy-baseline.json` | `diff`: the committed baseline to ratchet against |
 | `strict-tolerance` | `0.02` | `score --strict` tolerance |
 | `record` | `false` | `score`: append result to `.archy/history.jsonl` |
 | `config` | (auto) | `check`: path to `archy.yaml` |
@@ -513,9 +514,23 @@ repos:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
       - id: archy-cycles         # fail on any import cycle
+      - id: archy-no-new-cycles  # fail only on cycles/violations the baseline lacks
 ```
 
 `archy-score-strict` reads `.archy/history.jsonl`; commit a baseline first with `archy score . --record`.
+
+### Adopting on a codebase that already has cycles
+
+`archy-cycles` fails on any cycle, so on most existing codebases it fails on day one, and a gate that always fails gets deleted. Use the ratchet instead: commit the findings you have today, then fail only on new ones.
+
+```bash
+archy snapshot . --findings-only --out archy-baseline.json
+git add archy-baseline.json
+```
+
+Then use the `archy-no-new-cycles` hook, or `archy diff . --strict --baseline archy-baseline.json` in CI (the Action's `command: diff`). It exits 1 on a cycle or `archy.yaml` layer violation the baseline does not carry, names the closing import edges as `path:line`, and never fails on score. The file is sorted and has no score or line numbers, so regenerating it after paying down debt gives a reviewable diff.
+
+What counts as new: a cycle among modules outside every baseline cycle, an existing module pulled into a cycle, or two baseline cycles merged. Shrinking or splitting a cycle passes, and so do renames, a new file joining an existing cycle, and a new import between two modules already in the same cycle. `--strict` always needs `--baseline`: it never reads `.archy/baseline.json`, which `archy snapshot` and the MCP `archy_snapshot` tool overwrite. New findings are rare on a mature codebase (0.66% of commits in archy's own measurement), so treat this as cheap insurance that keeps the gate installed, not as a regression detector.
 
 ## Layer rules (`archy check`)
 

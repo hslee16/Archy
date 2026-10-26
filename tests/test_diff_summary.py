@@ -190,3 +190,17 @@ def test_dead_entrypoints_rule_is_named_with_its_scope_and_cause(tmp_path: Path)
         "(@entrypoints within app.** must reach pkg.b): pyproject.toml could not be read"
     )
     assert "bootstrap import" not in item.prompt
+
+
+def test_headline_without_a_baseline_score_says_so(tmp_path: Path):
+    """A findings-only baseline has no score, so the headline cannot state an
+    overall delta and must not invent one."""
+    project = _make_clean(tmp_path)
+    graph = build_graph(project)
+    current = take_snapshot(graph)
+    baseline = current.model_copy(update={"score": None})
+
+    summary = summarize_diff(compute_diff(baseline, current), graph)
+
+    assert summary.headline.startswith("score not in baseline")
+    assert not any(i.kind.startswith("score_component") for i in summary.top_regressions)

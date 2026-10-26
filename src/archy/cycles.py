@@ -1,7 +1,7 @@
 """Strongly-connected-component cycle detection over an import graph.
 
 archy:owns        Cycle, CycleEdge, find_cycles
-archy:mirrored-by Cycle -> archy.cli, archy.diff, archy.mcp
+archy:mirrored-by Cycle -> archy.cli, archy.diff, archy.mcp, archy.ratchet
 """
 
 from __future__ import annotations

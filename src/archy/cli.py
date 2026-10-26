@@ -5,8 +5,9 @@ archy:owns        ContractsOutcome, affected, brief, check, contracts, conventio
                   index, index_clear, index_status, index_sync, install, main, mcp,
                   render, score, simulate, snapshot, trend, uninstall,
                   what_to_refactor_next
-archy:gates       exit 1 (flag:--strict), exit 1 (flag:--strict-tolerance),
-                  exit 1 (hardcoded), exit 1 (param:check), non-zero exit (hardcoded)
+archy:gates       exit 1 (config:result.strict), exit 1 (flag:--strict),
+                  exit 1 (flag:--strict-tolerance), exit 1 (hardcoded),
+                  exit 1 (param:check), non-zero exit (hardcoded)
 """
 
 from __future__ import annotations
@@ -47,12 +48,13 @@ from archy.coupling import (
 )
 from archy.cycles import Cycle, find_cycles
 from archy.diff import (
+    CapturedSnapshot,
     DiffReport,
     DiffSummary,
     ScoreDelta,
-    Snapshot,
     compute_diff,
     read_snapshot,
+    strict_verdict,
     take_snapshot,
     write_snapshot,
 )
@@ -994,12 +996,21 @@ def what_to_refactor_next(
     default=None,
     help="Where to write the snapshot. Defaults to PATH/.archy/baseline.json.",
 )
-def snapshot(path: Path, out_path: Path | None) -> None:
+@click.option(
+    "--findings-only",
+    is_flag=True,
+    default=False,
+    help=(
+        "Write only the findings (cycles, violations, module list), sorted, with no "
+        "score or line numbers: the form to commit as the `diff --strict` baseline."
+    ),
+)
+def snapshot(path: Path, out_path: Path | None, findings_only: bool) -> None:
     """Capture score, cycles, and layer violations as a baseline for `archy diff`."""
     g, full = _load_graph_pair(path)
     snap = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
     target = out_path or (path / ".archy" / "baseline.json")
-    write_snapshot(snap, target)
+    write_snapshot(snap, target, findings_only=findings_only)
     click.echo(f"# baseline written to {target}")
     click.echo(_snapshot_to_text(snap))
 
@@ -1031,13 +1042,34 @@ def snapshot(path: Path, out_path: Path | None) -> None:
     default=5,
     help="Max items shown per regression / improvement list in the summary.",
 )
-def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int) -> None:
+@click.option(
+    "--strict",
+    is_flag=True,
+    default=False,
+    help=(
+        "Exit 1 on a cycle or layer violation the baseline does not carry; never on "
+        "score. Requires --baseline: a committed file, never .archy/baseline.json."
+    ),
+)
+def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: bool) -> None:
     """Compare current state against a baseline snapshot.
 
     Reports a risk-weighted summary (headline + top regressions / improvements),
     per-component score deltas, newly added cycles/violations, and any
     cycles/violations that have been resolved since the baseline.
+
+    With --strict, it is a ratchet for a codebase that already has cycles or
+    violations: findings the baseline records are carried, new ones fail.
     """
+    if strict and baseline_path is None:
+        # `.archy/baseline.json` is what `archy snapshot` (and the MCP
+        # `archy_snapshot` an agent is told to call per task) overwrites. A
+        # gate reading it would let any re-snapshot grandfather a new cycle.
+        raise click.UsageError(
+            "--strict needs --baseline pointing at a committed file (create one with "
+            "`archy snapshot --findings-only --out archy-baseline.json`); it never reads "
+            ".archy/baseline.json, which `archy snapshot` overwrites."
+        )
     target = baseline_path or (path / ".archy" / "baseline.json")
     baseline = read_snapshot(target)
     if baseline is None:
@@ -1045,11 +1077,16 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int) -> None:
     g, full = _load_graph_pair(path)
     current = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
     result = compute_diff(baseline, current)
-    result = result.model_copy(update={"summary": summarize_diff(result, g, top_n=top_n)})
+    update: dict[str, object] = {"summary": summarize_diff(result, g, top_n=top_n)}
+    if strict:
+        update["strict"] = strict_verdict(baseline, current, graph=g, root=path, label=str(target))
+    result = result.model_copy(update=update)
     if fmt == "json":
         click.echo(result.model_dump_json(indent=2))
     else:
         click.echo(_diff_to_text(result))
+    if result.strict is not None and not result.strict.passed:
+        sys.exit(1)
 
 
 def _parse_edge_spec(spec: str) -> tuple[str, str]:
@@ -2702,7 +2739,7 @@ def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
     ]
 
 
-def _snapshot_to_text(snap: Snapshot) -> str:
+def _snapshot_to_text(snap: CapturedSnapshot) -> str:
     return (
         f"# score: {snap.score.overall:.3f}  "
         f"cycles: {len(snap.cycles)}  violations: {len(snap.violations)}"
@@ -2725,7 +2762,10 @@ def _diff_to_text(result: DiffReport) -> str:
     if result.summary is not None:
         lines.extend(_summary_to_text(result.summary))
         lines.append("")
-    lines.extend(_score_delta_lines(result.score_delta, "# score deltas (current - baseline):"))
+    if result.score_delta is None:
+        lines.append("# score deltas: not available (the baseline records findings only)")
+    else:
+        lines.extend(_score_delta_lines(result.score_delta, "# score deltas (current - baseline):"))
     cycles = result.cycles
     lines.append("")
     lines.append(f"# cycles: +{len(cycles.added)} added, -{len(cycles.resolved)} resolved")
@@ -2759,6 +2799,10 @@ def _diff_to_text(result: DiffReport) -> str:
                 lines.append(f"  - rule can be checked again: {rule}")
             else:
                 lines.append(f"  - {v.module} now reaches {v.rule.must_reach}")
+    if result.strict is not None:
+        lines.append("")
+        verdict = "PASS" if result.strict.passed else "FAIL"
+        lines.append(f"# strict: {verdict}, {result.strict.reason}")
     return "\n".join(lines)
 
 

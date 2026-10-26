@@ -12,18 +12,19 @@ overwritten each capture). Sentrux uses an in-process `session_start`
 baseline; archy uses a file so the loop can survive process restarts
 and so the baseline shape is the same one the CLI emits.
 
-archy:owns        CycleSetDiff, DiffReport, DiffSummary, DiffSummaryItem,
-                  ReachViolationSetDiff, ScoreDelta, SdpViolationSetDiff, Snapshot,
-                  ViolationSetDiff, compute_diff, read_snapshot, snapshot_to_dict,
+archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
+                  DiffSummaryItem, ReachViolationSetDiff, ScoreDelta,
+                  SdpViolationSetDiff, Snapshot, ViolationSetDiff, compute_diff,
+                  read_snapshot, score_delta, snapshot_to_dict, strict_verdict,
                   take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
                   DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
                   ScoreDelta -> archy.cli, archy.simulate, compute_diff -> archy.cli,
                   archy.mcp, archy.simulate, bench.delta_direction,
                   bench.simulate_oracle, read_snapshot -> archy.cli, archy.mcp,
-                  take_snapshot -> archy.cli, archy.mcp, archy.simulate,
-                  bench.delta_direction, bench.simulate_oracle,
-                  write_snapshot -> archy.cli, archy.mcp
+                  strict_verdict -> archy.cli, archy.mcp, take_snapshot -> archy.cli,
+                  archy.mcp, archy.simulate, bench.delta_direction,
+                  bench.simulate_oracle, write_snapshot -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations
@@ -46,17 +47,31 @@ from archy.layers import (
     find_violations,
     load_config,
 )
+from archy.ratchet import StrictVerdict, evaluate_strict, module_paths_for
 from archy.score import Score, ScoreInputs, compute_complexity, compute_score
 
 
 class Snapshot(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    score: Score
+    # None for a findings-only baseline (`archy snapshot --findings-only`),
+    # which leaves the score out so regenerating a committed file diffs cleanly.
+    score: Score | None
     cycles: tuple[Cycle, ...]
     violations: tuple[Violation, ...]
     sdp_violations: tuple[SdpViolation, ...] = ()
     required_violations: tuple[ReachViolation, ...] = ()
+    # Every internal module at capture time. `diff --strict` needs it to tell
+    # a new file joining a tangle (carried) from an existing module pulled
+    # into one (new). Empty on snapshots written before it was recorded.
+    modules: tuple[str, ...] = ()
+
+
+class CapturedSnapshot(Snapshot):
+    """A snapshot taken from a live graph, which always has a score. Only a
+    baseline read back from disk can lack one."""
+
+    score: Score
 
 
 class ScoreDelta(BaseModel):
@@ -132,18 +147,21 @@ class DiffSummary(BaseModel):
 class DiffReport(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    score_delta: ScoreDelta
+    # None when either side has no score (a findings-only baseline).
+    score_delta: ScoreDelta | None
     cycles: CycleSetDiff
     violations: ViolationSetDiff
     sdp_violations: SdpViolationSetDiff = SdpViolationSetDiff()
     required_violations: ReachViolationSetDiff = ReachViolationSetDiff()
+    # Set only by `--strict`: the no-new-cycles, no-new-violations verdict.
+    strict: StrictVerdict | None = None
     # Populated by callers via `diff_summary.summarize_diff(report, graph)`;
     # left None for the pure `compute_diff` path so the function stays
     # graph-free.
     summary: DiffSummary | None = None
 
 
-def take_snapshot(graph, config_path: Path | None = None, *, reach_graph=None) -> Snapshot:
+def take_snapshot(graph, config_path: Path | None = None, *, reach_graph=None) -> CapturedSnapshot:
     """Capture score, cycles, layer, SDP, and required-reach violations from a graph.
 
     `graph` is expected to be internal-only: that is what `compute_score` and
@@ -172,34 +190,44 @@ def take_snapshot(graph, config_path: Path | None = None, *, reach_graph=None) -
         )
         if config.sdp.enabled:
             sdp_violations = tuple(find_sdp_violations(graph, tolerance=config.sdp.tolerance))
-    return Snapshot(
+    return CapturedSnapshot(
         score=score,
         cycles=cycles,
         violations=violations,
         sdp_violations=sdp_violations,
         required_violations=reach_violations,
+        modules=tuple(sorted(n for n, d in graph.nodes(data=True) if not d.get("external"))),
     )
 
 
-def snapshot_to_dict(snap: Snapshot) -> dict[str, object]:
+def snapshot_to_dict(snap: Snapshot, *, findings_only: bool = False) -> dict[str, object]:
     """Serialize to the legacy JSON wire shape (rule.from/to, score.components).
 
     We hand-build this rather than using `model_dump()` because the legacy
     shape predates pydantic and existing `.archy/baseline.json` files on
     disk depend on it.
     """
-    return {
-        "score": _score_to_dict(snap.score),
+    payload: dict[str, object] = {
         "cycles": [_cycle_to_dict(c) for c in snap.cycles],
         "violations": [_violation_to_dict(v) for v in snap.violations],
         "sdp_violations": [_sdp_violation_to_dict(v) for v in snap.sdp_violations],
         "required_violations": [_reach_violation_to_dict(v) for v in snap.required_violations],
+        "modules": list(snap.modules),
     }
+    if not findings_only and snap.score is not None:
+        payload["score"] = _score_to_dict(snap.score)
+    if findings_only:
+        # A committed baseline is regenerated by hand and reviewed as a diff, so
+        # it keeps only what identifies a finding: no score, no line numbers
+        # (any edit above an import moves them), every list sorted.
+        payload = _findings_only(payload)
+    return payload
 
 
-def write_snapshot(snap: Snapshot, path: Path) -> None:
+def write_snapshot(snap: Snapshot, path: Path, *, findings_only: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(snapshot_to_dict(snap), indent=2, sort_keys=True))
+    payload = snapshot_to_dict(snap, findings_only=findings_only)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
 def read_snapshot(path: Path) -> Snapshot | None:
@@ -218,13 +246,36 @@ def compute_diff(baseline: Snapshot, current: Snapshot) -> DiffReport:
     "modified", which is fine for a first-pass agent signal.
     """
     return DiffReport(
-        score_delta=_score_delta(baseline.score, current.score),
+        score_delta=(
+            None
+            if baseline.score is None or current.score is None
+            else score_delta(baseline.score, current.score)
+        ),
         cycles=_cycle_set_diff(baseline.cycles, current.cycles),
         violations=_violation_set_diff(baseline.violations, current.violations),
         sdp_violations=_sdp_violation_set_diff(baseline.sdp_violations, current.sdp_violations),
         required_violations=_reach_violation_set_diff(
             baseline.required_violations, current.required_violations
         ),
+    )
+
+
+def strict_verdict(
+    baseline: Snapshot, current: Snapshot, *, graph, root: Path, label: str
+) -> StrictVerdict:
+    """The `--strict` ratchet verdict for `current` against a committed `baseline`.
+
+    One entry point so the CLI and MCP surfaces cannot drift: both pass the
+    graph `current` was taken from, for the `path:line` locations.
+    """
+    return evaluate_strict(
+        baseline_label=label,
+        baseline_modules=baseline.modules,
+        baseline_cycles=baseline.cycles,
+        baseline_violations=baseline.violations,
+        current_cycles=current.cycles,
+        current_violations=current.violations,
+        module_paths=module_paths_for(graph, root),
     )
 
 
@@ -297,31 +348,8 @@ def _score_to_dict(s: Score) -> dict[str, object]:
 
 
 def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
-    score_dict = _expect_dict(payload["score"])
-    components = _expect_dict(score_dict["components"])
-    raw_inputs = dict(_expect_dict(score_dict["inputs"]))
-    # tangle_ratio added post-tangle-ratio rollout; default for old snapshots.
-    raw_inputs.setdefault("tangle_ratio", 0.0)
-    # ScoreInputs.model_validate handles per-field type coercion and raises a
-    # clear ValidationError if a key is missing or wrongly typed.
-    inputs = ScoreInputs.model_validate(raw_inputs)
-    # complexity (v0.20): re-derive from cc_mean / function_count on an old
-    # snapshot rather than refusing to load. The components dict on a pre-v0.20
-    # baseline.json doesn't carry the field; reconstructing it from inputs
-    # keeps the diff loop working across the version boundary.
-    if "complexity" in components:
-        complexity = _expect_float(components["complexity"])
-    else:
-        complexity = compute_complexity(inputs.cc_mean, inputs.function_count)
-    score = Score(
-        overall=_expect_float(score_dict["overall"]),
-        modularity=_expect_float(components["modularity"]),
-        acyclicity=_expect_float(components["acyclicity"]),
-        depth=_expect_float(components["depth"]),
-        equality=_expect_float(components["equality"]),
-        complexity=complexity,
-        inputs=inputs,
-    )
+    raw_score = payload.get("score")
+    score = None if raw_score is None else _score_from_dict(_expect_dict(raw_score))
     cycles = tuple(
         _cycle_from_dict(_expect_dict(c)) for c in _expect_list(payload.get("cycles", []))
     )
@@ -347,6 +375,66 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
         violations=violations,
         sdp_violations=sdp_violations,
         required_violations=reach_violations,
+        modules=tuple(str(m) for m in _expect_list(payload.get("modules", []))),
+    )
+
+
+def _findings_only(payload: dict[str, object]) -> dict[str, object]:
+    def strip(item: object) -> object:
+        if isinstance(item, dict):
+            return {k: strip(v) for k, v in item.items() if k != "lines"}
+        if isinstance(item, list):
+            return [strip(v) for v in item]
+        return item
+
+    def ordered(items: object) -> list[object]:
+        return sorted((strip(i) for i in _expect_list(items)), key=_canonical)
+
+    out: dict[str, object] = {
+        key: ordered(value) for key, value in payload.items() if key not in ("modules", "cycles")
+    }
+    out["modules"] = sorted(str(m) for m in _expect_list(payload["modules"]))
+    out["cycles"] = sorted(
+        (
+            {
+                "modules": sorted(str(m) for m in _expect_list(c["modules"])),
+                "edges": sorted(_expect_list(c["edges"]), key=_canonical),
+            }
+            for c in (_expect_dict(strip(c)) for c in _expect_list(payload["cycles"]))
+        ),
+        key=_canonical,
+    )
+    return out
+
+
+def _canonical(item: object) -> str:
+    return json.dumps(item, sort_keys=True)
+
+
+def _score_from_dict(score_dict: dict[str, object]) -> Score:
+    components = _expect_dict(score_dict["components"])
+    raw_inputs = dict(_expect_dict(score_dict["inputs"]))
+    # tangle_ratio added post-tangle-ratio rollout; default for old snapshots.
+    raw_inputs.setdefault("tangle_ratio", 0.0)
+    # ScoreInputs.model_validate handles per-field type coercion and raises a
+    # clear ValidationError if a key is missing or wrongly typed.
+    inputs = ScoreInputs.model_validate(raw_inputs)
+    # complexity (v0.20): re-derive from cc_mean / function_count on an old
+    # snapshot rather than refusing to load. The components dict on a pre-v0.20
+    # baseline.json doesn't carry the field; reconstructing it from inputs
+    # keeps the diff loop working across the version boundary.
+    if "complexity" in components:
+        complexity = _expect_float(components["complexity"])
+    else:
+        complexity = compute_complexity(inputs.cc_mean, inputs.function_count)
+    return Score(
+        overall=_expect_float(score_dict["overall"]),
+        modularity=_expect_float(components["modularity"]),
+        acyclicity=_expect_float(components["acyclicity"]),
+        depth=_expect_float(components["depth"]),
+        equality=_expect_float(components["equality"]),
+        complexity=complexity,
+        inputs=inputs,
     )
 
 
@@ -355,7 +443,7 @@ def _cycle_from_dict(d: dict[str, object]) -> Cycle:
         CycleEdge(
             source=str(_expect_dict(e)["source"]),
             target=str(_expect_dict(e)["target"]),
-            lines=tuple(_expect_int(x) for x in _expect_list(_expect_dict(e)["lines"])),
+            lines=tuple(_expect_int(x) for x in _expect_list(_expect_dict(e).get("lines", []))),
         )
         for e in _expect_list(d["edges"])
     )
@@ -368,7 +456,7 @@ def _violation_from_dict(d: dict[str, object]) -> Violation:
         rule=ForbidRule(from_layer=str(rule["from"]), to_layer=str(rule["to"])),
         source=str(d["source"]),
         target=str(d["target"]),
-        lines=tuple(_expect_int(x) for x in _expect_list(d["lines"])),
+        lines=tuple(_expect_int(x) for x in _expect_list(d.get("lines", []))),
     )
 
 
@@ -393,11 +481,11 @@ def _sdp_violation_from_dict(d: dict[str, object]) -> SdpViolation:
         target=str(d["target"]),
         source_instability=_expect_float(d["source_instability"]),
         target_instability=_expect_float(d["target_instability"]),
-        lines=tuple(_expect_int(x) for x in _expect_list(d["lines"])),
+        lines=tuple(_expect_int(x) for x in _expect_list(d.get("lines", []))),
     )
 
 
-def _score_delta(baseline: Score, current: Score) -> ScoreDelta:
+def score_delta(baseline: Score, current: Score) -> ScoreDelta:
     return ScoreDelta(
         overall=current.overall - baseline.overall,
         modularity=current.modularity - baseline.modularity,

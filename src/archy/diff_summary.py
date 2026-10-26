@@ -250,7 +250,7 @@ def _collect_regressions(
                 prompt=prompt,
             )
         )
-    for name in _COMPONENT_NAMES:
+    for name in _COMPONENT_NAMES if diff.score_delta is not None else ():
         delta = getattr(diff.score_delta, name)
         if delta < 0:
             items.append(
@@ -321,7 +321,7 @@ def _collect_improvements(
                 prompt=prompt,
             )
         )
-    for name in _COMPONENT_NAMES:
+    for name in _COMPONENT_NAMES if diff.score_delta is not None else ():
         delta = getattr(diff.score_delta, name)
         if delta > 0:
             items.append(
@@ -363,10 +363,10 @@ def _rank(items: list[DiffSummaryItem], top_n: int) -> tuple[DiffSummaryItem, ..
 
 
 def _make_headline(diff: DiffReport) -> str:
-    overall = diff.score_delta.overall
     drivers: list[str] = []
-    for name in _COMPONENT_NAMES:
-        delta = getattr(diff.score_delta, name)
+    score = diff.score_delta
+    for name in _COMPONENT_NAMES if score is not None else ():
+        delta = getattr(score, name)
         if abs(delta) >= 0.01:
             drivers.append(f"{name} {delta:+.2f}")
     cycles_added = len(diff.cycles.added)
@@ -381,7 +381,8 @@ def _make_headline(diff: DiffReport) -> str:
         + len(diff.sdp_violations.resolved)
         + len(diff.required_violations.resolved)
     )
-    parts = [f"overall {overall:+.3f}"]
+    # A findings-only baseline records no score, so there is no delta to state.
+    parts = [f"overall {score.overall:+.3f}" if score is not None else "score not in baseline"]
     if drivers:
         parts.append("driven by " + ", ".join(drivers[:3]))
     if cycles_added or cycles_resolved:

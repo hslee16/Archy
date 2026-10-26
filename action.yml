@@ -1,5 +1,5 @@
 name: archy
-description: Run archy (architectural sensor) against a Python project. Supports score, check, and cycles.
+description: Run archy (architectural sensor) against a Python project. Supports score, check, cycles, and diff.
 author: archy
 
 branding:
@@ -8,7 +8,7 @@ branding:
 
 inputs:
   command:
-    description: archy subcommand to run. One of "score", "check", "cycles".
+    description: archy subcommand to run. One of "score", "check", "cycles", "diff".
     required: false
     default: score
   path:
@@ -16,7 +16,7 @@ inputs:
     required: false
     default: "."
   strict:
-    description: For "score" and "cycles", pass --strict so the step fails on regression / cycles.
+    description: For "score", "cycles" and "diff", pass --strict so the step fails on regression / cycles / new findings.
     required: false
     default: "true"
   strict-tolerance:
@@ -31,6 +31,10 @@ inputs:
     description: For "check", path to archy.yaml. Auto-discovered if empty.
     required: false
     default: ""
+  baseline:
+    description: For "diff", the committed baseline file (create it with `archy snapshot --findings-only --out archy-baseline.json`).
+    required: false
+    default: "archy-baseline.json"
   python-version:
     description: Python version to install when running archy.
     required: false
@@ -90,6 +94,13 @@ runs:
               args+=(--strict)
             fi
             archy cycles "${args[@]}"
+            ;;
+          diff)
+            args=("${{ inputs.path }}" --baseline "${{ inputs.baseline }}")
+            if [[ "${{ inputs.strict }}" == "true" ]]; then
+              args+=(--strict)
+            fi
+            archy diff "${args[@]}"
             ;;
           *)
             echo "Unknown command: ${{ inputs.command }}" >&2

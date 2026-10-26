@@ -37,6 +37,7 @@ from archy.diff import (
     SdpViolationSetDiff,
     ViolationSetDiff,
     compute_diff,
+    score_delta,
     take_snapshot,
 )
 from archy.diff_summary import DiffSummary, summarize_diff
@@ -165,7 +166,9 @@ def find_simulate(
 
     return SimulateReport(
         applied=applied,
-        score_delta=report.score_delta,
+        # Both sides are live captures, so both have a score; `report`'s own
+        # delta is optional only because a findings-only baseline has none.
+        score_delta=score_delta(before.score, after.score),
         cycles=report.cycles,
         violations=report.violations,
         sdp_violations=report.sdp_violations,
