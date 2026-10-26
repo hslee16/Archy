@@ -22,7 +22,8 @@ archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
                   DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
                   ScoreDelta -> archy.cli, archy.simulate, compute_diff -> archy.cli,
                   archy.mcp, archy.simulate, bench.delta_direction,
-                  bench.simulate_oracle, default_baseline_path -> archy.cli, archy.mcp,
+                  bench.simulate_oracle, create_baseline_command -> archy.cli,
+                  archy.mcp, default_baseline_path -> archy.cli, archy.mcp,
                   missing_baseline_hint -> archy.cli, archy.mcp,
                   read_snapshot -> archy.cli, archy.mcp,
                   strict_baseline_problem -> archy.cli, archy.mcp,
@@ -34,7 +35,7 @@ archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
 from __future__ import annotations
 
 import json
-import os
+import shlex
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -51,6 +52,7 @@ from archy.layers import (
     find_sdp_violations,
     find_violations,
     load_config,
+    match_layer,
 )
 from archy.ratchet import StrictVerdict, evaluate_strict, module_paths_for
 from archy.score import Score, ScoreInputs, compute_complexity, compute_score
@@ -281,7 +283,7 @@ def default_baseline_path(root: Path) -> Path:
     return root / ".archy" / "baseline.json"
 
 
-def strict_baseline_problem(root: Path, target: Path) -> str | None:
+def strict_baseline_problem(root: Path, target: Path, *, suggested: Path) -> str | None:
     """Why `target` cannot be the `--strict` baseline, or None if it can.
 
     The default snapshot file is overwritten by every `archy snapshot`, and an
@@ -290,16 +292,23 @@ def strict_baseline_problem(root: Path, target: Path) -> str | None:
     refused even when named explicitly.
     """
     default = default_baseline_path(root)
-    same = target.resolve() == default.resolve()
+    resolved = target.resolve()
+    # Any `.archy/baseline.json`, not only this scan's: `archy snapshot .`
+    # from a parent writes one too, and an agent's next snapshot rewrites it.
+    same = resolved.name == default.name and resolved.parent.name == default.parent.name
     # `resolve()` misses a hard link and, on a case-insensitive filesystem, a
-    # differently-cased spelling; `samefile` compares the files themselves.
-    if not same and target.exists() and default.exists():
-        same = os.path.samefile(target, default)
+    # differently-cased spelling; `Path.samefile` compares the files themselves.
+    if not same:
+        try:
+            same = target.exists() and default.exists() and target.samefile(default)
+        except OSError:
+            # An unreadable `.archy/` cannot be the baseline being read anyway.
+            same = False
     if same:
         return (
             f"{target} is the file `archy snapshot` overwrites, so it cannot hold a "
             f"ratchet. Commit a separate baseline with "
-            f"`{create_baseline_command(root, Path('archy-baseline.json'))}` and pass that."
+            f"`{create_baseline_command(root, suggested)}` and pass that."
         )
     return None
 
@@ -311,7 +320,9 @@ def create_baseline_command(root: Path, target: Path) -> str:
     the current directory, misses an `archy.yaml` under `root`, and records a
     baseline that makes every existing violation read as new.
     """
-    return f"archy snapshot {root} --findings-only --out {target}"
+    return (
+        f"archy snapshot {shlex.quote(str(root))} --findings-only --out {shlex.quote(str(target))}"
+    )
 
 
 def missing_baseline_hint(root: Path, target: Path, *, committed: bool) -> str:
@@ -319,7 +330,7 @@ def missing_baseline_hint(root: Path, target: Path, *, committed: bool) -> str:
     `--findings-only --out`; a bare `archy snapshot` would write elsewhere."""
     if committed:
         return f"no baseline at {target}; create it with `{create_baseline_command(root, target)}`."
-    return f"no baseline at {target}; run `archy snapshot {root}` first."
+    return f"no baseline at {target}; run `archy snapshot {shlex.quote(str(root))}` first."
 
 
 def strict_verdict(
@@ -328,14 +339,37 @@ def strict_verdict(
     *,
     graph,
     root: Path,
+    target: Path,
     label: str,
-    rules_found: bool,
+    config_path: Path | None,
+    location_root: Path,
 ) -> StrictVerdict:
     """The `--strict` ratchet verdict for `current` against a committed `baseline`.
 
-    One entry point so the CLI and MCP surfaces cannot drift: both pass the
-    graph `current` was taken from, for the `path:line` locations.
+    One entry point so the CLI and MCP surfaces cannot drift. `graph` is the
+    one `current` was taken from; `location_root` is what `path:line`
+    locations are relative to (the CLI's working directory, so they paste
+    straight into `git blame`; MCP's `path`).
     """
+    config = _load_config_if_present(config_path)
+    ungoverned = None
+    if config is not None:
+        forbidden = {(r.from_layer, r.to_layer) for r in config.forbid}
+        internal = {n for n, d in graph.nodes(data=True) if not d.get("external")}
+        # A baseline violation whose two modules still exist but that today's
+        # rules would not flag: its layer patterns or forbid rule changed under
+        # it. Not a fix, since the import may still be there.
+        ungoverned = tuple(
+            v
+            for v in baseline.violations
+            if v.source in internal
+            and v.target in internal
+            and (
+                (v.rule.from_layer, v.rule.to_layer) not in forbidden
+                or match_layer(v.source, config.layers) != v.rule.from_layer
+                or match_layer(v.target, config.layers) != v.rule.to_layer
+            )
+        )
     return evaluate_strict(
         baseline_label=label,
         baseline_modules=baseline.modules,
@@ -343,8 +377,9 @@ def strict_verdict(
         baseline_violations=baseline.violations,
         current_cycles=current.cycles,
         current_violations=current.violations,
-        module_paths=module_paths_for(graph, root),
-        rules_found=rules_found,
+        module_paths=module_paths_for(graph, location_root),
+        ungoverned=ungoverned,
+        regenerate=create_baseline_command(root, target),
     )
 
 

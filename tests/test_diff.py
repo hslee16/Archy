@@ -336,3 +336,43 @@ def test_diff_against_a_findings_only_baseline_has_no_score_delta(tmp_path: Path
     result = compute_diff(restored, snap)
 
     assert result.score_delta is None
+
+
+def test_strict_refuses_any_archy_snapshot_file_not_only_the_scans_own(tmp_path: Path):
+    """`archy snapshot .` from a parent writes its own .archy/baseline.json,
+    which an agent's next snapshot rewrites just the same."""
+    from archy.diff import strict_baseline_problem
+
+    parent_file = tmp_path / ".archy" / "baseline.json"
+    problem = strict_baseline_problem(
+        tmp_path / "app", parent_file, suggested=Path("archy-baseline.json")
+    )
+
+    assert problem is not None
+    assert "the file `archy snapshot` overwrites" in problem
+
+
+def test_strict_baseline_check_survives_an_unreadable_snapshot_dir(tmp_path: Path, monkeypatch):
+    """Python 3.10's `Path.exists` raises on an unreadable parent; the check
+    must treat that as "not the same file", not crash the gate."""
+    from archy.diff import strict_baseline_problem
+
+    good = tmp_path / "good.json"
+    good.write_text("{}")
+    (tmp_path / ".archy").mkdir()
+    (tmp_path / ".archy" / "baseline.json").write_text("{}")
+
+    def boom(self, other):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "samefile", boom)
+
+    assert strict_baseline_problem(tmp_path, good, suggested=Path("x.json")) is None
+
+
+def test_create_baseline_command_quotes_paths_with_spaces(tmp_path: Path):
+    from archy.diff import create_baseline_command
+
+    command = create_baseline_command(Path("my proj"), Path("my proj/base.json"))
+
+    assert command == "archy snapshot 'my proj' --findings-only --out 'my proj/base.json'"

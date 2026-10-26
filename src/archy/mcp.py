@@ -128,6 +128,7 @@ from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     DiffReport,
     compute_diff,
+    create_baseline_command,
     default_baseline_path,
     missing_baseline_hint,
     read_snapshot,
@@ -1517,16 +1518,18 @@ def _run_diff(
         # Same rule as the CLI: `.archy/baseline.json` is what archy_snapshot
         # overwrites, so a strict gate reading it could be grandfathered by the
         # very call the agent is told to make at the start of a task.
+        create = create_baseline_command(path, path / "archy-baseline.json")
         return DiffErrorPayload(
             error=(
                 "strict=True needs `baseline`: a committed file such as "
-                "archy-baseline.json, created with `archy snapshot --findings-only "
-                "--out archy-baseline.json`. It never reads .archy/baseline.json, "
-                "which archy_snapshot overwrites."
+                f"archy-baseline.json, created with `{create}`. It never reads "
+                ".archy/baseline.json, which archy_snapshot overwrites."
             )
         )
     target = default_baseline_path(path) if baseline is None else path / baseline
-    if strict and (problem := strict_baseline_problem(path, target)):
+    if strict and (
+        problem := strict_baseline_problem(path, target, suggested=path / "archy-baseline.json")
+    ):
         return DiffErrorPayload(error=problem)
     snapshot = read_snapshot(target)
     if snapshot is None:
@@ -1549,8 +1552,10 @@ def _run_diff(
             current,
             graph=graph,
             root=path,
+            target=target,
             label=baseline or str(target),
-            rules_found=config_path is not None,
+            config_path=config_path,
+            location_root=path,
         )
     return report.model_copy(update=update)
 

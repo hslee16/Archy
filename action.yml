@@ -32,7 +32,7 @@ inputs:
     required: false
     default: ""
   baseline:
-    description: For "diff", the committed baseline file (create it with `archy snapshot --findings-only --out archy-baseline.json`).
+    description: For "diff", the committed baseline file, relative to the workflow's working directory. Create it with `archy snapshot <path> --findings-only --out <baseline>`, using the same `path` input.
     required: false
     default: "archy-baseline.json"
   python-version:

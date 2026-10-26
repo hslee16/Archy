@@ -1075,7 +1075,9 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: b
             "reads .archy/baseline.json, which `archy snapshot` overwrites."
         )
     target = baseline_path or default_baseline_path(path)
-    if strict and (problem := strict_baseline_problem(path, target)):
+    if strict and (
+        problem := strict_baseline_problem(path, target, suggested=Path("archy-baseline.json"))
+    ):
         raise click.UsageError(problem)
     baseline = read_snapshot(target)
     if baseline is None:
@@ -1093,8 +1095,10 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: b
             current,
             graph=g,
             root=path,
+            target=target,
             label=str(target),
-            rules_found=config_path is not None,
+            config_path=config_path,
+            location_root=Path.cwd(),
         )
     result = result.model_copy(update=update)
     if fmt == "json":

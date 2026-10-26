@@ -33,6 +33,8 @@ def _verdict(baseline, current, *, violations=((), ()), modules=_MODULES):
         current_cycles=current,
         current_violations=violations[1],
         module_paths={m: f"pkg/{m}.py" for m in (*_MODULES, "new", "renamed")},
+        ungoverned=(),
+        regenerate="archy snapshot . --findings-only --out archy-baseline.json",
     )
 
 
@@ -191,3 +193,31 @@ def test_a_self_import_the_baseline_had_is_carried():
     self_loop = Cycle(modules=("a",), edges=(CycleEdge(source="a", target="a", lines=(1,)),))
 
     assert _verdict([self_loop], [self_loop]).passed is True
+
+
+def test_a_baseline_violation_the_rules_no_longer_cover_refuses():
+    """Patterns gone dead (a bare `pkg.core` for `pkg.core.**`, or a package
+    renamed under the config): the violation would silently drop out and new
+    ones go unseen. With the rules still covering it, the same input passes."""
+    rule = ForbidRule(from_layer="core", to_layer="cli")
+    old = Violation(rule=rule, source="a", target="b", lines=(4,))
+
+    def run(ungoverned: tuple[Violation, ...]):
+        return evaluate_strict(
+            baseline_label="b.json",
+            baseline_modules=_MODULES,
+            baseline_cycles=[],
+            baseline_violations=[old],
+            current_cycles=[],
+            current_violations=[],
+            module_paths={},
+            ungoverned=ungoverned,
+            regenerate="archy snapshot app --findings-only --out b.json",
+        )
+
+    assert run(()).passed is True
+    dead = run((old,))
+    assert dead.passed is False
+    assert "no longer cover 1 baseline violation(s)" in dead.reason
+    assert "a -> b, core -> cli" in dead.reason
+    assert "archy snapshot app --findings-only --out b.json" in dead.reason

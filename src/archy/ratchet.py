@@ -113,7 +113,8 @@ def evaluate_strict(
     current_cycles: Iterable[Cycle],
     current_violations: Iterable[Violation],
     module_paths: Mapping[str, str],
-    rules_found: bool = True,
+    ungoverned: tuple[Violation, ...] | None,
+    regenerate: str,
 ) -> StrictVerdict:
     """Compare current findings against a committed baseline.
 
@@ -126,22 +127,40 @@ def evaluate_strict(
             refused=(
                 "the baseline records no module list (written before `--strict` "
                 "existed, or from an empty scan), so a new file cannot be told from an "
-                "existing module. Regenerate it with `archy snapshot --findings-only "
-                f"--out {baseline_label}`."
+                f"existing module. Regenerate it with `{regenerate}`."
             ),
         )
     baseline_violations = list(baseline_violations)
-    if baseline_violations and not rules_found:
-        # The baseline recorded layer violations but no archy.yaml was found
-        # now, so no layer rule ran. A pass here would be a rule set that
-        # cannot fire reading as clean.
-        return StrictVerdict(
-            baseline=baseline_label,
-            refused=(
-                f"the baseline records {len(baseline_violations)} layer violation(s), but "
-                "no archy.yaml was found for this scan, so no layer rule was checked."
-            ),
+    # A baseline violation can only be carried or resolved by a rule that still
+    # runs. With no archy.yaml, or a layer whose patterns now match nothing (a
+    # bare `pkg.core` for `pkg.core.**`, a package renamed under the config),
+    # the violation silently drops out and new ones go unseen: a rule set that
+    # cannot fire reading as clean.
+    if baseline_violations:
+        remedy = (
+            "Restore the rules, or if they were removed on purpose, regenerate the "
+            f"baseline with `{regenerate}`."
         )
+        if ungoverned is None:
+            return StrictVerdict(
+                baseline=baseline_label,
+                refused=(
+                    f"the baseline records {len(baseline_violations)} layer violation(s), "
+                    "but no archy.yaml was found for this scan, so no layer rule was "
+                    f"checked. {remedy}"
+                ),
+            )
+        if ungoverned:
+            first = ungoverned[0]
+            return StrictVerdict(
+                baseline=baseline_label,
+                refused=(
+                    f"the rules in archy.yaml no longer cover {len(ungoverned)} baseline "
+                    f"violation(s) whose modules still exist (e.g. {first.source} -> "
+                    f"{first.target}, {first.rule.from_layer} -> {first.rule.to_layer}), so "
+                    f"those rules cannot fire. {remedy}"
+                ),
+            )
     known = set(baseline_modules)
     baseline_cycles = list(baseline_cycles)
     old_cycles = [set(c.modules) for c in baseline_cycles]

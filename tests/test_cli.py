@@ -2210,8 +2210,13 @@ def test_diff_strict_passes_when_a_baseline_cycle_is_split(tmp_path: Path):
     assert "# strict: PASS" in result.output
 
 
-def test_diff_strict_fails_on_a_fresh_cycle_and_names_its_edges(tmp_path: Path):
+def test_diff_strict_fails_on_a_fresh_cycle_and_names_its_edges(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     project = _make_ratchet_project(tmp_path)
+    # Locations are relative to the working directory, so they paste into
+    # `git blame` from where the command ran (#521).
+    monkeypatch.chdir(project)
     (project / "pkg" / "d.py").write_text("x = 1\nimport pkg.e\n")
     (project / "pkg" / "e.py").write_text("import pkg.d\n")
 
@@ -2237,8 +2242,13 @@ def test_diff_strict_json_carries_the_verdict(tmp_path: Path):
     assert "new import cycle" in strict["reason"]
 
 
-def test_diff_strict_fails_on_a_new_layer_violation(tmp_path: Path):
+def test_diff_strict_fails_on_a_new_layer_violation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
     project = _make_layered_project(tmp_path, with_violation=False)
+    # Locations are relative to the working directory, so they paste into
+    # `git blame` from where the command ran (#521).
+    monkeypatch.chdir(project)
     snapshot = _snapshot_findings_only(project)
     assert snapshot.exit_code == 0, snapshot.output
     (project / "myapp" / "core" / "api.py").write_text("from myapp.cli.runner import go\n")
@@ -2326,23 +2336,29 @@ def test_diff_with_a_missing_committed_baseline_says_how_to_create_it(tmp_path: 
     assert f"archy snapshot {project} --findings-only --out {missing}" in result.output
 
 
-def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
-    """With SDP enabled, an unrelated new importer shifts instability ratios
-    without changing any finding; the committed file must not change. The
-    fixture really has an SDP violation whose ratio moves."""
+def _make_sdp_ratchet_project(tmp_path: Path) -> Path:
+    """The ratchet project with SDP enabled and an edge that violates it,
+    asserted present in a full snapshot so the fixture cannot drift into a
+    tree with nothing for the SDP handling to act on."""
     project = _make_ratchet_project(tmp_path)
     (project / "archy.yaml").write_text("layers: {}\nforbid: []\nsdp: {enabled: true}\n")
     (project / "pkg" / "d.py").write_text("import pkg.e\n")
     (project / "pkg" / "e.py").write_text("import pkg.a\nimport pkg.b\n")
-    assert _snapshot_findings_only(project).exit_code == 0
-    before = (project / "base.json").read_text()
     full_path = project / "full.json"
     assert (
         CliRunner().invoke(main, ["snapshot", str(project), "--out", str(full_path)]).exit_code == 0
     )
-    assert json.loads(full_path.read_text())["sdp_violations"], (
-        "fixture must carry an SDP violation"
-    )
+    assert json.loads(full_path.read_text())["sdp_violations"], "fixture must carry SDP"
+    return project
+
+
+def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
+    """With SDP enabled, an unrelated new importer shifts instability ratios
+    without changing any finding; the committed file must not change. The
+    fixture really has an SDP violation whose ratio moves."""
+    project = _make_sdp_ratchet_project(tmp_path)
+    assert _snapshot_findings_only(project).exit_code == 0
+    before = (project / "base.json").read_text()
 
     # An existing module gains an importer: ratios move, the module list and
     # every finding stay the same.
@@ -2355,13 +2371,7 @@ def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
 def test_diff_against_a_findings_only_baseline_does_not_invent_sdp_regressions(tmp_path: Path):
     """The committed form records no SDP violations, so comparing them would
     call every current one new on an unchanged tree. The fixture has some."""
-    project = _make_ratchet_project(tmp_path)
-    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nsdp: {enabled: true}\n")
-    (project / "pkg" / "d.py").write_text("import pkg.e\n")
-    (project / "pkg" / "e.py").write_text("import pkg.a\nimport pkg.b\n")
-    full_path = project / "full.json"
-    CliRunner().invoke(main, ["snapshot", str(project), "--out", str(full_path)])
-    assert json.loads(full_path.read_text())["sdp_violations"], "fixture must carry SDP"
+    project = _make_sdp_ratchet_project(tmp_path)
     assert _snapshot_findings_only(project).exit_code == 0
 
     result = _strict(project, "--format", "json")
@@ -2411,3 +2421,52 @@ def test_findings_only_baseline_drops_required_reach_detail(tmp_path: Path):
 
     assert rows, "fixture must carry a required-reach violation"
     assert all("detail" not in row for row in rows)
+
+
+def test_diff_strict_refuses_when_layer_patterns_went_dead(tmp_path: Path):
+    """archy.yaml still exists, but the layer named by the baseline violation
+    now matches nothing; a new violation would otherwise pass unseen."""
+    project = _make_layered_project(tmp_path, with_violation=True)
+    assert _snapshot_findings_only(project).exit_code == 0
+    (project / "archy.yaml").write_text(
+        "layers:\n  core: {modules: [myapp.core]}\n  cli: {modules: [myapp.cli.**]}\n"
+        "forbid:\n  - {from: core, to: cli}\n"
+    )
+
+    result = _strict(project)
+
+    assert result.exit_code == 1
+    assert "no longer cover 1 baseline violation(s)" in result.output
+    assert f"archy snapshot {project} --findings-only --out" in result.output
+
+
+def test_diff_strict_refusal_without_a_module_list_names_the_scan_path(tmp_path: Path):
+    """Run from elsewhere, a path-less `archy snapshot` scans the wrong tree."""
+    project = _make_ratchet_project(tmp_path)
+    payload = json.loads((project / "base.json").read_text())
+    del payload["modules"]
+    (project / "base.json").write_text(json.dumps(payload))
+
+    result = _strict(project)
+
+    assert result.exit_code == 1
+    assert f"archy snapshot {project} --findings-only --out {project / 'base.json'}" in (
+        result.output
+    )
+
+
+def test_diff_strict_locations_are_relative_to_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """Run from a parent of the scanned path, a location relative to the scan
+    root (`pkg/d.py`) would not resolve for `git blame`; `sub/pkg/d.py` does."""
+    (tmp_path / "sub").mkdir()
+    project = _make_ratchet_project(tmp_path / "sub")
+    (project / "pkg" / "d.py").write_text("import pkg.e\n")
+    (project / "pkg" / "e.py").write_text("import pkg.d\n")
+    monkeypatch.chdir(tmp_path)
+
+    result = _strict(project)
+
+    assert result.exit_code == 1
+    assert f"pkg.d -> pkg.e at {Path('sub', 'pkg', 'd.py')}:1" in result.output

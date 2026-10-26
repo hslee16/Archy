@@ -2167,6 +2167,15 @@ def _write_cyclic_ratchet_project(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _add_cycle_and_resnapshot(project: Path) -> None:
+    """Add the `pkg.d <-> pkg.e` cycle, then re-snapshot as an agent told to
+    snapshot at the start of each task would, which overwrites
+    .archy/baseline.json with the new cycle already in it."""
+    (project / "pkg" / "d.py").write_text("import pkg.e\n")
+    (project / "pkg" / "e.py").write_text("import pkg.d\n")
+    _run_snapshot(project)
+
+
 def test_run_diff_strict_needs_a_committed_baseline(tmp_path: Path):
     project = _write_cyclic_ratchet_project(tmp_path)
     _run_snapshot(project)
@@ -2182,9 +2191,7 @@ def test_run_diff_strict_is_not_grandfathered_by_a_resnapshot(tmp_path: Path):
     task re-snapshots after adding a cycle. Strict reads the committed file,
     so the new cycle still fails and is named."""
     project = _write_cyclic_ratchet_project(tmp_path)
-    (project / "pkg" / "d.py").write_text("import pkg.e\n")
-    (project / "pkg" / "e.py").write_text("import pkg.d\n")
-    _run_snapshot(project)  # overwrites .archy/baseline.json with the new cycle in it
+    _add_cycle_and_resnapshot(project)
 
     result = _run_diff(project, baseline="archy-baseline.json", strict=True)
 
@@ -2210,9 +2217,7 @@ def test_run_diff_strict_refuses_the_default_snapshot_file(tmp_path: Path):
     """The agent being gated picks the arguments: naming .archy/baseline.json
     after a re-snapshot would otherwise pass a new cycle."""
     project = _write_cyclic_ratchet_project(tmp_path)
-    (project / "pkg" / "d.py").write_text("import pkg.e\n")
-    (project / "pkg" / "e.py").write_text("import pkg.d\n")
-    _run_snapshot(project)
+    _add_cycle_and_resnapshot(project)
 
     result = _run_diff(project, baseline=".archy/baseline.json", strict=True)
 
