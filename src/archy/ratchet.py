@@ -147,7 +147,15 @@ def evaluate_strict(
     carried_cycles = 0
     for cycle in current_cycles:
         seen = set(cycle.modules) & known
-        if seen and any(seen <= old for old in old_cycles):
+        if len(cycle.modules) == 1:
+            # A self-import is its own kind of cycle: carried only if the
+            # baseline had that exact self-edge, not merely because the module
+            # once sat in a larger cycle that has since been broken.
+            [module] = cycle.modules
+            carried = (module, module) in old_cycle_edges
+        else:
+            carried = bool(seen) and any(seen <= old for old in old_cycles)
+        if carried:
             carried_cycles += 1
             continue
         closing = [e for e in cycle.edges if closes(e.source, e.target)]

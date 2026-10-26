@@ -15,13 +15,17 @@ and so the baseline shape is the same one the CLI emits.
 archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
                   DiffSummaryItem, ReachViolationSetDiff, ScoreDelta,
                   SdpViolationSetDiff, Snapshot, ViolationSetDiff, compute_diff,
-                  read_snapshot, score_delta, snapshot_to_dict, strict_verdict,
-                  take_snapshot, write_snapshot
+                  default_baseline_path, missing_baseline_hint, read_snapshot,
+                  score_delta, snapshot_to_dict, strict_baseline_problem,
+                  strict_verdict, take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
                   DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
                   ScoreDelta -> archy.cli, archy.simulate, compute_diff -> archy.cli,
                   archy.mcp, archy.simulate, bench.delta_direction,
-                  bench.simulate_oracle, read_snapshot -> archy.cli, archy.mcp,
+                  bench.simulate_oracle, default_baseline_path -> archy.cli, archy.mcp,
+                  missing_baseline_hint -> archy.cli, archy.mcp,
+                  read_snapshot -> archy.cli, archy.mcp,
+                  strict_baseline_problem -> archy.cli, archy.mcp,
                   strict_verdict -> archy.cli, archy.mcp, take_snapshot -> archy.cli,
                   archy.mcp, archy.simulate, bench.delta_direction,
                   bench.simulate_oracle, write_snapshot -> archy.cli, archy.mcp
@@ -260,6 +264,39 @@ def compute_diff(baseline: Snapshot, current: Snapshot) -> DiffReport:
     )
 
 
+def default_baseline_path(root: Path) -> Path:
+    """Where `archy snapshot` and the MCP `archy_snapshot` write by default."""
+    return root / ".archy" / "baseline.json"
+
+
+def strict_baseline_problem(root: Path, target: Path) -> str | None:
+    """Why `target` cannot be the `--strict` baseline, or None if it can.
+
+    The default snapshot file is overwritten by every `archy snapshot`, and an
+    agent is told to call `archy_snapshot` at the start of each task. Strict
+    against it would grandfather a new cycle on the next snapshot, so it is
+    refused even when named explicitly.
+    """
+    if target.resolve() == default_baseline_path(root).resolve():
+        return (
+            f"{target} is the file `archy snapshot` overwrites, so it cannot hold a "
+            "ratchet. Commit a separate baseline with `archy snapshot --findings-only "
+            "--out archy-baseline.json` and pass that."
+        )
+    return None
+
+
+def missing_baseline_hint(target: Path, *, committed: bool) -> str:
+    """The fix for a missing baseline. A committed one is created with
+    `--findings-only --out`; a bare `archy snapshot` would write elsewhere."""
+    if committed:
+        return (
+            f"no baseline at {target}; create it with "
+            f"`archy snapshot --findings-only --out {target}`."
+        )
+    return f"no baseline at {target}; run `archy snapshot` first."
+
+
 def strict_verdict(
     baseline: Snapshot, current: Snapshot, *, graph, root: Path, label: str
 ) -> StrictVerdict:
@@ -390,8 +427,13 @@ def _findings_only(payload: dict[str, object]) -> dict[str, object]:
     def ordered(items: object) -> list[object]:
         return sorted((strip(i) for i in _expect_list(items)), key=_canonical)
 
+    # SDP violations carry instability ratios that move whenever any module's
+    # fan-in or fan-out does, so they would churn the committed file on edits
+    # that change no finding. `--strict` does not read them.
     out: dict[str, object] = {
-        key: ordered(value) for key, value in payload.items() if key not in ("modules", "cycles")
+        key: ordered(value)
+        for key, value in payload.items()
+        if key not in ("modules", "cycles", "sdp_violations")
     }
     out["modules"] = sorted(str(m) for m in _expect_list(payload["modules"]))
     out["cycles"] = sorted(

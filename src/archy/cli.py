@@ -53,7 +53,10 @@ from archy.diff import (
     DiffSummary,
     ScoreDelta,
     compute_diff,
+    default_baseline_path,
+    missing_baseline_hint,
     read_snapshot,
+    strict_baseline_problem,
     strict_verdict,
     take_snapshot,
     write_snapshot,
@@ -1070,10 +1073,14 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: b
             "`archy snapshot --findings-only --out archy-baseline.json`); it never reads "
             ".archy/baseline.json, which `archy snapshot` overwrites."
         )
-    target = baseline_path or (path / ".archy" / "baseline.json")
+    target = baseline_path or default_baseline_path(path)
+    if strict and (problem := strict_baseline_problem(path, target)):
+        raise click.UsageError(problem)
     baseline = read_snapshot(target)
     if baseline is None:
-        raise click.ClickException(f"no baseline at {target}; run `archy snapshot {path}` first.")
+        raise click.ClickException(
+            missing_baseline_hint(target, committed=baseline_path is not None)
+        )
     g, full = _load_graph_pair(path)
     current = take_snapshot(g, config_path=discover_config(path), reach_graph=full)
     result = compute_diff(baseline, current)

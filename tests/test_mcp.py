@@ -57,8 +57,6 @@ from archy.simulate import EdgeSpec, SimulateReport
 def _internal_graph(root: Path):
     # Build the same internal-only graph the MCP layer hands to callers,
     # for parity assertions against graph_to_dict.
-    from archy.graph import build_graph
-
     g = build_graph(root)
     external = {n for n, d in g.nodes(data=True) if d.get("external")}
     g.remove_nodes_from(external)
@@ -838,7 +836,6 @@ def test_snapshot_brief_mirrors_score_and_acyclic_invariant(acyclic_project: Pat
     derived independently here, by building the graph and calling
     `compute_score` directly, which is the shape a parity assertion needs.
     """
-    from archy.graph import build_graph
     from archy.score import compute_score
 
     payload = _run_snapshot(acyclic_project)
@@ -872,8 +869,6 @@ def test_snapshot_brief_load_bearing_ranked_and_capped(tmp_path: Path):
     (pkg / "m5.py").write_text("from pkg.m4 import a\nfrom pkg.m2 import c\n")
     (pkg / "m6.py").write_text("from pkg.m5 import a\n")
     (pkg / "m7.py").write_text("from pkg.m6 import a\nfrom pkg.m3 import d\n")
-
-    from archy.graph import build_graph
     from archy.risk import compute_edit_risk
 
     all_risks = compute_edit_risk(build_graph(tmp_path))
@@ -963,16 +958,12 @@ def test_simulate_tool_input_schema_uses_from_to_aliases():
 
 
 def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
-    from archy.mcp import DiffErrorPayload
-
     result = _run_diff(acyclic_project)
     assert isinstance(result, DiffErrorPayload)
     assert "no baseline" in result.error
 
 
 def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
-    from archy.diff import DiffReport
-
     _run_snapshot(acyclic_project)
     result = _run_diff(acyclic_project)
     assert isinstance(result, DiffReport)
@@ -2213,3 +2204,17 @@ def test_run_diff_strict_passes_on_carried_findings(tmp_path: Path):
     assert isinstance(result, DiffReport)
     assert result.model_dump()["strict"]["passed"] is True
     assert result.score_delta is None  # findings-only baseline: no score to compare
+
+
+def test_run_diff_strict_refuses_the_default_snapshot_file(tmp_path: Path):
+    """The agent being gated picks the arguments: naming .archy/baseline.json
+    after a re-snapshot would otherwise pass a new cycle."""
+    project = _write_cyclic_ratchet_project(tmp_path)
+    (project / "pkg" / "d.py").write_text("import pkg.e\n")
+    (project / "pkg" / "e.py").write_text("import pkg.d\n")
+    _run_snapshot(project)
+
+    result = _run_diff(project, baseline=".archy/baseline.json", strict=True)
+
+    assert isinstance(result, DiffErrorPayload)
+    assert "the file `archy snapshot` overwrites" in result.error

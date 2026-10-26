@@ -172,3 +172,22 @@ def test_passed_and_reason_survive_model_dump():
     assert dumped["passed"] is False
     assert "new import cycle" in dumped["reason"]
     assert "0 cycle(s) and 0 violation(s) carried" in dumped["reason"]
+
+
+def test_a_new_self_import_in_a_formerly_cyclic_module_fails():
+    """`a` sat in the baseline `a <-> b` cycle; that cycle was broken and `a`
+    now imports itself. Its only member is in a baseline cycle, so the subset
+    test alone would carry it, but the self-edge is new."""
+    self_loop = Cycle(modules=("a",), edges=(CycleEdge(source="a", target="a", lines=(1,)),))
+    baseline = _cycle(("a", "b"), ("b", "a"))
+
+    verdict = _verdict([baseline], [self_loop])
+
+    assert verdict.passed is False
+    assert verdict.findings[0].modules == ("a",)
+
+
+def test_a_self_import_the_baseline_had_is_carried():
+    self_loop = Cycle(modules=("a",), edges=(CycleEdge(source="a", target="a", lines=(1,)),))
+
+    assert _verdict([self_loop], [self_loop]).passed is True

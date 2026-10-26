@@ -528,9 +528,9 @@ archy snapshot . --findings-only --out archy-baseline.json
 git add archy-baseline.json
 ```
 
-Then use the `archy-no-new-cycles` hook, or `archy diff . --strict --baseline archy-baseline.json` in CI (the Action's `command: diff`). It exits 1 on a cycle or `archy.yaml` layer violation the baseline does not carry, names the closing import edges as `path:line`, and never fails on score. The file is sorted and has no score or line numbers, so regenerating it after paying down debt gives a reviewable diff.
+Then use the `archy-no-new-cycles` hook, or `archy diff . --strict --baseline archy-baseline.json` in CI (the Action's `command: diff`). It exits 1 on a cycle or `archy.yaml` layer violation the baseline does not carry, names the closing import edges as `path:line`, and never fails on score. The file is sorted and has no score, line numbers or SDP violations (their instability ratios move with unrelated edits), so regenerating it after paying down debt gives a reviewable diff.
 
-What counts as new: a cycle among modules outside every baseline cycle, an existing module pulled into a cycle, or two baseline cycles merged. Shrinking or splitting a cycle passes, and so do renames, a new file joining an existing cycle, and a new import between two modules already in the same cycle. `--strict` always needs `--baseline`: it never reads `.archy/baseline.json`, which `archy snapshot` and the MCP `archy_snapshot` tool overwrite. New findings are rare on a mature codebase (0.66% of commits in archy's own measurement), so treat this as cheap insurance that keeps the gate installed, not as a regression detector.
+What counts as new: a cycle among modules outside every baseline cycle, an existing module pulled into a cycle, or two baseline cycles merged. Shrinking or splitting a cycle passes, and so do renames, a new file joining an existing cycle, and a new import between two modules already in the same cycle. `--strict` always needs `--baseline` and refuses `.archy/baseline.json` even when named, because `archy snapshot` and the MCP `archy_snapshot` tool overwrite it. New findings are rare on a mature codebase (0.66% of commits in archy's own measurement), so treat this as cheap insurance that keeps the gate installed, not as a regression detector.
 
 ## Layer rules (`archy check`)
 

@@ -128,7 +128,10 @@ from archy.cycles import Cycle, find_cycles
 from archy.diff import (
     DiffReport,
     compute_diff,
+    default_baseline_path,
+    missing_baseline_hint,
     read_snapshot,
+    strict_baseline_problem,
     strict_verdict,
     take_snapshot,
     write_snapshot,
@@ -1522,9 +1525,13 @@ def _run_diff(
                 "which archy_snapshot overwrites."
             )
         )
-    target = path / ".archy" / "baseline.json" if baseline is None else path / baseline
+    target = default_baseline_path(path) if baseline is None else path / baseline
+    if strict and (problem := strict_baseline_problem(path, target)):
+        return DiffErrorPayload(error=problem)
     snapshot = read_snapshot(target)
     if snapshot is None:
+        if baseline is not None:
+            return DiffErrorPayload(error=missing_baseline_hint(target, committed=True))
         return DiffErrorPayload(
             error=f"no baseline at {target}; call archy_snapshot first to capture one."
         )

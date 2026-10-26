@@ -2179,12 +2179,16 @@ def _make_ratchet_project(tmp_path: Path) -> Path:
         (pkg / f"{name}.py").write_text(body)
     (pkg / "d.py").write_text("")
     (pkg / "e.py").write_text("")
-    result = CliRunner().invoke(
-        main,
-        ["snapshot", str(tmp_path), "--findings-only", "--out", str(tmp_path / "base.json")],
-    )
+    result = _snapshot_findings_only(tmp_path)
     assert result.exit_code == 0, result.output
     return tmp_path
+
+
+def _snapshot_findings_only(project: Path):
+    return CliRunner().invoke(
+        main,
+        ["snapshot", str(project), "--findings-only", "--out", str(project / "base.json")],
+    )
 
 
 def _strict(project: Path, *extra: str):
@@ -2235,15 +2239,8 @@ def test_diff_strict_json_carries_the_verdict(tmp_path: Path):
 
 def test_diff_strict_fails_on_a_new_layer_violation(tmp_path: Path):
     project = _make_layered_project(tmp_path, with_violation=False)
-    assert (
-        CliRunner()
-        .invoke(
-            main,
-            ["snapshot", str(project), "--findings-only", "--out", str(project / "base.json")],
-        )
-        .exit_code
-        == 0
-    )
+    snapshot = _snapshot_findings_only(project)
+    assert snapshot.exit_code == 0, snapshot.output
     (project / "myapp" / "core" / "api.py").write_text("from myapp.cli.runner import go\n")
 
     result = _strict(project)
@@ -2294,9 +2291,64 @@ def test_findings_only_snapshot_is_stable_across_unrelated_edits(tmp_path: Path)
     assert before.endswith("\n")
 
     (project / "pkg" / "a.py").write_text('"""Docstring."""\n\nimport pkg.b\n')
-    CliRunner().invoke(
-        main,
-        ["snapshot", str(project), "--findings-only", "--out", str(project / "base.json")],
+    assert _snapshot_findings_only(project).exit_code == 0
+
+    assert (project / "base.json").read_text() == before
+
+
+def test_diff_strict_refuses_the_file_snapshot_overwrites_even_when_named(tmp_path: Path):
+    """Naming `.archy/baseline.json` explicitly would let the next `archy
+    snapshot` grandfather a new cycle, so strict refuses it outright."""
+    project = _make_ratchet_project(tmp_path)
+    CliRunner().invoke(main, ["snapshot", str(project)])
+    default = project / ".archy" / "baseline.json"
+    assert default.exists()
+
+    result = CliRunner().invoke(
+        main, ["diff", str(project), "--strict", "--baseline", str(default)]
     )
+
+    assert result.exit_code == 2
+    assert "the file `archy snapshot` overwrites" in result.output
+
+
+def test_diff_with_a_missing_committed_baseline_says_how_to_create_it(tmp_path: Path):
+    """`archy snapshot` alone writes .archy/baseline.json, which would not fix
+    a missing archy-baseline.json; the hint has to name the right command."""
+    project = _make_ratchet_project(tmp_path)
+    missing = project / "archy-baseline.json"
+
+    result = CliRunner().invoke(
+        main, ["diff", str(project), "--strict", "--baseline", str(missing)]
+    )
+
+    assert result.exit_code == 1
+    assert f"archy snapshot --findings-only --out {missing}" in result.output
+
+
+def test_findings_only_snapshot_is_stable_when_sdp_ratios_move(tmp_path: Path):
+    """With SDP enabled, an unrelated new importer shifts instability ratios
+    without changing any finding; the committed file must not change. The
+    fixture really has an SDP violation whose ratio moves."""
+    project = _make_ratchet_project(tmp_path)
+    (project / "archy.yaml").write_text("layers: {}\nforbid: []\nsdp: {enabled: true}\n")
+    (project / "pkg" / "d.py").write_text("import pkg.e\n")
+    (project / "pkg" / "e.py").write_text("import pkg.a\nimport pkg.b\n")
+    assert _snapshot_findings_only(project).exit_code == 0
+    before = (project / "base.json").read_text()
+    full = json.loads(
+        CliRunner()
+        .invoke(
+            main,
+            ["diff", str(project), "--format", "json", "--baseline", str(project / "base.json")],
+        )
+        .output
+    )
+    assert full["sdp_violations"]["added"], "fixture must carry an SDP violation"
+
+    # An existing module gains an importer: ratios move, the module list and
+    # every finding stay the same.
+    (project / "pkg" / "__init__.py").write_text("import pkg.e\n")
+    assert _snapshot_findings_only(project).exit_code == 0
 
     assert (project / "base.json").read_text() == before
