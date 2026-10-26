@@ -177,19 +177,61 @@ def test_derive_never_resolves_a_target_to_a_single_segment(tmp_path: Path):
     entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
 
     assert entrypoints == {}
-    assert len(errors) == 1
+    assert errors == ()
 
 
-def test_derive_reports_an_unresolved_target_inside_the_scan(tmp_path: Path):
-    """Dropping it silently would shrink the set the rule binds."""
-    _write(tmp_path, "pyproject.toml", '[project.scripts]\nx = "missing.cli:main"\n')
+@pytest.mark.parametrize(
+    "target",
+    [
+        pytest.param("tools.gen:main", id="excluded-directory"),
+        pytest.param("alembic.config:main", id="re-exported-third-party-tool"),
+    ],
+)
+def test_derive_skips_a_target_outside_the_scan_without_refusing(tmp_path: Path, target: str):
+    """Refusing here left the rule permanently unable to pass: nothing in
+    archy.yaml can make a third-party module or an excluded directory scanned."""
+    _write(tmp_path, "pyproject.toml", f'[project.scripts]\nx = "{target}"\n')
     modules = _modules(tmp_path, "pkg.cli")
 
     entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
 
     assert entrypoints == {}
-    [error] = errors
-    assert "script `x` targets 'missing.cli', which matches no scanned module" in error
+    assert errors == ()
+
+
+def test_derive_does_not_rebind_a_stale_target_of_a_scanned_package(tmp_path: Path):
+    """`myproj` is a real scanned package, so `myproj.tools.cli` is stale, not a
+    namespace spelling; stripping `myproj.` would blame an unrelated `tools.cli`."""
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nmyproj = "myproj.tools.cli:main"\n')
+    modules = _modules(tmp_path, "myproj.boot", "tools.cli")
+
+    entrypoints, _ = derive_entrypoints(tmp_path, guarded=(), modules=modules)
+
+    assert entrypoints == {}
+
+
+def test_derive_without_a_repository_marker_reads_nothing_above_the_scan(tmp_path: Path):
+    """An exported tree with no VCS directory: a parent's pyproject.toml is not
+    this project's, so it neither binds modules nor breaks the rule."""
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nother = "unrelated.app.cli:main"\n')
+    project = tmp_path / "proj"
+    modules = _modules(project, "app.cli")
+
+    assert derive_entrypoints(project, guarded=(), modules=modules) == ({}, ())
+
+    _write(tmp_path, "pyproject.toml", "[project.scripts\n")
+    assert derive_entrypoints(project, guarded=(), modules=modules) == ({}, ())
+
+
+@pytest.mark.parametrize("marker", [".git", ".hg", ".jj", ".svn", ".sl"])
+def test_derive_climbs_to_any_repository_marker(tmp_path: Path, marker: str):
+    (tmp_path / marker).mkdir()
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\npkg-cli = "pkg.cli:main"\n')
+    modules = _modules(tmp_path / "src", "pkg.cli")
+
+    entrypoints, _ = derive_entrypoints(tmp_path / "src", guarded=(), modules=modules)
+
+    assert entrypoints == {"pkg.cli": "console script `pkg-cli` in pyproject.toml"}
 
 
 def test_derive_ignores_an_unresolved_target_above_the_scan(tmp_path: Path):

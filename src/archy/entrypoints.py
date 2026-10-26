@@ -53,12 +53,14 @@ def derive_entrypoints(
     src` must see the scripts the project root declares, and a monorepo's
     sub-projects each carry their own.
 
-    `errors` is non-empty when a `pyproject.toml` cannot be read as TOML, or
-    when one inside the scan root names a script target that matches no
-    scanned module. Both are reported rather than swallowed, because either
-    shrinks `@entrypoints` and would let a rule pass over exactly the modules
-    it was meant to bind. A target named by a `pyproject.toml` ABOVE the scan
-    root may legitimately live outside the scan, so it is not an error.
+    A target that matches no scanned module is skipped, not reported. It is
+    usually legitimate: an `exclude:`d directory, a script that re-exports a
+    third-party tool (`alembic.config:main`), or a test fixture's own
+    pyproject. Refusing the verdict there left the rule with no way to pass.
+
+    `errors` is non-empty when a `pyproject.toml` that is read cannot be parsed
+    as TOML. That is reported rather than swallowed, because dropping its
+    script targets would let a rule pass over exactly the modules they name.
     """
     found: dict[str, str] = {}
     for qualname in sorted(guarded):
@@ -68,56 +70,67 @@ def derive_entrypoints(
         if qualname == "__main__" or qualname.endswith(".__main__"):
             found.setdefault(qualname, MAIN_MODULE)
 
-    scan_root = root.resolve()
+    top_level = {qualname.split(".", 1)[0] for qualname in modules}
     errors: list[str] = []
-    for pyproject in _pyprojects(modules.values()):
+    for pyproject in _pyprojects(root, modules.values()):
         targets, error = _script_targets(pyproject)
         if error:
             errors.append(error)
             continue
-        inside_scan = pyproject.parent.is_relative_to(scan_root)
         for name, target in targets:
-            module = _resolve_target(target, modules)
+            module = _resolve_target(target, modules, top_level)
             if module is not None:
                 found.setdefault(module, f"console script `{name}` in {pyproject.name}")
-            elif inside_scan:
-                errors.append(
-                    f"{pyproject}: script `{name}` targets {target!r}, which matches no "
-                    "scanned module (if the package sits under a directory without "
-                    "`__init__.py`, declare it with `roots:` in archy.yaml)"
-                )
     return dict(sorted(found.items())), tuple(errors)
 
 
-def _pyprojects(paths: Iterable[Path]) -> list[Path]:
+# Directories that mark a repository root. `.git` alone missed Mercurial,
+# Jujutsu, Subversion and Sapling checkouts, where the walk then climbed to `/`.
+_REPO_MARKERS = (".git", ".hg", ".jj", ".svn", ".sl")
+
+
+def _pyprojects(root: Path, paths: Iterable[Path]) -> list[Path]:
     """Every `pyproject.toml` from each module's directory up to the repo root.
 
-    The walk stops at the first directory holding `.git`, so a stray
-    `pyproject.toml` in a home directory never joins a project's scan.
+    The repo root is the nearest directory at or above the scan root holding a
+    VCS marker. With none (an exported tree, a Docker build context without
+    `.git`), the scan root itself is the ceiling: climbing to `/` would let a
+    stray `pyproject.toml` in a parent directory bind or break this project.
     """
+    scan_root = root.resolve()
+    ceiling = next(
+        (d for d in (scan_root, *scan_root.parents) if _is_repo_root(d)),
+        scan_root,
+    )
     seen: set[Path] = set()
     for path in paths:
         current = path.resolve().parent
-        while current not in seen:
+        while current not in seen and current.is_relative_to(ceiling):
             seen.add(current)
-            if (current / ".git").exists() or current.parent == current:
-                break
             current = current.parent
     return sorted(d / "pyproject.toml" for d in seen if (d / "pyproject.toml").is_file())
 
 
-def _resolve_target(target: str, modules: Mapping[str, Path]) -> str | None:
+def _is_repo_root(directory: Path) -> bool:
+    return any((directory / marker).exists() for marker in _REPO_MARKERS)
+
+
+def _resolve_target(target: str, modules: Mapping[str, Path], top_level: set[str]) -> str | None:
     """The internal qualname a dotted script target refers to, if any.
 
-    An exact match first. Failing that, drop leading segments while at least
-    two remain: under a namespace package (no `__init__.py` in `acme/`) the
-    installer imports `acme.tool.cli` where archy names the same file
-    `tool.cli`. Two segments is the floor so a bare `cli` never captures
-    `other.cli`.
+    An exact match first. Failing that, and only when the target's first
+    segment is NOT one of this project's own top-level names, drop leading
+    segments while at least two remain: under a namespace package (no
+    `__init__.py` in `acme/`) the installer imports `acme.tool.cli` where archy
+    names the same file `tool.cli`. If `acme` IS a scanned package, the target
+    is simply stale, and stripping it would blame an unrelated `tool.cli`. Two
+    segments is the floor so a bare `cli` never captures `other.cli`.
     """
     if target in modules:
         return target
     parts = target.split(".")
+    if parts[0] in top_level:
+        return None
     for start in range(1, len(parts) - 1):
         candidate = ".".join(parts[start:])
         if candidate in modules:

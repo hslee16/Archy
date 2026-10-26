@@ -704,7 +704,8 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
                     detail=(
                         f"rule cannot fire: no entrypoint was derived{scope}. An entrypoint is a "
                         'module with a top-level `if __name__ == "__main__":` guard, a '
-                        "`__main__.py`, or a script target in pyproject.toml at the scan root."
+                        "`__main__.py`, or a script target in a pyproject.toml between the "
+                        "scanned modules and the repository root."
                     ),
                 )
             )
