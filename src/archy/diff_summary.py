@@ -228,17 +228,26 @@ def _collect_regressions(
         )
     for v in diff.required_violations.added:
         modules = _reach_modules(v.module)
-        # A dead rule has no module; name the rule, with its `within` scope.
-        subject = v.module or v.rule.describe_source()
+        if v.module is None:
+            # The whole rule went dead (a pattern matches nothing, or the
+            # entrypoints could not be derived). Nothing "stopped reaching"
+            # anything, so the import-removal question would send the reader
+            # after the wrong cause; the detail names the real one.
+            rule = f"{v.rule.describe_source()} must reach {v.rule.must_reach}"
+            description = f"required-reach rule can no longer be checked ({rule}): {v.detail}"
+            prompt = f"The rule `{rule}` is not being evaluated. Fix what the detail names first."
+        else:
+            description = (
+                f"new required-reach violation: {v.module} no longer reaches {v.rule.must_reach}"
+            )
+            prompt = _reach_added_prompt(v.module, v.rule.must_reach, v.rule.reason, hypothetical)
         items.append(
             DiffSummaryItem(
                 kind="required_reach_violation_added",
                 risk=_max_module_risk(modules, risk),
                 modules=modules,
-                description=(
-                    f"new required-reach violation: {subject} no longer reaches {v.rule.must_reach}"
-                ),
-                prompt=_reach_added_prompt(subject, v.rule.must_reach, v.rule.reason, hypothetical),
+                description=description,
+                prompt=prompt,
             )
         )
     for name in _COMPONENT_NAMES:
@@ -294,17 +303,22 @@ def _collect_improvements(
         )
     for v in diff.required_violations.resolved:
         modules = _reach_modules(v.module)
-        # A dead rule has no module; name the rule, with its `within` scope.
-        subject = v.module or v.rule.describe_source()
+        if v.module is None:
+            rule = f"{v.rule.describe_source()} must reach {v.rule.must_reach}"
+            description = f"required-reach rule can be checked again ({rule})"
+            prompt = f"The rule `{rule}` is evaluated again; read its current violations."
+        else:
+            description = (
+                f"required-reach violation resolved: {v.module} now reaches {v.rule.must_reach}"
+            )
+            prompt = _reach_resolved_prompt(v.module, v.rule.must_reach, hypothetical)
         items.append(
             DiffSummaryItem(
                 kind="required_reach_violation_resolved",
                 risk=_max_module_risk(modules, risk),
                 modules=modules,
-                description=(
-                    f"required-reach violation resolved: {subject} now reaches {v.rule.must_reach}"
-                ),
-                prompt=_reach_resolved_prompt(subject, v.rule.must_reach, hypothetical),
+                description=description,
+                prompt=prompt,
             )
         )
     for name in _COMPONENT_NAMES:

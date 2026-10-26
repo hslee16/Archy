@@ -258,7 +258,7 @@ def assemble_graph(
     entrypoints, entrypoint_errors = derive_entrypoints(
         root,
         guarded=(m.qualname for m in modules if parse_results[m.qualname].has_main_guard),
-        internal=qualname_set,
+        modules={m.qualname: m.path for m in modules},
     )
     graph.graph["entrypoints"] = entrypoints
     graph.graph["entrypoint_errors"] = entrypoint_errors

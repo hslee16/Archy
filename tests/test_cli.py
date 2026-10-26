@@ -22,12 +22,14 @@ from archy.diff import (
     CycleSetDiff,
     DiffReport,
     DiffSummary,
+    ReachViolationSetDiff,
     ScoreDelta,
     SdpViolationSetDiff,
     ViolationSetDiff,
 )
 from archy.duplicates import DuplicateGroup, DuplicateMember
 from archy.hotspots import Hotspot
+from archy.layers import ReachViolation, RequiredRule
 from archy.simulate import AppliedDelta, PropagationDelta, SimulateReport
 
 
@@ -424,6 +426,26 @@ def test_check_entrypoints_exit_code_tracks_the_worker_import(tmp_path: Path):
     assert "app.worker does not transitively reach" in result.output
     assert 'It is an entrypoint: top-level `if __name__ == "__main__":` guard.' in result.output
     assert "tests.test_worker" not in result.output
+
+
+def test_check_of_a_subdirectory_still_sees_the_root_console_scripts(tmp_path: Path):
+    """`archy check src` and `archy check .` must agree: the console script is
+    declared at the repository root, above the scanned directory."""
+    (tmp_path / ".git").mkdir()
+    pkg = tmp_path / "src" / "pkg"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "registry.py").write_text("")
+    (pkg / "cli.py").write_text("def main():\n    pass\n")
+    (tmp_path / "pyproject.toml").write_text('[project.scripts]\npkg-cli = "pkg.cli:main"\n')
+    (tmp_path / "archy.yaml").write_text(
+        "required:\n  - source: '@entrypoints'\n    must_reach: pkg.registry\n"
+    )
+
+    for scanned in (tmp_path, tmp_path / "src"):
+        result = CliRunner().invoke(main, ["check", str(scanned)])
+        assert result.exit_code == 1, scanned
+        assert "pkg.cli does not transitively reach" in result.output
 
 
 def test_check_json_carries_the_entrypoints_rule_scope(tmp_path: Path):
@@ -2063,6 +2085,25 @@ def test_diff_text_lists_every_score_axis_in_order():
         "",
         "# violations: +0 added, -0 resolved",
     ]
+
+
+def test_diff_text_names_a_revived_entrypoints_rule_with_its_scope():
+    """A dead rule coming back has no module, so the line names the rule, with
+    `within`, or two scoped rules read alike. It is not "now reaches": nothing
+    started reaching anything; the rule became checkable."""
+    rule = RequiredRule(source="@entrypoints", must_reach="core.registry", within="app.**")
+    report = DiffReport(
+        score_delta=_DELTA,
+        cycles=CycleSetDiff(),
+        violations=ViolationSetDiff(),
+        required_violations=ReachViolationSetDiff(
+            resolved=(ReachViolation(rule=rule, module=None, detail="dead"),)
+        ),
+    )
+
+    assert "  - rule can be checked again: @entrypoints within app.** must reach core.registry" in (
+        _diff_to_text(report).splitlines()
+    )
 
 
 def test_simulate_text_lists_every_score_axis_then_blast_radius():

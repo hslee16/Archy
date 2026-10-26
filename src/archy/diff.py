@@ -441,9 +441,17 @@ def _reach_violation_set_diff(
 
     baseline_keys = {_key(v) for v in baseline}
     current_keys = {_key(v) for v in current}
+    # A rule that is dead NOW (one `module=None` row) evaluated no module, so
+    # its baseline failures are unknown, not fixed. Reporting them as resolved
+    # would tell the reader an unreadable pyproject.toml repaired the code. The
+    # reverse needs no guard: a rule coming back to life reports its failures as
+    # added, which over-reports and is the safe direction.
+    dead_now = {_key(v)[:3] for v in current if v.module is None}
     return ReachViolationSetDiff(
         added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
+        resolved=tuple(
+            v for v in baseline if _key(v) not in current_keys and _key(v)[:3] not in dead_now
+        ),
     )
 
 

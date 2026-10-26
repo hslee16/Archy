@@ -22,6 +22,11 @@ from archy.parser import parse_source
         "if __name__ == '__main__':\n    main()\n",
         'if "__main__" == __name__:\n    main()\n',
         'import sys\n\ndef main():\n    pass\n\nif __name__ == "__main__":\n    sys.exit(main())\n',
+        'if (__name__ == "__main__"):\n    main()\n',
+        'if __name__ == "__main__" and not DEBUG:\n    main()\n',
+        'if ready and (__name__ == "__main__"):\n    main()\n',
+        'if __name__ == r"__main__":\n    main()\n',
+        'if __name__ == """__main__""":\n    main()\n',
     ],
 )
 def test_parser_detects_a_top_level_main_guard(source: str):
@@ -38,6 +43,12 @@ def test_parser_detects_a_top_level_main_guard(source: str):
         'if __name__ != "__main__":\n    pass\n',
         'if __name__ == "main":\n    pass\n',
         'if name == "__main__":\n    pass\n',
+        # `or` runs the body on import too; bytes and f-strings never equal a
+        # module name; the last compares against the value `'__main__'`.
+        'if __name__ == "__main__" or x:\n    pass\n',
+        'if __name__ == b"__main__":\n    pass\n',
+        'if __name__ == f"__main__":\n    pass\n',
+        "if __name__ == \"'__main__'\":\n    pass\n",
         "x = 1\n",
     ],
 )
@@ -77,35 +88,129 @@ def test_derive_names_each_signal_with_its_reason(tmp_path: Path):
     }
 
 
-def test_derive_reads_poetry_scripts_and_skips_the_file_form(tmp_path: Path):
-    """Poetry's table form names a FILE, so it has no module to bind."""
+def _modules(root: Path, *qualnames: str) -> dict[str, Path]:
+    """Real files for `qualnames`, laid out as packages under `root`."""
+    out: dict[str, Path] = {}
+    for qualname in qualnames:
+        path = root.joinpath(*qualname.split(".")).with_suffix(".py")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+        out[qualname] = path
+    return out
+
+
+def test_derive_reads_both_poetry_script_forms_and_skips_files(tmp_path: Path):
+    """Poetry's table form is a console script unless `type = "file"`."""
     _write(
         tmp_path,
         "pyproject.toml",
         "[tool.poetry.scripts]\n"
         'run = "app.cli:main"\n'
+        'extra = { reference = "app.extra:main", type = "console", extras = ["x"] }\n'
         'tool = { reference = "bin/tool.sh", type = "file" }\n',
     )
+    modules = _modules(tmp_path, "app.cli", "app.extra")
 
-    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), internal=("app", "app.cli"))
+    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
 
-    assert entrypoints == {"app.cli": "console script `run` in pyproject.toml"}
+    assert entrypoints == {
+        "app.cli": "console script `run` in pyproject.toml",
+        "app.extra": "console script `extra` in pyproject.toml",
+    }
     assert errors == ()
 
 
-def test_derive_ignores_a_script_target_outside_the_scan(tmp_path: Path):
-    _write(tmp_path, "pyproject.toml", '[project.scripts]\nother = "elsewhere.cli:main"\n')
+def test_derive_reads_the_project_pyproject_when_scanning_a_subdirectory(tmp_path: Path):
+    """`archy check src` must see what the repository root declares."""
+    (tmp_path / ".git").mkdir()
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\npkg-cli = "pkg.cli:main"\n')
+    modules = _modules(tmp_path / "src", "pkg.cli")
 
-    entrypoints, _ = derive_entrypoints(tmp_path, guarded=(), internal=("app.cli",))
+    entrypoints, errors = derive_entrypoints(tmp_path / "src", guarded=(), modules=modules)
+
+    assert entrypoints == {"pkg.cli": "console script `pkg-cli` in pyproject.toml"}
+    assert errors == ()
+
+
+def test_derive_reads_each_monorepo_subproject(tmp_path: Path):
+    _write(tmp_path, "packages/a/pyproject.toml", '[project.scripts]\nalpha = "alpha.cli:main"\n')
+    _write(tmp_path, "packages/b/pyproject.toml", '[project.scripts]\nbeta = "beta.cli:main"\n')
+    modules = {
+        **_modules(tmp_path / "packages" / "a", "alpha.cli"),
+        **_modules(tmp_path / "packages" / "b", "beta.cli"),
+    }
+
+    entrypoints, _ = derive_entrypoints(tmp_path, guarded=(), modules=modules)
+
+    assert set(entrypoints) == {"alpha.cli", "beta.cli"}
+
+
+def test_derive_stops_at_the_repository_root(tmp_path: Path):
+    """A pyproject.toml above `.git` belongs to some other project."""
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nstray = "pkg.cli:main"\n')
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    modules = _modules(repo, "pkg.cli")
+
+    entrypoints, errors = derive_entrypoints(repo, guarded=(), modules=modules)
 
     assert entrypoints == {}
+    assert errors == ()
+
+
+def test_derive_resolves_a_namespace_package_target(tmp_path: Path):
+    """No `acme/__init__.py`: the installer imports `acme.tool.cli`, archy
+    names the file `tool.cli`."""
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nacme-tool = "acme.tool.cli:main"\n')
+    modules = _modules(tmp_path, "tool.cli")
+
+    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
+
+    assert entrypoints == {"tool.cli": "console script `acme-tool` in pyproject.toml"}
+    assert errors == ()
+
+
+def test_derive_never_resolves_a_target_to_a_single_segment(tmp_path: Path):
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nx = "other.cli:main"\n')
+    modules = _modules(tmp_path, "cli")
+
+    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
+
+    assert entrypoints == {}
+    assert len(errors) == 1
+
+
+def test_derive_reports_an_unresolved_target_inside_the_scan(tmp_path: Path):
+    """Dropping it silently would shrink the set the rule binds."""
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nx = "missing.cli:main"\n')
+    modules = _modules(tmp_path, "pkg.cli")
+
+    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
+
+    assert entrypoints == {}
+    [error] = errors
+    assert "script `x` targets 'missing.cli', which matches no scanned module" in error
+
+
+def test_derive_ignores_an_unresolved_target_above_the_scan(tmp_path: Path):
+    """Scanning one package of a project: the root's other scripts are not
+    this scan's business."""
+    (tmp_path / ".git").mkdir()
+    _write(tmp_path, "pyproject.toml", '[project.scripts]\nother = "elsewhere.cli:main"\n')
+    modules = _modules(tmp_path / "src", "pkg.cli")
+
+    entrypoints, errors = derive_entrypoints(tmp_path / "src", guarded=(), modules=modules)
+
+    assert entrypoints == {}
+    assert errors == ()
 
 
 def test_derive_prefers_the_guard_when_signals_overlap(tmp_path: Path):
     """A console-script target that also has a guard keeps one stable reason."""
     _write(tmp_path, "pyproject.toml", '[project.scripts]\napp = "app.cli:main"\n')
+    modules = _modules(tmp_path, "app.cli")
 
-    entrypoints, _ = derive_entrypoints(tmp_path, guarded=("app.cli",), internal=("app.cli",))
+    entrypoints, _ = derive_entrypoints(tmp_path, guarded=("app.cli",), modules=modules)
 
     assert entrypoints == {"app.cli": MAIN_GUARD}
 
@@ -114,8 +219,9 @@ def test_derive_reports_an_unreadable_pyproject(tmp_path: Path):
     """Swallowing the error would shrink the set and let a rule pass over the
     very modules the scripts table names."""
     _write(tmp_path, "pyproject.toml", "[project.scripts\n")
+    modules = _modules(tmp_path, "app.cli")
 
-    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), internal=("app.cli",))
+    entrypoints, errors = derive_entrypoints(tmp_path, guarded=(), modules=modules)
 
     assert entrypoints == {}
     assert len(errors) == 1
@@ -123,7 +229,10 @@ def test_derive_reports_an_unreadable_pyproject(tmp_path: Path):
 
 
 def test_derive_without_a_pyproject_is_not_an_error(tmp_path: Path):
-    entrypoints, errors = derive_entrypoints(tmp_path, guarded=("a",), internal=("a",))
+    (tmp_path / ".git").mkdir()
+    modules = _modules(tmp_path, "a")
+
+    entrypoints, errors = derive_entrypoints(tmp_path, guarded=("a",), modules=modules)
 
     assert entrypoints == {"a": MAIN_GUARD}
     assert errors == ()

@@ -2746,7 +2746,11 @@ def _diff_to_text(result: DiffReport) -> str:
         for v in reach.added:
             lines.append(f"  + {v.detail}")
         for v in reach.resolved:
-            lines.append(f"  - {v.module or v.rule.source} now reaches {v.rule.must_reach}")
+            if v.module is None:
+                rule = f"{v.rule.describe_source()} must reach {v.rule.must_reach}"
+                lines.append(f"  - rule can be checked again: {rule}")
+            else:
+                lines.append(f"  - {v.module} now reaches {v.rule.must_reach}")
     return "\n".join(lines)
 
 

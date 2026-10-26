@@ -208,17 +208,60 @@ def _has_main_guard(root, source: bytes) -> bool:
         if stmt.type != "if_statement":
             continue
         cond = stmt.child_by_field_name("condition")
-        if cond is None or cond.type != "comparison_operator" or len(cond.children) != 3:
-            continue
-        left, op, right = cond.children
-        if op.type != "==":
-            continue
-        operands = {(left.type, _node_text(left, source)), (right.type, _node_text(right, source))}
-        if ("identifier", "__name__") in operands and any(
-            kind == "string" and text.strip("'\"") == "__main__" for kind, text in operands
-        ):
+        if cond is not None and _tests_for_main(cond, source):
             return True
     return False
+
+
+def _tests_for_main(node, source: bytes) -> bool:
+    """True if `node` is `__name__ == "__main__"`, possibly parenthesized or
+    one operand of an `and`.
+
+    `(__name__ == "__main__")` and `__name__ == "__main__" and not DEBUG` are
+    both written to run only as a script, so both make the file an entrypoint.
+    `or` is not followed: its body also runs on import, so it says nothing
+    about the file being meant to run directly.
+    """
+    if node.type == "parenthesized_expression" and len(node.children) == 3:
+        return _tests_for_main(node.children[1], source)
+    if node.type == "boolean_operator":
+        operator = node.child_by_field_name("operator")
+        if operator is None or operator.type != "and":
+            return False
+        return any(
+            _tests_for_main(side, source)
+            for side in (node.child_by_field_name("left"), node.child_by_field_name("right"))
+            if side is not None
+        )
+    if node.type != "comparison_operator" or len(node.children) != 3:
+        return False
+    left, op, right = node.children
+    if op.type != "==":
+        return False
+    return (
+        {left.type, right.type} == {"identifier", "string"}
+        and any(
+            side.type == "identifier" and _node_text(side, source) == "__name__"
+            for side in (left, right)
+        )
+        and any(_is_main_literal(side, source) for side in (left, right))
+    )
+
+
+def _is_main_literal(node, source: bytes) -> bool:
+    """True for a plain string literal whose VALUE is `__main__`.
+
+    Compared on the parsed content, not the source text, so `"'__main__'"`
+    (a different value) does not match. Bytes and f-strings never equal a
+    module name at runtime, so only no prefix, `r` or `u` qualifies.
+    """
+    if node.type != "string":
+        return False
+    parts = node.children
+    if len(parts) != 3 or parts[1].type != "string_content":
+        return False
+    prefix = _node_text(parts[0], source).rstrip("'\"").lower()
+    return set(prefix) <= {"r", "u"} and _node_text(parts[1], source) == "__main__"
 
 
 def _handle_import(node, source: bytes) -> list[ImportRef]:

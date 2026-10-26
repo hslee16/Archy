@@ -259,6 +259,27 @@ def test_diff_keys_reach_violations_by_rule_scope(tmp_path: Path):
     assert result.required_violations.resolved == (old,)
 
 
+def test_diff_does_not_resolve_failures_of_a_rule_that_went_dead(tmp_path: Path):
+    """A rule that could not be evaluated now says nothing about its modules.
+
+    Before: `app.worker` fails. After: pyproject.toml is unreadable, so the
+    rule yields one `module=None` row. The worker's failure is unknown, not
+    fixed, so it must not be reported as resolved; the dead row is the news.
+    """
+    rule = RequiredRule(source="@entrypoints", must_reach="core.registry")
+    failing = ReachViolation(rule=rule, module="app.worker", detail="x")
+    dead = ReachViolation(rule=rule, module=None, detail="pyproject.toml could not be read")
+    base = take_snapshot(build_graph(_make_clean(tmp_path)))
+
+    result = compute_diff(
+        base.model_copy(update={"required_violations": (failing,)}),
+        base.model_copy(update={"required_violations": (dead,)}),
+    )
+
+    assert result.required_violations.resolved == ()
+    assert result.required_violations.added == (dead,)
+
+
 def test_snapshot_reads_a_baseline_written_before_required_reach_existed(tmp_path: Path):
     """An old baseline.json has no `required_violations` key at all.
 
