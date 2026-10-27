@@ -1234,13 +1234,15 @@ def _dsm_from_path(
     focus_depth: int,
     package: str | None,
 ):
-    """Load the graph and build the DSM, for `dsm` and `render` (#422).
+    
+    """Load the graph and build the DSM, for `dsm` and `render` (#422)."""
+    # CHANGE THIS LINE:
+    graph = _load_graph(path, internal_only=True)
 
-    The six knobs were written out at both call sites, so adding a seventh
-    meant remembering to edit two places. The `archy.dsm` import stays deferred
-    here, as it was at both sites: it pulls the matrix machinery in only for the
-    two commands that need it.
-    """
+    if focus is not None and focus not in graph:
+        raise click.ClickException(f"no module {focus!r} under {path}")
+    
+    # ... rest of function
     from archy.dsm import GroupBy, Weight, build_dsm
 
     return build_dsm(

@@ -2570,3 +2570,20 @@ def test_diff_strict_locations_are_relative_to_the_working_directory(
 
     assert result.exit_code == 1
     assert f"pkg.d -> pkg.e at {Path('sub', 'pkg', 'd.py')}:1" in result.output
+
+from click.testing import CliRunner
+from archy.cli import main
+
+def test_dsm_unknown_focus_errors(tmp_path):
+    (tmp_path / "mod.py").write_text("import os\n")
+    runner = CliRunner()
+    result = runner.invoke(main, ["dsm", str(tmp_path), "--focus", "nope"])
+    assert result.exit_code == 1
+    assert "no module 'nope'" in result.output
+
+def test_render_dsm_unknown_focus_errors(tmp_path):
+    (tmp_path / "mod.py").write_text("import os\n")
+    runner = CliRunner()
+    result = runner.invoke(main, ["render", "--view=dsm", str(tmp_path), "--focus", "nope"])
+    assert result.exit_code == 1
+    assert "no module 'nope'" in result.output
