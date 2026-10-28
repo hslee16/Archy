@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
-import re
 import sys
 import threading
 from collections.abc import Callable
@@ -27,6 +26,7 @@ ah = importlib.util.module_from_spec(_spec)
 sys.modules["archy_history"] = ah
 _spec.loader.exec_module(ah)
 
+OCT = "history/2026-10.jsonl"
 COMMIT_A = "a" * 40
 COMMIT_B = "b" * 40
 COMMIT_C = "c" * 40
@@ -156,6 +156,15 @@ class FakeGitHub:
     _pending_tree: tuple[str, str] = ("", "")
 
 
+def commits_of(gh: FakeGitHub, path: str = OCT) -> list[str]:
+    """The commit of every row currently stored at `path`, in order."""
+    return [json.loads(x)["commit"] for x in gh.text(path).splitlines()]
+
+
+def puts(gh: FakeGitHub) -> list[tuple[str, str]]:
+    return [c for c in gh.calls if c[0] == "PUT"]
+
+
 @pytest.fixture
 def gh():
     fake = FakeGitHub()
@@ -172,45 +181,45 @@ def test_first_record_creates_an_orphan_branch_holding_one_row(gh: FakeGitHub):
     assert not gh.branch_exists  # the fixture must start without the branch
     result = ah.append_row(client(gh), "archy-history", line, COMMIT_A, sleep=False)
     assert result == "recorded"
-    assert gh.text("history/2026-10.jsonl") == line + "\n"
+    assert gh.text(OCT) == line + "\n"
     [commit] = gh.created_commits
     assert commit["parents"] == []  # an orphan root, sharing no history with the code
     assert "aaaaaaa" in str(commit["message"])
 
 
 def test_a_second_record_appends_in_order_to_the_same_month(gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A, day="01") + "\n")
+    gh.set_file(OCT, row(COMMIT_A, day="01") + "\n")
     assert ah.append_row(client(gh), "b", row(COMMIT_B, day="02"), COMMIT_B, sleep=False) == (
         "recorded"
     )
-    lines = gh.text("history/2026-10.jsonl").splitlines()
+    lines = gh.text(OCT).splitlines()
     assert [json.loads(x)["commit"] for x in lines] == [COMMIT_A, COMMIT_B]
-    assert [c for c in gh.calls if c[0] == "PUT"], "an existing file is updated, not recreated"
+    assert puts(gh), "an existing file is updated, not recreated"
 
 
 def test_the_same_commit_is_not_recorded_twice(gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A) + "\n")
-    before = gh.text("history/2026-10.jsonl")
+    gh.set_file(OCT, row(COMMIT_A) + "\n")
+    before = gh.text(OCT)
     assert ah.append_row(client(gh), "b", row(COMMIT_A), COMMIT_A, sleep=False) == "skipped"
-    assert gh.text("history/2026-10.jsonl") == before
-    assert not [c for c in gh.calls if c[0] == "PUT"]
+    assert gh.text(OCT) == before
+    assert not puts(gh)
 
 
 def test_a_losing_race_reapplies_only_its_own_row_on_a_fresh_read(gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A, day="01") + "\n")
+    gh.set_file(OCT, row(COMMIT_A, day="01") + "\n")
     raced: list[bool] = []
 
     def other_merge_lands_first(g: FakeGitHub) -> None:
         raced.append(True)
-        g.set_file("history/2026-10.jsonl", g.text("history/2026-10.jsonl") + row(COMMIT_B) + "\n")
+        g.set_file(OCT, g.text(OCT) + row(COMMIT_B) + "\n")
 
     gh.before_put = other_merge_lands_first
     result = ah.append_row(client(gh), "b", row(COMMIT_C, day="03"), COMMIT_C, sleep=False)
     assert raced == [True], "the fixture must actually race the write"
     assert result == "recorded"
-    commits = [json.loads(x)["commit"] for x in gh.text("history/2026-10.jsonl").splitlines()]
+    commits = commits_of(gh)
     assert commits == [COMMIT_A, COMMIT_B, COMMIT_C]  # nobody's row lost, none duplicated
-    assert len([c for c in gh.calls if c[0] == "PUT"]) == 2
+    assert len(puts(gh)) == 2
 
 
 def test_a_writer_creating_this_months_file_first_is_a_conflict_not_an_error(gh: FakeGitHub):
@@ -222,32 +231,32 @@ def test_a_writer_creating_this_months_file_first_is_a_conflict_not_an_error(gh:
 
     def other_merge_creates_this_month(g: FakeGitHub) -> None:
         created.append(True)
-        g.set_file("history/2026-10.jsonl", row(COMMIT_B) + "\n")
+        g.set_file(OCT, row(COMMIT_B) + "\n")
 
     gh.before_put = other_merge_creates_this_month
     result = ah.append_row(client(gh), "b", row(COMMIT_C), COMMIT_C, sleep=False)
     assert created == [True], "the fixture must actually race the create"
     assert result == "recorded"
-    commits = [json.loads(x)["commit"] for x in gh.text("history/2026-10.jsonl").splitlines()]
+    commits = commits_of(gh)
     assert commits == [COMMIT_B, COMMIT_C]
 
 
 def test_losing_the_branch_creation_race_retries_as_an_append(gh: FakeGitHub):
     def other_writer_creates_the_branch(g: FakeGitHub) -> None:
-        g.set_file("history/2026-10.jsonl", row(COMMIT_B) + "\n")
+        g.set_file(OCT, row(COMMIT_B) + "\n")
 
     gh.before_ref = other_writer_creates_the_branch
     result = ah.append_row(client(gh), "b", row(COMMIT_C), COMMIT_C, sleep=False)
     assert result == "recorded"
-    commits = [json.loads(x)["commit"] for x in gh.text("history/2026-10.jsonl").splitlines()]
+    commits = commits_of(gh)
     assert commits == [COMMIT_B, COMMIT_C]
 
 
 def test_it_gives_up_loudly_when_every_attempt_conflicts(gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A) + "\n")
+    gh.set_file(OCT, row(COMMIT_A) + "\n")
 
     def always_stale(g: FakeGitHub) -> None:
-        g.set_file("history/2026-10.jsonl", g.text("history/2026-10.jsonl") + row(COMMIT_B) + "\n")
+        g.set_file(OCT, g.text(OCT) + row(COMMIT_B) + "\n")
         g.before_put = always_stale
 
     gh.before_put = always_stale
@@ -257,22 +266,22 @@ def test_it_gives_up_loudly_when_every_attempt_conflicts(gh: FakeGitHub):
 
 def test_a_month_that_would_exceed_the_size_cap_is_not_written(gh: FakeGitHub):
     big = ("x" * 1000 + "\n") * 905
-    gh.set_file("history/2026-10.jsonl", big)
+    gh.set_file(OCT, big)
     with pytest.raises(ah.HistoryError, match="would exceed"):
         ah.append_row(client(gh), "b", row(COMMIT_A), COMMIT_A, sleep=False)
-    assert gh.text("history/2026-10.jsonl") == big
+    assert gh.text(OCT) == big
 
 
 def test_a_new_month_starts_a_new_file_and_reads_come_back_oldest_first(gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A, "2026-10", "30") + "\n")
+    gh.set_file(OCT, row(COMMIT_A, "2026-10", "30") + "\n")
     ah.append_row(client(gh), "b", row(COMMIT_B, "2026-11", "01"), COMMIT_B, sleep=False)
-    assert sorted(gh.files) == ["history/2026-10.jsonl", "history/2026-11.jsonl"]
+    assert sorted(gh.files) == [OCT, "history/2026-11.jsonl"]
     everything = ah.fetch_all(client(gh), "b")
     assert [json.loads(x)["commit"] for x in everything.splitlines()] == [COMMIT_A, COMMIT_B]
 
 
 def test_reading_needs_no_token_and_writing_sends_one(gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A) + "\n")
+    gh.set_file(OCT, row(COMMIT_A) + "\n")
     ah.fetch_all(client(gh, token=None), "b")
     assert set(gh.auth_headers) == {None}
     gh.auth_headers.clear()
@@ -336,9 +345,9 @@ def main_args(project: Path, *extra: str) -> list[str]:
 def test_main_records_a_merge_seeds_the_local_history_and_writes_the_summary(
     cli_env: Path, gh: FakeGitHub, tmp_path: Path
 ):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A) + "\n")
+    gh.set_file(OCT, row(COMMIT_A) + "\n")
     assert ah.main(main_args(cli_env, "--record")) == 0
-    remote = [json.loads(x)["commit"] for x in gh.text("history/2026-10.jsonl").splitlines()]
+    remote = commits_of(gh)
     assert remote == [COMMIT_A, COMMIT_B]
     local = (cli_env / ".archy" / "history.jsonl").read_text().splitlines()
     assert [json.loads(x)["commit"] for x in local] == [COMMIT_A, COMMIT_B]
@@ -347,19 +356,19 @@ def test_main_records_a_merge_seeds_the_local_history_and_writes_the_summary(
 
 
 def test_main_does_not_record_twice_for_a_rerun_of_the_same_commit(cli_env: Path, gh: FakeGitHub):
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_B) + "\n")
+    gh.set_file(OCT, row(COMMIT_B) + "\n")
     ah.main(main_args(cli_env, "--record"))
-    assert not [c for c in gh.calls if c[0] == "PUT"]
-    assert len(gh.text("history/2026-10.jsonl").splitlines()) == 1
+    assert not puts(gh)
+    assert len(gh.text(OCT).splitlines()) == 1
 
 
 def test_main_never_records_on_a_pull_request(
     cli_env: Path, gh: FakeGitHub, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ):
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A) + "\n")
+    gh.set_file(OCT, row(COMMIT_A) + "\n")
     assert ah.main(main_args(cli_env, "--record")) == 0
-    assert len(gh.text("history/2026-10.jsonl").splitlines()) == 1
+    assert len(gh.text(OCT).splitlines()) == 1
     assert "not recording history on a pull request" in capsys.readouterr().out
 
 
@@ -367,9 +376,9 @@ def test_main_without_a_token_reads_but_does_not_write(
     cli_env: Path, gh: FakeGitHub, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ):
     monkeypatch.delenv("ARCHY_HISTORY_TOKEN")
-    gh.set_file("history/2026-10.jsonl", row(COMMIT_A) + "\n")
+    gh.set_file(OCT, row(COMMIT_A) + "\n")
     assert ah.main(main_args(cli_env, "--record")) == 0
-    assert len(gh.text("history/2026-10.jsonl").splitlines()) == 1
+    assert len(gh.text(OCT).splitlines()) == 1
     assert "no ARCHY_HISTORY_TOKEN" in capsys.readouterr().out
 
 
@@ -380,5 +389,4 @@ def test_an_unreachable_api_is_a_warning_not_a_failed_build(
     assert ah.main(main_args(cli_env, "--record")) == 0
     out = capsys.readouterr().out
     assert "::warning::archy history: could not reach" in out
-    assert re.search(r"trend\.html", str(cli_env / "trend.html"))  # render still ran
-    assert (cli_env / "trend.html").exists()
+    assert (cli_env / "trend.html").exists()  # render still ran

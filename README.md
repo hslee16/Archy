@@ -501,7 +501,7 @@ Inputs (all optional unless noted):
 | `history-last` | `10` | `history`: how many recent records the job summary shows |
 | `token` | `github.token` | `history` with `record: true`: needs `contents: write` |
 | `strict-tolerance` | `0.02` | `score --strict` tolerance |
-| `record` | `false` | `score`: append result to `.archy/history.jsonl` |
+| `record` | `false` | `score`: append result to `.archy/history.jsonl`. `history`: record this commit's score on the history branch (merges only; a pull request never records) |
 | `config` | (auto) | `check`: path to `archy.yaml` |
 | `python-version` | `3.10` | Python to install |
 

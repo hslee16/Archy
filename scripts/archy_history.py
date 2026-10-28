@@ -3,7 +3,9 @@
 Used by the `history` command of `action.yml` (#605). On a merge to the default
 branch it scores the project, appends ONE row to `history/YYYY-MM.jsonl` on a
 history branch through the GitHub contents API, and renders the trend. Standard
-library only, so the action needs nothing beyond what it already installs.
+library only, on purpose: the action runs it under `uv run --no-project`, where
+pydantic (which `src/` uses for value objects) is not installed, so `Remote` is a
+plain frozen dataclass.
 
 Why these choices (each was weighed against the free GitHub alternatives):
 
