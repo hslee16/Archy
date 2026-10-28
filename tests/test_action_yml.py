@@ -35,6 +35,11 @@ DEFAULTS = {
     "INPUT_RECORD": "false",
     "INPUT_CONFIG": "",
     "INPUT_BASELINE": "archy-baseline.json",
+    "INPUT_HISTORY_BRANCH": "archy-history",
+    "INPUT_HISTORY_LAST": "10",
+    "INPUT_PYTHON_VERSION": "3.12",
+    "ACTION_PATH": "/action",
+    "RUNNER_TEMP_DIR": "/tmp/runner",
 }
 
 
@@ -115,6 +120,10 @@ def test_a_value_starting_with_a_dash_is_refused_as_option_injection(tmp_path: P
         ("INPUT_RECORD", "1"),
         ("INPUT_STRICT_TOLERANCE", "0.02; id"),
         ("INPUT_STRICT_TOLERANCE", "-1"),
+        ("INPUT_HISTORY_BRANCH", "-delete"),
+        ("INPUT_HISTORY_BRANCH", "main; id"),
+        ("INPUT_HISTORY_LAST", "0"),
+        ("INPUT_HISTORY_LAST", "5; id"),
     ],
 )
 def test_an_invalid_enumerated_input_is_refused_before_archy_runs(
@@ -167,3 +176,44 @@ def test_the_env_names_cover_every_input_the_script_reads():
     # A name the script reads but the step never sets would be empty at run time.
     read = set(re.findall(r"\bINPUT_[A-Z_]+\b", RUN_STEP["run"]))
     assert read <= set(RUN_STEP["env"])
+
+
+def test_the_history_command_runs_the_script_with_validated_arguments(tmp_path: Path):
+    env = {**DEFAULTS, "INPUT_COMMAND": "history", "INPUT_RECORD": "true", "INPUT_PATH": "src"}
+    assert _run(RUN_STEP, tmp_path, env).returncode == 0
+    assert _argv(tmp_path, "uv") == [
+        "run",
+        "--no-project",
+        "--python",
+        "3.12",
+        "python",
+        "/action/scripts/archy_history.py",
+        "--project",
+        "src",
+        "--branch",
+        "archy-history",
+        "--last",
+        "10",
+        "--html-out",
+        "/tmp/runner/archy-trend.html",
+        "--record",
+    ]
+
+
+def test_the_history_command_does_not_record_unless_asked(tmp_path: Path):
+    env = {**DEFAULTS, "INPUT_COMMAND": "history", "INPUT_RECORD": "false"}
+    assert _run(RUN_STEP, tmp_path, env).returncode == 0
+    assert "--record" not in _argv(tmp_path, "uv")
+
+
+def test_the_token_reaches_only_the_history_command():
+    # An expression, not a literal: any other command gets an empty token.
+    token = RUN_STEP["env"]["ARCHY_HISTORY_TOKEN"]
+    assert "inputs.command == 'history'" in token
+    assert "inputs.token" in token
+
+
+def test_the_trend_artifact_step_is_pinned_and_history_only():
+    step = STEPS["Upload the score trend"]
+    assert step["if"] == "inputs.command == 'history'"
+    assert re.fullmatch(r"actions/upload-artifact@[0-9a-f]{40}", step["uses"]), step["uses"]
