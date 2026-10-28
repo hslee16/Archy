@@ -46,7 +46,9 @@ def load(path: str) -> dict[str, object] | None:
         data = json.loads(Path(path).read_text())
     except (OSError, json.JSONDecodeError):
         return None
-    return data if isinstance(data, dict) and isinstance(data.get("overall"), float | int) else None
+    if isinstance(data, dict) and isinstance(data.get("overall"), float | int):
+        return data
+    return None
 
 
 def _components(score: dict[str, object]) -> dict[str, float]:
@@ -118,7 +120,7 @@ def render(base: dict[str, object] | None, head: dict[str, object] | None, base_
         )
     lines += [
         "",
-        f"_Both scored by this PR's archy, so the delta is the code and not the scorer. "
+        "_Both scored by this PR's archy, so the delta is the code and not the scorer. "
         f"Non-blocking; a drop of {TOLERANCE:g} or more overall is flagged. Higher is better._",
     ]
     return "\n".join(lines) + "\n"
