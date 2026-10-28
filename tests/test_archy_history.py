@@ -156,9 +156,14 @@ class FakeGitHub:
     _pending_tree: tuple[str, str] = ("", "")
 
 
+def commits_in_text(text: str) -> list[str]:
+    """The commit of every row in a history file's text, in order."""
+    return [json.loads(x)["commit"] for x in text.splitlines()]
+
+
 def commits_of(gh: FakeGitHub, path: str = OCT) -> list[str]:
     """The commit of every row currently stored at `path`, in order."""
-    return [json.loads(x)["commit"] for x in gh.text(path).splitlines()]
+    return commits_in_text(gh.text(path))
 
 
 def puts(gh: FakeGitHub) -> list[tuple[str, str]]:
@@ -192,8 +197,7 @@ def test_a_second_record_appends_in_order_to_the_same_month(gh: FakeGitHub):
     assert ah.append_row(client(gh), "b", row(COMMIT_B, day="02"), COMMIT_B, sleep=False) == (
         "recorded"
     )
-    lines = gh.text(OCT).splitlines()
-    assert [json.loads(x)["commit"] for x in lines] == [COMMIT_A, COMMIT_B]
+    assert commits_of(gh) == [COMMIT_A, COMMIT_B]
     assert puts(gh), "an existing file is updated, not recreated"
 
 
@@ -277,7 +281,7 @@ def test_a_new_month_starts_a_new_file_and_reads_come_back_oldest_first(gh: Fake
     ah.append_row(client(gh), "b", row(COMMIT_B, "2026-11", "01"), COMMIT_B, sleep=False)
     assert sorted(gh.files) == [OCT, "history/2026-11.jsonl"]
     everything = ah.fetch_all(client(gh), "b")
-    assert [json.loads(x)["commit"] for x in everything.splitlines()] == [COMMIT_A, COMMIT_B]
+    assert commits_in_text(everything) == [COMMIT_A, COMMIT_B]
 
 
 def test_reading_needs_no_token_and_writing_sends_one(gh: FakeGitHub):
@@ -295,7 +299,7 @@ def test_an_unparseable_line_in_history_does_not_hide_the_good_ones():
 
 
 FAKE_ARCHY = """#!/bin/bash
-# score appends one row to <path>/.archy/history.jsonl; trend and render print fixed output.
+# A stand-in for the real CLI: no install needed, and the output is deterministic.
 cmd="$1"; shift
 case "$cmd" in
   score)
@@ -349,8 +353,8 @@ def test_main_records_a_merge_seeds_the_local_history_and_writes_the_summary(
     assert ah.main(main_args(cli_env, "--record")) == 0
     remote = commits_of(gh)
     assert remote == [COMMIT_A, COMMIT_B]
-    local = (cli_env / ".archy" / "history.jsonl").read_text().splitlines()
-    assert [json.loads(x)["commit"] for x in local] == [COMMIT_A, COMMIT_B]
+    local = (cli_env / ".archy" / "history.jsonl").read_text()
+    assert commits_in_text(local) == [COMMIT_A, COMMIT_B]
     assert "TREND-TABLE rows=2" in (tmp_path / "summary.md").read_text()
     assert (cli_env / "trend.html").read_text().strip() == "<html>trend</html>"
 
@@ -389,4 +393,4 @@ def test_an_unreachable_api_is_a_warning_not_a_failed_build(
     assert ah.main(main_args(cli_env, "--record")) == 0
     out = capsys.readouterr().out
     assert "::warning::archy history: could not reach" in out
-    assert (cli_env / "trend.html").exists()  # render still ran
+    assert (cli_env / "trend.html").exists()  # an unreachable API must not stop the local render
