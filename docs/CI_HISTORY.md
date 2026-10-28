@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: hslee16/archy@vX.Y.Z      # a release that includes `command: history`
+      - uses: hslee16/archy@v0.52.0     # the first release with `command: history`
         with:
           command: history
           record: "true"
