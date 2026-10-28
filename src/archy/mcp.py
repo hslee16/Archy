@@ -416,8 +416,9 @@ class BriefConventions(ConventionsReport):
 class BriefPayload(BaseModel):
     """What to know before touching an unfamiliar repository, in one call.
 
-    Field names match `archy brief --format json` exactly, so the two surfaces
-    cannot drift apart on the handoff (#427).
+    Top-level field names match `archy brief --format json`, so the two surfaces
+    cannot drift apart on the handoff (#427). Nested shapes follow the MCP models,
+    as they already do between `archy check` and `archy_check`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -918,25 +919,19 @@ def _register_tools(server: Server) -> None:
             # it leaves the rules as unverified as a missing import-linter does
             # (#457). Same rule as the CLI's `_transitive_checked`, so the two
             # surfaces cannot disagree about whether a run was checked.
-            unverifiable = payload.unverifiable or 0
-            checked = payload.available and payload.error is None and unverifiable == 0
+            checked, unverifiable_reason = _contracts_verdict(payload)
             # A stale reason is worse than none. `_run_check` computed its reason
             # before contracts were attempted, so it names contracts=True -- and
             # replaying that at a caller who just passed contracts=True and
             # watched it fail sends them round a loop they have been through.
             # A non-None reason from `_run_check` is also the signal that there
             # WAS something to verify, so it gates the no-verdict branch.
-            if unverifiable:
+            if unverifiable_reason:
                 # Unlike the no-verdict case this does not depend on there
                 # having been a reason already: contracts ran and answered
                 # nothing, which is worth saying however well-governed the
                 # direct edges are.
-                reason = (
-                    f"{unverifiable} contract(s) could not have failed: their module patterns "
-                    "matched nothing, so the rule holds whatever the code does. Fix the "
-                    "patterns or drop the rule; the `contracts` field names the expressions "
-                    "that matched no module."
-                )
+                reason = unverifiable_reason
             elif checked or result.transitive_unverified_reason is None:
                 reason = None
             else:
@@ -1437,23 +1432,14 @@ def _run_brief(
             config = coverage = None
 
     contracts = _run_contracts(path, config_filename=None) if with_contracts else None
-    unverifiable = (contracts.unverifiable or 0) if contracts is not None else 0
-    checked = (
-        contracts is not None
-        and contracts.available
-        and contracts.error is None
-        and unverifiable == 0
+    checked, unverifiable_reason = (
+        _contracts_verdict(contracts) if contracts is not None else (False, None)
     )
 
     reason: str | None = None
     if config is not None and coverage is not None and not checked:
-        if unverifiable:
-            reason = (
-                f"{unverifiable} contract(s) could not have failed: their module patterns "
-                "matched nothing, so the rule holds whatever the code does. Fix the "
-                "patterns or drop the rule; the `contracts` field names the expressions "
-                "that matched no module."
-            )
+        if unverifiable_reason:
+            reason = unverifiable_reason
         elif contracts_unverified(config, coverage, []):
             n = len(config.forbid)
             stem = f"{n} forbid {'rule' if n == 1 else 'rules'} declared"
@@ -1643,6 +1629,29 @@ def _run_contracts(path: Path, *, config_filename: Path | None) -> ContractsPayl
         import_count=result.import_count,
         contracts=result.contracts,
     )
+
+
+def _contracts_verdict(contracts: ContractsPayload) -> tuple[bool, str | None]:
+    """`(checked, unverifiable_reason)` for a contracts run, shared by every caller.
+
+    Only a verdict counts as "checked": a missing import-linter leaves the rules
+    as unverified as not asking (#343), and so does a contract that could not
+    have failed (#457). The reason is set exactly when some contract could not
+    have failed, whatever the direct edges govern. Shared by `archy_check` and
+    `archy_brief` so the two cannot disagree about either (same rule as the
+    CLI's `_transitive_checked`).
+    """
+    unverifiable = contracts.unverifiable or 0
+    checked = contracts.available and contracts.error is None and unverifiable == 0
+    reason = (
+        f"{unverifiable} contract(s) could not have failed: their module patterns "
+        "matched nothing, so the rule holds whatever the code does. Fix the "
+        "patterns or drop the rule; the `contracts` field names the expressions "
+        "that matched no module."
+        if unverifiable
+        else None
+    )
+    return checked, reason
 
 
 _BRIEF_LOAD_BEARING_N = 5

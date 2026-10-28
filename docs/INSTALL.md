@@ -30,7 +30,7 @@ Code plugin. Per client it writes up to three things:
 2. **An instructions/rules file** with a short, marker-fenced block telling the
    agent *when* to call the tools (the snapshot -> impact -> diff loop).
 3. **A permission allowlist (Claude Code only)** so you are not prompted to
-   approve each of the 13 `mcp__archy__*` tools on first use.
+   approve each of the 14 `mcp__archy__*` tools on first use.
 
 It does **not** phone home, create an account, auto-update, or install the
 `archy` CLI. (If you want the `archy` command on your PATH for direct CLI use,
