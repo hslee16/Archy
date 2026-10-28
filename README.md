@@ -484,7 +484,7 @@ archy ships a composite action you can drop into any workflow:
 ```yaml
 - uses: hslee16/archy@v0.51.0
   with:
-    command: score      # score | check | cycles | diff
+    command: score      # score | check | cycles | diff | history
     path: .
     strict: "true"      # fail on regression (score) or any cycle (cycles)
 ```
@@ -493,10 +493,13 @@ Inputs (all optional unless noted):
 
 | Input | Default | Notes |
 |---|---|---|
-| `command` | `score` | `score`, `check`, `cycles`, or `diff` |
+| `command` | `score` | `score`, `check`, `cycles`, `diff`, or `history` (see [`docs/CI_HISTORY.md`](docs/CI_HISTORY.md)) |
 | `path` | `.` | Project root to analyze |
 | `strict` | `true` | `score`/`cycles`/`diff`: fail on regression / any cycle / a new finding |
 | `baseline` | `archy-baseline.json` | `diff`: the committed baseline to ratchet against |
+| `history-branch` | `archy-history` | `history`: the orphan branch that holds the score history |
+| `history-last` | `10` | `history`: how many recent records the job summary shows |
+| `token` | `github.token` | `history` with `record: true`: needs `contents: write` |
 | `strict-tolerance` | `0.02` | `score --strict` tolerance |
 | `record` | `false` | `score`: append result to `.archy/history.jsonl` |
 | `config` | (auto) | `check`: path to `archy.yaml` |

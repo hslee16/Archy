@@ -8,7 +8,7 @@ branding:
 
 inputs:
   command:
-    description: archy subcommand to run. One of "score", "check", "cycles", "diff".
+    description: archy subcommand to run. One of "score", "check", "cycles", "diff", "history".
     required: false
     default: score
   path:
@@ -24,7 +24,7 @@ inputs:
     required: false
     default: "0.02"
   record:
-    description: For "score", also append the result to .archy/history.jsonl.
+    description: For "score", also append the result to .archy/history.jsonl. For "history", record this commit's score on the history branch (run it on merges to the default branch only; a pull request never records).
     required: false
     default: "false"
   config:
@@ -35,6 +35,18 @@ inputs:
     description: For "diff", the committed baseline file, relative to the workflow's working directory. Create it with `archy snapshot <path> --findings-only --out <baseline>`, using the same `path` input.
     required: false
     default: "archy-baseline.json"
+  history-branch:
+    description: For "history", the orphan branch that holds the score history (one file per month under history/).
+    required: false
+    default: "archy-history"
+  history-last:
+    description: For "history", how many recent records the job summary shows.
+    required: false
+    default: "10"
+  token:
+    description: For "history" with record true, the token that writes the history branch. Needs contents write; the default workflow token works.
+    required: false
+    default: ${{ github.token }}
   python-version:
     description: Python version to install when running archy.
     required: false
@@ -91,6 +103,13 @@ runs:
         INPUT_RECORD: ${{ inputs.record }}
         INPUT_CONFIG: ${{ inputs.config }}
         INPUT_BASELINE: ${{ inputs.baseline }}
+        INPUT_HISTORY_BRANCH: ${{ inputs.history-branch }}
+        INPUT_HISTORY_LAST: ${{ inputs.history-last }}
+        INPUT_PYTHON_VERSION: ${{ inputs.python-version }}
+        ACTION_PATH: ${{ github.action_path }}
+        RUNNER_TEMP_DIR: ${{ runner.temp }}
+        # The token is only handed to the history command, and only then.
+        ARCHY_HISTORY_TOKEN: ${{ inputs.command == 'history' && inputs.token || '' }}
       run: |
         set -euo pipefail
         fail() { echo "$1" >&2; exit 2; }
@@ -105,6 +124,10 @@ runs:
           || fail "Invalid record: $INPUT_RECORD (expected true or false)"
         [[ "$INPUT_STRICT_TOLERANCE" =~ ^[0-9]+(\.[0-9]+)?$ ]] \
           || fail "Invalid strict-tolerance: $INPUT_STRICT_TOLERANCE"
+        [[ "$INPUT_HISTORY_BRANCH" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]*$ ]] \
+          || fail "Invalid history-branch: $INPUT_HISTORY_BRANCH"
+        [[ "$INPUT_HISTORY_LAST" =~ ^[1-9][0-9]*$ ]] \
+          || fail "Invalid history-last: $INPUT_HISTORY_LAST"
         case "$INPUT_COMMAND" in
           score)
             args=("$INPUT_PATH")
@@ -137,7 +160,24 @@ runs:
             fi
             archy diff "${args[@]}"
             ;;
+          history)
+            args=(--project "$INPUT_PATH" --branch "$INPUT_HISTORY_BRANCH"
+                  --last "$INPUT_HISTORY_LAST" --html-out "$RUNNER_TEMP_DIR/archy-trend.html")
+            if [[ "$INPUT_RECORD" == "true" ]]; then
+              args+=(--record)
+            fi
+            uv run --no-project --python "$INPUT_PYTHON_VERSION" \
+              python "$ACTION_PATH/scripts/archy_history.py" "${args[@]}"
+            ;;
           *)
             fail "Unknown command: $INPUT_COMMAND"
             ;;
         esac
+
+    - name: Upload the score trend
+      if: inputs.command == 'history'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: archy-score-trend
+        path: ${{ runner.temp }}/archy-trend.html
+        if-no-files-found: ignore
