@@ -16,6 +16,7 @@ Usage:
     python archy_score_delta.py BASE.json HEAD.json BASE_SHA --pr 123
 
 archy:owns        Client, Unavailable, find_comment, load, main, render, upsert
+archy:mirrored-by Client also in scripts.archy_history
 """
 
 from __future__ import annotations
