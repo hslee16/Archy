@@ -12,7 +12,7 @@ archy:owns        ExactPatternHint, ForbidRule, LayerConfig, LayerConfigError,
                   match_layer
 archy:mirrored-by LayerConfig -> archy.cli, archy.contracts, archy.diff,
                   archy.scan_config, bench.greenfield_eval,
-                  LayerConfigError -> archy.cli, archy.contracts,
+                  LayerConfigError -> archy.cli, archy.contracts, archy.mcp,
                   LayerCoverage -> archy.cli, archy.mcp, ReachViolation -> archy.cli,
                   archy.diff, archy.mcp, RequiredRule -> archy.cli, archy.diff,
                   SdpViolation -> archy.cli, archy.diff, archy.mcp,

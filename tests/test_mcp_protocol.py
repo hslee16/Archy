@@ -113,7 +113,7 @@ def test_server_completes_the_handshake_and_lists_tools(tools):
     names = {t["name"] for t in tools}
 
     assert "archy_check" in names
-    assert len(names) == 13, f"tool count changed: {sorted(names)}"
+    assert len(names) == 14, f"tool count changed: {sorted(names)}"
 
 
 def test_the_handshake_reports_archys_version_not_the_sdks():

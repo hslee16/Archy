@@ -30,6 +30,7 @@ from archy.layers import LayerConfigError
 from archy.mcp import (
     CheckErrorPayload,
     CheckPayload,
+    ContractsPayload,
     DiffErrorPayload,
     DSMErrorPayload,
     DSMTooLargePayload,
@@ -39,6 +40,7 @@ from archy.mcp import (
     GraphTooLargePayload,
     _advertise_serialization_output_schemas,
     _run_affected,
+    _run_brief,
     _run_check,
     _run_cycles,
     _run_diff,
@@ -162,8 +164,11 @@ def test_create_server_registers_expected_tools():
         # the released tool's wire format for consumers that never asked for
         # this feature.
         "archy_module_view",
+        # `archy_brief` composes conventions + coverage + contracts into one
+        # call. It was CLI-only until a usage signal appeared (#427).
+        "archy_brief",
     }
-    assert len(names) == 13
+    assert len(names) == 14
 
 
 def test_all_tools_declare_read_only_annotations_except_snapshot():
@@ -365,6 +370,7 @@ def test_serialization_schema_replaces_a_cached_validation_schema():
         ("archy_impact", {"files": ["pkg/a.py"]}, True),  # union, blast branch (Impact)
         ("archy_impact", {"files": ["pkg/a.py"], "mode": "affected"}, True),  # affected branch
         ("archy_conventions", {}, True),  # BaseModel return (ConventionsReport)
+        ("archy_brief", {}, True),  # BaseModel return (BriefPayload)
     ],
 )
 def test_tool_result_conforms_to_output_schema(
@@ -430,6 +436,7 @@ _PROJECT_PATH_ARGS: dict[str, dict] = {
     "archy_duplicates": {},
     "archy_conventions": {},
     "archy_module_view": {"module": "pkg.a"},
+    "archy_brief": {},
 }
 
 
@@ -2569,3 +2576,109 @@ def test_run_diff_strict_refuses_when_the_layer_rules_disappeared(tmp_path: Path
     assert isinstance(result, DiffReport)
     assert result.model_dump()["strict"]["passed"] is False
     assert "no archy.yaml was found" in result.model_dump()["strict"]["reason"]
+
+
+def _write_brief_project(tmp_path: Path, *, with_config: bool) -> Path:
+    """Two homes with two-member suffix families each, one unlayered module.
+
+    Two naming homes so `top_n=1` has something to drop; the unlayered module
+    and the forbid rule so a direct-edge pass cannot prove the rule holds.
+    """
+    pkg = tmp_path / "pkg"
+    (pkg / "core").mkdir(parents=True)
+    (pkg / "ui").mkdir()
+    for d in (pkg, pkg / "core", pkg / "ui"):
+        (d / "__init__.py").write_text("")
+    (pkg / "core" / "errors.py").write_text("class FooError: ...\nclass BarError: ...\n")
+    (pkg / "ui" / "handlers.py").write_text("class AHandler: ...\nclass BHandler: ...\n")
+    (pkg / "other.py").write_text("x = 1\n")
+    if with_config:
+        (tmp_path / "archy.yaml").write_text(
+            "layers:\n"
+            "  core: {modules: [pkg.core.**]}\n"
+            "  ui: {modules: [pkg.ui.**]}\n"
+            "forbid:\n"
+            "  - {from: core, to: ui}\n"
+        )
+    return tmp_path
+
+
+def test_brief_bounds_ranked_sections_and_reports_what_it_dropped(tmp_path: Path):
+    project = _write_brief_project(tmp_path, with_config=False)
+    full = _run_brief(project, top_n=50, with_contracts=False, include_tests=False)
+    # The fixture must exercise the truncation before the outcome means anything.
+    assert full.conventions.totals["naming"] >= 2
+
+    bounded = _run_brief(project, top_n=1, with_contracts=False, include_tests=False)
+    assert len(bounded.conventions.naming) == 1
+    assert bounded.conventions.top_n == 1
+    assert bounded.conventions.totals == full.conventions.totals
+    # Survives the wire form FastMCP sends.
+    assert (
+        bounded.model_dump()["conventions"]["totals"]["naming"] == full.conventions.totals["naming"]
+    )
+
+
+def test_brief_without_a_config_has_no_coverage_and_no_reason(tmp_path: Path):
+    project = _write_brief_project(tmp_path, with_config=False)
+    payload = _run_brief(project, top_n=8, with_contracts=False, include_tests=False)
+    assert payload.coverage is None
+    assert payload.transitive_checked is False
+    assert payload.transitive_unverified_reason is None
+
+
+def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
+    project = _write_brief_project(tmp_path, with_config=True)
+    payload = _run_brief(project, top_n=8, with_contracts=False, include_tests=False)
+    assert payload.coverage is not None
+    assert payload.transitive_checked is False
+    dumped = payload.model_dump()
+    assert "1 forbid rule declared" in dumped["transitive_unverified_reason"]
+    assert "archy_brief(contracts=True)" in dumped["transitive_unverified_reason"]
+
+
+@pytest.mark.parametrize(
+    ("contracts", "checked", "reason_has"),
+    [
+        (ContractsPayload(available=True, error="boom"), False, "boom"),
+        (ContractsPayload(available=True, verified=True, unverifiable=0), True, None),
+        (ContractsPayload(available=True, verified=False, unverifiable=2), False, "2 contract(s)"),
+    ],
+)
+def test_brief_reads_the_contracts_verdict(
+    tmp_path: Path, monkeypatch, contracts: ContractsPayload, checked: bool, reason_has
+):
+    monkeypatch.setattr("archy.mcp._run_contracts", lambda *a, **k: contracts)
+    project = _write_brief_project(tmp_path, with_config=True)
+    payload = _run_brief(project, top_n=8, with_contracts=True, include_tests=False)
+    assert payload.transitive_checked is checked
+    if reason_has is None:
+        assert payload.transitive_unverified_reason is None
+    else:
+        assert reason_has in (payload.transitive_unverified_reason or "")
+
+
+def test_brief_payload_has_the_cli_json_field_names(tmp_path: Path):
+    # Derived independently: the CLI hand-rolls its dict, the MCP side is a model.
+    from click.testing import CliRunner
+
+    from archy.cli import main
+
+    project = _write_brief_project(tmp_path, with_config=True)
+    cli = json.loads(CliRunner().invoke(main, ["brief", str(project), "--format", "json"]).output)
+    _c, wire = _call_tool(create_server(), "archy_brief", {"path": str(project)})
+    assert wire is not None
+    assert set(wire) == set(cli)
+    assert set(wire["conventions"]) == set(cli["conventions"])
+    assert wire["transitive_checked"] == cli["transitive_checked"]
+    assert (wire["transitive_unverified_reason"] is None) == (
+        cli["transitive_unverified_reason"] is None
+    )
+
+
+def test_brief_rejects_a_nonsense_top_n(tmp_path: Path):
+    from archy.mcp_compat import ToolError
+
+    project = _write_brief_project(tmp_path, with_config=False)
+    with pytest.raises(ToolError):
+        _call_tool(create_server(), "archy_brief", {"path": str(project), "top_n": 0})
