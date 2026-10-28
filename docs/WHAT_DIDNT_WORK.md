@@ -560,11 +560,16 @@ count is worth spelling out rather than leaving to be inferred:
 | # | intervention | result |
 | ---: | --- | --- |
 | 1 | `conventions` as a pull surface | 0 of 89 |
-| 2 | `conventions --module` as a pull surface | 0 of 24 |
+| 2 | `conventions --module` as a pull surface | 0 of 24 (see note) |
 | 3 | `contracts` as a pull surface | 0 of 38 |
 | 4 | a prior seeding arm on the same card set | lost to its control |
 | 5 | E1, derived module headers | 1.26x, wrong direction |
 | 6 | E2, hand-written crux payload | 1.128x, wrong direction |
+
+Note on row 2: `bench/conventions_bench_results.md` attributes the 0 of 24 to the
+ordinary ranked report, scored before `--module` existed (#414). Read it as a result
+about the ranked report, not about `--module`, whose held-out retrievability is
+unmeasured (#418, `bench/retrievability_results.md`).
 
 ### Validity, because the first attempt measured nothing
 
