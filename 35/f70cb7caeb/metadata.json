@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "35f70cb7caeb",
+  "strategy": "manual-commit",
+  "branch": "alee/score-comment-on-fork-prs",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "tests/test_archy_score_delta.py",
+    "tests/test_ci_workflow.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/35/f70cb7caeb/0/metadata.json",
+      "transcript": "/35/f70cb7caeb/0/full.jsonl",
+      "content_hash": "/35/f70cb7caeb/0/content_hash.txt",
+      "prompt": "/35/f70cb7caeb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 11637,
+    "cache_read_tokens": 816055,
+    "output_tokens": 2412,
+    "api_call_count": 8
+  }
+}

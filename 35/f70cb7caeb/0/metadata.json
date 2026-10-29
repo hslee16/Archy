@@ -1,0 +1,118 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "35f70cb7caeb",
+  "session_id": "066a13ba-dfed-4db6-a2cd-bbdd11c0ce15",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-29T17:42:52.166634Z",
+  "branch": "alee/score-comment-on-fork-prs",
+  "checkpoints_count": 5,
+  "save_step_count": 3,
+  "files_touched": [
+    "tests/test_archy_score_delta.py",
+    "tests/test_ci_workflow.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "34a7b0be60bf",
+  "checkpoint_transcript_start": 240,
+  "transcript_lines_at_start": 240,
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 11637,
+    "cache_read_tokens": 816055,
+    "output_tokens": 2412,
+    "api_call_count": 8
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01Y15FAsGGNH4SHuzfhrgWY3",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "34a7b0be60bf",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 181,
+        "end": 182,
+        "entry_ids": [
+          "56ab521c-3773-4c0f-8225-f526f674db02"
+        ],
+        "tool_use_id": "toolu_01Y15FAsGGNH4SHuzfhrgWY3"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01Y15FAsGGNH4SHuzfhrgWY3"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-29T17:42:52.123878Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 13,
+    "human_removed": 26,
+    "total_committed": 0,
+    "total_lines_changed": 39,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 692,
+      "user_lines_removed": 26,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130,
+        "tests/test_archy_score_delta.py": 17,
+        "tests/test_ci_workflow.py": 1
+      },
+      "user_removed_per_file": {
+        "tests/test_archy_score_delta.py": 25,
+        "tests/test_ci_workflow.py": 1
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 692,
+      "agent_lines_removed": 26
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 692,
+      "agent_lines_removed": 26
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 692,
+      "agent_lines_removed": 26
+    }
+  ]
+}
