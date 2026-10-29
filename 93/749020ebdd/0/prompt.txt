@@ -1,0 +1,1 @@
+lets make archy run in PRs as well (e.g. - https://github.com/hslee16/Archy/pull/617). PRs should get a similar github PR comment - [Image #1]

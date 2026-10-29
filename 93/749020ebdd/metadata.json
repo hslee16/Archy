@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "93749020ebdd",
+  "strategy": "manual-commit",
+  "branch": "alee/score-comment-on-fork-prs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/ci.yml",
+    ".github/workflows/score-comment.yml",
+    ".github/workflows/score-delta.yml",
+    "docs/SHIPPED.md",
+    "scripts/archy_score_delta.py",
+    "tests/test_archy_score_delta.py",
+    "tests/test_ci_workflow.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/93/749020ebdd/0/metadata.json",
+      "transcript": "/93/749020ebdd/0/full.jsonl",
+      "content_hash": "/93/749020ebdd/0/content_hash.txt",
+      "prompt": "/93/749020ebdd/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 34,
+    "cache_creation_tokens": 61328,
+    "cache_read_tokens": 1194573,
+    "output_tokens": 18085,
+    "api_call_count": 17
+  }
+}
