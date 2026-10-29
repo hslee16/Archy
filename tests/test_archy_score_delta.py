@@ -175,6 +175,20 @@ def client(gh: FakeGitHub) -> object:
     return asd.Client(gh.url, "o/r", "tok")
 
 
+def _artifact(tmp_path: Path) -> tuple[Path, Path]:
+    base, head = tmp_path / "b.json", tmp_path / "h.json"
+    base.write_text(json.dumps(score(0.6)))
+    head.write_text(json.dumps(score(0.57)))
+    return base, head
+
+
+def _env(monkeypatch: pytest.MonkeyPatch, gh: FakeGitHub, tmp_path: Path) -> None:
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_API_URL", gh.url)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+
 def test_the_first_run_creates_the_comment(make_gh):
     gh = make_gh([{"id": 1, "user": {"login": "alice"}, "body": "LGTM"}])
     assert asd.upsert(client(gh), 7, f"{asd.MARKER}\nhello") == "created"
@@ -217,14 +231,9 @@ def test_a_fork_pr_that_cannot_write_gets_the_summary_and_a_clean_exit(
     make_gh, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ):
     gh = make_gh([], write_status=403)
-    base, head = tmp_path / "b.json", tmp_path / "h.json"
-    base.write_text(json.dumps(score(0.6)))
-    head.write_text(json.dumps(score(0.57)))
+    base, head = _artifact(tmp_path)
     summary = tmp_path / "summary.md"
-    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
-    monkeypatch.setenv("GITHUB_API_URL", gh.url)
-    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
-    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    _env(monkeypatch, gh, tmp_path)
     assert asd.main([str(base), str(head), "abcdef123456", "--pr", "7"]) == 0
     assert "regression" in summary.read_text()
     assert asd.MARKER not in summary.read_text()  # the marker is for the comment, not the page
@@ -238,10 +247,7 @@ def test_without_a_pr_number_it_writes_only_the_summary(
     gh = make_gh([])
     base = tmp_path / "b.json"
     base.write_text(json.dumps(score(0.5)))
-    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
-    monkeypatch.setenv("GITHUB_API_URL", gh.url)
-    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
-    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    _env(monkeypatch, gh, tmp_path)
     assert asd.main([str(base), str(base), "abc1234"]) == 0
     assert gh.calls == []
     assert (tmp_path / "summary.md").exists()
@@ -263,20 +269,6 @@ def test_a_superseded_run_finds_no_pr(make_gh):
     # The branch moved on: the PR's head is a newer SHA, so the old run comments nowhere.
     gh = make_gh([], pulls=[pull(9, "c" * 40)])
     assert asd.find_pr(client(gh), "fork:topic", "a" * 40) is None
-
-
-def _artifact(tmp_path: Path) -> tuple[Path, Path]:
-    base, head = tmp_path / "b.json", tmp_path / "h.json"
-    base.write_text(json.dumps(score(0.6)))
-    head.write_text(json.dumps(score(0.57)))
-    return base, head
-
-
-def _env(monkeypatch: pytest.MonkeyPatch, gh: FakeGitHub, tmp_path: Path) -> None:
-    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
-    monkeypatch.setenv("GITHUB_API_URL", gh.url)
-    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
-    monkeypatch.setenv("GITHUB_TOKEN", "tok")
 
 
 def test_a_fork_pr_gets_its_comment_from_the_head_lookup(

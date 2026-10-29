@@ -15,23 +15,23 @@ import yaml
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
 
 
-def load(name: str) -> dict:
+def _load_workflow(name: str) -> dict:
     return yaml.safe_load((WORKFLOWS / name).read_text())
 
 
-CI = load("ci.yml")
-SCORE = load("score-delta.yml")
-COMMENT = load("score-comment.yml")
+CI = _load_workflow("ci.yml")
+SCORE = _load_workflow("score-delta.yml")
+COMMENT = _load_workflow("score-comment.yml")
+# PyYAML (YAML 1.1) parses the bare key `on` as boolean True, hence `[True]` below.
 SCORE_JOB = SCORE["jobs"]["score-delta"]
 COMMENT_JOB = COMMENT["jobs"]["comment"]
 
 
-def steps(job: dict) -> list[dict]:
+def _steps(job: dict) -> list[dict]:
     return job["steps"]
 
 
 def test_no_job_that_runs_pr_code_can_write():
-    # PyYAML reads the `on:` key as the boolean True.
     for wf in (CI, SCORE):
         assert wf["permissions"] == {"contents": "read"}
         assert not [n for n, j in wf["jobs"].items() if "permissions" in j]
@@ -64,24 +64,24 @@ def test_the_comment_workflow_is_triggered_by_the_scoring_workflow_only():
 def test_the_comment_job_never_checks_out_or_runs_the_prs_code():
     # A `ref:` or `repository:` on checkout would fetch the fork's tree into a job
     # that holds a write token. `uv run` / `pip` would build the fork's project.
-    for step in steps(COMMENT_JOB):
+    for step in _steps(COMMENT_JOB):
         if step.get("uses", "").startswith("actions/checkout@"):
             assert not set(step.get("with", {})) & {"ref", "repository"}
             assert step["with"]["persist-credentials"] is False
-    runs = " ".join(s["run"] for s in steps(COMMENT_JOB) if "run" in s)
+    runs = " ".join(s["run"] for s in _steps(COMMENT_JOB) if "run" in s)
     assert "uv " not in runs and "pip" not in runs and "setup-" not in str(COMMENT_JOB)
 
 
 def test_the_comment_job_hands_the_prs_identity_from_the_event_not_the_artifact():
-    run = next(s for s in steps(COMMENT_JOB) if "run" in s)
+    run = next(s for s in _steps(COMMENT_JOB) if "run" in s)
     assert "--head" in run["run"] and "--head-sha" in run["run"]
     assert "--pr" not in run["run"]
     assert "workflow_run.head_sha" in run["env"]["HEAD_SHA"]
 
 
 def test_the_two_workflows_agree_on_the_artifact_name():
-    uploaded = next(s for s in steps(SCORE_JOB) if "upload-artifact" in s.get("uses", ""))
-    downloaded = next(s for s in steps(COMMENT_JOB) if "download-artifact" in s.get("uses", ""))
+    uploaded = next(s for s in _steps(SCORE_JOB) if "upload-artifact" in s.get("uses", ""))
+    downloaded = next(s for s in _steps(COMMENT_JOB) if "download-artifact" in s.get("uses", ""))
     assert uploaded["with"]["name"] == downloaded["with"]["name"] == "score-delta"
     assert downloaded["with"]["run-id"] == "${{ github.event.workflow_run.id }}"
 
@@ -90,13 +90,13 @@ def test_no_event_expression_is_interpolated_into_a_shell_script():
     # `${{ github.event.* }}` in `run:` is expanded before bash parses it. The values
     # reach the scripts through `env:` instead.
     for job in (SCORE_JOB, COMMENT_JOB):
-        runs = [s["run"] for s in steps(job) if "run" in s]
+        runs = [s["run"] for s in _steps(job) if "run" in s]
         assert runs
         assert not [r for r in runs if "${{" in r]
 
 
 def test_every_action_is_pinned_to_a_full_commit_sha():
-    uses = [s["uses"] for job in (SCORE_JOB, COMMENT_JOB) for s in steps(job) if "uses" in s]
+    uses = [s["uses"] for job in (SCORE_JOB, COMMENT_JOB) for s in _steps(job) if "uses" in s]
     assert len(uses) >= 5
     assert all(re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", u) for u in uses), uses
 
@@ -104,6 +104,6 @@ def test_every_action_is_pinned_to_a_full_commit_sha():
 def test_both_commits_are_scored_by_the_checkouts_own_archy():
     # Scoring the base with a released archy would make the delta measure the scorer.
     script = next(
-        s["run"] for s in steps(SCORE_JOB) if "run" in s and "BASE_SHA" in s.get("env", {})
+        s["run"] for s in _steps(SCORE_JOB) if "run" in s and "BASE_SHA" in s.get("env", {})
     )
     assert script.count("uv run archy score") == 2
