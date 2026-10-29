@@ -1,0 +1,51 @@
+name: Score comment
+
+# Posts archy's score change as ONE sticky comment on the pull request (#604).
+#
+# `workflow_run` runs the workflow file and scripts from the DEFAULT branch with a
+# write token, even for a fork PR, which is exactly why it must never check out or
+# execute the PR's code. It reads only the artifact `score-delta.yml` uploaded, and
+# treats that as untrusted data: `archy_score_delta.py` reads numbers from it and
+# finds the PR itself from the run's head branch and SHA.
+on:
+  workflow_run:
+    workflows: [Score delta]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  comment:
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read # to download the artifact from the other run
+      contents: read
+      pull-requests: write # to upsert the one comment, nothing else
+    steps:
+      # No `ref:`, so this is the default branch: trusted scripts, never the PR's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download the scores
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: score-delta
+          path: ${{ runner.temp }}/score
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Upsert the score comment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEAD_OWNER: ${{ github.event.workflow_run.head_repository.owner.login }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          python3 scripts/archy_score_delta.py \
+            "$RUNNER_TEMP/score/base.json" "$RUNNER_TEMP/score/head.json" \
+            "$(head -c 64 "$RUNNER_TEMP/score/base_sha.txt")" \
+            --head "$HEAD_OWNER:$HEAD_BRANCH" --head-sha "$HEAD_SHA"

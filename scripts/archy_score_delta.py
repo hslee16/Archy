@@ -12,10 +12,18 @@ read-only) the same Markdown goes to the job summary instead, so the number is
 still visible. Both runs must be scored by the SAME archy, or the delta measures
 the scorer and not the code; the workflow scores both with the checkout's own.
 
+A fork PR's job token cannot write, so the comment is posted from a second,
+trusted workflow (`score-comment.yml`, on `workflow_run`) that never runs PR code.
+The scoring job hands it the two score files as an artifact. Everything in that
+artifact is untrusted: it is read as numbers only, size-capped, and the PR it is
+posted on is looked up from the run's head branch and SHA, never named by the
+artifact.
+
 Usage:
     python archy_score_delta.py BASE.json HEAD.json BASE_SHA --pr 123
+    python archy_score_delta.py BASE.json HEAD.json BASE_SHA --head OWNER:BRANCH --head-sha SHA
 
-archy:owns        Client, Unavailable, find_comment, load, main, render, upsert
+archy:owns        Client, Unavailable, find_comment, find_pr, load, main, render, upsert
 archy:mirrored-by Client also in scripts.archy_history
 """
 
@@ -24,6 +32,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -39,13 +48,17 @@ NOISE = 0.0005
 TOLERANCE = 0.02
 API_DEFAULT = "https://api.github.com"
 NO_CHANGE = "\N{HEAVY MINUS SIGN}"
+# A real score file is a few hundred bytes; anything near this is not one.
+MAX_SCORE_BYTES = 1_000_000
 
 
 def load(path: str) -> dict[str, object] | None:
     """The score JSON, or None for a missing, malformed, or failed run (`{}`)."""
     try:
+        if Path(path).stat().st_size > MAX_SCORE_BYTES:
+            return None
         data = json.loads(Path(path).read_text())
-    except (OSError, json.JSONDecodeError):
+    except (OSError, ValueError):
         return None
     if isinstance(data, dict) and isinstance(data.get("overall"), float | int):
         return data
@@ -181,6 +194,22 @@ def find_comment(client: Client, pr: int) -> int | None:
         page += 1
 
 
+def find_pr(client: Client, head: str, head_sha: str) -> int | None:
+    """The open PR whose head is `head` (`OWNER:BRANCH`) at exactly `head_sha`.
+
+    Looked up rather than read from the artifact, so a PR cannot point the comment
+    at someone else's. A newer push to the branch has a different head SHA, so a
+    stale run finds nothing and posts nothing."""
+    status, payload = client.request("GET", f"pulls?state=open&per_page=100&head={head}")
+    if status != 200 or not isinstance(payload, list):
+        raise Unavailable(f"looking up the PR failed: HTTP {status}")
+    for pr in payload:
+        pr_head = pr.get("head") if isinstance(pr, dict) else None
+        if isinstance(pr_head, dict) and pr_head.get("sha") == head_sha:
+            return int(pr["number"])
+    return None
+
+
 def upsert(client: Client, pr: int, body: str) -> str:
     existing = find_comment(client, pr)
     if existing is None:
@@ -200,9 +229,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("head_json")
     parser.add_argument("base_sha")
     parser.add_argument("--pr", type=int, default=None)
+    parser.add_argument("--head", help="OWNER:BRANCH of the PR head, to find the PR")
+    parser.add_argument("--head-sha", help="the head SHA that was scored, with --head")
     args = parser.parse_args(argv)
 
-    body = render(load(args.base_json), load(args.head_json), args.base_sha[:7])
+    base_sha = args.base_sha.strip()
+    # Cosmetic, but it lands in a comment, so only a hex SHA is echoed.
+    base_sha = base_sha[:7] if re.fullmatch(r"[0-9a-f]{7,40}", base_sha) else "unknown"
+    body = render(load(args.base_json), load(args.head_json), base_sha)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as fh:
@@ -210,12 +244,16 @@ def main(argv: list[str] | None = None) -> int:
 
     token = os.environ.get("GITHUB_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
-    if args.pr is None or not token or not repo:
+    if (args.pr is None and not (args.head and args.head_sha)) or not token or not repo:
         print("::notice::no PR comment written (no PR number or token); see the job summary")
         return 0
     client = Client(os.environ.get("GITHUB_API_URL", API_DEFAULT), repo, token)
     try:
-        print(f"{upsert(client, args.pr, body)} the archy score comment")
+        pr = args.pr if args.pr is not None else find_pr(client, args.head, args.head_sha)
+        if pr is None:
+            print("::notice::no open PR at that head (closed or superseded); nothing to comment")
+            return 0
+        print(f"{upsert(client, pr, body)} the archy score comment")
     except Unavailable as exc:
         # Normal on a fork PR, whose token cannot write. The job summary has it.
         print(f"::notice::no PR comment written ({exc}); see the job summary")

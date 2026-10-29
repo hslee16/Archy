@@ -87,8 +87,15 @@ def test_load_treats_a_failed_or_malformed_run_as_missing(tmp_path: Path, text: 
 
 
 class FakeGitHub:
-    def __init__(self, comments: list[dict[str, object]], *, write_status: int = 201) -> None:
+    def __init__(
+        self,
+        comments: list[dict[str, object]],
+        *,
+        write_status: int = 201,
+        pulls: list[dict[str, object]] | None = None,
+    ) -> None:
         self.comments = comments
+        self.pulls = pulls or []
         self.write_status = write_status
         self.calls: list[tuple[str, str]] = []
         outer = self
@@ -110,6 +117,9 @@ class FakeGitHub:
 
             def do_GET(self) -> None:
                 outer.calls.append(("GET", self.path))
+                if "/pulls?" in self.path:
+                    self._send(200, outer.pulls)
+                    return
                 page = int(self.path.split("page=")[-1])
                 self._send(200, outer.comments[(page - 1) * 100 : page * 100])
 
@@ -146,8 +156,13 @@ def bot_comment(cid: int, body: str) -> dict[str, object]:
 def make_gh():
     made: list[FakeGitHub] = []
 
-    def make(comments: list[dict[str, object]], **kw: int) -> FakeGitHub:
-        fake = FakeGitHub(comments, **kw)
+    def make(
+        comments: list[dict[str, object]],
+        *,
+        write_status: int = 201,
+        pulls: list[dict[str, object]] | None = None,
+    ) -> FakeGitHub:
+        fake = FakeGitHub(comments, write_status=write_status, pulls=pulls)
         made.append(fake)
         return fake
 
@@ -230,3 +245,78 @@ def test_without_a_pr_number_it_writes_only_the_summary(
     assert asd.main([str(base), str(base), "abc1234"]) == 0
     assert gh.calls == []
     assert (tmp_path / "summary.md").exists()
+
+
+def pull(number: int, sha: str) -> dict[str, object]:
+    return {"number": number, "head": {"sha": sha}}
+
+
+def test_the_pr_is_found_by_its_head_sha_not_by_position(make_gh):
+    # Two open PRs from one branch name (different forks' pushes): only the one at the
+    # SHA that was scored is ours, and it is not the first listed.
+    gh = make_gh([], pulls=[pull(8, "b" * 40), pull(9, "a" * 40)])
+    assert asd.find_pr(client(gh), "fork:topic", "a" * 40) == 9
+    assert ("GET", "/repos/o/r/pulls?state=open&per_page=100&head=fork:topic") in gh.calls
+
+
+def test_a_superseded_run_finds_no_pr(make_gh):
+    # The branch moved on: the PR's head is a newer SHA, so the old run comments nowhere.
+    gh = make_gh([], pulls=[pull(9, "c" * 40)])
+    assert asd.find_pr(client(gh), "fork:topic", "a" * 40) is None
+
+
+def _artifact(tmp_path: Path) -> tuple[Path, Path]:
+    base, head = tmp_path / "b.json", tmp_path / "h.json"
+    base.write_text(json.dumps(score(0.6)))
+    head.write_text(json.dumps(score(0.57)))
+    return base, head
+
+
+def _env(monkeypatch: pytest.MonkeyPatch, gh: FakeGitHub, tmp_path: Path) -> None:
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_API_URL", gh.url)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "o/r")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+
+def test_a_fork_pr_gets_its_comment_from_the_head_lookup(
+    make_gh, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    gh = make_gh([], pulls=[pull(617, "d" * 40)])
+    base, head = _artifact(tmp_path)
+    _env(monkeypatch, gh, tmp_path)
+    argv = [str(base), str(head), "a" * 40, "--head", "fork:topic", "--head-sha", "d" * 40]
+    assert asd.main(argv) == 0
+    assert [c for c in gh.calls if c[0] == "POST"] == [("POST", "/repos/o/r/issues/617/comments")]
+    assert "0.6000 → 0.5700" in str(gh.comments[0]["body"])
+    assert "base (`aaaaaaa`)" in str(gh.comments[0]["body"])
+
+
+def test_no_open_pr_at_that_head_writes_nothing_and_exits_clean(
+    make_gh, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+):
+    gh = make_gh([], pulls=[])
+    base, head = _artifact(tmp_path)
+    _env(monkeypatch, gh, tmp_path)
+    argv = [str(base), str(head), "a" * 40, "--head", "fork:topic", "--head-sha", "d" * 40]
+    assert asd.main(argv) == 0
+    assert not [c for c in gh.calls if c[0] in ("POST", "PATCH")]
+    assert "nothing to comment" in capsys.readouterr().out
+
+
+def test_main_replaces_a_non_hex_base_sha_with_unknown(
+    make_gh, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    gh = make_gh([], pulls=[pull(1, "d" * 40)])
+    base, head = _artifact(tmp_path)
+    _env(monkeypatch, gh, tmp_path)
+    evil = "[click](https://evil.example) <script>"
+    assert asd.main([str(base), str(head), evil, "--head", "f:t", "--head-sha", "d" * 40]) == 0
+    assert "evil" not in str(gh.comments[0]["body"])
+    assert "base (`unknown`)" in str(gh.comments[0]["body"])
+
+
+def test_an_oversized_score_file_is_treated_as_missing(tmp_path: Path):
+    big = tmp_path / "big.json"
+    big.write_text(json.dumps({"overall": 0.5, "pad": "x" * (asd.MAX_SCORE_BYTES + 1)}))
+    assert asd.load(str(big)) is None

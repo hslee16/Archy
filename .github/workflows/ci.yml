@@ -55,51 +55,6 @@ jobs:
       - name: Derived headers are current (archy conventions --emit-headers --check)
         run: uv run archy conventions . --emit-headers --check
 
-  # Posts archy's score change for the PR as ONE sticky comment (#604): archy on
-  # archy's own pull requests, the surface other projects have had to hand-roll.
-  # It reports, it does not gate. Both commits are scored by THIS checkout's archy,
-  # so the delta is the code and not a scorer change. On a fork PR the token cannot
-  # comment; the same table goes to the job summary instead.
-  score-delta:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write # to upsert the one comment, nothing else
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # the base commit has to be present to score it
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          enable-cache: true
-
-      - name: Set up Python
-        run: uv python install 3.10
-
-      - name: Install dependencies
-        run: uv sync
-
-      - name: Score the PR head and its base with the same archy
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          uv run archy score . --format json > "$RUNNER_TEMP/head.json" || echo '{}' > "$RUNNER_TEMP/head.json"
-          git worktree add --detach "$RUNNER_TEMP/base" "$BASE_SHA"
-          uv run archy score "$RUNNER_TEMP/base" --format json > "$RUNNER_TEMP/base.json" || echo '{}' > "$RUNNER_TEMP/base.json"
-
-      - name: Upsert the score comment
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          uv run --no-project python scripts/archy_score_delta.py \
-            "$RUNNER_TEMP/base.json" "$RUNNER_TEMP/head.json" "$BASE_SHA" --pr "$PR_NUMBER"
-
   # The lockfile pins ONE mcp major, so every job above proves archy works on
   # exactly the version a user installing from PyPI probably does not get. That
   # gap shipped a broken MCP server in v0.42.0 (#391): `archy mcp` died on import
