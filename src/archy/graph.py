@@ -7,7 +7,7 @@ root. External imports (stdlib, third-party) appear as nodes with
 archy:owns        Module, ScanTooLargeError, assemble_graph, build_graph,
                   discover_modules, effective_max_modules, graph_to_dict,
                   internal_subgraph, parse_project, resolve_from_import,
-                  resolve_modules, resolve_relative_import
+                  resolve_modules, resolve_relative_import, suggest_modules
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
                   assemble_graph -> archy.index, archy.watcher,
@@ -22,6 +22,7 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
 
 from __future__ import annotations
 
+import difflib
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -62,6 +63,12 @@ DEFAULT_IGNORED_DIRS = frozenset(
 # real project archy benches (pytorch ~2,250 modules); callers pass `0`/`None`
 # to disable, or override via `max_modules:` in archy.yaml.
 DEFAULT_MAX_MODULES = 10_000
+
+# Lowest difflib ratio at which `suggest_modules` calls a name a misspelling. A
+# one-letter slip in a short dotted name (`archy.scor`) scores ~0.95; two
+# unrelated modules sharing a package prefix (`archy.cli`, `archy.dsm`) score
+# ~0.67, and must not be offered as the answer to each other.
+_SUGGEST_MIN_SIMILARITY = 0.8
 
 
 class ScanTooLargeError(Exception):
@@ -298,6 +305,34 @@ def graph_to_dict(graph: nx.DiGraph) -> dict:
             for u, v, d in sorted(graph.edges(data=True), key=lambda e: (e[0], e[1]))
         ],
     }
+
+
+def suggest_modules(known: Iterable[str], ref: str, limit: int = 5) -> list[str]:
+    """Module names `ref` was probably meant to be, best first; `[]` when nothing is close.
+
+    For a lookup that found nothing, to name the near misses in the refusal
+    rather than leave the caller to guess again. It suggests and never accepts:
+    a bare `cli` would match `archy.cli` and every `tests.*cli*` module, so
+    resolving it would pick one of them for the caller.
+
+    Names that contain `ref` come first (`cli` finds `archy.cli`), then names
+    spelled like it (`archy.scoer` finds `archy.score`, similarity ratio 20/22).
+    Each tier is ordered by name, the second by similarity then name, so the
+    answer does not depend on the order `known` arrives in.
+    """
+    if not ref:
+        return []
+    names = sorted(set(known))
+    contained = [n for n in names if ref in n]
+    taken = set(contained)
+    scored = []
+    for n in names:
+        if n in taken:
+            continue
+        ratio = difflib.SequenceMatcher(None, ref, n).ratio()
+        if ratio >= _SUGGEST_MIN_SIMILARITY:
+            scored.append((-ratio, n))
+    return (contained + [n for _, n in sorted(scored)])[:limit]
 
 
 def internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:

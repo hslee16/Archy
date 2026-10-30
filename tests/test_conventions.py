@@ -815,6 +815,30 @@ def test_setting_tests_aside_says_how_to_include_them(tmp_path: Path):
     assert "--include-tests" in _conventions_to_text(report, top_n=12)
 
 
+def test_module_view_refusal_suggests_modules_containing_the_name():
+    root = _new_project({"risk.py": "", "risk_utils.py": ""})
+    with pytest.raises(LookupError) as caught:
+        compute_module_view(root, "risk")
+    assert str(caught.value) == (
+        f"no module 'risk' under {root}; did you mean pkg.risk, pkg.risk_utils?"
+    )
+
+
+def test_module_view_refusal_suggests_the_spelling_it_was_probably_meant_to_be():
+    """`pkg.risj` is in no module name, so this is answered by the misspelling leg."""
+    root = _new_project({"risk.py": ""})
+    with pytest.raises(LookupError) as caught:
+        compute_module_view(root, "pkg.risj")
+    assert str(caught.value) == f"no module 'pkg.risj' under {root}; did you mean pkg.risk?"
+
+
+def test_module_view_refusal_with_no_near_miss_names_none():
+    root = _new_project({"risk.py": ""})
+    with pytest.raises(LookupError) as caught:
+        compute_module_view(root, "elsewhere.thing")
+    assert str(caught.value) == f"no module 'elsewhere.thing' under {root}"
+
+
 def test_module_view_answers_a_negative(tmp_path: Path):
     """The whole point. "Does `risk` import `hotspots`?" is answered by the
     ABSENCE of hotspots from a complete list; against the ranked report the same

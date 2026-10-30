@@ -76,6 +76,7 @@ from archy.graph import (
     discover_modules,
     resolve_from_import,
     resolve_relative_import,
+    suggest_modules,
 )
 
 # A CamelCase name splits into an acronym run (`DSM`, `MCP`) or a single
@@ -1646,7 +1647,7 @@ def compute_module_view(
             facts[m.qualname] = collected
 
     if module not in facts:
-        near = sorted(q for q in facts if module in q or q.endswith("." + module))
+        near = suggest_modules(facts, module)
         raise LookupError(
             f"no module {module!r} under {root}"
             + (f"; did you mean {', '.join(near[:5])}?" if near else "")

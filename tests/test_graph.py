@@ -15,6 +15,7 @@ from archy.graph import (
     effective_max_modules,
     graph_to_dict,
     resolve_modules,
+    suggest_modules,
 )
 from archy.reach import package_init_edges, with_package_init_edges
 
@@ -938,3 +939,52 @@ def test_when_two_roots_contain_a_file_the_outermost_names_it(tmp_path: Path):
 
     assert g.has_edge("app.plugins.foo.x", "app.core")
     assert g.has_edge("app.core", "app.plugins.foo.x")
+
+
+# --- suggest_modules ----------------------------------------------------------
+
+_KNOWN = ("pkg.score", "pkg.scorer_utils", "pkg.cli", "tests.test_cli", "pkg.dsm")
+
+
+def test_suggest_modules_offers_a_misspelling():
+    """`pkg.scoer` vs `pkg.score`: shared `pkg.sco` (7) plus `e` (1) is 8 matched
+    characters of 9 + 9, ratio 16/18 = 0.89. `pkg.scorer_utils` shares `pkg.sco`
+    and `er` (9 of 9 + 16), ratio 18/25 = 0.72, under the 0.8 floor."""
+    assert not any("pkg.scoer" in n for n in _KNOWN)  # only the fuzzy leg can answer
+    assert suggest_modules(_KNOWN, "pkg.scoer") == ["pkg.score"]
+
+
+def test_suggest_modules_offers_every_module_containing_a_bare_name():
+    assert suggest_modules(_KNOWN, "cli") == ["pkg.cli", "tests.test_cli"]
+
+
+def test_suggest_modules_puts_containing_names_before_misspellings():
+    """`m.scorf` is a misspelling of `m.score` (12/14 = 0.86) and sorts first by
+    name, so only the tiering can put `z.m.score`, which contains it, ahead."""
+    known = ("m.scorf", "z.m.score")
+    assert sorted(known)[0] == "m.scorf"
+    assert suggest_modules(known, "m.score") == ["z.m.score", "m.scorf"]
+
+
+def test_suggest_modules_does_not_offer_unrelated_siblings():
+    """`pkg.cli` vs `pkg.dsm` share only `pkg.` and a letter or two: 8/14 = 0.57."""
+    assert suggest_modules(["pkg.dsm"], "pkg.cli") == []
+
+
+def test_suggest_modules_has_nothing_to_say_when_nothing_is_close():
+    assert suggest_modules(_KNOWN, "pkg.zzzzzzzz") == []
+
+
+def test_suggest_modules_empty_ref_matches_nothing():
+    """The empty string is a substring of every name, which would suggest them all."""
+    assert suggest_modules(_KNOWN, "") == []
+
+
+def test_suggest_modules_caps_at_limit_in_name_order():
+    known = [f"pkg.x{i}" for i in (3, 1, 4, 2, 5)]
+    assert suggest_modules(known, "x", limit=3) == ["pkg.x1", "pkg.x2", "pkg.x3"]
+
+
+def test_suggest_modules_does_not_depend_on_input_order():
+    assert suggest_modules(reversed(_KNOWN), "cli") == suggest_modules(_KNOWN, "cli")
+    assert suggest_modules(reversed(_KNOWN), "pkg.scoer") == suggest_modules(_KNOWN, "pkg.scoer")
