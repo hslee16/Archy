@@ -16,6 +16,7 @@ from archy.graph import (
     build_graph,
     effective_max_modules,
     graph_to_dict,
+    hint_unresolved,
     resolve_modules,
     suggest_modules,
 )
@@ -1005,3 +1006,40 @@ def test_suggest_modules_caps_at_limit_in_name_order():
 def test_suggest_modules_does_not_depend_on_input_order():
     assert suggest_modules(reversed(_KNOWN), "cli") == suggest_modules(_KNOWN, "cli")
     assert suggest_modules(reversed(_KNOWN), "pkg.scoer") == suggest_modules(_KNOWN, "pkg.scoer")
+
+
+# --- hint_unresolved ----------------------------------------------------------
+
+
+def test_hint_unresolved_answers_modules_with_modules_and_paths_with_paths(tmp_path: Path):
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "score.py").write_text("")
+    graph = build_graph(tmp_path)
+    hints = hint_unresolved(graph, ["app.scoer", "app/scoer.py", "zzzzzzzz"], base=tmp_path)
+    assert [(h.ref, h.did_you_mean) for h in hints] == [
+        ("app.scoer", ("app.score",)),
+        ("app/scoer.py", ("app/score.py",)),
+    ]  # input order kept; the reference with no close match gets no entry
+
+
+def test_hint_unresolved_lists_a_repeated_reference_once(tmp_path: Path):
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "score.py").write_text("")
+    graph = build_graph(tmp_path)
+    assert len(hint_unresolved(graph, ["app.scoer", "app.scoer"])) == 1
+
+
+def test_hint_unresolved_does_not_offer_external_modules(tmp_path: Path):
+    """`requestz` is 14/16 = 0.88 from the third-party `requests`, which is in the graph
+    as an external node but is not a module the caller can name in this project."""
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "m.py").write_text("import requests\n")
+    graph = build_graph(tmp_path)
+    assert graph.nodes["requests"]["external"]  # the near miss exists, as an external
+    assert hint_unresolved(graph, ["requestz"]) == ()

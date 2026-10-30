@@ -4,28 +4,29 @@ A "module" is identified by its dotted path relative to a discovered package
 root. External imports (stdlib, third-party) appear as nodes with
 `external=True` so callers can filter them.
 
-archy:owns        Module, ScanTooLargeError, assemble_graph, build_graph,
-                  discover_modules, effective_max_modules, graph_to_dict,
-                  internal_subgraph, parse_project, resolve_from_import,
-                  resolve_modules, resolve_relative_import, suggest_modules
+archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
+                  build_graph, discover_modules, effective_max_modules, graph_to_dict,
+                  hint_unresolved, internal_subgraph, parse_project,
+                  resolve_from_import, resolve_modules, resolve_relative_import,
+                  suggest_files, suggest_modules
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
+                  UnresolvedHint -> archy.impact, archy.mcp, archy.simulate,
                   assemble_graph -> archy.index, archy.watcher,
                   bench.pattern_detection, discover_modules -> archy.cli,
                   archy.conventions, archy.index, archy.mcp, archy.watcher,
-                  graph_to_dict -> archy.cli, archy.mcp,
-                  internal_subgraph -> archy.cli, archy.mcp,
+                  graph_to_dict -> archy.cli, archy.mcp, hint_unresolved -> archy.mcp,
+                  archy.simulate, internal_subgraph -> archy.cli, archy.mcp,
                   parse_project -> archy.cli, archy.mcp,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
-                  bench.pattern_detection, resolve_modules -> archy.mcp,
-                  archy.simulate, suggest_modules -> archy.conventions, archy.impact
+                  bench.pattern_detection, resolve_modules -> archy.mcp, archy.simulate
 """
 
 from __future__ import annotations
 
 import difflib
 from collections.abc import Iterable, Iterator
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
@@ -343,6 +344,114 @@ def suggest_modules(known: Iterable[str], ref: str, limit: int = 5) -> list[str]
     closest = -scored[0][0] if scored else 0.0
     kept = [n for r, n in scored if -r >= closest - _SUGGEST_MARGIN]
     return (contained + kept)[:limit]
+
+
+class UnresolvedHint(BaseModel):
+    """What an unresolved reference was probably meant to be.
+
+    Carried beside a tool's `unresolved` list rather than replacing its strings,
+    so a consumer that reads `unresolved` as a list of names keeps working. `ref`
+    is the reference exactly as it was given, a module name or a file path.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    ref: str
+    did_you_mean: tuple[str, ...]
+
+
+def hint_unresolved(
+    graph: nx.DiGraph, refs: Iterable[str], *, base: Path | None = None
+) -> tuple[UnresolvedHint, ...]:
+    """A hint for each unresolved reference that has a close match, in input order.
+
+    A `.py` reference is a file path and is answered with file paths
+    (`suggest_files`); anything else is a module name and is answered with module
+    names. A reference with no close match gets no entry rather than an empty one.
+    `base` is what a relative path was meant relative to; see `suggest_files`.
+    """
+    ordered = list(dict.fromkeys(refs))
+    by_file = {h.ref: h for h in suggest_files(graph, ordered, base=base)}
+    internal = [n for n, d in graph.nodes(data=True) if not d.get("external")]
+    hints: list[UnresolvedHint] = []
+    for ref in ordered:
+        if ref in by_file:
+            hints.append(by_file[ref])
+        elif not ref.endswith(".py"):
+            found = suggest_modules(internal, ref)
+            if found:
+                hints.append(UnresolvedHint(ref=ref, did_you_mean=tuple(found)))
+    return tuple(hints)
+
+
+def suggest_files(
+    graph: nx.DiGraph, refs: Iterable[str], *, base: Path | None = None
+) -> tuple[UnresolvedHint, ...]:
+    """Name the module file each unresolved `.py` path was probably meant to be.
+
+    The similarity floor in `suggest_modules` is tuned for dotted module names.
+    On whole paths the shared `src/archy/` prefix lifts every sibling over it
+    (`src/archy/clx.py` would match `dsm.py` at 0.81), so the path is turned into
+    the module name it would have and compared as one. The layout prefix (`src/`)
+    is learned from the graph's own modules rather than assumed. Suggestions are
+    shown in the form the caller typed: absolute when the path was absolute,
+    otherwise anchored the same way. A relative path is read against `base` when
+    one is given, else the working directory. No hint without a root to anchor
+    on, and none for a reference that is not a `.py` path.
+    """
+    root_raw = graph.graph.get("root")
+    refs = list(refs)
+    if not root_raw or not refs:
+        return ()
+    root = Path(root_raw).resolve()
+
+    by_qualname: dict[str, PurePosixPath] = {}
+    prefixes: set[tuple[str, ...]] = {()}
+    for qualname, data in graph.nodes(data=True):
+        raw = data.get("path")
+        if data.get("external") or not raw:
+            continue
+        try:
+            rel = PurePosixPath(Path(raw).resolve().relative_to(root).as_posix())
+        except ValueError:
+            continue
+        by_qualname[qualname] = rel
+        parts = _module_parts(rel)
+        names = tuple(qualname.split("."))
+        if parts[len(parts) - len(names) :] == names:
+            prefixes.add(parts[: len(parts) - len(names)])
+    longest_first = sorted(prefixes, key=len, reverse=True)
+
+    hints: list[UnresolvedHint] = []
+    for raw_ref in refs:
+        typed = Path(raw_ref)
+        if typed.suffix != ".py":
+            continue
+        anchored = typed if base is None or typed.is_absolute() else base / typed
+        try:
+            rel = PurePosixPath(anchored.resolve().relative_to(root).as_posix())
+        except ValueError:
+            continue
+        parts = _module_parts(rel)
+        stripped = next((parts[len(p) :] for p in longest_first if parts[: len(p)] == p), parts)
+        found = suggest_modules(by_qualname, ".".join(stripped))
+        if not found:
+            continue
+        shown = [_in_callers_form(typed, rel, by_qualname[q]) for q in found]
+        hints.append(UnresolvedHint(ref=raw_ref, did_you_mean=tuple(shown)))
+    return tuple(hints)
+
+
+def _module_parts(rel: PurePosixPath) -> tuple[str, ...]:
+    """`pkg/mod.py` -> `("pkg", "mod")`; `pkg/__init__.py` -> `("pkg",)`."""
+    parts = rel.with_suffix("").parts
+    return parts[:-1] if parts[-1] == "__init__" else parts
+
+
+def _in_callers_form(typed: Path, typed_rel: PurePosixPath, candidate_rel: PurePosixPath) -> str:
+    """`candidate_rel` anchored the way `typed` was: same leading directories."""
+    lead = typed.parts[: max(0, len(typed.parts) - len(typed_rel.parts))]
+    return str(Path(*lead, *candidate_rel.parts))
 
 
 def internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:

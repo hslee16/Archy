@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from archy.diff import compute_diff, take_snapshot
-from archy.graph import build_graph
+from archy.graph import UnresolvedHint, build_graph
 from archy.simulate import find_simulate
 
 
@@ -234,3 +234,80 @@ def test_oracle_complexity_axis_is_always_zero_for_edge_delta(tmp_path: Path):
     g0 = _internal(project)
     sim = find_simulate(g0, add=[("app.a", "app.b")], remove=[], project_root=project)
     assert sim.score_delta.complexity == 0.0
+
+
+# --- coverage: was any requested edge actually simulated? ---------------------
+
+
+def test_unresolved_endpoint_gets_a_hint_and_nothing_is_simulated(tmp_path: Path):
+    """`app.bb` vs `app.b`: 5 matched characters of 6 + 5, ratio 10/11 = 0.91. `app.a`
+    matches only `app.` (4 of 6 + 5, ratio 8/11 = 0.73), under the 0.8 floor, so only
+    `app.b` is offered."""
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(g, add=[("app.a", "app.bb")], remove=[], project_root=project)
+    applied = result.applied
+    assert applied.skipped == ("add app.a -> app.bb",)
+    assert applied.unresolved_hints == (UnresolvedHint(ref="app.bb", did_you_mean=("app.b",)),)
+    assert applied.coverage == "none"
+    assert applied.added_edges == ()
+
+
+def test_a_run_that_simulates_some_edges_and_skips_others_is_partial(tmp_path: Path):
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(
+        g, add=[("app.a", "app.b"), ("app.a", "app.bb")], remove=[], project_root=project
+    )
+    assert [(e.source, e.target) for e in result.applied.added_edges] == [("app.a", "app.b")]
+    assert result.applied.skipped == ("add app.a -> app.bb",)
+    assert result.applied.coverage == "partial"
+
+
+def test_a_no_op_edge_counts_as_simulated_when_judging_coverage(tmp_path: Path):
+    """`app.a` already imports `app.b`, so adding it is a real answer ("already
+    there"), and the typo'd sibling spec leaves the run partial, not none."""
+    project = _make_pkg(tmp_path, {"a.py": "from app.b import x\n", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(
+        g, add=[("app.a", "app.b"), ("app.a", "app.bb")], remove=[], project_root=project
+    )
+    assert result.applied.added_edges == ()
+    assert [(e.source, e.target) for e in result.applied.no_op_adds] == [("app.a", "app.b")]
+    assert result.applied.coverage == "partial"
+
+
+def test_a_fully_resolved_or_empty_delta_is_complete(tmp_path: Path):
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    resolved = find_simulate(g, add=[("app.a", "app.b")], remove=[], project_root=project)
+    assert resolved.applied.skipped == ()
+    assert resolved.applied.coverage == "complete"
+    assert find_simulate(g, add=[], remove=[], project_root=project).applied.coverage == "complete"
+
+
+def test_an_unresolved_remove_is_skipped_too(tmp_path: Path):
+    project = _make_pkg(tmp_path, {"a.py": "from app.b import x\n", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(g, add=[], remove=[("app.a", "app.bb")], project_root=project)
+    assert result.applied.skipped == ("remove app.a -> app.bb",)
+    assert result.applied.coverage == "none"
+
+
+def test_a_file_path_endpoint_is_answered_with_a_file_path_in_the_form_typed(tmp_path: Path):
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(g, add=[("app/a.py", "app/bb.py")], remove=[], project_root=project)
+    assert result.applied.unresolved_hints == (
+        UnresolvedHint(ref="app/bb.py", did_you_mean=("app/b.py",)),
+    )
+
+
+def test_coverage_survives_model_dump(tmp_path: Path):
+    """FastMCP sends `model_dump()`; a plain property would drop the verdict."""
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    result = find_simulate(g, add=[("app.a", "app.bb")], remove=[], project_root=project)
+    applied = result.model_dump()["applied"]
+    assert applied["coverage"] == "none"
+    assert applied["skipped"] == ("add app.a -> app.bb",)

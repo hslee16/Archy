@@ -12,20 +12,20 @@ that file participates in the discovered graph. Files outside the graph
 in any package) are reported as `unresolved` rather than silently
 dropped, so callers can tell why a file produced no impact.
 
-archy:owns        CausalChain, CausalHop, Impact, UnresolvedHint, find_impact
+archy:owns        CausalChain, CausalHop, Impact, find_impact
 archy:mirrored-by Impact -> archy.cli, archy.mcp, find_impact -> archy.cli, archy.mcp
 """
 
 from __future__ import annotations
 
 from itertools import pairwise
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, computed_field
 
 from archy.coupling import CoChangeHint
-from archy.graph import suggest_modules
+from archy.graph import UnresolvedHint, suggest_files
 
 DEFAULT_MAX_CHAINS = 20
 
@@ -68,19 +68,6 @@ class CausalChain(BaseModel):
     changed: str
     via: tuple[str, ...]
     hops: tuple[CausalHop, ...]
-
-
-class UnresolvedHint(BaseModel):
-    """The files an unresolved `.py` path was probably meant to be.
-
-    Kept beside `Impact.unresolved` rather than replacing its strings, so a
-    consumer that reads `unresolved` as a list of paths keeps working.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    file: str
-    did_you_mean: tuple[str, ...]
 
 
 class Impact(BaseModel):
@@ -169,76 +156,12 @@ def find_impact(
     return Impact(
         changed=tuple(sorted(changed)),
         unresolved=tuple(sorted(unresolved)),
-        unresolved_hints=_unresolved_hints(graph, sorted(unresolved)),
+        unresolved_hints=suggest_files(graph, sorted(unresolved)),
         impacted=tuple(sorted(impacted)),
         propagation_cost=propagation_cost,
         chains=chains,
         chains_omitted=chains_omitted,
     )
-
-
-def _unresolved_hints(graph: nx.DiGraph, unresolved: list[str]) -> tuple[UnresolvedHint, ...]:
-    """Name the module file each unresolved `.py` path was probably meant to be.
-
-    The similarity floor in `suggest_modules` is tuned for dotted module names.
-    On whole paths the shared `src/archy/` prefix lifts every sibling over it
-    (`src/archy/clx.py` would match `dsm.py` at 0.81), so the path is turned into
-    the module name it would have and compared as one. The layout prefix (`src/`)
-    is learned from the graph's own modules rather than assumed. Suggestions are
-    shown in the form the caller typed: absolute when the path was absolute,
-    otherwise anchored the same way. No hint without a root to anchor on.
-    """
-    root_raw = graph.graph.get("root")
-    if not root_raw or not unresolved:
-        return ()
-    root = Path(root_raw).resolve()
-
-    by_qualname: dict[str, PurePosixPath] = {}
-    prefixes: set[tuple[str, ...]] = {()}
-    for qualname, data in graph.nodes(data=True):
-        raw = data.get("path")
-        if data.get("external") or not raw:
-            continue
-        try:
-            rel = PurePosixPath(Path(raw).resolve().relative_to(root).as_posix())
-        except ValueError:
-            continue
-        by_qualname[qualname] = rel
-        parts = _module_parts(rel)
-        names = tuple(qualname.split("."))
-        if parts[len(parts) - len(names) :] == names:
-            prefixes.add(parts[: len(parts) - len(names)])
-    longest_first = sorted(prefixes, key=len, reverse=True)
-
-    hints: list[UnresolvedHint] = []
-    for raw_ref in unresolved:
-        ref = Path(raw_ref)
-        if ref.suffix != ".py":
-            continue
-        try:
-            rel = PurePosixPath(ref.resolve().relative_to(root).as_posix())
-        except ValueError:
-            continue
-        parts = _module_parts(rel)
-        stripped = next((parts[len(p) :] for p in longest_first if parts[: len(p)] == p), parts)
-        found = suggest_modules(by_qualname, ".".join(stripped))
-        if not found:
-            continue
-        shown = [_in_callers_form(ref, rel, by_qualname[q]) for q in found]
-        hints.append(UnresolvedHint(file=raw_ref, did_you_mean=tuple(shown)))
-    return tuple(hints)
-
-
-def _module_parts(rel: PurePosixPath) -> tuple[str, ...]:
-    """`pkg/mod.py` -> `("pkg", "mod")`; `pkg/__init__.py` -> `("pkg",)`."""
-    parts = rel.with_suffix("").parts
-    return parts[:-1] if parts[-1] == "__init__" else parts
-
-
-def _in_callers_form(typed: Path, typed_rel: PurePosixPath, candidate_rel: PurePosixPath) -> str:
-    """`candidate_rel` anchored the way `typed` was: same leading directories."""
-    lead = typed.parts[: len(typed.parts) - len(typed_rel.parts)]
-    return str(Path(*lead, *candidate_rel.parts))
 
 
 def _build_chains(

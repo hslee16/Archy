@@ -1455,6 +1455,43 @@ def test_graph_focus_reports_unresolved(acyclic_project: Path):
     assert set(payload.unresolved) == {"nonexistent.module", "missing/file.py"}
 
 
+def test_graph_focus_suggests_the_module_for_an_unresolved_name(acyclic_project: Path):
+    payload = _run_graph_focus(
+        acyclic_project,
+        modules=["pkg.aa", "pkg/aa.py", "nothing.close"],
+        depth=0,
+        direction="both",
+        internal_only=True,
+    )
+    assert {h.ref: h.did_you_mean for h in payload.unresolved_hints} == {
+        "pkg.aa": ("pkg.a",),
+        "pkg/aa.py": ("pkg/a.py",),
+    }
+
+
+def test_graph_focus_suggests_even_when_another_name_resolved(acyclic_project: Path):
+    """The mixed case returns through a different branch than the all-unresolved one."""
+    payload = _run_graph_focus(
+        acyclic_project, modules=["pkg.a", "pkg.bb"], depth=0, direction="both", internal_only=True
+    )
+    assert {n.id for n in payload.nodes} == {"pkg.a"}
+    assert [(h.ref, h.did_you_mean) for h in payload.unresolved_hints] == [("pkg.bb", ("pkg.b",))]
+
+
+def test_simulate_tool_reports_that_nothing_was_simulated(acyclic_project: Path):
+    """On the wire: the verdict and the hint reach the agent, not just the model."""
+    _content, structured = _call_tool(
+        create_server(),
+        "archy_simulate",
+        {"path": str(acyclic_project), "add": [{"from": "pkg.a", "to": "pkg.bb"}]},
+    )
+    assert structured is not None
+    applied = structured["applied"]
+    assert applied["coverage"] == "none"
+    assert applied["skipped"] == ["add pkg.a -> pkg.bb"]
+    assert applied["unresolved_hints"] == [{"ref": "pkg.bb", "did_you_mean": ["pkg.b"]}]
+
+
 def test_graph_focus_multi_seed_unions_ego_graphs(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -1721,7 +1758,7 @@ def test_impact_tool_suggests_the_file_for_an_unresolved_path(acyclic_project: P
     payload = structured["result"]  # a union return type wraps the payload under `result`
     assert payload["nothing_resolved"] is True
     assert payload["unresolved_hints"] == [
-        {"file": str(typo), "did_you_mean": [str(acyclic_project / "pkg" / "b.py")]}
+        {"ref": str(typo), "did_you_mean": [str(acyclic_project / "pkg" / "b.py")]}
     ]
 
 

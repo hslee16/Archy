@@ -1682,6 +1682,42 @@ def test_simulate_cli_empty_delta_renders(tmp_path: Path):
     assert "+0 / -0 edge(s)" in result.output
 
 
+def test_simulate_cli_with_nothing_resolved_does_not_print_a_clean_zero(tmp_path: Path):
+    """`simulate` is asked "should I add this import?". A typo'd endpoint used to
+    answer `overall +0.000` for an edge that was never applied (#627)."""
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["simulate", str(project), "--add", "pkg.a:pkg.bb"])
+    assert result.exit_code == 0
+    assert result.output.splitlines() == [
+        "# simulation (no files written): +0 / -0 edge(s)",
+        "  ! unresolved endpoint: pkg.bb  (did you mean pkg.b?)",
+        "",
+        "# summary: nothing simulated: no edge resolved, so no score, cycle or "
+        "violation delta was computed",
+    ]
+
+
+def test_simulate_cli_partial_run_says_so_before_the_numbers(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    args = ["simulate", str(project), "--add", "pkg.b:pkg.a", "--add", "pkg.a:pkg.bb"]
+    result = CliRunner().invoke(main, args)
+    lines = result.output.splitlines()
+    partial = next(i for i, line in enumerate(lines) if line.startswith("# PARTIAL"))
+    summary = next(i for i, line in enumerate(lines) if line.startswith("# summary"))
+    assert "add pkg.a -> pkg.bb" in lines[partial]
+    assert partial < summary  # the caveat comes first
+    assert "new cycle" in result.output  # and the resolved edge was still simulated
+
+
+def test_simulate_cli_json_carries_the_verdict_and_the_hint(tmp_path: Path):
+    project = _make_acyclic_project(tmp_path)
+    args = ["simulate", str(project), "--add", "pkg.a:pkg.bb", "--format", "json"]
+    applied = json.loads(CliRunner().invoke(main, args).output)["applied"]
+    assert applied["coverage"] == "none"
+    assert applied["skipped"] == ["add pkg.a -> pkg.bb"]
+    assert applied["unresolved_hints"] == [{"ref": "pkg.bb", "did_you_mean": ["pkg.b"]}]
+
+
 def test_simulate_cli_bad_spec_exits_nonzero(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["simulate", str(project), "--add", "foo"])
@@ -2253,7 +2289,7 @@ def test_impact_json_carries_the_hint_and_the_verdict(tmp_path: Path):
     assert payload["nothing_resolved"] is True
     assert payload["unresolved_hints"] == [
         {
-            "file": str(tmp_path / "app/libs/dbb.py"),
+            "ref": str(tmp_path / "app/libs/dbb.py"),
             "did_you_mean": [str(tmp_path / "app/libs/db.py")],
         }
     ]

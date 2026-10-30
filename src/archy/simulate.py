@@ -26,9 +26,10 @@ archy:mirrored-by SimulateReport -> archy.cli, archy.mcp, find_simulate -> archy
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 import networkx as nx
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from archy.diff import (
     CycleSetDiff,
@@ -42,7 +43,7 @@ from archy.diff import (
 )
 from archy.diff_summary import DiffSummary, summarize_diff
 from archy.dsm import build_dsm, diff_dsm
-from archy.graph import resolve_modules
+from archy.graph import UnresolvedHint, hint_unresolved, resolve_modules
 from archy.reach import compute_propagation_cost
 
 
@@ -82,6 +83,28 @@ class AppliedDelta(BaseModel):
     no_op_adds: tuple[EdgeRef, ...]
     no_op_removes: tuple[EdgeRef, ...]
     rejected: tuple[str, ...]
+    # Each spec dropped because an endpoint matched no internal module, as
+    # `add a -> b` / `remove a -> b`: `unresolved` names the endpoints, this names
+    # the edges that were therefore never applied.
+    skipped: tuple[str, ...] = ()
+    unresolved_hints: tuple[UnresolvedHint, ...] = ()
+
+    # `computed_field`, not a bare property: FastMCP sends `model_dump()`, which
+    # drops a plain property, so the verdict would reach the CLI and not the agent.
+    @computed_field
+    @property
+    def coverage(self) -> Literal["complete", "partial", "none"]:
+        """Whether every requested edge was simulated.
+
+        `none` means the deltas in the report describe an unchanged graph, so a
+        `+0.000` there is not a prediction that the edit is free. An edge that
+        already exists, or one absent from a remove, still counts as simulated:
+        those are answers, listed under `no_op_adds` / `no_op_removes`.
+        """
+        if not self.skipped:
+            return "complete"
+        answered = self.added_edges or self.removed_edges or self.no_op_adds or self.no_op_removes
+        return "partial" if answered else "none"
 
 
 class PropagationDelta(BaseModel):
@@ -211,8 +234,10 @@ def _resolve_delta(
         res, _ = resolve_modules(graph, [ref], project_root=project_root)
         return res[0] if res else None
 
+    skipped: list[str] = []
+
     def _resolve_pairs(
-        specs: list[tuple[str, str]],
+        op: str, specs: list[tuple[str, str]]
     ) -> tuple[list[tuple[str, str]], list[str]]:
         pairs: list[tuple[str, str]] = []
         unresolved: list[str] = []
@@ -223,12 +248,13 @@ def _resolve_delta(
             if dst is None:
                 unresolved.append(dst_raw)
             if src is None or dst is None:
+                skipped.append(f"{op} {src_raw} -> {dst_raw}")
                 continue
             pairs.append((src, dst))
         return list(dict.fromkeys(pairs)), unresolved
 
-    add_pairs, add_unres = _resolve_pairs(add)
-    remove_pairs, rem_unres = _resolve_pairs(remove)
+    add_pairs, add_unres = _resolve_pairs("add", add)
+    remove_pairs, rem_unres = _resolve_pairs("remove", remove)
     rejected: list[str] = []
     # De-duplicate unresolved names (order-preserving) the same way pairs are:
     # a name that fails to resolve across several specs is one failed endpoint,
@@ -259,6 +285,8 @@ def _resolve_delta(
         no_op_adds=tuple(no_op_adds),
         no_op_removes=tuple(no_op_removes),
         rejected=tuple(rejected),
+        skipped=tuple(dict.fromkeys(skipped)),
+        unresolved_hints=hint_unresolved(graph, unresolved, base=project_root),
     )
 
 

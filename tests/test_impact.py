@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from archy.graph import build_graph
-from archy.impact import UnresolvedHint, find_impact
+from archy.graph import UnresolvedHint, build_graph
+from archy.impact import find_impact
 
 
 def _make_chain(tmp_path: Path) -> Path:
@@ -239,7 +239,7 @@ def test_impact_unresolved_python_file_names_the_file_it_was_probably_meant_to_b
     assert not typo.exists()
     result = find_impact(g, [typo])
     assert result.unresolved_hints == (
-        UnresolvedHint(file=str(typo), did_you_mean=(str(project / "app" / "libs" / "db.py"),)),
+        UnresolvedHint(ref=str(typo), did_you_mean=(str(project / "app" / "libs" / "db.py"),)),
     )
     assert result.nothing_resolved
 
@@ -258,7 +258,7 @@ def test_impact_hint_strips_a_src_layout_and_answers_in_the_form_typed(
     monkeypatch.chdir(tmp_path)
     result = find_impact(g, [Path("src/app/mdo.py")])
     assert result.unresolved_hints == (
-        UnresolvedHint(file="src/app/mdo.py", did_you_mean=("src/app/mod.py",)),
+        UnresolvedHint(ref="src/app/mdo.py", did_you_mean=("src/app/mod.py",)),
     )
 
 
@@ -286,7 +286,7 @@ def test_impact_hint_does_not_make_a_mixed_run_look_unresolved(tmp_path: Path):
     )
     assert result.changed == ("app.libs.db",)
     assert not result.nothing_resolved
-    assert [h.file for h in result.unresolved_hints] == [str(project / "app" / "libs" / "dbb.py")]
+    assert [h.ref for h in result.unresolved_hints] == [str(project / "app" / "libs" / "dbb.py")]
 
 
 def test_impact_hint_and_nothing_resolved_survive_model_dump(tmp_path: Path):
@@ -297,5 +297,5 @@ def test_impact_hint_and_nothing_resolved_survive_model_dump(tmp_path: Path):
     dumped = find_impact(g, [typo]).model_dump()
     assert dumped["nothing_resolved"] is True
     assert dumped["unresolved_hints"] == (
-        {"file": str(typo), "did_you_mean": (str(project / "app" / "libs" / "db.py"),)},
+        {"ref": str(typo), "did_you_mean": (str(project / "app" / "libs" / "db.py"),)},
     )

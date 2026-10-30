@@ -2881,12 +2881,12 @@ def _simulate_to_text(result: SimulateReport) -> str:
     lines = [
         f"# simulation (no files written): +{len(a.added_edges)} / -{len(a.removed_edges)} edge(s)"
     ]
-    for note, items in (
-        ("unresolved endpoint", a.unresolved),
-        ("rejected", a.rejected),
-    ):
-        for item in items:
-            lines.append(f"  ! {note}: {item}")
+    suggestions = {h.ref: h.did_you_mean for h in a.unresolved_hints}
+    for name in a.unresolved:
+        hint = f"  (did you mean {', '.join(suggestions[name])}?)" if name in suggestions else ""
+        lines.append(f"  ! unresolved endpoint: {name}{hint}")
+    for item in a.rejected:
+        lines.append(f"  ! rejected: {item}")
     for note, edges in (
         ("no-op add (edge already exists)", a.no_op_adds),
         ("no-op remove (edge absent)", a.no_op_removes),
@@ -2895,6 +2895,19 @@ def _simulate_to_text(result: SimulateReport) -> str:
             lines.append(f"  ~ {note}: {e.source} -> {e.target}")
 
     lines.append("")
+    if a.coverage == "none":
+        # Every number below would describe the unchanged graph: a `+0.000` that
+        # reads as "this edit is free" when no edit was simulated.
+        lines.append(
+            "# summary: nothing simulated: no edge resolved, so no score, cycle or "
+            "violation delta was computed"
+        )
+        return "\n".join(lines)
+    if a.coverage == "partial":
+        lines.append(
+            f"# PARTIAL: {len(a.skipped)} spec(s) skipped, unresolved ({'; '.join(a.skipped)}); "
+            "the results below cover only the edges that resolved"
+        )
     lines.extend(_summary_to_text(result.summary))
 
     lines.append("")
@@ -3111,7 +3124,7 @@ def _impact_to_dict(result: Impact) -> dict:
         "changed": list(result.changed),
         "unresolved": list(result.unresolved),
         "unresolved_hints": [
-            {"file": h.file, "did_you_mean": list(h.did_you_mean)} for h in result.unresolved_hints
+            {"ref": h.ref, "did_you_mean": list(h.did_you_mean)} for h in result.unresolved_hints
         ],
         "nothing_resolved": result.nothing_resolved,
         "impacted": list(result.impacted),
@@ -3431,7 +3444,7 @@ def _impact_to_text(result: Impact) -> str:
         _unresolved_and_changed_lines(
             result.unresolved,
             result.changed,
-            {h.file: h.did_you_mean for h in result.unresolved_hints},
+            {h.ref: h.did_you_mean for h in result.unresolved_hints},
         )
     )
     if result.impacted:

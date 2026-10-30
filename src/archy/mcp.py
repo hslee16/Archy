@@ -166,9 +166,11 @@ from archy.duplicates import (
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
+    UnresolvedHint,
     build_graph,
     discover_modules,
     graph_to_dict,
+    hint_unresolved,
     internal_subgraph,
     parse_project,
     resolve_modules,
@@ -581,6 +583,7 @@ class GraphPayload(BaseModel):
     nodes: tuple[GraphNode, ...]
     edges: tuple[GraphEdge, ...]
     unresolved: tuple[str, ...] = ()
+    unresolved_hints: tuple[UnresolvedHint, ...] = ()
 
 
 class GraphTooLargePayload(BaseModel):
@@ -1074,7 +1077,12 @@ def _register_tools(server: Server) -> None:
             "`summary` phrased conditionally ('would form a cycle'). Use it to "
             "test a refactoring hypothesis and reshape the plan before editing. "
             "Endpoints matching no internal module are returned in "
-            "`applied.unresolved`. Caveat: it models the graph delta you "
+            "`applied.unresolved` with a `did you mean` in "
+            "`applied.unresolved_hints`; a spec that could not be applied is "
+            "listed in `applied.skipped`, and `applied.coverage` is `none` when "
+            "no requested edge was simulated (the zero deltas then describe an "
+            "unchanged graph, not a free edit) or `partial` when some were. "
+            "Caveat: it models the graph delta you "
             "describe, not arbitrary code edits (it cannot move the complexity "
             "axis), and one submodule import (`a.b.c`) also implies edges to its "
             "ancestor packages -- include them in `add` to model it exactly (a "
@@ -1897,7 +1905,11 @@ def _run_graph_focus(
     graph = _load_graph(path, internal_only=internal_only)
     resolved, unresolved = resolve_modules(graph, modules, project_root=path)
     if not resolved:
-        return _graph_payload_from(_empty_subgraph(graph), unresolved=tuple(unresolved))
+        return _graph_payload_from(
+            _empty_subgraph(graph),
+            unresolved=tuple(unresolved),
+            unresolved_hints=hint_unresolved(graph, unresolved, base=path),
+        )
 
     reachable: set[str] = set(resolved)
     if direction in ("out", "both"):
@@ -1911,7 +1923,11 @@ def _run_graph_focus(
     sub = graph.subgraph(reachable).copy()
     sub.graph["root"] = graph.graph.get("root")
     sub.graph["parse_errors"] = graph.graph.get("parse_errors", ())
-    return _graph_payload_from(sub, unresolved=tuple(unresolved))
+    return _graph_payload_from(
+        sub,
+        unresolved=tuple(unresolved),
+        unresolved_hints=hint_unresolved(graph, unresolved, base=path),
+    )
 
 
 def _pagerank(graph, *, damping: float = 0.85, iterations: int = 50, tol: float = 1e-6) -> dict:
@@ -2230,7 +2246,12 @@ def _empty_subgraph(graph):
     return empty
 
 
-def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayload:
+def _graph_payload_from(
+    graph,
+    *,
+    unresolved: tuple[str, ...] = (),
+    unresolved_hints: tuple[UnresolvedHint, ...] = (),
+) -> GraphPayload:
     data = graph_to_dict(graph)
     nodes = tuple(
         GraphNode(
@@ -2259,6 +2280,7 @@ def _graph_payload_from(graph, *, unresolved: tuple[str, ...] = ()) -> GraphPayl
         nodes=nodes,
         edges=edges,
         unresolved=unresolved,
+        unresolved_hints=unresolved_hints,
     )
 
 
