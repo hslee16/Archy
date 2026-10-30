@@ -98,6 +98,7 @@ class GraphPayload(BaseModel):
     nodes: tuple[GraphNode, ...]
     edges: tuple[GraphEdge, ...]
     unresolved: tuple[str, ...] = ()  # from focus(): refs that matched no internal module
+    unresolved_hints: tuple[UnresolvedHint, ...] = ()  # {ref, did_you_mean}, when a near miss exists (#627)
 
 # Separate model rather than a `truncated: bool` flag so the typed union
 # (`GraphPayload | GraphTooLargePayload`) forces callers to handle the

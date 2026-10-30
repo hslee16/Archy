@@ -366,3 +366,39 @@ wrong result first:
 - **A gate must reach every surface.** CLI text, CLI JSON, and the MCP payload
   are three consumers, and the presence gate was wired to one at a time across
   three review rounds. The MCP surface is the one agents call.
+
+## Graphify review: one idea worth taking, and four lookups that answered a zero (October 2026, #624-#627, #631)
+
+Graphify (Graphify-Labs/graphify; Apache-2.0, created April 2026, tree-sitter over about 40 languages, a queryable knowledge graph installed as a skill plus a pre-search hook, with a paid cloud product) had come up once, for its Leiden clustering (#190, above). A full read of its README, `ARCHITECTURE.md`, `BENCHMARKS.md` and the source of `analyze.py`, `serve.py` and `affected.py` was done to see what else was worth replicating.
+
+**What its numbers do and do not show.** Its benchmarks are self-run on its own harness. The one code result is n=6 questions on ERPNext (82.0% key-fact coverage against 70.8% for a grep-and-read baseline), and its `INFERRED`-edge precision claim is a manual audit of 12 edges. The "80% fewer tokens" line belongs to the cloud product's marketing, not to any benchmark in the repository. None of it is evidence for adopting a feature.
+
+**Mapped against archy:**
+
+| Graphify feature | Verdict |
+|---|---|
+| `affected`, `graph_diff`, `find_import_cycles`, watcher and cache, HTML render, hub ranking | Already shipped here under other names. |
+| About 40 languages | Out. Python only is settled (`FUTURE.md`, anti-goals). |
+| `suggest_questions`, `GRAPH_REPORT.md`, a hook that nudges the agent toward the graph | Out. This is the delivery line: six interventions, none positive, two cost more than control (`WHAT_DIDNT_WORK.md`). A seventh needs a reason it differs; their n=6 result is not one. |
+| Surprising-connection scoring | Weak here. It earns its keep on graphs that mix file types; archy's imports already have declared layers that catch what matters. |
+| Leiden communities | Closed by #190. Their own README says it falls back to Louvain without the optional extra. |
+| Rationale nodes (`# WHY:` comments and ADRs linked to code) | Speculative; one more fact pushed at the model. |
+| PR conflict risk from shared communities | Needs a usage signal first (under 20 real users). |
+| **Refusing an unresolvable or ambiguous name and listing the candidates** | **Taken.** |
+
+**The audit.** archy's resolution is exact (a qualname or a path), so there is no true ambiguity; the gap was what happens to a name that matches nothing. One surface did it right (`conventions --module` and `archy_module_view`: exit 1, `did you mean`). The other four answered a zero:
+
+- `archy_dsm` with a mistyped `focus` or `package` returned an empty summary with `back_edge_count=0`, which is what a clean project reports.
+- `impact --file` printed `0 module(s) depend on 0 changed module(s)` and exited 0.
+- `simulate` printed `overall +0.000` for an edge it never applied, with the unresolved endpoint named above it.
+- `archy_graph(focus=...)` returned an empty subgraph with the name in `unresolved` and no candidates.
+
+All four were fixed under #625 to #627 (PRs #628, #630, #632, #633), with #624 the shared helper. `affected`, found afterwards to share the renderer and the gap, is #631.
+
+**What the work taught:**
+
+- **An empty result is a false clean.** The fix is never to resolve more (a bare `cli` would match `archy.cli` and every `tests.*cli*` module). It is to refuse, name the nearest candidates, and say in the verdict that nothing was looked up.
+- **Search for the symptom, not the mechanism.** #556 (`dsm --focus` typo prints an empty matrix) already described the worst case, and the duplicate search before filing #625 used the words "ambiguous", "did you mean" and "not found", so it missed it. #628 fixes it (CLI and MCP) and tests it, but #556 stays open: a contributor claimed it and has a pull request in review (#574), which the maintainer has to close or rebase.
+- **Similarity ratios are tuned to a kind of string.** Applied to whole paths, the shared `src/archy/` prefix lifted every sibling over the 0.8 floor (`clx.py` matched `dsm.py` at 0.81). The fix compares the module name the path would have, and `suggest_modules` keeps only misspellings within 0.1 of the closest, so a clear winner is not diluted by siblings that share its prefix (`tests.test_dsmm` offered `test_mcp`, `test_diff` and `test_risk` before that).
+- **mcp 2.x drops a tool's `ValueError` text.** The tool call surfaces `ToolError("Error executing tool archy_dsm")` without the message. Tests therefore pin the exact message on the direct `_run_*` call and assert only the `ToolError` type on the wire (a new test that matched the text failed the `mcp 2.x compatibility` job only). The consequence is that an agent on an mcp 2.x client does not see the reason a tool refused. That is a limit of the SDK, not yet a ticket.
+- **A mutation can be inert twice over.** A mutation helper whose replacement string did not match left the tree unmutated, and the suite "survived". One test also used a stdlib name for an external node, but external nodes are top-level names (`os`, `requests`), so it could never fail. Check that the mutation applied, and assert the fixture reaches the branch.

@@ -75,7 +75,10 @@ EdgeSpec = {"from": str, "to": str}   # resolved (Q1)
   qualnames use dots so `:` is unambiguous between them.
 - An endpoint that does not resolve to a node in the current graph goes into
   `unresolved` (mirrors `Impact.unresolved`); phase 1 does **not** invent new
-  modules, so an unresolved endpoint means that edge is skipped.
+  modules, so an unresolved endpoint means that edge is skipped. The skipped
+  spec is named in `skipped` (`add a -> b`), the near misses in
+  `unresolved_hints`, and `coverage` says how much of the request was simulated
+  (see the report shape below). A skipped edge never reads as a free one.
 - A `remove` edge that does not currently exist is reported in
   `no_op_removes` rather than silently ignored (no silent caps).
 
@@ -143,6 +146,9 @@ SimulateReport:
     unresolved:    tuple[str, ...]          # endpoints not in the graph
     no_op_adds:    tuple[EdgeRef, ...]      # add targets that already existed
     no_op_removes: tuple[EdgeRef, ...]      # remove targets that did not exist
+    skipped:       tuple[str, ...]          # specs never applied, "add a -> b" (#627)
+    unresolved_hints: tuple[UnresolvedHint, ...]  # {ref, did_you_mean} per endpoint
+    coverage: "complete" | "partial" | "none"     # computed_field, see below
   score_delta:   ScoreDelta                 # reuse diff.ScoreDelta
   cycles:        CycleSetDiff               # added / resolved
   violations:    ViolationSetDiff           # layer rules added / resolved
@@ -155,6 +161,14 @@ SimulateReport:
   summary:       DiffSummary                # reuse summarize_diff: risk-ranked
                                             # headline + per-item judgment prompts
 ```
+
+`coverage` is `complete` when every requested edge was simulated, `partial` when
+some were skipped, and `none` when nothing was. With `none` every number in the
+report describes the unchanged graph, so a `+0.000` there is not a prediction
+that the edit is free; the CLI prints `nothing simulated` instead of the score
+block. A no-op (an add of an existing edge, a remove of an absent one) counts as
+simulated: it is an answer. It is a `computed_field`, because FastMCP sends
+`model_dump()` and a plain property would reach the CLI but not the agent.
 
 Notes:
 - `new_back_edges` is translated from `DSMCell(row, col)` positions back to

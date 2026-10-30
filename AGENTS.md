@@ -88,6 +88,24 @@ and assert on `model_dump()`.
 `violations` list is indistinguishable from a bug in archy. Whatever fails the
 gate must also say why, in every format.
 
+**A name that matched nothing is a refusal, not an empty result.** `archy_dsm`
+with a mistyped `focus` returned `back_edge_count=0`, which a clean project also
+reports, and `simulate` printed `overall +0.000` for an edge it never applied
+(#625, #627). Raise, or put the unresolved state in the verdict itself
+(`coverage`, `nothing_resolved`), and name the near misses with
+`graph.suggest_modules`. It suggests and never accepts: resolving a bare `cli`
+to one of `archy.cli` and every `tests.*cli*` module would be a guess. Search for
+an existing ticket by the symptom ("empty", "exits 0"), not only the mechanism:
+#556 already described the dsm case and a mechanism-worded search missed it.
+
+**mcp 2.x drops a tool's `ValueError` text.** The call surfaces
+`ToolError("Error executing tool <name>")` with no message. Pin the exact message
+on the direct `_run_*` call and assert only the `ToolError` type through
+`_call_tool`; a test that matched the text passed on mcp 1.x and failed only the
+`mcp 2.x compatibility` job. Reproduce that job locally with its own install
+(`uv venv`, then `uv pip install -e ".[contracts]" "mcp>=2,<3" pytest
+pytest-snapshot`) before pushing a change to a tool's error path.
+
 ## Tests that cannot fail
 
 A green suite is not evidence a test works. Sixteen tests in this repository
@@ -124,7 +142,13 @@ nothing in either direction**: reversing a topological sort on a 3-cycle changes
 nothing, because one SCC orders its members alphabetically, and a test that
 "survives" it has not been shown to be blind. And **clear `__pycache__`**: a
 reordering mutation keeps the file's byte length, so a stale `.pyc` can survive
-the restore and make a clean tree report the mutated behaviour.
+the restore and make a clean tree report the mutated behaviour. A third: **a
+mutation that did not apply is inert too.** A helper whose replacement string
+fails to match leaves the tree unmutated and the suite "survives"; make the
+helper exit non-zero when the match is missing, and read its "applied" line. That
+happened once in #633. In the same PR one test could never fail, though its
+mutation applied, because it named `os.path` as an external node when external
+nodes are top-level names (`os`, `requests`).
 
 Remaining known cases are filed as #440, #441 and #442.
 
