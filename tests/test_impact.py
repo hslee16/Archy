@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from archy.graph import build_graph
-from archy.impact import find_impact
+from archy.impact import UnresolvedHint, find_impact
 
 
 def _make_chain(tmp_path: Path) -> Path:
@@ -226,3 +226,76 @@ def test_nonempty_or_unresolved_impact_has_no_caveat(chain):
     nothing = find_impact(graph, [project / "README.md"])
     assert nothing.changed == () and nothing.unresolved
     assert nothing.model_dump()["empty_caveat"] is None
+
+
+# --- unresolved file hints ----------------------------------------------------
+
+
+def test_impact_unresolved_python_file_names_the_file_it_was_probably_meant_to_be(tmp_path: Path):
+    """`app.libs.dbb` vs `app.libs.db`: 11 matched characters of 12 + 11, ratio 22/23."""
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    typo = project / "app" / "libs" / "dbb.py"
+    assert not typo.exists()
+    result = find_impact(g, [typo])
+    assert result.unresolved_hints == (
+        UnresolvedHint(file=str(typo), did_you_mean=(str(project / "app" / "libs" / "db.py"),)),
+    )
+    assert result.nothing_resolved
+
+
+def test_impact_hint_strips_a_src_layout_and_answers_in_the_form_typed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """`src/app/mdo.py` is the module `app.mdo` once the learned `src/` prefix is
+    dropped: 12/14 = 0.86 from `app.mod`. On the whole path the shared `src/app/`
+    would inflate every sibling, so a relative input must get a relative answer."""
+    pkg = tmp_path / "src" / "app"
+    pkg.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "mod.py").write_text("")
+    g = build_graph(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    result = find_impact(g, [Path("src/app/mdo.py")])
+    assert result.unresolved_hints == (
+        UnresolvedHint(file="src/app/mdo.py", did_you_mean=("src/app/mod.py",)),
+    )
+
+
+def test_impact_hint_is_silent_when_nothing_is_close_or_the_file_is_not_python(tmp_path: Path):
+    project = _make_chain(tmp_path)
+    (project / "README.md").write_text("")
+    g = build_graph(project)
+    result = find_impact(
+        g,
+        [
+            project / "app" / "libs" / "zzzzzzzz.py",
+            project / "README.md",
+            project / "app" / "libs" / "dbb.txt",
+        ],
+    )
+    assert len(result.unresolved) == 3  # still reported, just not guessed at
+    assert result.unresolved_hints == ()
+
+
+def test_impact_hint_does_not_make_a_mixed_run_look_unresolved(tmp_path: Path):
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    result = find_impact(
+        g, [project / "app" / "libs" / "db.py", project / "app" / "libs" / "dbb.py"]
+    )
+    assert result.changed == ("app.libs.db",)
+    assert not result.nothing_resolved
+    assert [h.file for h in result.unresolved_hints] == [str(project / "app" / "libs" / "dbb.py")]
+
+
+def test_impact_hint_and_nothing_resolved_survive_model_dump(tmp_path: Path):
+    """FastMCP sends `model_dump()`; a plain property would drop `nothing_resolved`."""
+    project = _make_chain(tmp_path)
+    g = build_graph(project)
+    typo = project / "app" / "libs" / "dbb.py"
+    dumped = find_impact(g, [typo]).model_dump()
+    assert dumped["nothing_resolved"] is True
+    assert dumped["unresolved_hints"] == (
+        {"file": str(typo), "did_you_mean": (str(project / "app" / "libs" / "db.py"),)},
+    )

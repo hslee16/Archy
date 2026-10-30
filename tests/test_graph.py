@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import difflib
 from pathlib import Path
 
 import networkx as nx
 import pytest
 
 from archy.graph import (
+    _SUGGEST_MIN_SIMILARITY,
     DEFAULT_IGNORED_DIRS,
     DEFAULT_MAX_MODULES,
     ScanTooLargeError,
@@ -964,6 +966,21 @@ def test_suggest_modules_puts_containing_names_before_misspellings():
     known = ("m.scorf", "z.m.score")
     assert sorted(known)[0] == "m.scorf"
     assert suggest_modules(known, "m.score") == ["z.m.score", "m.scorf"]
+
+
+def test_suggest_modules_does_not_dilute_a_clear_winner_with_prefix_siblings():
+    """`tests.test_dsmm` is 28/29 = 0.97 from `tests.test_dsm`; `tests.test_mcp` shares
+    `tests.test_` and an `m` (24/29 = 0.83). The sibling clears the floor but is more
+    than 0.1 behind the winner, so it is not offered."""
+    known = ("tests.test_dsm", "tests.test_mcp")
+    siblings_ratio = difflib.SequenceMatcher(None, "tests.test_dsmm", "tests.test_mcp").ratio()
+    assert siblings_ratio >= _SUGGEST_MIN_SIMILARITY  # the floor alone would offer it
+    assert suggest_modules(known, "tests.test_dsmm") == ["tests.test_dsm"]
+
+
+def test_suggest_modules_keeps_misspellings_that_are_equally_close():
+    """`m.scorf` and `m.scorg` are each 12/14 = 0.86 from `m.score`: neither wins."""
+    assert suggest_modules(("m.scorg", "m.scorf"), "m.score") == ["m.scorf", "m.scorg"]
 
 
 def test_suggest_modules_does_not_offer_unrelated_siblings():

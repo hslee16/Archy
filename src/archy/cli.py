@@ -15,7 +15,7 @@ from __future__ import annotations
 import difflib
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -3041,15 +3041,24 @@ def _deleted_lines(deleted: Sequence[str]) -> list[str]:
     ]
 
 
-def _unresolved_and_changed_lines(unresolved: Sequence[str], changed: Sequence[str]) -> list[str]:
+def _unresolved_and_changed_lines(
+    unresolved: Sequence[str],
+    changed: Sequence[str],
+    did_you_mean: Mapping[str, Sequence[str]] | None = None,
+) -> list[str]:
     """The `did not resolve` block and the `Changed:` list shared by `impact` and `affected`."""
+    suggestions = did_you_mean or {}
     lines: list[str] = []
     if unresolved:
         lines.append(
             f"# {len(unresolved)} file(s) did not resolve to a module "
             "(non-Python, excluded, or outside any package):"
         )
-        lines.extend(f"  ? {f}" for f in unresolved)
+        lines.extend(
+            f"  ? {f}"
+            + (f"  (did you mean {', '.join(suggestions[f])}?)" if f in suggestions else "")
+            for f in unresolved
+        )
     if changed:
         lines.append("")
         lines.append("Changed:")
@@ -3101,6 +3110,10 @@ def _impact_to_dict(result: Impact) -> dict:
     return {
         "changed": list(result.changed),
         "unresolved": list(result.unresolved),
+        "unresolved_hints": [
+            {"file": h.file, "did_you_mean": list(h.did_you_mean)} for h in result.unresolved_hints
+        ],
+        "nothing_resolved": result.nothing_resolved,
         "impacted": list(result.impacted),
         "chains": [
             {
@@ -3402,10 +3415,25 @@ def _refactor_to_text(
 
 
 def _impact_to_text(result: Impact) -> str:
-    lines = [
-        f"# {len(result.impacted)} module(s) depend on {len(result.changed)} changed module(s)"
-    ]
-    lines.extend(_unresolved_and_changed_lines(result.unresolved, result.changed))
+    if result.nothing_resolved:
+        # "0 module(s) depend on 0 changed module(s)" reads as a clean answer; no
+        # file was looked up, so there is no answer.
+        headline = (
+            f"# nothing analysed: none of {len(result.unresolved)} file(s) resolved to a module, "
+            "so no blast radius was computed"
+        )
+    else:
+        headline = (
+            f"# {len(result.impacted)} module(s) depend on {len(result.changed)} changed module(s)"
+        )
+    lines = [headline]
+    lines.extend(
+        _unresolved_and_changed_lines(
+            result.unresolved,
+            result.changed,
+            {h.file: h.did_you_mean for h in result.unresolved_hints},
+        )
+    )
     if result.impacted:
         lines.append("")
         lines.append("Impacted (transitive dependents):")

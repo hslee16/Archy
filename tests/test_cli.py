@@ -2231,6 +2231,42 @@ def test_impact_and_affected_text_share_the_unresolved_and_changed_block(
     assert expected in result.output
 
 
+def test_impact_text_suggests_the_file_and_stops_reading_as_a_zero_blast_radius(
+    tmp_path: Path,
+):
+    _make_libs_to_routers_chain(tmp_path)
+    result = CliRunner().invoke(main, ["impact", str(tmp_path), "--file", "app/libs/dbb.py"])
+    assert result.exit_code == 0, result.output  # deleted and renamed files take this path (#592)
+    assert result.output.splitlines()[:3] == [
+        "# nothing analysed: none of 1 file(s) resolved to a module, "
+        "so no blast radius was computed",
+        "# 1 file(s) did not resolve to a module (non-Python, excluded, or outside any package):",
+        f"  ? {tmp_path / 'app/libs/dbb.py'}  (did you mean {tmp_path / 'app/libs/db.py'}?)",
+    ]
+    assert "module(s) depend on" not in result.output
+
+
+def test_impact_json_carries_the_hint_and_the_verdict(tmp_path: Path):
+    _make_libs_to_routers_chain(tmp_path)
+    args = ["impact", str(tmp_path), "--file", "app/libs/dbb.py", "--format", "json"]
+    payload = json.loads(CliRunner().invoke(main, args).output)
+    assert payload["nothing_resolved"] is True
+    assert payload["unresolved_hints"] == [
+        {
+            "file": str(tmp_path / "app/libs/dbb.py"),
+            "did_you_mean": [str(tmp_path / "app/libs/db.py")],
+        }
+    ]
+
+
+def test_impact_headline_is_unchanged_when_any_file_resolves(tmp_path: Path):
+    _make_libs_to_routers_chain(tmp_path)
+    args = ["impact", str(tmp_path), "--file", "app/libs/db.py", "--file", "app/libs/dbb.py"]
+    result = CliRunner().invoke(main, args)
+    assert result.output.startswith("# 1 module(s) depend on 1 changed module(s)")
+    assert "(did you mean" in result.output
+
+
 def _dup_group(category: str, *, exact: bool = False, similarity: float | None = None):
     members = (
         DuplicateMember(module="pkg.a", qualified_name="alpha", path="pkg/a.py", line=3),

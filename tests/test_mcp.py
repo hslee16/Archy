@@ -1710,6 +1710,21 @@ def test_graph_tool_focus_still_validates_response_format(acyclic_project: Path)
         )
 
 
+def test_impact_tool_suggests_the_file_for_an_unresolved_path(acyclic_project: Path):
+    """On the wire: both new fields reach the agent, not just the model."""
+    typo = acyclic_project / "pkg" / "bb.py"
+    assert not typo.exists()
+    _content, structured = _call_tool(
+        create_server(), "archy_impact", {"path": str(acyclic_project), "files": ["pkg/bb.py"]}
+    )
+    assert structured is not None
+    payload = structured["result"]  # a union return type wraps the payload under `result`
+    assert payload["nothing_resolved"] is True
+    assert payload["unresolved_hints"] == [
+        {"file": str(typo), "did_you_mean": [str(acyclic_project / "pkg" / "b.py")]}
+    ]
+
+
 def test_impact_mode_blast_returns_chains(acyclic_project: Path):
     """`mode='blast'` (the default) answers "what breaks if I edit this", and a
     chain is the "because": the import path from an impacted module back to the

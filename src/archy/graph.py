@@ -17,7 +17,8 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   internal_subgraph -> archy.cli, archy.mcp,
                   parse_project -> archy.cli, archy.mcp,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
-                  bench.pattern_detection, resolve_modules -> archy.mcp, archy.simulate
+                  bench.pattern_detection, resolve_modules -> archy.mcp,
+                  archy.simulate, suggest_modules -> archy.conventions, archy.impact
 """
 
 from __future__ import annotations
@@ -69,6 +70,9 @@ DEFAULT_MAX_MODULES = 10_000
 # unrelated modules sharing a package prefix (`archy.cli`, `archy.dsm`) score
 # ~0.67, and must not be offered as the answer to each other.
 _SUGGEST_MIN_SIMILARITY = 0.8
+
+# How far below the closest misspelling a candidate may fall and still be offered.
+_SUGGEST_MARGIN = 0.1
 
 
 class ScanTooLargeError(Exception):
@@ -317,6 +321,9 @@ def suggest_modules(known: Iterable[str], ref: str, limit: int = 5) -> list[str]
 
     Names that contain `ref` come first (`cli` finds `archy.cli`), then names
     spelled like it (`archy.scoer` finds `archy.score`, similarity ratio 20/22).
+    Of the misspellings only those within `_SUGGEST_MARGIN` of the closest are
+    kept: a clear winner is not diluted by siblings that merely share its
+    prefix (`tests.test_dsmm` finds `tests.test_dsm`, not also `tests.test_mcp`).
     Each tier is ordered by name, the second by similarity then name, so the
     answer does not depend on the order `known` arrives in.
     """
@@ -332,7 +339,10 @@ def suggest_modules(known: Iterable[str], ref: str, limit: int = 5) -> list[str]
         ratio = difflib.SequenceMatcher(None, ref, n).ratio()
         if ratio >= _SUGGEST_MIN_SIMILARITY:
             scored.append((-ratio, n))
-    return (contained + [n for _, n in sorted(scored)])[:limit]
+    scored.sort()
+    closest = -scored[0][0] if scored else 0.0
+    kept = [n for r, n in scored if -r >= closest - _SUGGEST_MARGIN]
+    return (contained + kept)[:limit]
 
 
 def internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:
