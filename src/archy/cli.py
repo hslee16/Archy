@@ -1248,14 +1248,17 @@ def _dsm_from_path(
     """
     from archy.dsm import GroupBy, Weight, build_dsm
 
-    return build_dsm(
-        _load_graph(path, internal_only=False),
-        group_by=cast(GroupBy, group_by),
-        weight=cast(Weight, weight),
-        focus=focus,
-        focus_depth=focus_depth,
-        package=package,
-    )
+    try:
+        return build_dsm(
+            _load_graph(path, internal_only=False),
+            group_by=cast(GroupBy, group_by),
+            weight=cast(Weight, weight),
+            focus=focus,
+            focus_depth=focus_depth,
+            package=package,
+        )
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
 
 @main.command()

@@ -792,6 +792,27 @@ def test_archy_cycles_rejects_min_size_below_one(acyclic_project: Path):
     assert structured == {"result": []}
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"focus": "pkg.nope"}, "focus 'pkg.nope' is not an internal module"),
+        ({"package": "nope"}, "package 'nope' matches no internal module"),
+    ],
+)
+def test_archy_dsm_refuses_a_name_that_matches_nothing(
+    acyclic_project: Path, kwargs: dict, message: str
+):
+    """The tool used to return a clean-looking empty summary for a typo (#625)."""
+    from archy.mcp_compat import ToolError
+
+    assert _dsm(acyclic_project).module_count > 0  # the unfiltered project is not empty
+    with pytest.raises(ValueError, match=message):
+        _dsm(acyclic_project, **kwargs)
+    server = create_server()
+    with pytest.raises(ToolError, match=message):
+        _call_tool(server, "archy_dsm", {"path": str(acyclic_project), **kwargs})
+
+
 def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
     """MCP archy_dsm must reject focus_depth < 0 the way the CLI does."""
     from archy.mcp_compat import ToolError

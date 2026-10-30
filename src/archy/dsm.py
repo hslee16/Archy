@@ -194,11 +194,21 @@ def build_dsm(
     Operates on the internal subgraph (external nodes excluded; the
     audience is structural reasoning about your own code, not vendor
     surface). Applies `focus` and `package` filters in that order.
+
+    Raises `ValueError` when `package` matches no internal module, or `focus`
+    is not one (inside `package`, when both are given). An empty matrix reads
+    as `back_edge_count=0`, which is also what a clean project reports, so a
+    mistyped name must be refused rather than answered with a zero.
     """
     sub = _internal_subgraph(graph)
     if package is not None:
         sub = _filter_by_package(sub, package)
+        if not sub:
+            raise ValueError(f"package {package!r} matches no internal module")
     if focus is not None:
+        if focus not in sub:
+            within = f" within package {package!r}" if package is not None else ""
+            raise ValueError(f"focus {focus!r} is not an internal module{within}")
         sub = _filter_by_focus(sub, focus, focus_depth)
 
     if group_by == "community":
@@ -245,8 +255,6 @@ def _filter_by_package(graph: nx.DiGraph, prefix: str) -> nx.DiGraph:
 
 
 def _filter_by_focus(graph: nx.DiGraph, focus: str, depth: int) -> nx.DiGraph:
-    if focus not in graph:
-        return graph.subgraph([]).copy()
     keep: set[str] = {focus}
     frontier: set[str] = {focus}
     for _ in range(max(depth, 0)):

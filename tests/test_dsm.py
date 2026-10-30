@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import networkx as nx
@@ -210,10 +211,35 @@ def test_focus_filter_depth_two_grows_neighborhood():
     assert set(dsm.ordering) == {"a", "b", "c", "d", "e"}
 
 
-def test_focus_filter_unknown_node_returns_empty():
+def test_focus_filter_unknown_node_is_refused():
+    """An empty matrix reports 0 back-edges, the same as a clean project (#625)."""
     g = _g(("a", "b"))
-    dsm = build_dsm(g, focus="nope")
-    assert dsm.ordering == ()
+    with pytest.raises(ValueError, match="focus 'nope' is not an internal module"):
+        build_dsm(g, focus="nope")
+
+
+def test_package_filter_matching_nothing_is_refused():
+    g = _g(("pkg.a", "pkg.b"))
+    with pytest.raises(ValueError, match="package 'pkgg' matches no internal module"):
+        build_dsm(g, package="pkgg")
+
+
+def test_package_prefix_must_end_at_a_dot_boundary():
+    """`pk` is a string prefix of `pkg.a` but not a package of it."""
+    g = _g(("pkg.a", "pkg.b"))
+    with pytest.raises(ValueError, match="package 'pk' matches no internal module"):
+        build_dsm(g, package="pk")
+
+
+def test_focus_outside_the_package_is_refused_and_says_so():
+    g = _g(("pkg.a", "pkg.b"), ("other.c", "other.d"))
+    # Both names exist; only the combination is empty, so the message must name the package.
+    assert "other.c" in g
+    with pytest.raises(
+        ValueError,
+        match=re.escape("focus 'other.c' is not an internal module within package 'pkg'"),
+    ):
+        build_dsm(g, focus="other.c", package="pkg")
 
 
 # --- Builder: package filter --------------------------------------------------

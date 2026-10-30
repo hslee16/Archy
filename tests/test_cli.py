@@ -1542,6 +1542,24 @@ def test_dsm_ascii_rejects_oversized_with_helpful_message(tmp_path: Path):
     assert "--focus" in result.output
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    [
+        ("--focus", "pkg.nope", "focus 'pkg.nope' is not an internal module"),
+        ("--package", "nope", "package 'nope' matches no internal module"),
+    ],
+)
+def test_dsm_refuses_a_name_that_matches_nothing(
+    tmp_path: Path, flag: str, value: str, message: str
+):
+    """A mistyped name used to print an empty matrix, which reads as a clean project (#625)."""
+    project = _make_three_module_project(tmp_path)
+    assert _dsm_json(project)["ordering"]  # the unfiltered project is not empty
+    result = CliRunner().invoke(main, ["dsm", str(project), flag, value, "--format", "json"])
+    assert result.exit_code == 1
+    assert f"Error: {message}" in result.output
+
+
 def test_dsm_rejects_negative_focus_depth(tmp_path: Path):
     project = _make_three_module_project(tmp_path)
     result = CliRunner().invoke(main, ["dsm", str(project), "--focus-depth", "-1"])
