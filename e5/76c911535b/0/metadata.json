@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "e576c911535b",
+  "session_id": "6c8713c3-0797-4682-844d-d2968adf7740",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-30T16:33:34.907823Z",
+  "branch": "alee/dsm-unmatched-focus-refusal",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "src/archy/cli.py",
+    "src/archy/dsm.py",
+    "tests/test_cli.py",
+    "tests/test_dsm.py",
+    "tests/test_mcp.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "314498c99684",
+  "token_usage": {
+    "input_tokens": 84,
+    "cache_creation_tokens": 110442,
+    "cache_read_tokens": 3858061,
+    "output_tokens": 26144,
+    "api_call_count": 38
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-30T16:33:34.880328Z",
+    "agent_lines": 89,
+    "agent_removed": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 89,
+    "total_lines_changed": 102,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 674,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130
+      }
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+have we researched/considered graphify https://github.com/Graphify-Labs/graphify in the past?
+
+---
+
+lets do a deep dive research. Perhaps there are functionality of graphify we can replicate in archy
+
+---
+
+lets audit and do Graphify feature: Ambiguity refusal on name lookup. Create new tickets
+
+---
+
+why does 624 block the other three tickets?
+
+---
+
+yep, lets get to work
