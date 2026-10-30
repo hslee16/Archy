@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "566be11b3a4c",
+  "strategy": "manual-commit",
+  "branch": "alee/suggest-modules-helper",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/archy/conventions.py",
+    "src/archy/graph.py",
+    "tests/test_conventions.py",
+    "tests/test_graph.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/56/6be11b3a4c/0/metadata.json",
+      "transcript": "/56/6be11b3a4c/0/full.jsonl",
+      "content_hash": "/56/6be11b3a4c/0/content_hash.txt",
+      "prompt": "/56/6be11b3a4c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 28,
+    "cache_creation_tokens": 11293,
+    "cache_read_tokens": 2111606,
+    "output_tokens": 8422,
+    "api_call_count": 12
+  }
+}
