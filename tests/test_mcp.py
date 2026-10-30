@@ -808,9 +808,11 @@ def test_archy_dsm_refuses_a_name_that_matches_nothing(
     assert _dsm(acyclic_project).module_count > 0  # the unfiltered project is not empty
     with pytest.raises(ValueError, match=message):
         _dsm(acyclic_project, **kwargs)
-    server = create_server()
-    with pytest.raises(ToolError, match=message):
-        _call_tool(server, "archy_dsm", {"path": str(acyclic_project), **kwargs})
+    # mcp 2.x wraps the ValueError as ToolError("Error executing tool archy_dsm")
+    # without the underlying message; 1.x keeps it. The exact message is pinned on
+    # the direct _dsm raise above.
+    with pytest.raises(ToolError):
+        _call_tool(create_server(), "archy_dsm", {"path": str(acyclic_project), **kwargs})
 
 
 def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
