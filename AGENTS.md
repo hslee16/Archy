@@ -98,8 +98,9 @@ to one of `archy.cli` and every `tests.*cli*` module would be a guess. Search fo
 an existing ticket by the symptom ("empty", "exits 0"), not only the mechanism:
 #556 already described the dsm case and a mechanism-worded search missed it.
 
-**mcp 2.x drops a tool's `ValueError` text.** The call surfaces
-`ToolError("Error executing tool <name>")` with no message. Pin the exact message
+**mcp 2.x drops a tool's `ValueError` text** (#636). The call surfaces
+`UnexpectedToolError("Error executing tool <name>")`, a `ToolError` subclass, with
+no message; a tool that raises `ToolError(msg)` itself keeps it. Pin the exact message
 on the direct `_run_*` call and assert only the `ToolError` type through
 `_call_tool`; a test that matched the text passed on mcp 1.x and failed only the
 `mcp 2.x compatibility` job. Reproduce that job locally with its own install
