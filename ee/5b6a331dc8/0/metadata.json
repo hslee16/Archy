@@ -1,0 +1,98 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "ee5b6a331dc8",
+  "session_id": "6c8713c3-0797-4682-844d-d2968adf7740",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-30T18:30:37.766466Z",
+  "branch": "alee/docs-status-refresh-0-53",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "AGENTS.md",
+    "README.md",
+    "docs/FUTURE.md",
+    "docs/LEARNINGS.md",
+    "docs/ROADMAP.md",
+    "docs/SHIPPED.md",
+    "docs/SPEC_GRAPH_MCP.md",
+    "docs/SPEC_SIMULATE.md",
+    "plugins/claude/skills/archy/SKILL.md",
+    "skills/archy/SKILL.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "5bca57eb0888",
+  "checkpoint_transcript_start": 1379,
+  "transcript_lines_at_start": 1379,
+  "token_usage": {
+    "input_tokens": 74,
+    "cache_creation_tokens": 73394,
+    "cache_read_tokens": 11254386,
+    "output_tokens": 28809,
+    "api_call_count": 32
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01JYqo5Yi8HJXxiqMqzPma5X",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "5bca57eb0888",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 360,
+        "end": 361,
+        "entry_ids": [
+          "a501059e-b4a4-4caa-8049-5fd7c82e2d16"
+        ],
+        "tool_use_id": "toolu_01JYqo5Yi8HJXxiqMqzPma5X"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01JYqo5Yi8HJXxiqMqzPma5X"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 24
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-30T18:30:37.684588Z",
+    "agent_lines": 112,
+    "agent_removed": 13,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 112,
+    "total_lines_changed": 125,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 674,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130
+      }
+    }
+  ]
+}

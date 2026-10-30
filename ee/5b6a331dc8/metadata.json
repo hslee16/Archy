@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "ee5b6a331dc8",
+  "strategy": "manual-commit",
+  "branch": "alee/docs-status-refresh-0-53",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "AGENTS.md",
+    "README.md",
+    "docs/FUTURE.md",
+    "docs/LEARNINGS.md",
+    "docs/ROADMAP.md",
+    "docs/SHIPPED.md",
+    "docs/SPEC_GRAPH_MCP.md",
+    "docs/SPEC_SIMULATE.md",
+    "plugins/claude/skills/archy/SKILL.md",
+    "skills/archy/SKILL.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ee/5b6a331dc8/0/metadata.json",
+      "transcript": "/ee/5b6a331dc8/0/full.jsonl",
+      "content_hash": "/ee/5b6a331dc8/0/content_hash.txt",
+      "prompt": "/ee/5b6a331dc8/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 74,
+    "cache_creation_tokens": 73394,
+    "cache_read_tokens": 11254386,
+    "output_tokens": 28809,
+    "api_call_count": 32
+  }
+}
