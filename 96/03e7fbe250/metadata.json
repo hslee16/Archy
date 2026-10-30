@@ -1,0 +1,34 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "9603e7fbe250",
+  "strategy": "manual-commit",
+  "branch": "alee/simulate-unresolved",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "src/archy/cli.py",
+    "src/archy/graph.py",
+    "src/archy/impact.py",
+    "src/archy/mcp.py",
+    "src/archy/simulate.py",
+    "tests/test_cli.py",
+    "tests/test_graph.py",
+    "tests/test_impact.py",
+    "tests/test_mcp.py",
+    "tests/test_simulate.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/96/03e7fbe250/0/metadata.json",
+      "transcript": "/96/03e7fbe250/0/full.jsonl",
+      "content_hash": "/96/03e7fbe250/0/content_hash.txt",
+      "prompt": "/96/03e7fbe250/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 67857,
+    "cache_read_tokens": 7985416,
+    "output_tokens": 30754,
+    "api_call_count": 29
+  }
+}

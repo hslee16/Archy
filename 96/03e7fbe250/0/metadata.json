@@ -1,0 +1,119 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "9603e7fbe250",
+  "session_id": "6c8713c3-0797-4682-844d-d2968adf7740",
+  "strategy": "manual-commit",
+  "created_at": "2026-10-30T17:55:35.091892Z",
+  "branch": "alee/simulate-unresolved",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "src/archy/cli.py",
+    "src/archy/graph.py",
+    "src/archy/impact.py",
+    "src/archy/mcp.py",
+    "src/archy/simulate.py",
+    "tests/test_cli.py",
+    "tests/test_graph.py",
+    "tests/test_impact.py",
+    "tests/test_mcp.py",
+    "tests/test_simulate.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "615824fe353f",
+  "checkpoint_transcript_start": 1044,
+  "transcript_lines_at_start": 1044,
+  "token_usage": {
+    "input_tokens": 72,
+    "cache_creation_tokens": 67857,
+    "cache_read_tokens": 7985416,
+    "output_tokens": 30754,
+    "api_call_count": 29
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01JYqo5Yi8HJXxiqMqzPma5X",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "615824fe353f",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 360,
+        "end": 361,
+        "entry_ids": [
+          "a501059e-b4a4-4caa-8049-5fd7c82e2d16"
+        ],
+        "tool_use_id": "toolu_01JYqo5Yi8HJXxiqMqzPma5X"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01JYqo5Yi8HJXxiqMqzPma5X"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 19
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-10-30T17:55:35.022045Z",
+    "agent_lines": 0,
+    "agent_removed": 8,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 108,
+    "total_committed": 18,
+    "total_lines_changed": 116,
+    "agent_percentage": 6.896551724137931,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1055,
+      "user_lines_removed": 108,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130,
+        "src/archy/cli.py": 21,
+        "src/archy/graph.py": 109,
+        "src/archy/impact.py": 4,
+        "src/archy/mcp.py": 26,
+        "src/archy/simulate.py": 33,
+        "tests/test_cli.py": 37,
+        "tests/test_graph.py": 38,
+        "tests/test_impact.py": 6,
+        "tests/test_mcp.py": 29,
+        "tests/test_simulate.py": 78
+      },
+      "user_removed_per_file": {
+        "src/archy/cli.py": 8,
+        "src/archy/graph.py": 1,
+        "src/archy/impact.py": 81,
+        "src/archy/mcp.py": 4,
+        "src/archy/simulate.py": 5,
+        "tests/test_cli.py": 1,
+        "tests/test_impact.py": 6,
+        "tests/test_mcp.py": 1,
+        "tests/test_simulate.py": 1
+      }
+    }
+  ]
+}
