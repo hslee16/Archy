@@ -1070,6 +1070,11 @@ def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: b
     With --strict, it is a ratchet for a codebase that already has cycles or
     violations: findings the baseline records are carried, new ones fail.
     """
+    # Validate before the baseline is read so a bad --top fails fast and
+    # consistently (a non-positive value otherwise silently truncated the
+    # list: --top 0 dropped the whole section, --top -1 the last regression).
+    # Every other --top flag refuses values below 1.
+    _require(top_n >= 1, "top", ">= 1", top_n)
     if strict and baseline_path is None:
         # `.archy/baseline.json` is what `archy snapshot` (and the MCP
         # `archy_snapshot` an agent is told to call per task) overwrites. A

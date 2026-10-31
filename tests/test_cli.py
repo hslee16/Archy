@@ -1081,6 +1081,68 @@ def test_what_to_refactor_next_top_rejects_invalid_values(tmp_path: Path, bad: s
     assert f"--top must be >= 1; got {bad}" in result.output
 
 
+def _make_two_cycle_project(tmp_path: Path) -> Path:
+    """Clean 5-module baseline, then two fresh 2-cycles written on top of it.
+
+    The two cycles give more regressions than any single `--top` value shows,
+    so a `-1` that means "all but the last" cannot pass as "all", and a `0`
+    that hides every regression cannot pass as "none found".
+    """
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for name in ("a", "b", "c", "d", "e"):
+        (pkg / f"{name}.py").write_text("")
+    snap = _snapshot_findings_only(tmp_path)
+    assert snap.exit_code == 0, snap.output
+    (pkg / "a.py").write_text("import pkg.b\n")
+    (pkg / "b.py").write_text("import pkg.a\n")
+    (pkg / "c.py").write_text("import pkg.d\n")
+    (pkg / "d.py").write_text("import pkg.c\n")
+    return tmp_path
+
+
+def _diff_json(project: Path, *extra: str):
+    return CliRunner().invoke(
+        main,
+        [
+            "diff",
+            str(project),
+            "--baseline",
+            str(project / "base.json"),
+            "--format",
+            "json",
+            *extra,
+        ],
+    )
+
+
+def test_diff_default_top_lists_more_than_one_regression(tmp_path: Path):
+    """Pin the fixture the two rejection tests below rely on.
+
+    `--top 0` producing an empty list only proves the guard works if this
+    project really has regressions to hide.
+    """
+    project = _make_two_cycle_project(tmp_path)
+    result = _diff_json(project)
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert len(payload["summary"]["top_regressions"]) >= 2
+
+
+@pytest.mark.parametrize("bad", ["0", "-1"])
+def test_diff_top_rejects_invalid_values(tmp_path: Path, bad: str):
+    # --top was unvalidated on diff, and `diff_summary.py` slices items[:top_n]:
+    # 0 dropped the "top regressions" section entirely and -1 sliced off the
+    # lowest-risk regression, both while exiting 0. A reader sees no
+    # regressions and commits. The guard runs before the baseline is read, so
+    # it fires even when the baseline path is also wrong.
+    project = _make_two_cycle_project(tmp_path)
+    result = _diff_json(project, "--top", bad)
+    assert result.exit_code != 0
+    assert f"--top must be >= 1; got {bad}" in result.output
+
+
 @pytest.mark.parametrize("bad", ["1.5", "-0.1"])
 def test_what_to_refactor_next_min_risk_rejects_out_of_range(tmp_path: Path, bad: str):
     _make_empty_package_project(tmp_path)
