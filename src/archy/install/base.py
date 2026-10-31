@@ -13,7 +13,7 @@ contract tests (layer 4) parse back; the filesystem only enters when
 
 archy:owns        AgentAdapter, FileAction, Scope, apply_plan, apply_uninstall,
                   delete_file, instructions_block, local_root, permission_patterns,
-                  remove_instructions, upsert_instructions
+                  remove_instructions, render_plan, upsert_instructions, write_rendered
 archy:mirrored-by delete_file -> archy.install.adapters.continue_,
                   archy.install.adapters.cursor,
                   local_root -> archy.install.adapters.claude,
@@ -281,21 +281,34 @@ class AgentAdapter(ABC):
         """
 
 
-def apply_plan(plan: list[FileAction], write_system: WriteSystem) -> list[Path]:
-    """Feed each action's pure render through the write system. Returns paths."""
-    written: list[Path] = []
+def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple[Path, str]]:
+    """Render each action against the write system without writing. Returns pairs."""
+    rendered: list[tuple[Path, str]] = []
     for action in plan:
         existing = write_system.read_text(action.path)
         try:
-            rendered = action.render(existing)
+            content = action.render(existing)
         except InstallError as exc:
             msg = str(exc)
             if str(action.path) not in msg:
                 raise InstallError(f"{action.path}: {msg}") from exc
             raise
-        write_system.write_text(action.path, rendered)
-        written.append(action.path)
+        rendered.append((action.path, content))
+    return rendered
+
+
+def write_rendered(pairs: list[tuple[Path, str]], write_system: WriteSystem) -> list[Path]:
+    """Write previously rendered ``(path, content)`` pairs. Returns paths."""
+    written: list[Path] = []
+    for path, content in pairs:
+        write_system.write_text(path, content)
+        written.append(path)
     return written
+
+
+def apply_plan(plan: list[FileAction], write_system: WriteSystem) -> list[Path]:
+    """Feed each action's pure render through the write system. Returns paths."""
+    return write_rendered(render_plan(plan, write_system), write_system)
 
 
 def apply_uninstall(plan: list[FileAction], write_system: WriteSystem) -> list[Path]:

@@ -28,6 +28,8 @@ from archy.install.base import (
     apply_plan,
     apply_uninstall,
     remove_instructions,
+    render_plan,
+    write_rendered,
 )
 from archy.install.merge import denied_archy_permission_patterns
 from archy.install.registry import all_adapters, get_adapter
@@ -149,31 +151,68 @@ def _run_for_adapters(
     apply_fn: Callable[[list[FileAction], WriteSystem], list[Path]],
     for_uninstall: bool = False,
 ) -> InstallResult:
-    """Plan each adapter and run ``apply_fn`` over it. Shared by install/uninstall."""
+    """Plan each adapter and run ``apply_fn`` over it. Shared by install/uninstall.
+
+    Install (#591) is two-phase: render every adapter first (collecting every
+    ``InstallError``), write nothing if any failed, otherwise write all. Uninstall
+    keeps the sequential ``apply_fn`` path so reverse order stays unchanged.
+    """
     ws = write_system if write_system is not None else RealWriteSystem()
-    results: list[AdapterResult] = []
+    if for_uninstall:
+        results: list[AdapterResult] = []
+        for adapter in adapters:
+            plan = plan_for(
+                adapter,
+                scope,
+                project_root=project_root,
+                seed_permissions=seed_permissions,
+                for_uninstall=True,
+            )
+            touched = apply_fn(plan, ws)
+            results.append(
+                AdapterResult(
+                    adapter_id=adapter.id,
+                    written=tuple(touched),
+                    notes=(),
+                )
+            )
+        return InstallResult(results=tuple(results))
+
+    prepared: list[tuple[str, tuple[str, ...], list[tuple[Path, str]]]] = []
+    errors: list[str] = []
     for adapter in adapters:
         plan = plan_for(
             adapter,
             scope,
             project_root=project_root,
             seed_permissions=seed_permissions,
-            for_uninstall=for_uninstall,
+            for_uninstall=False,
         )
         notes: list[str] = []
-        if not for_uninstall:
-            for action in plan:
-                if action.kind != "permissions":
-                    continue
-                skipped = denied_archy_permission_patterns(ws.read_text(action.path))
-                if skipped:
-                    notes.append("left denied (not added to allow): " + ", ".join(skipped))
-        touched = apply_fn(plan, ws)
+        for action in plan:
+            if action.kind != "permissions":
+                continue
+            skipped = denied_archy_permission_patterns(ws.read_text(action.path))
+            if skipped:
+                notes.append("left denied (not added to allow): " + ", ".join(skipped))
+        try:
+            pairs = render_plan(plan, ws)
+        except InstallError as exc:
+            errors.append(f"{adapter.id}: {exc}")
+            continue
+        prepared.append((adapter.id, tuple(notes), pairs))
+
+    if errors:
+        raise InstallError("; ".join(errors))
+
+    results = []
+    for adapter_id, adapter_notes, pairs in prepared:
+        touched = write_rendered(pairs, ws)
         results.append(
             AdapterResult(
-                adapter_id=adapter.id,
+                adapter_id=adapter_id,
                 written=tuple(touched),
-                notes=tuple(notes),
+                notes=adapter_notes,
             )
         )
     return InstallResult(results=tuple(results))
