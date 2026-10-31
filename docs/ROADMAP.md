@@ -1,17 +1,19 @@
 # Roadmap
 
-> **Status note, updated 2026-09-02: THIS ROADMAP IS STILL CLOSED, but archy is not.**
+> **Status note, updated 2026-10-31: THIS ROADMAP IS STILL CLOSED, but archy is not.**
 >
-> The project went back into active development on 2026-09-02, on one line: **coding agents running
-> a small model on local hardware** (see the banner in [`README.md`](../README.md) and the
-> pre-registered thresholds in [#408](https://github.com/hslee16/archy/issues/408)). That does not
-> reopen anything below. This roadmap closed on 2026-07-27 because archy's premise was measured
-> four times and came back rare each time, most recently in #369, which found a real effect and
-> found it capped at 12% by how seldom the mistake happens (results in
-> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6 and `bench/greenfield_results.md`). **None of
-> that was retracted**, so the items here are still premised on a claim that did not hold.
-> Distribution work (#322 and children) remains parked. New work is tracked against the local-model
-> line, not against this file.
+> The project went back into active development on 2026-09-02 to test one more population, coding
+> agents running a small model on local hardware ([#408](https://github.com/hslee16/archy/issues/408)).
+> That question is now **closed, as six interventions, none positive** (Study 8 in
+> [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md)), and it reopened nothing below. The project stayed
+> active, pointed deeper into the loop it already serves rather than wider; the banner in
+> [`README.md`](../README.md) says what that means. This roadmap closed on 2026-07-27 because
+> archy's premise was measured four times and came back rare each time, most recently in #369,
+> which found a real effect and found it capped at 12% by how seldom the mistake happens (results
+> in [`WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md) Study 6 and `bench/greenfield_results.md`). **None
+> of that was retracted**, so the items here are still premised on a claim that did not hold.
+> Distribution work (#322 and children) remains parked. Live work is tracked in the open issues,
+> not in this file.
 >
 > Everything below is kept because the design thinking is worth reading and because a closed
 > roadmap that has been *deleted* is indistinguishable from one that was never thought through.

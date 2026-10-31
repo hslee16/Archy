@@ -2,22 +2,30 @@
 
 ## Community Compact
 
-**Read this first: archy is active again as of 2026-09-02, on one line of
-work.** It spent 2026-07-27 to 2026-09-02 in maintenance, deliberately, after
-its premise was measured four times and came back rare each time. What reopened
-it is a different population rather than a different reading of those results:
-**coding agents running a small model on local hardware**, where usable context
-is far below a frontier model's and a structural answer may substitute for
-context the model cannot hold. The reasoning is in [`README.md`](README.md), the
-prior results in full in [`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md),
-and the pre-registered thresholds in
-[#408](https://github.com/hslee16/archy/issues/408).
+**Read this first: archy is active, and pointed at the loop rather than the
+surface area.** It spent 2026-07-27 to 2026-09-02 in maintenance, deliberately,
+after its premise was measured four times and came back rare each time. It
+reopened on 2026-09-02 to test one more population, coding agents running a
+small model on local hardware ([#408](https://github.com/hslee16/archy/issues/408)).
+That question is now **closed, as six interventions, none positive**, two of
+them measured as costing more than their control (Study 8 in
+[`docs/WHAT_DIDNT_WORK.md`](docs/WHAT_DIDNT_WORK.md#study-8-pushing-the-fact-at-the-model-costs-more-twice)).
+The project stayed active; the banner in [`README.md`](README.md) says where it
+went instead.
 
 This changes what you should expect, so it is said here rather than discovered
-after you have spent a weekend: **feature work is driven along that one line.**
-A PR outside it is still welcome and still reviewed, but it is not what the
-maintainer is actively pushing on, and the honest word for that is "contribution
-accepted", not "roadmap item".
+after you have spent a weekend: **work goes deeper into the loop archy already
+serves, not wider.** In practice that means correctness of the answers archy
+already gives: a lookup that matched nothing must refuse instead of answering a
+zero, a check that could not have failed must not report like one that held,
+every verdict carries its reason on every surface, and tests must be able to
+fail. Most open issues are of that kind, and the ones labelled
+[`good first issue`](https://github.com/hslee16/archy/labels/good%20first%20issue)
+and
+[`good second issue`](https://github.com/hslee16/archy/labels/good%20second%20issue)
+are written to be picked up cold. New tools and new output formats stay gated
+behind a usage signal, so a PR that adds one is still reviewed, but the honest
+word for it is "contribution accepted", not "roadmap item".
 
 What the maintainer commits to:
 
@@ -33,9 +41,8 @@ What the maintainer no longer commits to:
 - A general forward roadmap. [`docs/ROADMAP.md`](docs/ROADMAP.md) and
   [`docs/FUTURE.md`](docs/FUTURE.md) stay closed and are kept as a record of
   what was considered and why; several items in them rest on a claim that has
-  since been retracted, and reopening the project did not reopen them. The one
-  line that *is* planned is the local-model work tracked from
-  [#408](https://github.com/hslee16/archy/issues/408).
+  since been retracted, and reopening the project did not reopen them. What is
+  planned lives in the open issues, not in a roadmap file.
 - Building requested features myself, on any timeline.
 
 What contributors are asked to do:
