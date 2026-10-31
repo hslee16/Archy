@@ -591,7 +591,13 @@ An entrypoint is a module with a top-level `if __name__ == "__main__":` guard (p
 
 A rule that derives nothing is reported as a violation. So is a `pyproject.toml` that cannot be parsed, since dropping its script targets would let the rule pass over the modules they name. A script target that matches no scanned module (an `exclude:`d directory, a re-exported third-party tool) is skipped; under a namespace package without `__init__.py`, `acme.tool.cli` is matched to the `tool.cli` archy scanned. Not read: `setup.py` and `setup.cfg` `console_scripts`, and `.py` files that sit outside every package, which have no module name in archy's graph.
 
-**Excluding directories.** Add an optional `exclude:` list of directory basenames to skip codegen output, vendored code, etc. Each name is matched anywhere in the project tree (same mechanism as the built-in skips for `.venv`, `node_modules`, `__pycache__`):
+**Excluding directories.** archy skips two kinds of directory by name.
+
+*Always*, whatever they hold: `.git`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.tox`, `.eggs`, `.venv`, `node_modules`.
+
+*Only when the directory is not a package* (no `__init__.py`): `build`, `dist`, `venv`, `site-packages`. Build output has no `__init__.py` at its top level (setuptools writes `build/lib/pkg/`), so this keeps artifacts out, while a first-party package that happens to be called `build` — pip keeps one at `src/pip/_internal/operations/build/` — is scanned instead of vanishing. Before #518 those four names were dropped unconditionally, which made `archy impact` report zero dependents for code that has them.
+
+Add an optional `exclude:` list of directory basenames for anything else — codegen output, vendored code — to skip. Each name is matched anywhere in the project tree:
 
 ```yaml
 exclude:
@@ -599,7 +605,9 @@ exclude:
   - generated
 ```
 
-`exclude:` applies to every analysis (`graph`, `cycles`, `score`, `check`) and the equivalent MCP tools.
+A name you exclude yourself is an explicit choice and is skipped unconditionally, whether or not the directory is a package.
+
+`exclude:` applies to every analysis (`graph`, `cycles`, `score`, `check`) and the equivalent MCP tools, and the `archy mcp` watcher uses the same predicate as a cold scan, so the two cannot disagree about what is in the project.
 
 **Scan-size guard (`max_modules:`).** archy refuses to *start* a scan of a tree with more modules than a ceiling, so a stray vendored, cache, or generated directory that the named `exclude:` skips do not cover cannot silently wedge a scan for minutes. The default (10,000) sits well above the largest real projects; a scan that trips it stops with a message pointing at `exclude:` / a narrower path. Override or disable it:
 

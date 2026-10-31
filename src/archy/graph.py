@@ -6,7 +6,7 @@ root. External imports (stdlib, third-party) appear as nodes with
 
 archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
                   build_graph, discover_modules, effective_max_modules, graph_to_dict,
-                  hint_unresolved, internal_subgraph, parse_project,
+                  hint_unresolved, internal_subgraph, is_ignored_path, parse_project,
                   resolve_from_import, resolve_modules, resolve_relative_import,
                   suggest_files, suggest_modules
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
@@ -38,7 +38,9 @@ from archy.parser import CallRef, ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 
-DEFAULT_IGNORED_DIRS = frozenset(
+# Names the scan never enters, whatever they hold: version-control and tool
+# bookkeeping that never carry first-party source.
+HARD_IGNORED_DIRS = frozenset(
     {
         "__pycache__",
         ".mypy_cache",
@@ -48,13 +50,17 @@ DEFAULT_IGNORED_DIRS = frozenset(
         ".eggs",
         ".git",
         ".venv",
-        "venv",
         "node_modules",
-        "site-packages",
-        "build",
-        "dist",
     }
 )
+
+# Names skipped only when the directory is not a Python package. Build output
+# has no `__init__.py` at its top level (setuptools writes `build/lib/pkg/`), so
+# this keeps artifacts out; a real package that happens to be called `build`,
+# `dist`, `venv` or `site-packages` (#518) is scanned instead of vanishing.
+SOFT_IGNORED_DIRS = frozenset({"build", "dist", "venv", "site-packages"})
+
+DEFAULT_IGNORED_DIRS = HARD_IGNORED_DIRS | SOFT_IGNORED_DIRS
 
 # Soft ceiling on how many modules a single scan may discover before archy
 # refuses to proceed. The named `DEFAULT_IGNORED_DIRS` above catch the standard
@@ -553,7 +559,7 @@ def _find_package_roots(
     """Return absolute paths to top-level package directories under root."""
     package_dirs: set[Path] = set()
     for path in root.rglob("__init__.py"):
-        if _is_ignored(path, ignored, root):
+        if is_ignored_path(path, ignored, root):
             continue
         package_dirs.add(path.parent.resolve())
 
@@ -577,26 +583,45 @@ def _find_package_roots(
 
 def _iter_python_files(root: Path, ignored: frozenset[str]) -> Iterable[Path]:
     for path in sorted(root.rglob("*.py")):
-        if _is_ignored(path, ignored, root):
+        if is_ignored_path(path, ignored, root):
             continue
         yield path
 
 
-def _is_ignored(path: Path, ignored: frozenset[str], root: Path) -> bool:
-    """Return True when an ignored name appears under the scan root.
+def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
+    """Return True when the scan must not read ``path``.
+
+    A hard-skipped name is refused at any depth. A soft-skipped name is refused
+    only when the directory holding it is not a package, so a first-party
+    package that happens to be called ``build`` / ``dist`` / ``venv`` /
+    ``site-packages`` is scanned (#518) while build output, which carries no
+    ``__init__.py`` at its top level, stays out. A name the caller excludes
+    itself is refused unconditionally.
 
     Ancestors of ``root`` itself must not count: a project that merely lives
     under a directory named ``build`` / ``dist`` / ``venv`` would otherwise
     scan as empty when given an absolute path (#517).
     """
     try:
-        rel_parts = path.resolve().relative_to(root.resolve()).parts
+        rel = path.resolve().relative_to(root.resolve())
     except ValueError:
         # Path is outside the scan root (watcher unit tests pass synthetic
-        # absolutes). Fall back to the full parts list so in-path ignored
-        # names like ``.venv`` still filter.
-        rel_parts = path.parts
-    return any(part in ignored for part in rel_parts)
+        # absolutes). Fall back to the full path so in-path ignored names like
+        # ``.venv`` still filter; no directory can be probed from it.
+        rel = path
+        current: Path | None = None
+    else:
+        current = root.resolve()
+    user_ignored = ignored - DEFAULT_IGNORED_DIRS
+    for part in rel.parts[:-1]:
+        current = None if current is None else current / part
+        if part in HARD_IGNORED_DIRS or part in user_ignored:
+            return True
+        if part in SOFT_IGNORED_DIRS and (
+            current is None or not (current / "__init__.py").is_file()
+        ):
+            return True
+    return False
 
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
