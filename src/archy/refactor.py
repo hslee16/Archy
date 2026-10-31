@@ -1,17 +1,17 @@
 """Fused refactor-priority ranking: hotspots x edit-risk in one list.
 
-archy already ships two refactor-priority signals through separate tools,
-each with a different lens:
+archy already ships two refactor-priority signals, exposed as the two lenses of
+one tool:
 
-* ``archy_hotspots`` is *behavioral* - cyclomatic complexity x git churn
+* ``lens="behavioral"`` is *behavioral* - cyclomatic complexity x git churn
   (Tornhill / CodeScene's "Code Red"). It answers "where is the
   refactoring leverage?" and needs git history.
-* ``archy_high_risk_modules`` is *structural* - the ``edit_risk`` composite
+* ``lens="structural"`` is *structural* - the ``edit_risk`` composite
   (geometric mean of propagation cost, normalized fan-in, and instability).
   It answers "is this edit dangerous?" and needs no git.
 
-An agent asked "what should I clean up first?" otherwise has to call both
-and merge them by hand. ``compute_refactor_priorities`` does that fusion:
+An agent asked "what should I clean up first?" would otherwise have to call
+both and merge them by hand. ``compute_refactor_priorities`` does that fusion:
 it gathers candidates from both lenses, ranks them by a fused priority,
 and attaches a one-line rationale naming which lenses fired and why.
 
@@ -144,8 +144,8 @@ def compute_refactor_priorities(
 
     ``churn`` is the per-file commit count from :func:`archy.hotspots.git_churn`
     (pass ``None`` when the project is not under git: the behavioral lens is
-    then skipped and ranking falls back to the structural lens alone, mirroring
-    ``archy_hotspots``' git-absent behavior). ``min_risk`` is the structural
+    then skipped and ranking falls back to the structural lens alone, the same
+    behavior the behavioral lens has without git). ``min_risk`` is the structural
     floor below which a module is not surfaced on the edit-risk lens.
 
     Returns the full ranked candidate list (callers cap with their own
