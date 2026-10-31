@@ -325,6 +325,57 @@ def test_build_dir_inside_the_scan_root_is_still_skipped(tmp_path: Path):
     assert not any(n.startswith("noise") or n.startswith("build") for n in internal)
 
 
+def test_a_real_package_named_build_is_scanned(tmp_path: Path):
+    """#518: a first-party package called `build` must not vanish.
+
+    The layout is pip's `src/pip/_internal/operations/build/`: the directory is
+    a package, imports first-party code, and used to be dropped silently.
+    """
+    core = tmp_path / "myapp" / "core"
+    core.mkdir(parents=True)
+    (tmp_path / "myapp" / "__init__.py").write_text("")
+    (core / "__init__.py").write_text("")
+
+    build_pkg = tmp_path / "myapp" / "operations" / "build"
+    build_pkg.mkdir(parents=True)
+    (tmp_path / "myapp" / "operations" / "__init__.py").write_text("")
+    (build_pkg / "__init__.py").write_text("")
+    (build_pkg / "wheel.py").write_text("from myapp import core\n")
+
+    # Assert the fixture reaches the branch before asserting the outcome.
+    assert (build_pkg / "__init__.py").is_file(), "fixture's build/ must be a package"
+
+    g = build_graph(tmp_path)
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+
+    assert "myapp.operations.build" in internal
+    assert "myapp.operations.build.wheel" in internal
+    assert g.has_edge("myapp.operations.build.wheel", "myapp.core")
+
+
+def test_build_output_without_a_top_level_init_is_still_skipped(tmp_path: Path):
+    """#518: the soft skip must keep real build output out of the graph.
+
+    setuptools writes `build/lib/pkg/`, so the skipped directory holds an
+    `__init__.py` further down while its own top level does not.
+    """
+    _tiny_pkg_project(tmp_path)
+    artifact = tmp_path / "build" / "lib" / "pkg"
+    artifact.mkdir(parents=True)
+    (artifact / "__init__.py").write_text("")
+    (artifact / "generated.py").write_text("import os\n")
+
+    assert not (tmp_path / "build" / "__init__.py").exists(), (
+        "fixture's build/ must not be a package"
+    )
+
+    g = build_graph(tmp_path)
+    internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
+
+    assert {"pkg", "pkg.a", "pkg.b"} <= internal
+    assert "pkg.generated" not in internal
+
+
 def test_monorepo_with_two_top_level_packages(tmp_path: Path):
     """Two unrelated packages under one root, each with internal imports."""
     a = tmp_path / "alpha"

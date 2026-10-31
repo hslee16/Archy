@@ -32,7 +32,7 @@ from typing import Protocol
 
 import networkx as nx
 
-from archy.graph import DEFAULT_IGNORED_DIRS, assemble_graph, discover_modules
+from archy.graph import DEFAULT_IGNORED_DIRS, assemble_graph, discover_modules, is_ignored_path
 from archy.index import SyncStats, default_db_path, open_index, sync
 
 DEBOUNCE_SECONDS = 2.0
@@ -155,18 +155,15 @@ class IndexManager:
             self._reset_timer()
 
     def _is_watched_py(self, path: Path) -> bool:
-        """A Python source file that isn't in an ignored directory.
+        """A Python source file the scan would also read.
 
-        Filters out `.archy/index.db` writes (not `.py`) so the cache's own
-        writes can't feed the watcher a loop.
+        Shares the scan's own predicate so the watcher and a cold build cannot
+        disagree about a directory (#518). Filters out `.archy/index.db` writes
+        (not `.py`) so the cache's own writes can't feed the watcher a loop.
         """
         if path.suffix != ".py":
             return False
-        try:
-            rel_parts = path.resolve().relative_to(self.root.resolve()).parts
-        except ValueError:
-            rel_parts = path.parts
-        return not any(part in self._ignored_dirs for part in rel_parts)
+        return not is_ignored_path(path, self._ignored_dirs, self.root)
 
     def _reset_timer(self) -> None:
         with self._lock:
