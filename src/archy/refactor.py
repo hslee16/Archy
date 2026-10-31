@@ -1,17 +1,17 @@
 """Fused refactor-priority ranking: hotspots x edit-risk in one list.
 
-archy already ships two refactor-priority signals through separate tools,
-each with a different lens:
+archy already ships two refactor-priority signals, exposed as the two lenses of
+one tool:
 
-* ``archy_hotspots`` is *behavioral* - cyclomatic complexity x git churn
+* ``lens="behavioral"`` is *behavioral* - cyclomatic complexity x git churn
   (Tornhill / CodeScene's "Code Red"). It answers "where is the
   refactoring leverage?" and needs git history.
-* ``archy_high_risk_modules`` is *structural* - the ``edit_risk`` composite
+* ``lens="structural"`` is *structural* - the ``edit_risk`` composite
   (geometric mean of propagation cost, normalized fan-in, and instability).
   It answers "is this edit dangerous?" and needs no git.
 
-An agent asked "what should I clean up first?" otherwise has to call both
-and merge them by hand. ``compute_refactor_priorities`` does that fusion:
+An agent asked "what should I clean up first?" would otherwise have to call
+both and merge them by hand. ``compute_refactor_priorities`` does that fusion:
 it gathers candidates from both lenses, ranks them by a fused priority,
 and attaches a one-line rationale naming which lenses fired and why.
 
@@ -143,10 +143,10 @@ def compute_refactor_priorities(
     """Fuse hotspots and edit-risk into one ranked refactor-priority list.
 
     ``churn`` is the per-file commit count from :func:`archy.hotspots.git_churn`
-    (pass ``None`` when the project is not under git: the behavioral lens is
-    then skipped and ranking falls back to the structural lens alone, mirroring
-    ``archy_hotspots``' git-absent behavior). ``min_risk`` is the structural
-    floor below which a module is not surfaced on the edit-risk lens.
+    (pass ``None`` when the project is not under git: the behavioral lens cannot
+    be computed, so only the rows the structural lens fired on come back).
+    ``min_risk`` is the structural floor below which a module is not surfaced on
+    the edit-risk lens.
 
     Returns the full ranked candidate list (callers cap with their own
     ``top_n``). An **empty list** is a meaningful result: nothing is both
@@ -158,8 +158,8 @@ def compute_refactor_priorities(
     hotspots = compute_hotspots(graph, churn=churn) if churn is not None else []
     hotspot_by_module = {h.module: h for h in hotspots}
 
-    # Structural lens. Mirror `_run_high_risk_modules`: compute the composite
-    # plus its three terms so each row can show *why* it ranks.
+    # Structural lens. Compute the composite plus its three terms so each row
+    # can show *why* it ranks.
     edit_risk = compute_edit_risk(graph)
     instability = compute_instability(graph)
     _, propagation_cost = compute_propagation_cost(graph)
