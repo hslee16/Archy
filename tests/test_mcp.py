@@ -810,6 +810,33 @@ def test_archy_cycles_rejects_min_size_below_one(acyclic_project: Path):
     assert structured == {"result": []}
 
 
+def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
+    """MCP archy_impact must reject max_chains=0 the way the CLI does (#640).
+
+    CLI `impact --max-chains 0` raises ClickException with a fixed message.
+    Without the matching MCP guard, max_chains=0 silently returns impacted
+    modules with empty chains (chains_omitted > 0) and no refusal.
+    """
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    path = str(acyclic_project)
+    message = (
+        "--max-chains must be negative (for all) or positive (for a limit); got 0"
+    )
+    with pytest.raises(ValueError) as caught:
+        _run_impact(acyclic_project, files=[Path("pkg/b.py")], max_chains=0)
+    assert str(caught.value) == message
+    # mcp 2.x wraps as ToolError("Error executing tool <name>: <msg>"); pin the
+    # refusal reaches the agent, not the exact outer wording.
+    with pytest.raises(ToolError):
+        _call_tool(
+            server,
+            "archy_impact",
+            {"path": path, "files": ["pkg/b.py"], "max_chains": 0},
+        )
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [

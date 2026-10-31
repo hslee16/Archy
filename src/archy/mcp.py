@@ -1848,6 +1848,10 @@ def _run_impact(
     max_chains: int = DEFAULT_MAX_CHAINS,
     co_change: bool = False,
 ) -> Impact:
+    if max_chains == 0:
+        raise ValueError(
+            "--max-chains must be negative (for all) or positive (for a limit); got 0"
+        )
     graph = _load_graph(path, internal_only=True)
     result = find_impact(graph, _resolve_against(path, files), max_chains=max_chains)
     if not co_change or not result.changed:
