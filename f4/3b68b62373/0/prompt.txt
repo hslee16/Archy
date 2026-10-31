@@ -1,0 +1,657 @@
+lets create more "good first issue" and "good second issue" tickets. We have made a lot of changes in to archy recently. Research on the internet as well if you need. Take all the time you need. Be thorough.
+
+---
+
+<task-notification>
+<task-id>a361e1dd77728e25f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/tasks/a361e1dd77728e25f.output</output-file>
+<status>completed</status>
+<summary>Agent "Hunt MCP surface defects" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found seven candidates on `main` (v0.53.0), all reproduced in-process the way `tests/test_mcp.py` does it, plus one minor one. Nothing in the repo was changed, filed or committed. The probe scripts are `probe1.py` to `probe6.py` in `/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/scratchpad/mcp/`, and they run against small fixtures in that folder (`proj1`, plus a git copy `proj2` and a no-history copy `proj3`). Run any of them with `cd /Users/hosanglee/archy &amp;&amp; uv run python &lt;script&gt;`. Line numbers refer to `src/archy/mcp.py` unless another file is named.
+
+---
+
+### 1. `fix(mcp): archy_impact accepts max_chains=0, which the CLI rejects (#170 left the MCP side)`
+- **Repro** (`probe1.py`): `archy_impact(files=["myapp/core.py"], max_chains=0)` succeeds and returns `"chains": [], "chains_omitted": 3`. `archy impact --max-chains 0` exits with "must be negative (for all) or positive (for a limit); got 0".
+- **Consequence:** the agent gets three impacted modules and no explanation of why any of them is reachable, where it expected the "because" chains. #170 named this exact case ("The MCP layer has no explicit validation either"), but only the CLI was fixed.
+- **Fix site:** `_run_impact`, around line 1810 (the parameter is at line 1007). Add the CLI's guard (`cli.py:557`) and raise `ValueError`.
+- **Acceptance:** `_run_impact(..., max_chains=0)` raises with the CLI's message; through `_call_tool`, assert only the `ToolError` type (per #636). Mutation check: delete the guard and the test goes red.
+- **Label:** good first issue. It is a one-line guard copied from the CLI.
+- **Closest ticket:** #170 (closed, CLI only), #555 (same kind of fix for other params).
+
+### 2. `fix(affected): a test_filter that matches no file reports every test as a module, plus a static-edge caveat that is false`
+- **Repro** (`probe6.py`), mode `affected`:
+  - `test_filter="tests/**"` gives `impacted_tests: ['tests.test_core']`.
+  - `test_filter="test/**"` (a typo) gives `impacted_tests: []`, moves `tests.test_core` into `impacted_modules`, and sets `empty_caveat` to "no statically resolvable import or call edge reaches the changed module(s)". That is false: the edge exists, and only the glob matched nothing.
+  - `test_filter="["` behaves the same way.
+- **Consequence:** in CI, `archy affected -f test/** -q | xargs pytest` selects zero tests and exits 0. An agent is told nothing imports the code when the real cause is its own filter. This is the "a name that matched nothing is a refusal" rule, applied to globs.
+- **Fix site:** `src/archy/affected.py:124` (`_test_classifier`) and the `empty_caveat` property at lines 64-69. When a `test_filter` is given and no graph node path matches it, either refuse or add a reason field such as `test_filter_matched=0`. The change has to reach the CLI text, the CLI JSON and the `Affected` payload.
+- **Acceptance:** a typo'd filter yields a refusal or reason on all three surfaces, asserted on `model_dump()`. The fixture must contain a real test-to-source edge, and the test should assert that edge exists first. Mutation check: drop the zero-match branch and the test goes red.
+- **Label:** good second issue. It touches `affected.py`, `cli.py` and `mcp.py`, and needs a design call between refusing and reporting.
+- **Closest tickets:** #631 (unresolved file, no mention of the filter), #592 (deleted files).
+
+### 3. `fix(mcp): relative baseline_path / config_path / contracts_config_path resolve against the server's cwd, not path`
+- **Repro** (`probe2.py`, server cwd `/Users/hosanglee/archy`, with `dsm.json` and `conf.yaml` written inside `proj1`):
+  - `archy_dsm(path=proj1, baseline_path="dsm.json")` returns `{"error": "no DSM snapshot at dsm.json"}`. The absolute path works.
+  - `archy_check(path=proj1, config_path="conf.yaml")` returns `config file not found: conf.yaml`.
+- **Consequence:** `archy_diff` deliberately resolves `baseline` against `path` (see the comment in `_run_diff`). These three parameters use whatever directory the MCP server was launched from, which the agent cannot see, and the error does not say where it looked. The resolution order also differs per tool.
+- **Fix sites:** line 911 (`Path(config_path)`), line 915 (`Path(contracts_config_path)`) and line 2130 (`read_dsm(Path(baseline_path))`). Route them through the existing `_resolve_against(path, ...)` at line 1805 and update the docstrings.
+- **Acceptance:** a relative value next to `path` resolves for all three, from a test whose cwd differs from `path` (use `monkeypatch.chdir`). Mutation check: revert one site and its test goes red.
+- **Label:** good first issue. The helper already exists and the change is three call sites.
+- **Closest ticket:** none found (searched "relative", "cwd", "config_path").
+
+### 4. `fix(mcp,score): strict=True with no history reports passed=true and no reason`
+- **Repro** (`probe4.py`, no `.archy`): `archy_score(strict=True)` returns gate `{'previous': None, 'delta': None, 'passed': True}` with no reason. CLI JSON is the same. Only the CLI text says "no prior score recorded; nothing to compare. Pass `--record`".
+- **Consequence:** an agent using this as a regression gate reads "passed" when no comparison was made. AGENTS.md says a verdict needs a reason on every surface, and here it reaches one surface of three. The CLI JSON also drops `previous_commit` and `previous_timestamp`, which MCP carries (a small parity gap).
+- **Fix sites:** `ScoreGate` (line 307) and `_run_score` (around line 1544) on the MCP side, and `_gate_to_dict` in `cli.py:2172`. Add a `reason` field, or a `compared: bool`. Changing `passed` itself is a separate design call.
+- **Acceptance:** the reason is present in `model_dump()` and in the CLI JSON when there is no history, and absent once a row exists. Mutation check: blank the reason and the test goes red.
+- **Label:** good first issue. Add a field and wire it to two surfaces, following an established pattern.
+- **Closest ticket:** #549 (`strict_tolerance` bound, closed).
+
+### 5. `feat(dsm): name near misses when focus/package matches nothing (#625's unmet suggestion criterion)`
+- **Repro:**
+  - `_run_dsm(focus="myapp.cor")` raises `focus 'myapp.cor' is not an internal module`, with no suggestion.
+  - `package="myap."` and `focus="myapp/core.py"` behave the same.
+  - By contrast, `archy_module_view("myapp.cor")` says "did you mean myapp.core?".
+- **Consequence:** #625's acceptance criterion asked for "the suggestion for the typo case", and its body says to "add the suggestion list from #624 afterwards". Only the refusal landed (#628), and open PR #574 adds no suggestions either. The agent has to guess again.
+- **Fix site:** `src/archy/dsm.py:207,211`. Append `graph.suggest_modules(...)` candidates to the error, and optionally resolve a `.py` focus via `resolve_modules`.
+- **Acceptance:** the typo'd focus or package refusal names `myapp.core` on the CLI and on the direct `_run_dsm` call (`ToolError` type only through `_call_tool`). Mutation check: drop the suggestion and the test goes red.
+- **Label:** good first issue. It reuses the helper the same way `compute_module_view` does.
+- **Closest tickets:** #625 (closed), #556 and PR #574 (CLI refusal only). Coordinate with #574.
+
+### 6. `fix(mcp): archy_module_view refuses a file path with no hint, though sibling tools accept paths`
+- **Repro** (`probe5.py`):
+  - `archy_module_view(module="myapp/core.py")` raises `no module 'myapp/core.py' under ...` with no did-you-mean.
+  - `archy_graph(focus=["myapp/core.py"])` resolves the same path fine.
+- **Consequence:** agents work from file paths. The "did you mean" helper does not match paths, so the refusal gives no way forward.
+- **Fix site:** `src/archy/conventions.py:1649-1654`. Either map a `.py` path to its qualname through the `discover_modules` list already in hand, or fall back to suggesting via `suggest_files` / `hint_unresolved`.
+- **Acceptance:** `module="myapp/core.py"` returns the same view as `"myapp.core"` (or the refusal names `myapp.core`), asserted on `model_dump()`. Mutation check: remove the mapping and the test goes red.
+- **Label:** good first issue. It touches one function.
+- **Closest ticket:** #624 (the helper) and #631. Neither covers module_view.
+
+### 7. `fix(simulate): an empty delta reports coverage="complete" and "overall +0.000"`
+- **Repro** (`probe3.py`, `probe2.py`):
+  - `archy_simulate(path=P)` returns `coverage: "complete"` with headline `overall +0.000`. `archy simulate .` with no flags prints the same and exits 0.
+  - Combined with candidate 8, `archy_simulate(adds=[...])` (a typo) produces this exact output.
+- **Consequence:** this is the #627 symptom ("+0.000 for an edge it never applied") in its degenerate form.
+- **Design call needed:** `tests/test_simulate.py:286` deliberately pins `add=[], remove=[]` as `"complete"`. The options are to refuse (`ValueError` plus a CLI `UsageError`), to return `"none"`, or to add a new `"empty"` value.
+- **Fix sites:** `src/archy/simulate.py:96-107`, `_run_simulate` (line 1793), and `cli.py` `simulate`.
+- **Acceptance:** an empty delta no longer reads as complete on the CLI text, CLI JSON or `model_dump()`. Update the pinned test. Mutation check: restore `"complete"` and the test goes red.
+- **Label:** good second issue. It reverses a pinned decision across three surfaces.
+- **Closest ticket:** #627 and #633 (closed).
+
+### 8. `fix(mcp): unknown tool arguments are silently dropped on every tool`
+- **Repro** (`probe4.py`, `probe2.py`):
+  - `archy_graph(focus_modules=["myapp.core"])` returns the whole-project summary.
+  - `archy_dsm(module="myapp.core")` returns the unfocused summary.
+  - `archy_simulate(adds=...)` returns a zero delta.
+  - The advertised `inputSchema` has no `additionalProperties`, and FastMCP's `ArgModelBase` (mcp 1.30.0) ignores extra fields.
+- **Consequence:** a hallucinated parameter name, which is likely for the local-model agents archy now targets, gets a plausible answer to a different question with no error.
+- **Fix site:** `create_server` (line 742), or `mcp_compat.py`. Set `additionalProperties: false` on each tool's input schema and reject extras when the arguments are validated. This has to work on both mcp 1.x and 2.x.
+- **Acceptance:** an unknown argument is refused (`ToolError`) on both mcp majors; reproduce the 2.x job per AGENTS.md. The `inputSchema` for all 13 tools carries `additionalProperties: false`. Mutation check: remove the hook and the test goes red.
+- **Label:** good second issue. It touches SDK internals and needs a design call.
+- **Closest tickets:** #229 (error model, closed; assumed FastMCP surfaces invalid args), #636.
+
+### Minor (could fold into an existing ticket)
+- `archy_dsm(group_by="bogus")` or `weight="bogus"` is only checked after the graph is built (the `cast` at lines 2122-2123). The agent gets a raw pydantic message ("1 validation error for DSM ... errors.pydantic.dev"), and on mcp 2.x that text is dropped (#636). The fix is a `_validate_*` helper like `_validate_response_format`. Good first issue.
+
+### Checked and fine
+- Bounds that already match the CLI:
+  - affected `depth &gt;= 1`
+  - graph focus `depth &gt;= 0` and `direction`
+  - `max_nodes`, `top_n`
+  - refactor `top_n` and `min_risk`
+  - duplicates `min_nodes`, `top_n`, `members`
+  - conventions `min_family`, brief `top_n`, score `strict_tolerance`
+  - cycles `min_size`, dsm `focus_depth`
+- A nonexistent `path` is refused (#552). archy_check with no `archy.yaml` returns an in-band error.
+- `archy_diff` resolves `baseline` relative to `path` and gives clear errors. A self-loop add in simulate is modelled as a cycle.
+- `module_view` handles a typo'd qualname and a test module properly.
+- `computed_field` is used for `coverage`, `empty_caveat` and `deleted_reason`, so they survive `model_dump()`.
+- Bad `--since` values are accepted by git itself (approxidate), so that is not archy's bug.
+- `impact(files=[])` returns empty. That is defensible: no changed files means no impact.</result>
+<usage><subagent_tokens>144199</subagent_tokens><tool_uses>38</tool_uses><duration_ms>319524</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aadeb4d6ac985f4e2</task-id>
+<tool-use-id>toolu_01DJRJ9DmqKvtnYpse1FuA9v</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/tasks/aadeb4d6ac985f4e2.output</output-file>
+<status>completed</status>
+<summary>Agent "Hunt CLI edge-case bugs" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found six candidates and reproduced each one on `main` at f8d306f (v0.53.0). Fixtures are under `/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/scratchpad/cli/` (shown as `S/` below). I changed no repo files and filed nothing.
+
+---
+
+### 1. `fix(diff): --top 0 and negative values silently hide or truncate regressions`
+**Label: good first issue.** It is a one-line `_require`, and `hotspots` already has the same fix to copy.
+
+**Repro** (5 empty modules, then `archy snapshot S/dtop`, then two 2-cycles plus a fan-in module):
+```
+uv run archy diff S/dtop --top 5    # 5 regressions listed
+uv run archy diff S/dtop --top -3   # 3 listed: drops the last 3 of 6
+uv run archy diff S/dtop --top -1   # 5 listed: drops the last one
+uv run archy diff S/dtop --top 0    # "## top regressions" section gone; exit 0
+uv run archy diff S/dtop --top 0 --format json  -&gt; summary.top_regressions == []  (6 with --top 100)
+```
+- **Expected:** `Error: --top must be &gt;= 1; got 0`, exit 1, the same as every other `--top`.
+- **Cause:** `src/archy/cli.py:1072` has no bound check. `diff_summary.py:362` does `items[:top_n]`. `cli.py:707-710` (hotspots) carries a comment describing exactly this bug: "--top 0 showed nothing, --top -1 dropped the lowest-score row".
+- **Fix:** add `_require(top_n &gt;= 1, "top", "&gt;= 1", top_n)` as the first line of `diff()`, before the baseline is read.
+- **Acceptance:** a CLI test that `--top 0` and `--top -1` exit 1 with the message. Mutation: delete the `_require` and confirm the test goes red. The fixture must have at least 2 regressions, so that an assert on count can tell `-1` apart from "all".
+- **Closest:** #318, #365 (DRY bound checks; diff was missed), #550 (bound checks that survive deletion; this is a missing one, not an untested one).
+
+### 2. `fix(simulate): no --add/--remove prints "overall +0.000" and coverage "complete"`
+**Label: good first issue.** It is a sibling of #627 that #627's coverage verdict did not catch.
+
+**Repro:**
+```
+uv run archy simulate S/proj            -&gt; "# summary: overall +0.000", exit 0
+uv run archy simulate S/proj --format json -&gt; applied.coverage == "complete", headline "overall +0.000"
+uv run python -c "...m._run_simulate(Path('S/proj'), add=[], remove=[])" -&gt; complete overall +0.000
+```
+On MCP, `archy_simulate(path=...)` defaults both lists to `None`, so an agent that forgets the edges gets a clean-looking "this edit is free".
+- **Expected:** CLI `UsageError` ("pass at least one --add or --remove"), exit 2. MCP raises `ToolError` the same way.
+- **Cause:** `cli.py:1170` (no empty check). `simulate.py:104` (`coverage` returns `"complete"` when `skipped` is empty, even if nothing was requested). `mcp.py:1098` (`add or [], remove or []`).
+- **Fix:** refuse at both entry points. Alternatively, make `coverage` return `"none"` when no spec was given; the text renderer already prints "nothing simulated" for `none`. The refusal is cleaner.
+- **Acceptance:** CLI test for exit 2 with the message, and an MCP test asserting `ToolError` (per #636, assert the type through `_call_tool` and the text on `_run_simulate`). Mutation: remove the guard and confirm both tests go red.
+- **Closest:** #627 (closed), #636.
+
+### 3. `fix(cli,diff,dsm): a directory passed to --out, --baseline or --diff tracebacks`
+**Label: good first issue.** The fix is a Click type flag plus one `except` clause in each reader.
+
+**Repro:**
+```
+uv run archy render   S/proj --out S        -&gt; Traceback ... IsADirectoryError
+uv run archy snapshot S/proj --out S        -&gt; Traceback (after the full scan)
+uv run archy diff     S/proj --baseline S   -&gt; Traceback ... IsADirectoryError
+uv run archy dsm      S/proj --diff S       -&gt; Traceback ... IsADirectoryError
+MCP: _run_diff(Path('S/proj'), baseline='sub') -&gt; raises IsADirectoryError (not a DiffErrorPayload)
+```
+- **Expected:** a one-line `Error: ... is a directory`, exit 1 or 2. On MCP, `DiffErrorPayload` and `DSMErrorPayload`.
+- **Cause:** `cli.py:1001` (snapshot `--out`), `:1034` (`--baseline`), `:1317` (`--diff`), `:1401` (render `--out`) all use `click.Path(path_type=Path)` without `dir_okay=False`. The readers only catch decode and validation errors: `diff.py:270-286` (`read_snapshot`) and `dsm.py:493-497` (`read_dsm`). That is why MCP crashes too.
+- **Fix:** add `dir_okay=False` on the four options. In both readers, raise `ValueError` for `path.is_dir()`, or catch `IsADirectoryError`/`OSError`, so MCP gets the payload too.
+- **Acceptance:** four CLI tests (no `Traceback` in output, non-zero exit, path named) and two MCP tests returning an error payload. Mutation: drop `dir_okay=False`, and separately drop the reader guard, then confirm the matching tests go red.
+- **Closest:** #553 and #554 (closed; malformed file, not a directory), #590 (the same class in install).
+
+### 4. `fix(hotspots,coupling,what-to-refactor-next): --since with a ref or typo silently matches 0 commits; the help promises "refspec"`
+**Label: good second issue.** Fixing it needs a design call (support a ref range or refuse it) and touches `hotspots.py`, `coupling.py`, three CLI help strings and the MCP description.
+
+**Repro** (archy repo itself; `git log v0.52.0..HEAD` has 15 commits):
+```
+uv run archy hotspots . --since v0.52.0      -&gt; "# No hotspots found since v0.52.0", exit 0
+uv run archy hotspots . --since HEAD~5       -&gt; 59 hotspots, churn counts span weeks (not 5 commits)
+uv run archy hotspots S/proj --since garbage-ref -&gt; "No hotspots found since garbage-ref", exit 0
+uv run archy coupling S/proj --since garbage-ref -&gt; "No structurally-unconnected ... pairs", exit 0
+uv run archy what-to-refactor-next . --since v0.52.0 -&gt; every row "not a churn hotspot", note: null
+git rev-parse --since=garbage-ref / --since=v0.52.0 -&gt; --max-age=&lt;now&gt;; --since=HEAD~5 -&gt; ~26 days ago
+```
+- **Consequence:** a user who follows the help ("since this date or refspec") gets "no hotspots" or "not a churn hotspot" and believes the code is calm. `what-to-refactor-next` silently drops its churn lens.
+- **Cause:** the help text at `cli.py:690`, `:743`, `:944`. The flag is passed straight through as `--since=` at `hotspots.py:89-90` and `coupling.py:170-171`. `git log --since` never accepts a refspec and never rejects garbage.
+- **Fix:**
+  - If `git rev-parse --verify --quiet &lt;since&gt;^{commit}` succeeds, use `&lt;since&gt;..HEAD` instead of `--since`.
+  - Otherwise, refuse when `git rev-parse --since=X` yields `--max-age` within a few seconds of now, unless X is literally a "now"-like value.
+  - At minimum, correct the help to "date" only.
+- **Acceptance:**
+  - `--since &lt;tag&gt;` counts only the commits after the tag.
+  - `--since garbage` exits 1 naming the value.
+  - The JSON `note` is non-null when the window holds 0 commits.
+  - Mutation: revert to plain `--since=` and confirm the tag test goes red. The fixture needs commits on both sides of the tag, asserted before the outcome.
+- **Closest:** none found (searched "since", "refspec").
+
+### 5. `fix(hotspots,what-to-refactor-next): a git repo with no commits is reported as "not inside a git repository"`
+**Label: good first issue.** It is message wording across the CLI and MCP strings; `coupling` already has the correct text to copy.
+
+**Repro:**
+```
+git init S/nocommit (no commits)
+uv run archy hotspots S/nocommit -&gt; "Error: ... is not inside a git repository (or git is unavailable)"
+uv run archy what-to-refactor-next S/nocommit -&gt; "# Not a git repo, so only the structural lens ran"
+uv run archy coupling S/nocommit -&gt; "...is not inside a git repository, has no commit history, or git is unavailable"  (correct)
+```
+- **Consequence:** the user is in a git repo and goes debugging git instead of committing.
+- **Cause:** `git_churn` maps git's `fatal: ... does not have any commits yet` (rc 128) to `None` (`hotspots.py:91-95`). The messages are at `cli.py:715`, `:3370`, `:3376`, `:3415` and `mcp.py:2303`, `:2311`, `:2337`.
+- **Fix:** reuse coupling's three-way wording, or make `git_churn` distinguish "no commits".
+- **Acceptance:** a test on a fresh `git init` asserting "no commit history" appears on both surfaces. Mutation: revert one string and confirm it goes red.
+- **Closest:** none.
+
+### 6. `feat(check): an empty layer gets a did-you-mean for its module patterns`
+**Label: good second issue.** It touches `layers.py` (coverage model), the CLI text and JSON, and the MCP payload (three surfaces), and needs to reuse `graph.suggest_modules`.
+
+**Repro** (`archy.yaml` layer `ghost: modules: ["app.cc"]` where `app.c` exists, plus `forbid: core -&gt; ghost`):
+```
+uv run archy check S/chk -&gt; "# No layer violations ...  layers present: 2 of 3 declared; empty: ghost", exit 0
+JSON coverage.empty_layers == ['ghost'], exact_pattern_hints == []
+```
+- **Consequence:** a typo in a layer pattern makes every rule naming that layer dead. archy says only "empty", so the user has to find the typo by hand. This is the AGENTS.md "rule set that cannot fire" failure, and the same refusal shape as #624-#627.
+- **Cause:** `layers.py:417` builds `exact_pattern_hints` only for bare-package patterns; empty layers carry no suggestion.
+- **Fix:** for each empty layer, run its literal patterns through `suggest_modules` and add `empty_layer_hints` to coverage as a `@computed_field` or plain field. Render it on all three surfaces.
+- **Acceptance:** the text, JSON and MCP `model_dump()` each show `app.c` as the suggestion. The fixture must assert that `app.cc` matches nothing first. Mutation: return `()` from the hint builder and confirm all three tests go red.
+- **Closest:** #123 (closed, presence check), #624, #525 (unknown yaml keys).
+
+---
+
+### Checked and fine (or already ticketed)
+- **Nonexistent path, or a file as PATH:** every command refuses with exit 2.
+- **Bounds validated with exit 1:** `--top` (all commands except diff), `--min-family`, `--min-support`, `--min-confidence`, `--min-size`, `--focus-depth`, `--max-nodes`, `--min-nodes`, `--members`, `--last`, `--strict-tolerance`, `--min-risk`, `--max-chains 0`, `--depth`.
+- **Did-you-mean refusals already in place:** dsm and render `--focus`/`--package`, `conventions --module` (with suggestion), impact unresolved `--file`, simulate unresolved endpoints. Note that #556 is still open but no longer reproduces on the CLI, so it may be closable.
+- **Usage-error guards:** `conventions` `--write`/`--check`/`--module` conflicts, `diff --strict` without `--baseline`, simulate malformed specs. `contracts --config &lt;dir&gt;` gives a clean error.
+- **Non-git handling and the rest of the surface:** coupling and hotspots refuse; what-to-refactor-next notes the fallback in both text and JSON. `index` subcommands, trend and render-trend with no or corrupt history, and the `cycles --strict` exit code in both formats all behave.
+- **Syntax-error files:** the parser recovers imports after the error, and cycles are still found.
+- **Already covered:**
+  - Empty or no-`.py` directory: score 1.000 and a perfect snapshot written (#523). duplicates also says "lower --min-nodes" on 0 modules, which belongs to #523 too.
+  - Missing `__init__` package edge in impact: #387 territory.
+- **Not worth a ticket:**
+  - Only `graph` warns about parse errors; score, cycles and brief stay silent, but I found no wrong result because of the recovery.
+  - The `--emit-headers --write` summary says "0 scanned module(s)" when it means headers computed.
+  - `render --view trend` silently ignores dsm-only flags.
+  - `score --strict` with no history gives JSON `gate.passed: true` with `previous: null`. The text explains it; the JSON has only nulls, no reason.
+  - An explicit `duplicates --co-change` without git is silently a no-op, but it is documented as best-effort.</result>
+<usage><subagent_tokens>131533</subagent_tokens><tool_uses>68</tool_uses><duration_ms>527937</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afedebb07f910e860</task-id>
+<tool-use-id>toolu_01Kb2J4xXoaEgCJdJcGkQbbn</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/tasks/afedebb07f910e860.output</output-file>
+<status>completed</status>
+<summary>Agent "Research Python ecosystem gaps" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found six candidates that reproduce on main (v0.53.0). Four are clear-cut. Two are weaker: one crash nothing in a 3,906-file real-world corpus triggers, and one with a small payoff.
+
+The most important fact behind several of them: `uv run` here uses **Python 3.10.20**. Imports, functions and cyclomatic complexity (CC) are read by tree-sitter-python 0.25.0, so the graph doesn't depend on the interpreter. But `conventions.py:753` and `headers.py:84` parse with the stdlib `ast` of whatever Python archy runs under.
+
+Fixtures are under `/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/scratchpad/research/`. All commands ran from `/Users/hosanglee/archy`. Nothing in the repo was modified.
+
+## Candidates
+
+### 1. `fix(graph): an import of a compiled extension module (.so/.pyd, usually with a .pyi stub) lands on the package __init__ and creates a false cycle`
+- **Facts:** Python finds extension modules by their own suffixes (`importlib.machinery.EXTENSION_SUFFIXES`, https://docs.python.org/3/library/importlib.html#importlib.machinery.EXTENSION_SUFFIXES). Stub files are `.pyi` (PEP 484, https://peps.python.org/pep-0484/#stub-files).
+- **Fixture `ext/`:**
+  - `pkg/__init__.py`: `from .api import fast`
+  - `pkg/api.py`: `from ._speedups import fast`
+  - plus `pkg/_speedups.pyi` and `pkg/_speedups.cpython-312-darwin.so`
+- **Observed:** `archy cycles &lt;ext&gt;` reports `pkg -&gt; pkg.api (line 1)` and `pkg.api -&gt; pkg (line 1)`, and `--strict` exits 1.
+- **Real packages:**
+  - grimp (copied from `.venv` into `research/real/`) shows one 7-module cycle. Every back-edge into `grimp` is a `from grimp import _rustgrimp as rust` line (caching:13, filesystem:6, graph:6, scanning:3).
+  - PyYAML shows `yaml &lt;-&gt; yaml.cyaml` through `from yaml._yaml import CParser`.
+- **Expected:** no cycle. A `.py` sibling would have given `pkg.api -&gt; pkg._speedups`.
+- **Cause:** discovery only looks at `*.py` (`graph.py:579`). The unknown `pkg._speedups` then collapses to its longest internal prefix (`graph.py:738` into `_external_target`, `graph.py:960-970`). The `from grimp import _rustgrimp` form falls back to the bare base at `graph.py:663`.
+- **Fix sketch:** during discovery, record the basenames of `*.so`/`*.pyd` (minus the ABI tag), `*.pyi` and `*.pyx` that have no `.py` twin. Add them as internal leaf modules with an empty `ParseResult`, so both resolution paths land on the leaf.
+- **Acceptance:**
+  - The fixture shows no cycle, and the edge is `pkg.api -&gt; pkg._speedups`. Also assert the `.py`-less extension really exists in the fixture.
+  - The grimp copy shows no cycle.
+  - Same answer through `archy_cycles` `model_dump()`.
+  - Mutation: drop the extension-name collection, clear `__pycache__`, and the tests go red.
+- **Label:** good second issue. It touches discovery plus one resolution path, and changes module counts, so it needs a bench note.
+- **Closest ticket:** none. I grepped for extension, compiled, cython, .so and pyi. #387 (implicit `__init__` edges) is related but different.
+
+### 2. `fix(conventions): read modules as bytes so a PEP 263 coding cookie is honoured, instead of silently dropping the module from "COMPLETE" answers`
+- **Facts:** PEP 263 (https://peps.python.org/pep-0263/) and https://docs.python.org/3/reference/lexical_analysis.html#encoding-declarations. CPython decodes source per the cookie, and `ast.parse(bytes)` does the same.
+- **Fixture `latin1/`:**
+  - `pkg/legacy.py`, Latin-1 encoded: `# -*- coding: latin-1 -*-`, `GREETING = "Olá, café"`, `from pkg.store import Store`
+  - `pkg/store.py`
+- **Observed:**
+  - `graph` has the edge `pkg.legacy -&gt; pkg.store`.
+  - `conventions --module pkg.store` prints `imported by (none)` followed by `🔴 every list above is COMPLETE for this module; absence is an answer`.
+  - This happens under both 3.10 and 3.14.
+- **Expected:** `imported by pkg.legacy`.
+- **Cause:** `conventions.py:753`, `ast.parse(module.path.read_text(encoding="utf-8"))`. The `UnicodeDecodeError` is swallowed, and `compute_module_view` (around line 1645) skips the module with nothing said.
+- **Fix:** `ast.parse(module.path.read_bytes())`. I verified this parses the fixture.
+- **Acceptance:**
+  - Latin-1 and UTF-8-BOM fixtures appear in `imported_by` on CLI and `archy_module_view`.
+  - Assert first that the fixture is not valid UTF-8.
+  - Mutation: revert to `read_text`, and the tests go red.
+- **Label:** good first issue (one-line fix, clear test).
+- **Closest ticket:** none on encoding. #543 is a UTF-8 crash in install, which is different.
+
+### 3. `fix(conventions): whether a module is censused depends on the interpreter archy runs under (stdlib ast), so newer syntax drops importers from a "COMPLETE" list`
+- **Facts:** PEP 695 is 3.12 (https://peps.python.org/pep-0695/). PEP 758 is 3.14 (https://peps.python.org/pep-0758/). archy declares `requires-python &gt;=3.10`.
+- **Fixture `pep695/`:**
+  - `pkg/cache.py`: `class Cache[K, V]` and `type Key = str`, plus `from pkg.store import Store`
+  - `pkg/cli.py` also imports `Store`
+- **Observed under 3.10:**
+  - `graph` has both `cache-&gt;store` and `cli-&gt;store`.
+  - `conventions --module pkg.store` gives `imported by pkg.cli` plus the COMPLETE claim.
+  - `--module pkg.cache` gives `Error: no module 'pkg.cache'`.
+  - The JSON reports `modules_unparsed: 1`, but only in the ranked report.
+- **Version dependence:** fixture `pep758/` (`except FileNotFoundError, PermissionError:`) gives `imported by (none)` under `--python 3.13` and `pkg.loader` under 3.14.
+- **Cause:** `conventions.py:753`, and the same pattern in `headers.py:84`. The latter means `--emit-headers --check` can disagree across a CI Python matrix.
+- **Fix sketch:** the minimal version is to carry unparsed qualnames on `ModuleView`. Then drop the COMPLETE claim and name the skipped files, giving the interpreter version and the `SyntaxError` line, on all three surfaces. The larger alternative is to source the census facts from tree-sitter.
+- **Acceptance:**
+  - On 3.10 the fixture no longer prints the COMPLETE line without naming `pkg.cache`.
+  - The skipped list shows up in `model_dump()`.
+  - Mutation: drop the caveat, and the tests go red.
+- **Label:** good second issue. It needs a surface-wiring decision and is the same "silent negative" class as #625.
+- **Closest ticket:** #476 is about dynamic imports, a different topic. Nothing else matched.
+
+### 4. `fix(parser): transcode non-UTF-8 sources before tree-sitter, so a Shift-JIS/Big5/GBK file loses no imports`
+- **Facts:** PEP 263 (above). In Shift-JIS, `能` is 0x94 0x5C, and the 0x5C trailing byte is an ASCII backslash.
+- **Fixture `sjis/`:**
+  - `pkg/a.py`, Shift-JIS encoded: `# -*- coding: shift_jis -*-`, `LABEL = '機能'`, `from pkg import b`
+  - `pkg/b.py`: `from pkg import a`
+  - CPython 3.14 imports it fine.
+- **Observed:**
+  - `archy cycles` prints `# No cycles found`, and `--strict` exits 0.
+  - The graph JSON has `parse_errors ['pkg.a']` and only the edge `('pkg.b','pkg.a')`.
+- **Expected:** a 2-cycle.
+- **Cause:** `parser.py:162-163`, where `parse_file` feeds raw bytes to a UTF-8 grammar.
+- **Fix:** take the encoding from `tokenize.detect_encoding`. If it isn't utf-8, run `source.decode(enc).encode("utf-8")` before `parse_source`. Lines are preserved; I verified the transcoded parse is clean and puts the import on line 3.
+- **Acceptance:**
+  - The cycle is found and `parse_errors` is empty.
+  - Assert first that the raw bytes contain `\x5c'`.
+  - Mutation: remove the transcode, and the tests go red.
+- **Label:** good first issue. **Weakness:** legacy CJK encodings are rare in 2026, though archy does print a parse-error warning for this case.
+- **Closest ticket:** none.
+
+### 5. `fix(parser): PEP 696 type-parameter defaults raise a spurious parse-error warning`
+- **Facts:** PEP 696 is 3.13 (https://peps.python.org/pep-0696/). The grammar gap is tree-sitter-python #346, which is open (https://github.com/tree-sitter/tree-sitter-python/issues/346). A third-party patch exists: https://github.com/RanolP/hihyou/pull/183.
+- **Observed:** `class D[T = str]` or `def f[T = int](x)` gives `has_errors=True`, with an `ERROR` node around `T =` inside `type_parameter`. Imports, functions and CC are all still recovered.
+- **Cause:** `parser.py:193`, same as #526.
+- **Fix:** extend #526's planned shim to also exempt an `ERROR` whose parent is `type_parameter` and that holds `identifier =`. Alternatively, fold this into #526.
+- **Label:** good first issue, but it is best filed as a comment or scope extension on #526 rather than a new ticket.
+
+### 6. `fix(complexity): an irrefutable case (case _ / case name) counts as a branch, so match scores one higher than the equivalent if/elif/else`
+- **Facts:** irrefutable patterns are defined in PEP 634 (https://peps.python.org/pep-0634/#irrefutable-case-blocks). radon 6.0.1 `visitors.py` subtracts the irrefutable case (https://github.com/rubik/radon/blob/master/radon/visitors.py).
+- **Fixture `matchcc/`:** the same function written with if/elif/else, with `case _`, and with `case other`.
+- **Observed:** archy reports `cc_max` 3, 4 and 4. radon reports 3, 3 and 3.
+- **Cause:** `complexity.py:42` counts every `case_clause`. Also, `if_clause` (`complexity.py:49`, intended for comprehensions) counts match guards.
+- **Fix sketch:** skip a `case_clause` whose only pattern is a bare `_` or a capture identifier. Decide the guard question explicitly.
+- **Acceptance:** the three fixtures score equal. `tests/test_complexity.py:63-71` currently pins 4 and must change. Mutation: remove the skip, and the tests go red.
+- **Weakness:** the docstring claims "matching radon" while a test pins the opposite. The payoff is small: about +1 CC per `match`, so a neutral if-to-match refactor reads as a complexity regression in `diff`/`score`.
+- **Label:** good first issue.
+
+### 7 (weaker). `fix(complexity): _walk_function_defs recursion crashes the whole scan on a ~1,000-term expression`
+- **Observed:** a module with `SQL = ("c0 " + ... + "c999 ")` (fixture `deep/`) makes `archy graph` die with `RecursionError` at `complexity.py:118-135`. The threshold is 993 terms. CPython 3.14 imports the same file fine.
+- **Fix:** an explicit stack, as `_walk_body_tokens` already uses.
+- **Weakness:** 0 of 3,906 stdlib and site-packages files trip it, so it is generated-code only.
+- **Label:** good first issue.
+
+## Checked and working on main
+- **PEP 695:** `def f[T]`, `class C[T: int, *Ts, **P]` and `type X[T] = ...` parse clean, keep their imports and get CC rows.
+- **PEP 701** (nested same quotes, multiline with comments, backslashes) and **PEP 750** t-strings parse clean. A t-string is a `string` node, so duplicates fold it to `STR`.
+- **PEP 758:** `except A, B:` and `except* A, B:` parse clean, and the imports inside are kept.
+- **CC:** `except*` counts +1 per clause, which is more correct than radon's 1. Async comprehensions, walrus and lambdas count sensibly.
+- **Line endings, whitespace and encodings:** a UTF-8 BOM, CRLF, tabs, form feeds and backslash continuations are fine. In the graph, Latin-1, EUC-KR and cp1252 are fine; Shift-JIS breaks only when a character's second byte is 0x5C (candidate 4). Non-ASCII identifiers are kept.
+- **Imports:** both branches of a conditional `try/except ImportError` import are recorded. `from __future__` is excluded. Relative imports beyond the top level are dropped (#161).
+- **uv workspace** with distinct package names under `packages/*/src`: a cross-member cycle is found.
+- **Py2-style statements** (`print &gt;&gt;x`, `exec(...)`) don't cause errors.
+- **Already filed, so skipped:** PEP 810 lazy imports (#526), `TYPE_CHECKING` (#520), `importlib`/`__import__` (#476), `from . import x` (#436), namespace packages (#586), init-less `tests/` (#529), same-name member collisions (#531), the build/dist/venv skip list (#518).
+- **Too niche to file:** CR-only (old Mac) line endings, which CPython accepts, give `has_errors` and lose function rows. Literal NUL bytes are invalid Python anyway.
+
+Sources:
+- [tree-sitter-python #346](https://github.com/tree-sitter/tree-sitter-python/issues/346)
+- [hihyou PR #183](https://github.com/RanolP/hihyou/pull/183)
+- [PEP 696](https://peps.python.org/pep-0696/)
+- [CPython PR #116129](https://github.com/python/cpython/pull/116129)
+- [PEP 263](https://peps.python.org/pep-0263/)
+- [PEP 634](https://peps.python.org/pep-0634/)
+- [PEP 695](https://peps.python.org/pep-0695/)
+- [PEP 758](https://peps.python.org/pep-0758/)
+- [PEP 484 stub files](https://peps.python.org/pep-0484/#stub-files)
+- [radon visitors.py](https://github.com/rubik/radon/blob/master/radon/visitors.py)</result>
+<usage><subagent_tokens>130580</subagent_tokens><tool_uses>48</tool_uses><duration_ms>504774</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aee6ae449976a9d4d</task-id>
+<tool-use-id>toolu_01RsDVVRmiHUy8wDi8RukUo8</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/tasks/aee6ae449976a9d4d.output</output-file>
+<status>completed</status>
+<summary>Agent "Hunt docs drift" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found 8 candidates where a doc says one thing and archy on `main` (v0.53.0) does another, each shown by running the command. Nothing in the repo was changed (`git status` shows only your two untracked folders), and nothing was filed or committed. Scratch fixtures are under `/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/scratchpad/docs/`.
+
+**Tracker hygiene first:** #556 (dsm `--focus` typo prints an empty matrix) is still open, but PR #628 fixed it. `archy dsm . --focus app.nope` now prints `Error: focus 'app.nope' is not an internal module` and exits 1. It should be closed, not re-filed.
+
+---
+
+### 1. `docs(readme): the MCP section says "thirteen tools" and its table omits archy_brief`
+- **Doc:** `README.md:427` says "`archy mcp` exposes thirteen tools and one prompt". The table at lines 429-443 has 13 rows and no `archy_brief`.
+- **Actual:** listing the registered tools through the server's `list_tools()` returns 14, the last being `archy_brief path, top_n=8, contracts=False, include_tests=False`. `docs/INSTALL.md:33`, `skills/archy/SKILL.md:205` and `plugin.json` already say 14.
+- **Fix:** change to "fourteen" and add an `archy_brief` row (the SKILL.md:205 wording works).
+- **Acceptance:** the README count matches `list_tools()`, and every registered tool has a row.
+- **Label:** `documentation`, `good first issue`.
+- **Closest ticket:** #568 (closed) fixed the same count in the `mcp.py` docstring only.
+
+### 2. `docs(status): CONTRIBUTING, ROADMAP and FUTURE still say feature work follows the local-model line, which the README calls closed`
+- **Doc:**
+  - `CONTRIBUTING.md:5-20`: "active again ... on one line ... coding agents running a small model on local hardware ... feature work is driven along that one line".
+  - `docs/ROADMAP.md:3-13` and `docs/FUTURE.md:3-13`: "New work is tracked against the local-model line".
+- **Actual:**
+  - The `README.md:15-31` banner (2026-09-10) says that question "is **closed, as six interventions, none positive**".
+  - #408 is closed.
+- **Why it matters:** a newcomer reading CONTRIBUTING first would aim their PR at a closed line.
+- **Fix:** bring the three status notes in line with the README banner (closed, the "deeper into the loop" direction), linking Study 8 in `WHAT_DIDNT_WORK.md`.
+- **Acceptance:** no doc outside `WHAT_DIDNT_WORK.md` and `docs/research/` presents the local-model line as the active one.
+- **Label:** `documentation`, `good first issue`.
+- **Closest ticket:** #423 (closed, stale README banner); #535 is about "only tool" claims, which is different.
+
+### 3. `docs(shipped,roadmap,future): v0.53.0 items still marked "unreleased"`
+- **Doc:**
+  - `docs/SHIPPED.md:5`: "v0.16 through v0.52, plus what is on `main` but not yet released".
+  - `SHIPPED.md:45`: "**Unreleased**, lookups refuse...", covering #625/#628, #630, #632, #633 and PRs #615/#616.
+  - `SHIPPED.md:85`: "**Unreleased:** ... PR #618, PR #617, PR #619".
+  - `docs/ROADMAP.md:59`: "(on `main`, unreleased ...)".
+  - `docs/FUTURE.md:46`: "shipped on `main` (unreleased)".
+- **Actual:** the v0.53.0 release notes (from the GitHub REST releases endpoint) list every one of these PRs.
+- **Why it matters:** a reader decides they need to install from git when the PyPI release already has the fix.
+- **Fix:**
+  - Tag the entries v0.53.
+  - Change the range to "v0.16 through v0.53".
+  - Add the missing version tags on the v0.51/v0.52 entries ("score comment" and "`history` command" are v0.52; `archy_brief` is v0.51).
+- **Acceptance:** "unreleased" appears only for work not in any tag, and each version tag is backed by `git tag --contains`.
+- **Label:** `documentation`, `good first issue`.
+
+### 4. `docs(shipped): 14 relative links resolve to docs/docs/...`
+- **Doc:** `docs/SHIPPED.md` lines 26, 32, 36-40, 57, 58, 60, 67, 70, 72 and 80 use `](docs/X.md)` from inside `docs/`. Examples: `[docs/INSTALL.md](docs/INSTALL.md)` at line 80 and `[docs/CI_HISTORY.md](docs/CI_HISTORY.md)` at line 70.
+- **Actual:** a link check that resolves each link against the file's own directory finds exactly these 14 broken (for example `docs/docs/INSTALL.md`). Every other doc in scope resolves, anchors included.
+- **Fix:** drop the `docs/` prefix (`INSTALL.md`, `research/RESEARCH_METRICS.md`).
+- **Acceptance:** every relative link in `docs/SHIPPED.md` resolves.
+- **Label:** `documentation`, `good first issue`.
+
+### 5. `docs(agent-loop,readme): example outputs predate the diff summary, the complexity axis and the check handoff lines`
+- **`docs/AGENT_LOOP.md:208-226` (worked example):**
+  - Doc shows `archy diff .` printing only `# score deltas` with no `complexity` row.
+  - On a fixture (`app.libs.db` &lt;-&gt; `app.services.auth`), it now starts with `# summary: overall ...; cycles +1/-0`, then `## top regressions (risk-weighted):` with `?` prompts and `## top improvements`, and then six delta rows including `complexity +0.000`.
+  - Line 146 tells the reader to "Read `summary.headline` first", yet the example never shows one.
+- **`README.md:648`, coverage example ("The numbers above are archy's own"):**
+  - Doc: `9 of 42 modules (21%), 16 of 117 internal edges (14%)`.
+  - `archy check .` now gives `10 of 48 modules ... 20 of 136 internal edges`, plus two lines the README never shows: `116 scanned module(s) sit outside every declared root package`, and the `# 6 forbid rules declared ... archy check --contracts evaluates them transitively` handoff.
+  - The bare-qualname example at `README.md:654-658` also lacks the handoff lines, which my `myapp` fixture does print.
+- **`README.md:105-133`, headline reproduction:**
+  - Doc: an "eight-module cycle" and "score down 0.009" at 139 modules.
+  - Reproduced in a `git archive` copy: a 12-module cycle, 0.638 to 0.636 (down 0.002), 164 to 164 modules with 318 to 319 edges.
+- **Fix:** regenerate each block from a real run, and say which version produced the numbers.
+- **Acceptance:** each block matches the current command's output line for line (numbers may differ only where marked illustrative).
+- **Label:** `documentation`, `good first issue`.
+- **Closest ticket:** #558 (closed) fixed the same drift in the 60-second tour.
+
+### 6. `docs(walkthrough): "check misses it, direct edges only" when the fixture's layers govern 0% of edges`
+- **Doc:** `docs/WALKTHROUGH.md:99` table: "`archy check` | misses it, exit 0 | direct edges only". Line 63 says "Baseline: `archy check` passes".
+- **Actual:**
+  - Running `uv run python bench/walkthrough.py`, archy's own output says `governs 0 of 4 internal edges (0%), so no forbid rule can fire`, and prints `Did you mean "shipping.api.**"?` for all four layers.
+  - The fixture's layers (`bench/walkthrough.py:95-103`) are bare qualnames, which is exactly the dead-config trap in AGENTS.md. So `check` would miss even a direct forbidden import there.
+- **Rewritten fixture:** with the layers changed to `shipping.X.**`, I got 100% edge coverage, `check` still exits 0, and `contracts` still reports the same 2 broken contracts. The walkthrough's conclusion survives; its reason does not.
+- **Fix:**
+  - Switch the fixture to `.**` patterns.
+  - Keep the "misses it" row.
+  - Mention `archy check --contracts`, which now prints the chain inline but never gates (also shown: exit 0).
+- **Acceptance:** the walkthrough's `check` output shows non-zero edge coverage and no "Did you mean" hints, and `tests/test_walkthrough.py` passes.
+- **Note:** `test_layers.py:867` deliberately pins this config shape for the hint test; leave that test alone.
+- **Label:** `documentation`, `good second issue` (fixture, doc and test together).
+
+### 7. `fix(plugin): the shim floor archy&gt;=0.36 cannot provide the tools the bundled skill tells the agent to call`
+- **Doc and code:**
+  - `plugins/claude/README.md:5` says the lower bound "guarantees the full current 0.x tool set". `plugins/claude/bin/archy-mcp.mjs:28` says the same.
+  - The shim's spec is `archy&gt;=0.36,&lt;1.0` (`archy-mcp.mjs:30`), pinned by `tests/test_plugin.py:38`.
+- **Actual** (registered tool names per tag, via `git grep 'name="archy_'`):
+  - v0.36.0: 13 tools, including the since-removed `archy_contracts`, `archy_status` and `archy_trend`. No `archy_duplicates`, `archy_conventions`, `archy_module_view` or `archy_brief`.
+  - `archy_module_view` first appears in v0.45.0.
+  - `archy_brief` first appears in v0.51.0 (`git tag --contains 6e58cc3`).
+- **Why it matters:** an old `uv tool` install that meets the floor serves a tool set the bundled SKILL.md table does not describe.
+- **Fix:** raise the floor to `&gt;=0.51` (or the current minor) in the shim, the plugin README (3 places) and `EXPECTED_SPEC`, and add a release-checklist note.
+- **Acceptance:** the shim, README and test agree, and every tool named in the bundled skill exists at the floor version.
+- **Label:** `bug`, `good second issue`.
+- **Closest ticket:** #150 (closed, the shim's origin).
+
+### 8. `chore(docker,action): the Dockerfile pins archy 0.19.0, and action.yml's description omits history`
+- **Dockerfile:** `Dockerfile:19` has `ARG ARCHY_VERSION=0.19.0`. Its comment at line 15 says "bump ARCHY_VERSION when archy ships a new tag", and line 3 says its purpose is Glama's handshake check.
+  - It was last touched in v0.19.0 (`git log -- Dockerfile`).
+  - That version's `score.py` docstring reads "Four sub-metrics", and its tools include the removed `archy_hotspots` and friends.
+  - The `docker run ... archy score /code` usage in the header comment therefore gives a 4-axis score from 34 releases ago.
+- **action.yml:** `action.yml:2` says "Supports score, check, cycles, and diff." The `command` input at line 11 and the README both list `history`, shipped in v0.52.0. This description is what the Marketplace listing shows.
+- **Fix:**
+  - Bump `ARCHY_VERSION` to 0.53.0.
+  - Add a test like `tests/test_server_json.py` that pins it to `pyproject.toml` (the publish workflow already relies on that test for `server.json`).
+  - Add `history` to the action description.
+- **Acceptance:** the Dockerfile version equals the `pyproject` version under test, and the action description lists all five commands.
+- **Label:** `good first issue`.
+- **Closest ticket:** #340/#462 (closed, same drift for `server.json`).
+
+---
+
+**Smaller, optional (could fold into #1 or stand alone):** `src/archy/risk.py:27` and `src/archy/refactor.py:3-11` module docstrings call `archy_high_risk_modules` / `archy_hotspots` current MCP tools. Both were removed in v0.36 and folded into `archy_what_to_refactor_next(lens=...)`.
+
+**Code nits seen in passing (not docs):**
+- The `check` handoff says "1 forbid rule declared, but ... to verify them" (wrong pluralisation).
+- It also says "governs too little of the graph" when 100% of edges are governed: the corrected walkthrough fixture prints it because one module, the root `shipping` package, is unlayered. That contradicts the docstring at `cli.py:2720`, which says it "stays quiet" on a fully layered repo.
+
+**Checked and accurate:**
+- `docs/SIXTY_SECOND_TOUR.md`: output reproduced exactly.
+- `docs/INSTALL.md`: all 10 client/location paths checked with `--print-config`, all flags correct.
+- `skills/archy/SKILL.md` tool table: all 14 signatures and defaults match the server's tool list, and the plugin mirror is byte-identical.
+- `src/archy/mcp.py`: module docstring and the `loop` prompt (one prompt, as the README says).
+- `docs/CI_HISTORY.md`: the v0.52.0 pin is correct, and the claim that rows don't record the version holds.
+- README Action input table versus `action.yml`, pre-commit hook ids, and the `affected`/`impact`/`dsm`/`render`/`diff`/`snapshot`/`trend`/`brief` flags in the README's CLI sections.
+- `server.json` (0.53.0, `mcp` argument), `glama.json`, `CONTRIBUTING.md`'s CI command list, and the `docs/SCORING.md` formulas against `score.py`.
+- All relative links and anchors outside `SHIPPED.md` resolve.
+- The `score --strict` no-history behaviour, and `check --contracts` being "never gated".</result>
+<usage><subagent_tokens>182867</subagent_tokens><tool_uses>95</tool_uses><duration_ms>549438</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad1d406076ac2d3e1</task-id>
+<tool-use-id>toolu_018Tt8xmPFr3y9G35cwQto7F</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/tasks/ad1d406076ac2d3e1.output</output-file>
+<status>completed</status>
+<summary>Agent "Hunt blind tests and code DRY" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found 7 candidates: 5 test pins and 2 cleanups. Every pinning test proposed below was written as a scratch test and run on unmutated code, where it passed. It went red under the mutant it targets, so each one is shown to be able to fail.
+
+**Setup.** All mutation work ran in a detached worktree at HEAD `f8d306f`, because your course correction came before I had changed anything in the main checkout. A helper copied each file aside, applied the replacement (and exited non-zero if the old text didn't match exactly once), and confirmed the new text was present. It cleared `__pycache__`, ran `uv run pytest -q -x -p no:randomly &lt;files&gt;`, then restored the file and confirmed `git diff` was clean.
+
+## Candidates
+
+**1. `test(graph): pin suggest_modules' similarity floor, margin, and default limit`** (good first issue: pure test additions with hand-worked numbers)
+- Survivors in `src/archy/graph.py`. All four passed `test_graph`, `test_impact`, `test_simulate`, `test_mcp` and `test_cli` (490 passed, 1 skipped):
+  - **Floor lowered:** `:73` changed from `_SUGGEST_MIN_SIMILARITY = 0.8` to `0.7`. The only floor test has a closer winner, so the margin hides the floor.
+  - **Margin removed:** `:76` changed from `_SUGGEST_MARGIN = 0.1` to `0.0`. Only exact ties are tested, never a near second.
+  - **Floor made exclusive:** `:341` changed from `ratio &gt;= _SUGGEST_MIN_SIMILARITY` to `&gt;`.
+  - **Default limit raised:** `:315` changed from `limit: int = 5` to `50`. The only cap test passes `limit=3`.
+- Pins, all verified to kill:
+  - `suggest_modules(["pkg.abxy"], "pkg.abcd") == []` (6 of 8+8 characters match, 12/16 = 0.75, below the floor).
+  - `suggest_modules(["abcdx"], "abcde") == ["abcdx"]` (8/10 = 0.8 exactly, so the floor must be inclusive).
+  - `suggest_modules(["pkg.abcdaa", "pkg.abcdf"], "pkg.abcde") == ["pkg.abcdf", "pkg.abcdaa"]` (16/18 = 0.889 and 16/19 = 0.842 are within 0.1 of each other; this also pins similarity order against name order).
+  - Seven `p.x0`..`p.x6` with ref `x` returns `p.x0`..`p.x4`.
+- Closest tickets: #624 (closed, the feature). No pin ticket exists.
+
+**2. `test(graph): pin that suggest_files answers a package __init__.py path`** (good first issue)
+- Survivor: `graph.py:448`, `_module_parts`, changed from `return parts[:-1] if parts[-1] == "__init__" else parts` to `return parts`. It survived the same 490.
+- Pin, verified to kill: a project with `app/__init__.py` and `app/score/__init__.py`. `suggest_files(g, ["app/scoer/__init__.py"], base=tmp_path)` should give one hint, `("app/scoer/__init__.py", ("app/score/__init__.py",))`. Correctly it compares `app.scoer` with `app.score` (0.89); under the mutant it compares `app.scoer.__init__` (16/27 = 0.59) and finds nothing.
+- Fold into #1 if you prefer. Closest ticket: #627 (closed).
+
+**3. `test(simulate,impact): pin coverage=partial when the answered spec is a remove, skipped de-duplication, and nothing_resolved on empty input`** (good first issue)
+- Survivors (391 passed across `test_simulate`, `test_impact`, `test_mcp`, `test_cli`):
+  - `simulate.py:106`: dropping `self.removed_edges` from `answered`.
+  - `simulate.py:106`: dropping `self.no_op_removes` from `answered`.
+  - `simulate.py:288`: changing `tuple(dict.fromkeys(skipped))` to `tuple(skipped)`.
+  - `impact.py:97`: changing `bool(self.unresolved) and not self.changed` to `not self.changed`.
+- Pins, all verified to kill:
+  - With `app.a` importing `app.b`, add `(app.a, app.bb)` and remove `(app.a, app.b)`: expect `removed_edges == [(app.a, app.b)]` and `coverage == "partial"`.
+  - With no edges, add `(app.a, app.bb)` and remove `(app.b, app.a)`: expect `no_op_removes == [(app.b, app.a)]` and `"partial"`.
+  - Add the same unresolved spec twice: expect `skipped == ("add app.a -&gt; app.bb",)`.
+  - `Impact(changed=(), unresolved=(), impacted=()).nothing_resolved is False`.
+- Closest tickets: #627 and #626 (closed). Existing tests cover only partial-via-add and partial-via-no-op-add.
+
+**4. `test(affected): pin conftest expansion's directory scope, filter, and __init__ exclusion with exact equality`** (good first issue; this is the "fixture never reaches the branch" shape)
+- Survivors in `src/archy/affected.py`. They survived all of `test_affected` + `test_cli` + `test_mcp` (392 passed):
+  - **Directory scope:** `:189` remove the `np.relative_to(cdir)` try/except. No fixture has a test file outside the conftest's directory.
+  - **Filter:** `:186` remove the `if not is_test(np): continue`. `test_conftest_expansion_respects_filter` says expansion "must not add paths the filter rejects", but its fixture contains no such path.
+  - **`__init__` exclusion:** `:184` drop `"__init__.py"` from the skip set. Tests assert with `in`, so the extra `tests` and `tests.unit` package nodes go unnoticed.
+- Pins, verified to kill all three. Fixture: `tests/unit/{conftest.py (imports app.factory), helpers.py, test_x.py}` plus `tests/integration/test_x.py`, every directory with `__init__.py`:
+  - Default classifier: `impacted_tests == ("tests.unit.helpers", "tests.unit.test_x")`.
+  - With `test_filter="**/test_*.py"`: `impacted_tests == ("tests.unit.test_x",)`.
+- Closest ticket: #530 (closed, the fix).
+
+**5. `test(install): pin denied_archy_permission_patterns' malformed-input guards and that uninstall emits no notes`** (good first issue)
+- Survivors (204 passed in `tests/install`):
+  - `merge.py:172`: changing `{p for p in deny if isinstance(p, str)}` to `set(deny)`.
+  - `merge.py:170`: changing `not isinstance(deny, list)` to `deny is None`.
+  - `merge.py:167`: changing `not isinstance(permissions, dict)` to `permissions is None`.
+  - `runner.py:164`: changing `if not for_uninstall:` to `if True:`.
+- Pins, all verified to kill:
+  - A deny of `[{"tool":"x"}, &lt;pattern0&gt;]` returns `[pattern0]` without a crash.
+  - `{"deny": 5}` returns `[]`.
+  - `run_install` on `{"permissions": []}` raises `InstallError`. Under the mutant the runner, which computes notes before apply, raises `AttributeError` instead.
+  - Install, then `run_uninstall`, with a pattern denied: `all_paths()` is non-empty and `all_notes() == []`.
+- Optionally fold in hoisting the four function-local imports in `tests/install/unit/test_runner.py:108-112` (`json`, `TOOL_NAMES`/`permission_patterns`, `get_adapter`, `RealWriteSystem`). They are not optional-dependency guards; the rest of the file imports at the top.
+- Closest ticket: #542 (closed).
+
+**6. `refactor(cli): load archy.yaml once per command and drop two unreachable LayerConfigError catches`** (good second issue: touches several command paths and needs care with the #524 behaviour)
+- `graph_kwargs` and `resolve_max_modules` both call `load_config(discover_config(path))` on the same file. Arguments evaluate left to right, so `_graph_kwargs_or_exit` has already exited on a bad config before `resolve_max_modules` runs.
+- Two catches are therefore dead:
+  - The `except LayerConfigError` at `cli.py:2131-2134`, whose comment ("resolve_max_modules also loads the config") is misleading.
+  - The `brief` catch at `cli.py:2070-2073` (`load_config` on the same file).
+- Evidence: deleting the first survived `test_cli` (202 passed). Replacing the second with `finally: pass` also survived.
+- Fix: one helper that loads the config once and returns `scan_kwargs(config)`, which already exists in `scan_config.py` and includes `max_modules`. Use it at `_load_graph` (:2125), `duplicates` (:900), `index sync` (:1537/1541) and `brief`, then delete both catches.
+- Closest tickets: #524 (closed) and #614 (a different constant). No duplicate.
+
+**7. `cleanup(impact,cli): a misplaced computed_field comment and the twice-written did-you-mean suffix`** (good first issue)
+- `impact.py:90-92`: the comment "Present only when there is a zero to qualify" belongs to `empty_caveat`. #626 inserted `nothing_resolved`, an always-present bool, between the comment and `empty_caveat`, so it now describes the wrong field.
+- The did-you-mean text is written twice:
+  - The `f"  (did you mean {', '.join(...)}?)"` suffix appears at `cli.py:2886` and `:3072`.
+  - The `{h.ref: h.did_you_mean for h in ...}` map appears at `:2884` and `:3447`.
+  - Extract `_hints_by_ref(hints)` and `_did_you_mean_suffix(ref, by_ref)`.
+- `conventions.py:1653` slices `near[:5]`, which is redundant because `suggest_modules` already caps at 5. Removing the slice survived (433 passed), as expected for an inert line.
+- Sequence this after or with #631, which will reuse `_unresolved_and_changed_lines`.
+
+## Correctly killed mutants
+- **graph:** floor raised to 0.9; margin widened to 0.2; the empty-ref guard; the contained-names skip; score sort by name; `dict.fromkeys` in `hint_unresolved`; the external filter in `hint_unresolved`; the order of `longest_first`; `base` anchoring; the caller-form `lead`; the `.py` suffix guard in `suggest_files`.
+- **dsm:** the empty-package raise; the "within package" text; `focus not in sub` changed to `in graph`.
+- **impact:** `nothing_resolved` without `not changed`; `unresolved_hints=()`.
+- **simulate:** `answered` without the no-ops; hints without `base`.
+- **mcp:** `min_size` bound changed to `&lt;0` and `&lt;2`; `focus_depth` bound changed to `&lt;-1` and `&lt;1`; both `hint_unresolved` sites in `_run_graph_focus`.
+- **install:** the deny skip in `render_claude_permissions`; the `kind != "permissions"` filter in the runner.
+- **affected:** removing `conftest.py` from the skip set; both `discard(cq)` calls.
+- **cli:** the simulate `partial` banner.
+
+## Low-value survivors, not proposed
+- `affected.py:193` `modules.discard(q)` and `:178` `if data.get("external")` both look dead. Every `q` reaching the discard already passed `is_test`, so it could not have been in `modules`, and external nodes have no `path`.
+- `graph.py` `elif not ref.endswith(".py")` changed to `else` survives. Killing it needs a contrived absolute `.py` path outside the project root that happens to resemble a module name.
+- `suggest_files`' `data.get("external")` guard is likely inert for the same no-`path` reason.
+
+## Tree state
+I removed the scratch tests (the worktree's `git status --porcelain` was empty), then ran `git worktree remove --force`. `git worktree list` now shows only `/Users/hosanglee/archy f8d306f [main]`. In the main checkout, `git status --porcelain src tests` is empty, and `git status --porcelain` shows only the pre-existing untracked folders:
+```
+?? reports/
+?? research_notes/
+```
+
+The mutation helper is at `/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/scratchpad/mut.py`, with its wrapper at `/private/tmp/claude-501/-Users-hosanglee-archy/1ed18e28-fc9c-4ab2-bc03-0a8d909c2556/scratchpad/run.sh`.</result>
+<usage><subagent_tokens>133286</subagent_tokens><tool_uses>42</tool_uses><duration_ms>673191</duration_ms></usage>
+</task-notification>
+
+---
+
+lets update Stale project direction and make the decision on 556
