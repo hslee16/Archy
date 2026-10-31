@@ -19,6 +19,40 @@
     "output_tokens": 50790,
     "api_call_count": 47
   },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01HwiJiLyswXntnnY65N49mr",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "28415f8e94ae",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 489,
+        "end": 490,
+        "entry_ids": [
+          "b2451d02-e22f-495c-a59e-83ebc30adc4d"
+        ],
+        "tool_use_id": "toolu_01HwiJiLyswXntnnY65N49mr"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01HwiJiLyswXntnnY65N49mr"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
   "session_metrics": {
     "turn_count": 5
   },
