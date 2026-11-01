@@ -172,7 +172,11 @@ def test_reset_timer_coalesces(project: Path, tmp_path: Path, monkeypatch):
             time.sleep(0.02)  # all within the debounce window
         # Only one timer is ever pending.
         assert m._timer is not None
-        time.sleep(0.3)  # 2x the debounce window: the timer must have fired by now
+        # The sync runs on the timer thread after the debounce, and a slow runner
+        # can take longer than any fixed sleep, so poll for convergence.
+        deadline = time.time() + 5
+        while time.time() < deadline and m.last_synced_at is None:
+            time.sleep(0.05)
         assert m.last_synced_at is not None
     finally:
         m.stop()
