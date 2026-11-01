@@ -360,6 +360,9 @@ def _mcp_args(tool, proj: Path) -> dict:
         args["files"] = ["pkg/b.py"]
     if tool.name == "archy_module_view":
         args["module"] = "pkg.a"
+    if tool.name == "archy_simulate":
+        # An empty delta is refused (#684), so propose a real one.
+        args["add"] = [{"from": "pkg.b", "to": "pkg.a"}]
     return args
 
 
