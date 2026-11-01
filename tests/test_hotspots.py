@@ -4,10 +4,11 @@ import subprocess
 from pathlib import Path
 
 import networkx as nx
+import pytest
 from click.testing import CliRunner
 
 from archy.cli import main
-from archy.hotspots import compute_hotspots, git_churn
+from archy.hotspots import NoCommitsError, compute_hotspots, git_churn
 
 
 def _node(g: nx.DiGraph, name: str, *, path: str, cc_sum: int) -> None:
@@ -69,6 +70,25 @@ def test_compute_hotspots_ties_break_on_churn_then_module():
 
 def test_git_churn_returns_none_outside_repo(tmp_path: Path):
     assert git_churn(tmp_path) is None
+
+
+def test_git_churn_distinguishes_fresh_repo_from_no_repo(tmp_path: Path):
+    # A fresh `git init` (zero commits) is a repository, not a missing one.
+    # git exits 128 with "does not have any commits yet", which used to
+    # collapse into the same None "not a repository" returns (#648).
+    repo = tmp_path
+    _init_repo(repo)
+    # Assert the fixture really is a repo with zero commits before asserting
+    # on the exception.
+    inside = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+    )
+    assert inside.returncode == 0
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True)
+    assert head.returncode != 0
+    with pytest.raises(NoCommitsError):
+        git_churn(repo)
 
 
 def _git(repo: Path, *args: str) -> None:

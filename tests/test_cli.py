@@ -2860,3 +2860,48 @@ def test_diff_strict_locations_are_relative_to_the_working_directory(
 
     assert result.exit_code == 1
     assert f"pkg.d -> pkg.e at {Path('sub', 'pkg', 'd.py')}:1" in result.output
+
+
+def _fresh_git_repo_without_commits(repo: Path) -> None:
+    repo.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "user.email", "t@t.t"], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "user.name", "t"], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "commit.gpgsign", "false"],
+        check=True,
+        capture_output=True,
+    )
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "app.py").write_text("def f(x):\n    if x: return 1\n    return 0\n")
+
+
+def test_hotspots_names_missing_commit_history_not_missing_repo(tmp_path: Path):
+    # #648: a fresh `git init` (no commits) is a repository, not a missing
+    # one. The error must point the user at committing, not at their git
+    # install, and must not leak a traceback.
+    repo = tmp_path / "repo"
+    _fresh_git_repo_without_commits(repo)
+    result = CliRunner().invoke(main, ["hotspots", str(repo)])
+    assert result.exit_code != 0
+    assert "no commit history" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_what_to_refactor_next_names_missing_commit_history(tmp_path: Path):
+    # #648: fused lens on a zero-commit repo degrades to structural-only, but
+    # the degraded header must not claim there is no git repository.
+    repo = tmp_path / "repo"
+    _fresh_git_repo_without_commits(repo)
+    result = CliRunner().invoke(main, ["what-to-refactor-next", str(repo)])
+    assert result.exit_code == 0, result.output
+    assert "not a git repo" not in result.output.lower()
+    assert "commits" in result.output

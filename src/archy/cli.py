@@ -83,7 +83,7 @@ from archy.headers import apply_header, compute_headers, existing_block, render_
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
-from archy.hotspots import Hotspot, compute_hotspots, git_churn
+from archy.hotspots import Hotspot, NoCommitsError, compute_hotspots, git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.layers import (
     LayerConfig,
@@ -709,7 +709,13 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
     # list: --top 0 showed nothing, --top -1 dropped the lowest-score row).
     _require(top_n >= 1, "top", ">= 1", top_n)
     g = _load_graph(path, internal_only=True)
-    churn = git_churn(path, since=since)
+    try:
+        churn = git_churn(path, since=since)
+    except NoCommitsError as exc:
+        raise click.ClickException(
+            f"{path} is a git repository with no commit history yet; "
+            "`archy hotspots` needs commits to compute per-file churn."
+        ) from exc
     if churn is None:
         raise click.ClickException(
             f"{path} is not inside a git repository (or git is unavailable); "
@@ -972,7 +978,12 @@ def what_to_refactor_next(
     _require(top_n >= 1, "top", ">= 1", top_n)
     _require(0.0 <= min_risk <= 1.0, "min-risk", "in [0, 1]", min_risk)
     g = _load_graph(path, internal_only=True)
-    churn = git_churn(path, since=since)
+    no_commits = False
+    try:
+        churn = git_churn(path, since=since)
+    except NoCommitsError:
+        churn = None
+        no_commits = True
     rows = compute_refactor_priorities(g, churn=churn, min_risk=min_risk)
     if fmt == "json":
         payload = _refactor_to_dict(
@@ -981,11 +992,18 @@ def what_to_refactor_next(
             since=since,
             min_risk=min_risk,
             git_available=churn is not None,
+            no_commits=no_commits,
         )
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
         click.echo(
-            _refactor_to_text(rows, top_n=top_n, min_risk=min_risk, git_available=churn is not None)
+            _refactor_to_text(
+                rows,
+                top_n=top_n,
+                min_risk=min_risk,
+                git_available=churn is not None,
+                no_commits=no_commits,
+            )
         )
 
 
@@ -3356,7 +3374,11 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
 
 
 def _refactor_note(
-    rows: list[RefactorPriority], *, min_risk: float, git_available: bool
+    rows: list[RefactorPriority],
+    *,
+    min_risk: float,
+    git_available: bool,
+    no_commits: bool = False,
 ) -> str | None:
     """Machine-readable explanation for the empty / git-absent cases.
 
@@ -3371,12 +3393,24 @@ def _refactor_note(
                 f"above min_risk={min_risk}. Lower min_risk to widen the "
                 "structural lens."
             )
+        if no_commits:
+            return (
+                "No commit history yet, so the CC x churn lens was skipped and "
+                f"only the structural lens ran; no module is central and fragile "
+                f"above min_risk={min_risk}. Lower min_risk to widen the "
+                "structural lens."
+            )
         return (
             "Not a git repository, so the CC x churn lens was skipped and only "
             f"the structural lens ran; no module is central and fragile above "
             f"min_risk={min_risk}. Lower min_risk to widen the structural lens."
         )
     if not git_available:
+        if no_commits:
+            return (
+                "No commit history yet; the CC x churn lens was skipped and "
+                "this ranking is structural-only (edit-risk)."
+            )
         return (
             "Not a git repository; the CC x churn lens was skipped and this "
             "ranking is structural-only (edit-risk)."
@@ -3391,6 +3425,7 @@ def _refactor_to_dict(
     since: str | None,
     min_risk: float,
     git_available: bool,
+    no_commits: bool = False,
 ) -> dict:
     return {
         "since": since,
@@ -3399,7 +3434,9 @@ def _refactor_to_dict(
         "total": len(rows),
         "shown": min(top_n, len(rows)),
         "priorities": [r.model_dump() for r in rows[:top_n]],
-        "note": _refactor_note(rows, min_risk=min_risk, git_available=git_available),
+        "note": _refactor_note(
+            rows, min_risk=min_risk, git_available=git_available, no_commits=no_commits
+        ),
     }
 
 
@@ -3409,12 +3446,18 @@ def _refactor_to_text(
     top_n: int,
     min_risk: float,
     git_available: bool,
+    no_commits: bool = False,
 ) -> str:
     if not rows:
         if git_available:
             return (
                 "# Nothing to refactor: no file is both complex and churned, and "
                 f"no module is central+fragile above min_risk={min_risk}."
+            )
+        if no_commits:
+            return (
+                "# No commits yet, so only the structural lens ran; no module is "
+                f"central+fragile above min_risk={min_risk}. Nothing surfaced."
             )
         return (
             "# Not a git repo, so only the structural lens ran; no module is "
@@ -3423,7 +3466,10 @@ def _refactor_to_text(
     shown = rows[:top_n]
     header = f"# {len(rows)} refactor candidate(s); showing top {len(shown)}"
     if not git_available:
-        header += " (structural-only: not a git repo)"
+        if no_commits:
+            header += " (structural-only: no commits yet)"
+        else:
+            header += " (structural-only: not a git repo)"
     lines = [header, ""]
     for i, r in enumerate(shown, 1):
         lenses = "+".join(r.lenses)

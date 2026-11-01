@@ -2903,3 +2903,26 @@ def test_impact_affected_expands_conftest(tmp_path: Path):
     payload = structured["result"]
     assert "tests.conftest" not in payload["impacted_tests"]
     assert "tests.test_x" in payload["impacted_tests"]
+
+
+def test_what_to_refactor_next_fresh_repo_note_mentions_commit_history(tmp_path: Path):
+    # #648: a fresh `git init` has no commits; git_churn used to collapse that
+    # into "not a git repository". The note must say what is actually missing.
+    repo = tmp_path
+    _init_git_repo(repo)
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # Sanity: the fixture really is a repo with zero commits.
+    inside = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"], capture_output=True
+    )
+    assert inside.returncode == 0
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True)
+    assert head.returncode != 0
+
+    payload = _run_what_to_refactor_next(repo, top_n=20, since=None, min_risk=0.0)
+    assert payload.git_available is False
+    assert payload.note is not None
+    assert "no commit history" in payload.note
+    assert "not inside a git repository" not in payload.note
