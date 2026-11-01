@@ -1,0 +1,50 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "cbda5601eff1",
+  "session_id": "8089ab7d-3638-4fc2-8bea-3f932532e700",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-01T12:37:34.848669Z",
+  "branch": "alee/fix-watcher-coalesce-flake",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/test_watcher.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "ba3a33b194b6",
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 36645,
+    "cache_read_tokens": 558169,
+    "output_tokens": 3667,
+    "api_call_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-01T12:37:34.829796Z",
+    "agent_lines": 30,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 30,
+    "total_lines_changed": 31,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 674,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130
+      }
+    }
+  ]
+}

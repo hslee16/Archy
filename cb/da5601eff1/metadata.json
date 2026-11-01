@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "cbda5601eff1",
+  "strategy": "manual-commit",
+  "branch": "alee/fix-watcher-coalesce-flake",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "tests/test_watcher.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cb/da5601eff1/0/metadata.json",
+      "transcript": "/cb/da5601eff1/0/full.jsonl",
+      "content_hash": "/cb/da5601eff1/0/content_hash.txt",
+      "prompt": "/cb/da5601eff1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 36645,
+    "cache_read_tokens": 558169,
+    "output_tokens": 3667,
+    "api_call_count": 10
+  }
+}
