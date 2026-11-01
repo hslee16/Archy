@@ -691,7 +691,7 @@ Unset by default, so existing configs keep their exit codes. The shape is taken 
 
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 
-**Coverage.** Every `check` reports how much of your code the rules actually reach, on a pass as well as a failure:
+**Coverage.** Every `check` reports how much of your code the rules actually reach, on a pass as well as a failure. The example is archy's own config before every module was layered (#686); `archy check .` on this repository now reports 47 of 48 modules (98%):
 
 ```console
 $ archy check .
