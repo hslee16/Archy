@@ -1,0 +1,91 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4bf8ebf7d1f7",
+  "session_id": "95634ce3-467c-4f4f-a51e-7c5f6a19b957",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-01T15:23:08.483508Z",
+  "branch": "alee/importlinter-single-source",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/ci.yml",
+    ".importlinter",
+    "AGENTS.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "aed2272d7720",
+  "checkpoint_transcript_start": 725,
+  "transcript_lines_at_start": 725,
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 6668,
+    "cache_read_tokens": 1265557,
+    "output_tokens": 3871,
+    "api_call_count": 7
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_016uwnEN5SsEujravh1zSvad",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "aed2272d7720",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 548,
+        "end": 549,
+        "entry_ids": [
+          "9559d1de-3597-4783-9f68-7e28bcc61998"
+        ],
+        "tool_use_id": "toolu_016uwnEN5SsEujravh1zSvad"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_016uwnEN5SsEujravh1zSvad"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 10
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-01T15:23:08.428535Z",
+    "agent_lines": 10,
+    "agent_removed": 49,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 10,
+    "total_lines_changed": 59,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 674,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130
+      }
+    }
+  ]
+}
