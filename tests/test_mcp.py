@@ -881,7 +881,7 @@ def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
     ],
 )
 def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
-    acyclic_project: Path, monkeypatch: pytest.MonkeyPatch, kwargs: dict, name: str
+    acyclic_project: Path, monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, str], name: str
 ):
     """group_by/weight used to be cast() straight into build_dsm, so an invalid
     value was only caught once the DSM pydantic model was built, after a full
@@ -894,18 +894,24 @@ def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
 
     monkeypatch.setattr("archy.mcp._load_graph", boom)
 
-    base = dict(
+    # Kept str-only (group_by/weight/response_format) so `**base` unifies to
+    # `dict[str, str]`; mixing in the None/int fields below would widen that
+    # to `str | None | int` and break every str-typed param at the call site.
+    base: dict[str, str] = dict(
         response_format="summary",
         group_by="community",
         weight="imports",
-        focus=None,
-        focus_depth=1,
-        package=None,
-        baseline_path=None,
     )
     base.update(kwargs)
     with pytest.raises(ValueError):
-        _run_dsm(acyclic_project, **base)
+        _run_dsm(
+            acyclic_project,
+            focus=None,
+            focus_depth=1,
+            package=None,
+            baseline_path=None,
+            **base,
+        )
 
 
 @pytest.mark.parametrize(
