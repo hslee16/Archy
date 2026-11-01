@@ -80,8 +80,8 @@ from archy.graph import (
     parse_project,
 )
 from archy.headers import apply_header, compute_headers, existing_block, render_header
+from archy.history import NO_HISTORY_REASON, git_metadata, row_from_score
 from archy.history import append as append_history
-from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import Hotspot, NoCommitsError, compute_hotspots, git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
@@ -2181,7 +2181,13 @@ def _format_lines(lines: tuple[int, ...]) -> str:
 def _gate_against_history(current: Score, history_path: Path) -> dict:
     rows = read_history(history_path)
     if not rows:
-        return {"previous": None, "current": current.overall, "delta": None}
+        return {
+            "previous": None,
+            "current": current.overall,
+            "delta": None,
+            "compared": False,
+            "reason": NO_HISTORY_REASON,
+        }
     previous = rows[-1]
     return {
         "previous": previous.overall,
@@ -2189,6 +2195,8 @@ def _gate_against_history(current: Score, history_path: Path) -> dict:
         "previous_timestamp": previous.timestamp,
         "current": current.overall,
         "delta": current.overall - previous.overall,
+        "compared": True,
+        "reason": None,
     }
 
 
@@ -2196,19 +2204,23 @@ def _gate_to_dict(gate: dict, tolerance: float) -> dict:
     delta = gate["delta"]
     return {
         "previous": gate["previous"],
+        "previous_commit": gate.get("previous_commit"),
+        "previous_timestamp": gate.get("previous_timestamp"),
         "current": gate["current"],
         "delta": delta,
         "tolerance": tolerance,
         "passed": delta is None or delta >= -tolerance,
+        # A `passed` with no comparison behind it is not a verdict. Carry the
+        # reason and the two fields MCP already had, so the CLI JSON and the
+        # MCP payload say the same thing about the same run.
+        "compared": gate["compared"],
+        "reason": gate["reason"],
     }
 
 
 def _gate_to_text(gate: dict, tolerance: float) -> str:
     if gate["delta"] is None:
-        return (
-            "# strict: no prior score recorded; nothing to compare. "
-            "Pass `--record` to seed the baseline."
-        )
+        return f"# strict: {NO_HISTORY_REASON}. Pass `--record` to seed the baseline."
     delta = gate["delta"]
     direction = "improved" if delta >= 0 else "dropped"
     verdict = "PASS" if delta >= -tolerance else "FAIL"

@@ -21,6 +21,12 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.score import Score
 
+# Why a strict gate has nothing to compare. Shared by the CLI and the MCP
+# surfaces so the two cannot drift apart: a verdict without a reason is not
+# actionable, and `passed=True` with no recorded history reads like a clean
+# pass to an agent or a CI job using the gate as a regression check.
+NO_HISTORY_REASON = "no prior score recorded; nothing to compare"
+
 
 class HistoryRow(BaseModel):
     model_config = ConfigDict(frozen=True)

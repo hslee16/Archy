@@ -175,8 +175,8 @@ from archy.graph import (
     parse_project,
     resolve_modules,
 )
+from archy.history import NO_HISTORY_REASON, git_metadata, row_from_score
 from archy.history import append as append_history
-from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.hotspots import NoCommitsError, git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
@@ -314,6 +314,11 @@ class ScoreGate(BaseModel):
     delta: float | None
     tolerance: float
     passed: bool
+    # A verdict without a reason is not actionable. With no recorded history
+    # the gate cannot compare anything, and `passed=True` on its own is
+    # indistinguishable from a comparison that held.
+    compared: bool = True
+    reason: str | None = None
 
 
 class ScorePayload(BaseModel):
@@ -1576,6 +1581,8 @@ def _run_score(
                 delta=None,
                 tolerance=strict_tolerance,
                 passed=True,
+                compared=False,
+                reason=NO_HISTORY_REASON,
             )
 
     if record:
