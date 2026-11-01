@@ -29,7 +29,10 @@ For vulnerability reporting and scope, see [`SECURITY.md`](../SECURITY.md).
   `sendto`, `getaddrinfo` and `create_connection` all made to fail, the
   read-only commands run and every MCP tool is called, and nothing attempts a
   connection. (`test_runtime_attempts_no_connection`)
-- The MCP server (`archy mcp`) serves over stdio. It opens no listener.
+- The MCP server (`archy mcp`) serves over stdio and opens no listener: the real
+  command answers an `initialize` request on stdout, and `lsof` shows no listening
+  socket for its process. (`test_mcp_server_speaks_stdio_and_listens_on_no_port`,
+  skipped where `lsof` is missing)
 
 Installing archy is a different matter: `pip`, `uv` or `uvx` download it from
 PyPI. That is your package manager, not archy.
@@ -114,6 +117,22 @@ not annotated read-only. No tool writes anywhere else in the project or your hom
 directory. Deleting `.archy/` is always safe.
 
 ## What this page does not claim
+
+Known gaps in the tests behind the claims above, each tracked: the network check does not see DNS lookups, raw `_socket` use or
+`bind`/`listen` ([#693](https://github.com/hslee16/archy/issues/693)); the
+subprocess scan can be bypassed with `os.spawn*`, asyncio subprocesses or aliased
+imports ([#694](https://github.com/hslee16/archy/issues/694)); the git check does
+not look at flags after the subcommand
+([#695](https://github.com/hslee16/archy/issues/695)); `.git` is not in the
+file-tree comparison ([#696](https://github.com/hslee16/archy/issues/696)); and
+uninstall is only weakly pinned, with no test on an existing config
+([#697](https://github.com/hslee16/archy/issues/697)). Also, the MCP entry
+install writes runs `uvx archy mcp`, so your agent's launcher fetches archy from
+PyPI when it starts the server
+([#698](https://github.com/hslee16/archy/issues/698) tracks saying so in the
+network section above).
+
+Other limits:
 
 - **Writes outside the project and your home directory** (for example the system
   temp directory) are not observed by the tests.

@@ -16,11 +16,14 @@ from __future__ import annotations
 
 import ast
 import asyncio
-import contextlib
 import hashlib
+import json
 import os
+import selectors
+import shutil
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -174,8 +177,65 @@ def test_runtime_attempts_no_connection(sandbox, monkeypatch):
         assert result.exit_code == 0, (cmd, result.output)
         ran += 1
     assert ran == len(READ_ONLY_COMMANDS)
-    assert _call_every_mcp_tool(proj) >= 12
+    assert _call_every_mcp_tool(proj) >= 14
     assert attempts == []
+
+
+# --- claim: `archy mcp` serves over stdio and opens no listener -------------------
+
+# Runs the real `archy mcp` command with the interpreter running this test, never the `archy` on
+# PATH, which can be a stale install (see tests/test_mcp_protocol.py).
+_SERVE_ARGV = [sys.executable, "-c", "from archy.cli import main; main()", "mcp"]
+
+
+@pytest.mark.skipif(shutil.which("lsof") is None, reason="lsof is needed to list open sockets")
+def test_mcp_server_speaks_stdio_and_listens_on_no_port(sandbox):
+    proj, _home = sandbox
+    proc = subprocess.Popen(
+        _SERVE_ARGV,
+        cwd=proj,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    )
+    try:
+        assert proc.stdin is not None and proc.stdout is not None
+        init = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "safety-test", "version": "0"},
+            },
+        }
+        proc.stdin.write(json.dumps(init) + "\n")
+        proc.stdin.flush()
+        # An answer on stdout is the stdio transport; another transport never writes here.
+        reply = json.loads(_readline_with_timeout(proc.stdout, seconds=20))
+        assert reply["id"] == 1 and "serverInfo" in reply["result"]
+
+        listing = subprocess.run(
+            ["lsof", "-nP", "-a", "-p", str(proc.pid), "-i"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert "LISTEN" not in listing.stdout, listing.stdout
+    finally:
+        proc.kill()
+        proc.wait(timeout=10)
+
+
+def _readline_with_timeout(stream, seconds: float) -> str:
+    # `selectors` (kqueue/epoll), not `select.select`, which raises once any fd exceeds 1023 and
+    # the rest of the suite leaves plenty open.
+    with selectors.DefaultSelector() as sel:
+        sel.register(stream, selectors.EVENT_READ)
+        assert sel.select(seconds), f"no reply on stdout within {seconds}s"
+    return stream.readline()
 
 
 # --- claim: the only subprocess is read-only git ----------------------------------
@@ -234,7 +294,7 @@ def test_analysed_code_is_never_executed(sandbox):
     )
     for cmd in READ_ONLY_COMMANDS:
         assert CliRunner().invoke(main, cmd).exit_code == 0, cmd
-    assert _call_every_mcp_tool(proj) >= 12
+    assert _call_every_mcp_tool(proj) >= 14
     # The module really is in the graph, so "not executed" is not "not seen".
     graph = CliRunner().invoke(main, ["graph", ".", "--format", "json"])
     assert "pkg.boom" in graph.output
@@ -291,26 +351,33 @@ def test_render_out_writes_only_the_named_file(sandbox):
     assert _changed(before_h, _snapshot(home)) == []
 
 
+def _mcp_args(tool, proj: Path) -> dict:
+    """Minimal arguments that make each archy MCP tool answer for the fixture project."""
+    args: dict = {}
+    if "path" in tool.inputSchema.get("properties", {}):
+        args["path"] = str(proj)
+    if tool.name in {"archy_impact", "archy_affected"}:
+        args["files"] = ["pkg/b.py"]
+    if tool.name == "archy_module_view":
+        args["module"] = "pkg.a"
+    return args
+
+
 def _call_every_mcp_tool(proj: Path) -> int:
-    """Call each MCP tool in-process on `proj`; return how many answered."""
+    """Call each MCP tool in-process on `proj`; return how many answered.
+
+    A tool that raises fails the test: swallowing the error is how one tool
+    (needing a `module` argument) went uncalled while the page said every tool was.
+    `archy_snapshot` goes first so `archy_diff` has a baseline to compare against.
+    """
     from archy.mcp import create_server
 
     server = create_server()
-    answered = 0
-    for tool in asyncio.run(server.list_tools()):
-        args: dict = {}
-        props = tool.inputSchema.get("properties", {})
-        if "path" in props:
-            args["path"] = str(proj)
-        if tool.name in {"archy_impact", "archy_affected"}:
-            args["files"] = ["pkg/b.py"]
-        try:
-            asyncio.run(server.call_tool(tool.name, args))
-            answered += 1
-        except Exception:  # a refusal still ran the tool; only writes matter here
-            pass
+    tools = sorted(asyncio.run(server.list_tools()), key=lambda t: t.name != "archy_snapshot")
+    for tool in tools:
+        asyncio.run(server.call_tool(tool.name, _mcp_args(tool, proj)))
     time.sleep(0.3)  # let the debounced watcher settle before the caller diffs
-    return answered
+    return len(tools)
 
 
 def test_mcp_tools_write_only_cache_and_baseline(sandbox):
@@ -322,6 +389,8 @@ def test_mcp_tools_write_only_cache_and_baseline(sandbox):
     server = create_server()
     tools = {t.name: t for t in asyncio.run(server.list_tools())}
     assert len(tools) >= 14
+    # archy_snapshot first, so archy_diff has a baseline and every tool can answer.
+    tools = dict(sorted(tools.items(), key=lambda kv: kv[0] != "archy_snapshot"))
 
     # The page says every tool but archy_snapshot is annotated read-only.
     for name, tool in tools.items():
@@ -331,11 +400,7 @@ def test_mcp_tools_write_only_cache_and_baseline(sandbox):
     written: set[str] = set()
     for name, tool in tools.items():
         before_p, before_h = _snapshot(proj), _snapshot(home)
-        args: dict = {"path": str(proj)} if "path" in tool.inputSchema.get("properties", {}) else {}
-        if name in {"archy_impact", "archy_affected"}:
-            args["files"] = ["pkg/b.py"]
-        with contextlib.suppress(Exception):  # a refusal still ran the tool
-            asyncio.run(server.call_tool(name, args))
+        asyncio.run(server.call_tool(name, _mcp_args(tool, proj)))  # must answer, not refuse
         time.sleep(0.3)
         assert _changed(before_h, _snapshot(home)) == [], name
         changed = _changed(before_p, _snapshot(proj))
