@@ -1190,14 +1190,18 @@ def simulate(
     rules broken, per-axis score delta, and blast-radius change, before you edit.
     """
     g, full = _load_graph_pair(path)
-    result = find_simulate(
-        g,
-        add=[_parse_edge_spec(s) for s in add_specs],
-        remove=[_parse_edge_spec(s) for s in remove_specs],
-        config_path=discover_config(path),
-        project_root=path,
-        reach_graph=full,
-    )
+    try:
+        result = find_simulate(
+            g,
+            add=[_parse_edge_spec(s) for s in add_specs],
+            remove=[_parse_edge_spec(s) for s in remove_specs],
+            config_path=discover_config(path),
+            project_root=path,
+            reach_graph=full,
+        )
+    except ValueError as err:
+        # Empty delta used to report coverage "complete" / +0.000 (#661).
+        raise click.UsageError("pass at least one --add or --remove") from err
     if fmt == "json":
         click.echo(result.model_dump_json(indent=2))
     else:

@@ -1737,11 +1737,12 @@ def test_simulate_cli_json_is_valid(tmp_path: Path):
     assert "applied" in payload and "cycles" in payload and "propagation_cost" in payload
 
 
-def test_simulate_cli_empty_delta_renders(tmp_path: Path):
+def test_simulate_cli_empty_delta_is_refused(tmp_path: Path):
+    """No --add/--remove must UsageError instead of coverage complete (#661)."""
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["simulate", str(project)])
-    assert result.exit_code == 0
-    assert "+0 / -0 edge(s)" in result.output
+    assert result.exit_code == 2
+    assert "pass at least one --add or --remove" in result.output
 
 
 def test_simulate_cli_with_nothing_resolved_does_not_print_a_clean_zero(tmp_path: Path):
