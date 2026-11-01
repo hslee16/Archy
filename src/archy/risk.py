@@ -25,8 +25,8 @@ red flag rather than a routine risk to grade. Users who want pure blast
 radius should read ``propagation_cost`` directly.
 
 The metric is a *diagnostic*, not a score-axis. It is exposed on graph nodes,
-graph summaries, and via the ``archy_high_risk_modules`` MCP tool so an agent
-can consult it before a non-trivial edit. It is not folded into ``archy
+graph summaries, and via ``archy_what_to_refactor_next(lens="structural")`` so an
+agent can consult it before a non-trivial edit. It is not folded into ``archy
 score``'s overall number - that boundary is deliberate (see ``FUTURE.md``).
 
 archy:owns        compute_edit_risk
