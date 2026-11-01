@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2fdd956e9454",
+  "session_id": "22bb346e-1bed-4ff4-91e9-06d4743ace4d",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-01T20:49:04.300965Z",
+  "branch": "alee/release-0.53.2",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "pyproject.toml",
+    "server.json",
+    "src/archy/__init__.py",
+    "tests/test_safety_claims.py",
+    "uv.lock"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "e6ed8fca2aaa",
+  "token_usage": {
+    "input_tokens": 28,
+    "cache_creation_tokens": 43593,
+    "cache_read_tokens": 876704,
+    "output_tokens": 4077,
+    "api_call_count": 14
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-01T20:49:04.280686Z",
+    "agent_lines": 12,
+    "agent_removed": 9,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 12,
+    "total_lines_changed": 21,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 674,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130
+      }
+    }
+  ]
+}
