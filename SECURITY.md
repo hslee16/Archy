@@ -41,5 +41,8 @@ targets, not contractual SLAs.
 - The persistent cache (`.archy/index.db`) and history (`.archy/`) are local
   files; deleting them is always safe.
 
+For the full list of what archy reads, writes and runs, each claim backed by a
+test, see [`docs/SAFETY.md`](docs/SAFETY.md).
+
 The realistic security surface is therefore the usual supply-chain one (archy's
 own dependencies). Reports about a vulnerable dependency are in scope.
