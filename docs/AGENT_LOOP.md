@@ -210,17 +210,30 @@ errors handled by the framework, distinct from both of the above.
 ```text
 $ archy snapshot .
 # baseline written to .archy/baseline.json
-# score: 0.638  cycles: 0  violations: 0
+# score: 0.627  cycles: 0  violations: 0
 
 # (edit some code, accidentally introduce a cycle)
 
 $ archy diff .
+# summary: overall +0.012; driven by modularity +0.03, acyclicity -0.17, equality +0.07; cycles +1/-0
+
+## top regressions (risk-weighted):
+  risk=0.83  acyclicity dropped -0.167
+      ? acyclicity dropped -0.167. Acceptable for this change, or a regression to address before committing?
+  risk=0.29  new cycle: app.libs.db, app.services.auth
+      ? Acyclicity dropped because app.libs.db, app.services.auth now form an import cycle. Intended, or should an edge be inverted or removed to break it?
+
+## top improvements (risk-weighted):
+  risk=0.34  equality improved +0.067
+  risk=0.14  modularity improved +0.029
+
 # score deltas (current - baseline):
-  overall     -0.220
-  modularity  -0.012
-  acyclicity  -0.500
+  overall     +0.012
+  modularity  +0.029
+  acyclicity  -0.167
   depth       +0.000
-  equality    -0.014
+  equality    +0.067
+  complexity  +0.000
 
 # cycles: +1 added, -0 resolved
   + cycle: app.libs.db, app.services.auth
@@ -229,7 +242,15 @@ $ archy diff .
 ```
 
 The `acyclicity` drop and the `+ cycle` line localize the regression
-in one read; the agent now knows to break the cycle and re-diff.
+in one read; the agent now knows to break the cycle and re-diff. The
+sign of `overall` alone would not have said so: in this run it went up,
+because two other axes gained more than acyclicity lost. A composite can
+absorb a new cycle, which is why `summary.top_regressions` decides whether
+a change is a regression and the headline's sign does not.
+
+Output above is from archy v0.53.0, run against a four-layer sample
+project (`app.api`, `app.services`, `app.models`, `app.libs`). The
+numbers will differ for yours; the shape will not.
 
 ## MCP discovery
 

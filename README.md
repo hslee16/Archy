@@ -104,10 +104,12 @@ from archy.cli import main    # convenience import. The diff looks harmless.
 
 ```console
 $ uvx archy check .
-# 1 layer violation(s) (config: archy.yaml)
+# 1 layer violation(s) (config: /path/to/archy/archy.yaml)
 
 graph -> cli (forbidden):
-  archy.graph -> archy.cli  (line: 21)
+  archy.graph -> archy.cli  (line: 40)
+#   layer coverage: 10 of 48 modules (21%), 21 of 137 internal edges (15%); 38 module(s) match no layer (`archy check --show-unlayered`)
+#   116 scanned module(s) sit outside every declared root package and are not counted above
 
 $ echo $?
 1
@@ -115,26 +117,67 @@ $ echo $?
 $ uvx archy cycles .
 # 1 cycle(s) found
 
-Cycle of 8 module(s):
+Cycle of 12 module(s):
+  - archy.affected
   - archy.cli
   - archy.conventions
   - archy.duplicates
   - archy.graph
+  - archy.headers
+  - archy.impact
   - archy.index
   - archy.mcp
+  - archy.scan_config
   - archy.simulate
   - archy.watcher
+Edges:
+  archy.affected -> archy.impact  (line: 29)
+  archy.cli -> archy.affected  (line: 27)
+  archy.cli -> archy.conventions  (line: 34)
+  archy.cli -> archy.duplicates  (line: 66)
+  archy.cli -> archy.graph  (line: 74)
+  archy.cli -> archy.headers  (line: 82)
+  archy.cli -> archy.impact  (line: 87)
+  archy.cli -> archy.index  (lines: 1537, 1538, 1566, 1591)
+  archy.cli -> archy.mcp  (line: 1511)
+  archy.cli -> archy.scan_config  (line: 111)
+  archy.cli -> archy.simulate  (line: 113)
+  archy.conventions -> archy.graph  (line: 72)
+  archy.duplicates -> archy.graph  (line: 84)
+  archy.graph -> archy.cli  (line: 40)
+  archy.headers -> archy.conventions  (line: 44)
+  archy.headers -> archy.graph  (line: 45)
+  archy.impact -> archy.graph  (line: 28)
+  archy.index -> archy.graph  (line: 31)
+  archy.mcp -> archy.affected  (line: 117)
+  archy.mcp -> archy.conventions  (line: 119)
+  archy.mcp -> archy.duplicates  (line: 157)
+  archy.mcp -> archy.graph  (line: 166)
+  archy.mcp -> archy.impact  (line: 182)
+  archy.mcp -> archy.scan_config  (line: 202)
+  archy.mcp -> archy.simulate  (line: 204)
+  archy.mcp -> archy.watcher  (line: 205)
+  archy.scan_config -> archy.graph  (line: 25)
+  archy.simulate -> archy.graph  (line: 46)
+  archy.watcher -> archy.graph  (line: 35)
+  archy.watcher -> archy.index  (line: 36)
 
 $ uvx archy score .
-# archy score: 0.647          (0.656 before the edit)
-...
-acyclicity:  0.942  (1 cycles, tangle=0.058)
-# graph: 139 modules, 264 edges     (263 before the edit)
+# archy score: 0.636          (0.639 before the edit)
+modularity:  0.670  (48 communities, raw Q=0.505)
+  call-weighted Q=0.699  (calls amplify community structure)
+acyclicity:  0.927  (1 cycles, tangle=0.073)
+depth:       0.533  (max depth 7)
+equality:    0.411  (Gini=0.589)
+complexity:  0.767  (2888 functions, cc_mean=2.86, cc_max=46)
+# graph: 164 modules, 319 edges     (318 before the edit)
+# propagation_cost: 0.1089  (diagnostic, not in score; MacCormack reverse-reach fraction)
+# calls: 1842 resolved across 262 edge(s), 7.03/edge  (diagnostic, not in score)
 ```
 
-One import, one edge. A forbidden layer edge, an eight-module cycle, and the score down 0.009. Nothing in the diff itself says any of that, and no amount of reading the file reveals it, because the rule that makes it a violation is not in the source. You supplied it.
+One import, one edge. A forbidden layer edge, a twelve-module cycle, and the score down 0.003. Nothing in the diff itself says any of that, and no amount of reading the file reveals it, because the rule that makes it a violation is not in the source. You supplied it.
 
-Note the size of the score move. 0.009 is small, and that is the honest shape of this problem: no single edit looks alarming on the number. The cycle count going 0 to 1 and `check` exiting 1 are the signals that matter here, and the score is what catches the version of this that happens forty times over six weeks. Read [`docs/SCORING.md`](docs/SCORING.md) before treating the composite as a quality gate.
+Note the size of the score move. 0.003 is small, and that is the honest shape of this problem: no single edit looks alarming on the number. The cycle count going 0 to 1 and `check` exiting 1 are the signals that matter here, and the score is what catches the version of this that happens forty times over six weeks. Read [`docs/SCORING.md`](docs/SCORING.md) before treating the composite as a quality gate.
 
 That example is a *direct* forbidden import, which is the easy case: an agent that reads `archy.yaml` first can catch it without archy. The harder and more honest case is a **transitive** violation, where the edit adds no forbidden import at all and reading the config tells you nothing. [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) is a one-command reproduction of that, and it states plainly which archy surfaces catch it (one) and which miss it (three).
 
@@ -652,20 +695,27 @@ Unset by default, so existing configs keep their exit codes. The shape is taken 
 
 ```console
 $ archy check .
-# No layer violations (config: archy.yaml).
-#   layer coverage: 9 of 42 modules (21%), 16 of 117 internal edges (14%); 33 module(s) match no layer (`archy check --show-unlayered`)
+# No layer violations (config: /path/to/archy/archy.yaml).
+#   layer coverage: 10 of 48 modules (21%), 20 of 136 internal edges (15%); 38 module(s) match no layer (`archy check --show-unlayered`)
+#   116 scanned module(s) sit outside every declared root package and are not counted above
+#   6 forbid rules declared, but this check governs too little of the graph to verify them.
+#   `archy check --contracts` evaluates them transitively via import-linter, which sees paths a direct-edge check cannot.
 ```
 
 That line exists because **a rule set that cannot fire is indistinguishable from a clean codebase**: without it, a config governing 14% of your import edges prints the same "No layer violations" as one governing all of them. The edge percentage is the one to watch, since a config can put most modules in layers while ruling almost none of the edges between them. Coverage is scoped to the root packages your patterns name (every module is counted if a layer uses a floating `**.` pattern), so scripts and benchmarks sitting beside your package are counted separately rather than dragging the number down. `--show-unlayered` lists the modules no layer matches.
+
+The `forbid rules declared` line is a handoff, not a warning: when the direct pass cannot reach enough of the graph to verify a declared `forbid` rule, `check` names the flag that can instead of reporting a pass it did not earn.
 
 When the reach is degenerate, the verdict says so instead of leaving it to the next line. A config whose patterns are bare qualnames, so they match one module each and none of the code beneath it, looks like this (exit code unchanged):
 
 ```console
 $ archy check .
-# No layer violations, but this config governs 0 of 1 internal edges (0%), so no forbid rule can fire (config: archy.yaml).
+# No layer violations, but this config governs 0 of 1 internal edges (0%), so no forbid rule can fire (config: /path/to/project/archy.yaml).
 #   layer coverage: 2 of 5 modules (40%), 0 of 1 internal edges (0%); 3 module(s) match no layer (`archy check --show-unlayered`)
 #   layer 'domain' matches myapp.domain exactly; 1 descendant module is unlayered (myapp.domain.models). Did you mean "myapp.domain.**"?
 #   layer 'web' matches myapp.web exactly; 1 descendant module is unlayered (myapp.web.views). Did you mean "myapp.web.**"?
+#   1 forbid rule declared, but this check governs too little of the graph to verify them.
+#   `archy check --contracts` evaluates them transitively via import-linter, which sees paths a direct-edge check cannot.
 ```
 
 If no module in the tree falls under any root the config names, the verdict says that no rule can fire.
