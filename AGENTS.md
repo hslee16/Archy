@@ -33,6 +33,7 @@ uv run ty check
 uv run pytest
 uv run archy check .       # archy's own layer rules
 uv run archy cycles . --strict
+uv run archy contracts .      # transitive forbid rules, derived from archy.yaml
 uv run archy conventions . --emit-headers --check   # derived headers still true
 ```
 

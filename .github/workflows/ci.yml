@@ -48,6 +48,15 @@ jobs:
           command: cycles
           strict: "true"
 
+      # `archy check` sees direct edges only. This evaluates the `forbid:` rules
+      # in archy.yaml transitively through import-linter, which is the only place
+      # a path via a third module shows up. There is deliberately no
+      # .importlinter: a hand-written mirror drifted from archy.yaml and reported
+      # a broken contract that was not one (#689), so the contracts are derived
+      # from archy.yaml and cannot disagree with it.
+      - name: Transitive contracts (archy contracts)
+        run: uv run archy contracts .
+
       # The headers in archy's own modules are DERIVED, so they can go stale the
       # moment a public symbol is added or a mirror set changes. A generated
       # block that quietly stops matching the tree is worse than no block: it
