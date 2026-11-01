@@ -123,7 +123,7 @@ def _walk_function_defs(node, source: bytes, visit, scope: tuple[str, ...] = ())
     per-function payload. `scope` is the tuple of enclosing class/function names.
 
     Uses an explicit stack (same idea as `_walk_body_tokens`) so a deep
-    expression tree — e.g. a 1,000-term concatenation — cannot blow the
+    expression tree (e.g. a 1,000-term concatenation) cannot blow the
     CPython recursion limit and abort the whole scan (#650).
     """
     stack = [(node, scope)]
