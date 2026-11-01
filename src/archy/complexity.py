@@ -121,18 +121,28 @@ def _walk_function_defs(node, source: bytes, visit, scope: tuple[str, ...] = ())
     Owns the scope-tracking traversal skeleton (functions and classes extend the
     dotted scope; other nodes recurse unchanged) so callers supply only the
     per-function payload. `scope` is the tuple of enclosing class/function names.
+
+    Uses an explicit stack (same idea as `_walk_body_tokens`) so a deep
+    expression tree — e.g. a 1,000-term concatenation — cannot blow the
+    CPython recursion limit and abort the whole scan (#650).
     """
-    if node.type in ("function_definition", "class_definition"):
-        name = _name_of(node, source)
-        if node.type == "function_definition":
-            visit(node, scope)
-        body = node.child_by_field_name("body")
-        if body is not None:
-            for child in body.named_children:
-                _walk_function_defs(child, source, visit, (*scope, name))
-        return
-    for child in node.named_children:
-        _walk_function_defs(child, source, visit, scope)
+    stack = [(node, scope)]
+    while stack:
+        current, current_scope = stack.pop()
+        if current.type in ("function_definition", "class_definition"):
+            name = _name_of(current, source)
+            if current.type == "function_definition":
+                visit(current, current_scope)
+            body = current.child_by_field_name("body")
+            children = body.named_children if body is not None else ()
+            next_scope = (*current_scope, name)
+            # Push in reverse so the first child is visited first (DFS order).
+            for child in reversed(children):
+                stack.append((child, next_scope))
+            continue
+        children = current.named_children
+        for child in reversed(children):
+            stack.append((child, current_scope))
 
 
 # Leaf/literal node types folded to a single placeholder token so that two

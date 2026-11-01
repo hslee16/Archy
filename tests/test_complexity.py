@@ -132,3 +132,14 @@ def test_functions_returned_in_line_order():
     src = b"def c():\n    pass\ndef a():\n    pass\ndef b():\n    pass\n"
     names = [f.qualified_name for f in compute_function_complexity(src)]
     assert names == ["c", "a", "b"]
+
+
+def test_deep_expression_tree_does_not_recursion_error():
+    """A ~1000-term concatenation must not crash the whole complexity walk (#650)."""
+    terms = b" + ".join(f'"c{i} "'.encode() for i in range(1000))
+    src = b"SQL = (" + terms + b")\n\ndef after():\n    return 1\n"
+    rows = compute_function_complexity(src)
+    by_name = {f.qualified_name: f.cyclomatic for f in rows}
+    assert by_name == {"after": 1}
+    # Stable order: the function after the deep expression is still present.
+    assert [f.qualified_name for f in rows] == ["after"]
