@@ -2096,6 +2096,18 @@ def _validate_refactor_lens(lens: str) -> None:
         raise ValueError(f"lens must be 'fused', 'behavioral', or 'structural'; got {lens!r}")
 
 
+def _validate_group_by(group_by: str) -> None:
+    if group_by not in ("community", "layer", "topological"):
+        raise ValueError(
+            f"group_by must be 'community', 'layer', or 'topological'; got {group_by!r}"
+        )
+
+
+def _validate_weight(weight: str) -> None:
+    if weight not in ("imports", "calls"):
+        raise ValueError(f"weight must be 'imports' or 'calls'; got {weight!r}")
+
+
 def _run_graph(
     path: Path,
     *,
@@ -2146,10 +2158,14 @@ def _run_dsm(
     A diff (baseline_path set) is a deliberate, already-compact comparison
     (new_back_edges is the signal), not a dump, so response_format does not
     apply to it. The full matrix is capped at DEFAULT_MAX_DSM_CELLS cells.
+    group_by and weight are validated up front too, before the scan, so a typo
+    never pays for a full build only to fail on a raw pydantic error (#645).
     """
     _validate_response_format(response_format)
     if focus_depth < 0:
         raise ValueError(f"focus_depth must be >= 0; got {focus_depth}")
+    _validate_group_by(group_by)
+    _validate_weight(weight)
     graph = _load_graph(path, internal_only=False)
     current = build_dsm(
         graph,

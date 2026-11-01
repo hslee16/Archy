@@ -873,6 +873,72 @@ def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
     assert summary.module_count >= 0
 
 
+@pytest.mark.parametrize(
+    ("kwargs", "name"),
+    [
+        ({"group_by": "bogus"}, "group_by"),
+        ({"weight": "bogus"}, "weight"),
+    ],
+)
+def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
+    acyclic_project: Path, monkeypatch: pytest.MonkeyPatch, kwargs: dict, name: str
+):
+    """group_by/weight used to be cast() straight into build_dsm, so an invalid
+    value was only caught once the DSM pydantic model was built, after a full
+    scan (#645). A scan that never runs cannot raise, so a `_load_graph` that
+    fails if called pins "validated up front" directly.
+    """
+
+    def boom(*args, **kwargs):
+        raise AssertionError(f"{name} must be validated before the project is scanned")
+
+    monkeypatch.setattr("archy.mcp._load_graph", boom)
+
+    base = dict(
+        response_format="summary",
+        group_by="community",
+        weight="imports",
+        focus=None,
+        focus_depth=1,
+        package=None,
+        baseline_path=None,
+    )
+    base.update(kwargs)
+    with pytest.raises(ValueError):
+        _run_dsm(acyclic_project, **base)
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "name", "allowed"),
+    [
+        ({"group_by": "bogus"}, "group_by", ("community", "layer", "topological")),
+        ({"weight": "bogus"}, "weight", ("imports", "calls")),
+    ],
+)
+def test_archy_dsm_names_the_allowed_group_by_or_weight_values(
+    acyclic_project: Path, kwargs: dict, name: str, allowed: tuple[str, ...]
+):
+    """The refusal must name the allowed values, not leak a raw pydantic error
+    ("1 validation error for DSM ... https://errors.pydantic.dev/...", #645).
+    """
+    from archy.mcp_compat import ToolError
+
+    with pytest.raises(ValueError) as caught:
+        _dsm(acyclic_project, **kwargs)
+    message = str(caught.value)
+    assert "validation error" not in message
+    assert "errors.pydantic.dev" not in message
+    assert name in message
+    for value in allowed:
+        assert value in message
+
+    with pytest.raises(ToolError) as caught_tool:
+        _call_tool(create_server(), "archy_dsm", {"path": str(acyclic_project), **kwargs})
+    tool_message = str(caught_tool.value)
+    assert "validation error" not in tool_message
+    assert "errors.pydantic.dev" not in tool_message
+
+
 def test_archy_score_rejects_strict_tolerance_outside_unit_interval(acyclic_project: Path):
     """`archy_score` must reject a strict_tolerance outside [0, 1].
 
