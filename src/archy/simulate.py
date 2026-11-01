@@ -163,7 +163,13 @@ def find_simulate(
     an edge is evaluated against the same hypothetical. Omitting it degrades
     exactly one case -- external-target rules read as dead on both sides, so
     they produce no false regression, only a missed one.
+
+    An empty delta (no ``add`` and no ``remove``) is refused: coverage
+    ``complete`` with overall +0.000 would otherwise read as "this edit is
+    free" when nothing was asked (#661).
     """
+    if not add and not remove:
+        raise ValueError("pass at least one add or remove edge")
     applied = _resolve_delta(graph, add=add, remove=remove, project_root=project_root)
 
     def _apply(target: nx.DiGraph) -> nx.DiGraph:

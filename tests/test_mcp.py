@@ -1402,6 +1402,23 @@ def test_run_simulate_parses_from_alias(acyclic_project: Path):
     assert payload.cycles.added
 
 
+def test_run_simulate_refuses_an_empty_delta(acyclic_project: Path):
+    """Direct helper refuses empty add/remove (#661)."""
+    with pytest.raises(ValueError, match="pass at least one add or remove edge"):
+        _run_simulate(acyclic_project, add=[], remove=[])
+
+
+def test_archy_simulate_refuses_an_empty_delta_on_the_wire(acyclic_project: Path):
+    """MCP tool boundary carries the refusal as ToolError (#661 / #636)."""
+    from archy.mcp_compat import ToolError
+
+    message = "pass at least one add or remove edge"
+    with pytest.raises(ValueError, match=message):
+        _run_simulate(acyclic_project, add=[], remove=[])
+    with pytest.raises(ToolError, match=message):
+        _call_tool(create_server(), "archy_simulate", {"path": str(acyclic_project)})
+
+
 def test_simulate_tool_input_schema_uses_from_to_aliases():
     server = create_server()
     tools = _list_tools(server)
