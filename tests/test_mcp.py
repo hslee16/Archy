@@ -771,6 +771,44 @@ def test_run_score_strict_includes_gate_block(acyclic_project: Path):
     assert payload.gate.tolerance == 0.02
 
 
+def test_run_score_strict_says_nothing_was_compared(acyclic_project: Path):
+    """MCP: a strict gate with no history must not read like a clean pass.
+
+    `previous=None` together with `passed=True` and no reason is
+    indistinguishable from a comparison that actually held, so an agent using
+    the gate as a regression check moves on when nothing was compared. FastMCP
+    sends `model_dump()`, so assert there rather than on the attribute.
+    """
+    payload = _run_score(
+        acyclic_project,
+        internal_only=True,
+        record=False,
+        strict=True,
+        strict_tolerance=0.02,
+    )
+    assert payload.gate is not None
+    gate = payload.model_dump()["gate"]
+    assert gate["compared"] is False
+    assert "no prior score recorded" in (gate["reason"] or "")
+
+
+def test_run_score_strict_reason_is_absent_when_a_row_exists(acyclic_project: Path):
+    """MCP: with a recorded row the gate really compared, so it carries no reason."""
+    _seed_score_history(acyclic_project, overall=0.95)
+    payload = _run_score(
+        acyclic_project,
+        internal_only=True,
+        record=False,
+        strict=True,
+        strict_tolerance=0.02,
+    )
+    assert payload.gate is not None
+    gate = payload.model_dump()["gate"]
+    assert gate["compared"] is True
+    assert gate["reason"] is None
+    assert gate["previous_commit"] == "deadbee"
+
+
 def _seed_score_history(project: Path, overall: float) -> None:
     """Write one history row so the strict gate has a previous overall to compare."""
     history = project / ".archy" / "history.jsonl"

@@ -902,6 +902,35 @@ def test_score_strict_compares_before_recording(tmp_path: Path):
     assert rows_after == rows_before + 1
 
 
+def test_score_strict_json_says_nothing_was_compared(tmp_path: Path):
+    """CLI JSON: `passed: true` with no history must carry why.
+
+    The text surface says it; the JSON surface did not, so a CI job reading
+    `gate.passed` could not tell a real regression check from no comparison.
+    """
+    project = _make_acyclic_project(tmp_path)
+    result = CliRunner().invoke(main, ["score", str(project), "--strict", "--format", "json"])
+    assert result.exit_code == 0
+    gate = json.loads(result.output)["gate"]
+    assert gate["compared"] is False
+    assert "no prior score recorded" in (gate["reason"] or "")
+
+
+def test_score_strict_json_carries_the_previous_row(tmp_path: Path):
+    """CLI JSON: carry the two fields MCP already had, and no reason once compared."""
+    project = _make_acyclic_project(tmp_path)
+    # Seeded well below the fixture's score so the gate passes: this asserts
+    # what the JSON carries, not the verdict.
+    _seed_history(project, overall=0.10)
+    result = CliRunner().invoke(main, ["score", str(project), "--strict", "--format", "json"])
+    assert result.exit_code == 0
+    gate = json.loads(result.output)["gate"]
+    assert gate["compared"] is True
+    assert gate["reason"] is None
+    assert gate["previous_commit"] == "deadbee"
+    assert gate["previous_timestamp"] == "2026-05-09T13:45:07Z"
+
+
 def test_score_strict_json_includes_gate_block(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     runner = CliRunner()
