@@ -126,6 +126,31 @@ def test_is_watched_py_keeps_files_under_an_ignored_ancestor(tmp_path: Path):
         m.stop()
 
 
+def test_is_watched_py_agrees_with_the_scan_about_a_package_named_build(tmp_path: Path):
+    """#518: a first-party `build` package is watched, real build output is not."""
+    proj = tmp_path / "proj"
+    _write(proj, "myapp/__init__.py", "")
+    _write(proj, "myapp/operations/__init__.py", "")
+    _write(proj, "myapp/operations/build/__init__.py", "")
+    internal = proj / "myapp" / "operations" / "build" / "wheel.py"
+    internal.write_text("from myapp import core\n", encoding="utf-8")
+
+    artifact = proj / "build" / "lib" / "pkg" / "generated.py"
+    artifact.parent.mkdir(parents=True)
+    artifact.write_text("x = 1\n", encoding="utf-8")
+
+    # The fixture must reach both branches: one build/ is a package, one is not.
+    assert (proj / "myapp" / "operations" / "build" / "__init__.py").is_file()
+    assert not (proj / "build" / "__init__.py").exists()
+
+    m = IndexManager(proj.resolve(), db_path=tmp_path / "index-build-pkg.db")
+    try:
+        assert m._is_watched_py(internal.resolve()) is True
+        assert m._is_watched_py(artifact.resolve()) is False
+    finally:
+        m.stop()
+
+
 def test_debounced_fire_runs_sync(project: Path, tmp_path: Path):
     m = _manager(project, tmp_path)
     try:
