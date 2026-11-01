@@ -1,0 +1,89 @@
+<task-notification>
+<task-id>a9f8b0e76fa0809a6</task-id>
+<tool-use-id>toolu_01Ws49VHoetsaCHJzvjoB5oX</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/a9f8b0e76fa0809a6.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I based this on the instruction file and the list of changed files. I did not open any of the six files.
+
+The changeset is `archy.yaml` plus four research notes and one report on LLM code and software architecture. The research notes and report are one-off prose, so they are not a recurring class of mistake that a small inline check could catch. `archy.yaml` is already covered by the project's own gates (`archy check`, `archy cycles`) and the existing `.deepreview` rules.
+
+I marked `suggest_new_reviews--6_files--ba80a8ca9d4b` as passed.</result>
+<usage><subagent_tokens>18513</subagent_tokens><tool_uses>2</tool_uses><duration_ms>5819</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a405cb193fe933865</task-id>
+<tool-use-id>toolu_01Rt5EQMFFxME3FZo2FU9BzX</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/a405cb193fe933865.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed. I found no em dashes (U+2014) in any of the six files, and I marked review `no_em_dashes--6_files--ba80a8ca9d4b` as passed.
+
+I checked the files with a grep for U+2014. It returned no matches in any of them. The files were `archy.yaml`, the report `reports/LLM code and software architecture.md`, and the four research notes (`agent_context_evidence.md`, `empirical_studies.md`, `practitioner_trends.md`, `tools_landscape.md`).</result>
+<usage><subagent_tokens>18285</subagent_tokens><tool_uses>3</tool_uses><duration_ms>7028</duration_ms></usage>
+</task-notification>
+
+---
+
+do it
+
+---
+
+run the review
+
+---
+
+<task-notification>
+<task-id>af740dd55f499cace</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/af740dd55f499cace.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of layers" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no real defect in `archy.yaml`; the config does what it claims. The only things worth raising are a known coverage gap and a stale `.importlinter` that was already out of step.
+
+**What I checked**
+
+- **Placement:** I mapped every internal edge in `archy graph . --format json --internal-only` onto the 7 layers. All cross-layer edges point downward, and no upward edge exists. Lazy imports are in the graph too, and mutation 15 below shows the check catches them. No module is misplaced by its actual imports.
+- **Rule firing:** all 26 `forbid` rules are exercised by real layer pairs and none is dead.
+- **Mutation test:** I added one violating import to a copy for each of 17 cases and ran `archy check` on the copy. Every case exited 1 with the expected `X -&gt; Y (forbidden)` line. None failed to fire. The cases:
+  1. metrics to parser (`risk.py` imports `archy.parser`)
+  2. metrics to install
+  3. parser to graph
+  4. parser to cli
+  5. graph to policy
+  6. graph to analysis
+  7. policy to analysis
+  8. policy to cli
+  9. analysis to cli
+  10. analysis to install
+  11. install to graph
+  12. install to metrics
+  13. install to cli
+  14. a deep install adapter to graph (this also confirms `archy.install.**` reaches nested packages)
+  15. a function-local `import archy.cli` in `impact.py`
+  16. an import under `TYPE_CHECKING` in `graph.py`
+  17. `from archy import cli` in `affected.py`, caught as analysis to cli
+- **Transitive check:** `archy check . --contracts` on a copy with no `.importlinter` reported `26 kept, 0 broken`.
+
+**Findings, ranked**
+
+1. **Medium: a module added later lands unlayered and bypasses the direct-edge check.** I added `archy/newmod.py` containing `import archy.cli`, and made `risk.py` (metrics) import `archy.newmod`. `archy check .` exited 0, with only the note `47 of 49 modules ... 2 module(s) match no layer`. With the copy's source on `PYTHONPATH`, `archy check . --contracts` reported `14 kept, 12 broken`, for example `archy.risk -&gt; archy.newmod -&gt; archy.cli -&gt; archy.graph`. It still exited 0, because `--contracts` is documented as report-only and CI runs only `command: check`.
+   - Whether to fix this is a judgement call: a rule requiring full coverage, or CI running `--contracts`. It is not a defect of this diff.
+   - The bare `archy` root is deliberately left out, as the comment in the file explains. It has no outgoing imports to violate, so `--show-unlayered` showing it as the single unlayered module is expected.
+2. **Low: `.importlinter` is stale against the new layering, and the mismatch was already there.** On the real tree, `archy check . --contracts` uses the hand-written `.importlinter` and reports `2 kept, 1 broken`: `archy.diff -&gt; archy.layers via archy.diff -&gt; archy.ratchet -&gt; archy.layers`. That file puts `archy.diff` in the graph layer, while the new `archy.yaml` puts it in analysis, so it contradicts the config. I didn't run it on `main`. The file is unchanged by this PR, and nothing in CI or the pre-commit config runs it. Anyone following the "run `--contracts`" hint printed by `check` gets a contradictory result.
+
+**Method note:** `--contracts` imports `archy` from the editable install, so a copy needs `PYTHONPATH=&lt;copy&gt;/src` or it silently analyses the real tree. My first run without that was misleading (`48 modules`), and I reran it.
+
+Scratch files are under `/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/scratchpad/review`. The mutation script is `mut.sh` there. I did not touch the repo.</result>
+<usage><subagent_tokens>67158</subagent_tokens><tool_uses>11</tool_uses><duration_ms>137204</duration_ms></usage>
+</task-notification>
+
+---
+
+merged. Lets update all documents as required
