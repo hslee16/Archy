@@ -709,6 +709,20 @@ def test_dsm_bad_baseline_returns_error_on_the_wire(acyclic_project: Path, tmp_p
     }
 
 
+def test_dsm_directory_baseline_returns_error_on_the_wire(acyclic_project: Path, tmp_path: Path):
+    baseline = tmp_path / "subdir"
+    baseline.mkdir()
+    result = _dsm(acyclic_project, baseline_path=str(baseline))
+
+    assert isinstance(result, DSMErrorPayload)
+    assert result.model_dump() == {
+        "error": (
+            f"{baseline} is a directory, not a DSM snapshot "
+            "(write one with `archy dsm --format json`)"
+        )
+    }
+
+
 def test_graph_default_is_summary(acyclic_project: Path):
     result = _run_graph(
         acyclic_project, response_format="summary", internal_only=True, max_nodes=500, top_n=20
@@ -1401,6 +1415,22 @@ def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
     result = _run_diff(acyclic_project)
     assert isinstance(result, DiffErrorPayload)
     assert "no baseline" in result.error
+
+
+def test_run_diff_directory_baseline_returns_error_on_the_wire(acyclic_project: Path):
+    # `baseline` is resolved relative to `path`, so "subdir" is a folder inside it.
+    target = acyclic_project / "subdir"
+    target.mkdir()
+
+    result = _run_diff(acyclic_project, baseline="subdir")
+
+    assert isinstance(result, DiffErrorPayload)
+    assert result.model_dump() == {
+        "error": (
+            f"{target} is not a readable archy snapshot; re-run `archy snapshot`: "
+            "it is a directory, not a file"
+        )
+    }
 
 
 def test_run_diff_corrupt_baseline_returns_error_on_the_wire(acyclic_project: Path):

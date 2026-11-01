@@ -1016,7 +1016,7 @@ def what_to_refactor_next(
 @click.option(
     "--out",
     "out_path",
-    type=click.Path(path_type=Path),
+    type=click.Path(dir_okay=False, path_type=Path),
     default=None,
     help="Where to write the snapshot. Defaults to PATH/.archy/baseline.json.",
 )
@@ -1049,7 +1049,7 @@ def snapshot(path: Path, out_path: Path | None, findings_only: bool) -> None:
 @click.option(
     "--baseline",
     "baseline_path",
-    type=click.Path(path_type=Path),
+    type=click.Path(dir_okay=False, path_type=Path),
     default=None,
     help="Path to a baseline JSON. Defaults to PATH/.archy/baseline.json.",
 )
@@ -1337,7 +1337,7 @@ def _dsm_from_path(
 @click.option(
     "--diff",
     "diff_path",
-    type=click.Path(path_type=Path),
+    type=click.Path(dir_okay=False, path_type=Path),
     default=None,
     help="Path to a previously written DSM JSON. Renders the diff against current.",
 )
@@ -1421,7 +1421,7 @@ def dsm(
 @click.option(
     "--out",
     "out_path",
-    type=click.Path(path_type=Path),
+    type=click.Path(dir_okay=False, path_type=Path),
     default=None,
     help="Write the HTML here. Defaults to stdout.",
 )

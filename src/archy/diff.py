@@ -269,6 +269,8 @@ def read_snapshot(path: Path) -> Snapshot | None:
     """
     if not path.exists():
         return None
+    if path.is_dir():
+        raise _unreadable_snapshot(path, "it is a directory, not a file")
     try:
         text = path.read_text()
     except UnicodeDecodeError as exc:

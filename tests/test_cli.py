@@ -2726,6 +2726,41 @@ def test_diff_malformed_baseline_is_a_clean_error(
     assert output == f"Error: {message}\n"
 
 
+@pytest.mark.parametrize(
+    ("command", "option"),
+    [
+        ("render", "--out"),
+        ("snapshot", "--out"),
+        ("diff", "--baseline"),
+        ("dsm", "--diff"),
+    ],
+)
+def test_file_path_option_given_a_directory_is_a_clean_error(
+    tmp_path: Path, command: str, option: str
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "mod.py").write_text("x = 1\n")
+    folder = tmp_path / "somedir"
+    folder.mkdir()
+
+    # The real entry point, for the same reason as the malformed-baseline test:
+    # CliRunner would hide a Traceback in Result.exception.
+    proc = subprocess.run(
+        [str(Path(sys.executable).parent / "archy"), command, str(project), option, str(folder)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = proc.stdout + proc.stderr
+
+    assert proc.returncode == 2
+    assert "Traceback" not in output
+    assert option in output
+    assert str(folder) in output
+    assert "is a directory" in output
+
+
 def _make_sdp_ratchet_project(tmp_path: Path) -> Path:
     """The ratchet project with SDP enabled and an edge that violates it,
     asserted present in a full snapshot so the fixture cannot drift into a
