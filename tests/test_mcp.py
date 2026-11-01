@@ -3028,3 +3028,75 @@ def test_what_to_refactor_next_fresh_repo_note_mentions_commit_history(tmp_path:
     assert payload.note is not None
     assert "no commit history" in payload.note
     assert "not inside a git repository" not in payload.note
+
+
+@pytest.mark.parametrize(
+    "tool_name",
+    sorted(
+        {
+            "archy_score",
+            "archy_cycles",
+            "archy_check",
+            "archy_impact",
+            "archy_snapshot",
+            "archy_diff",
+            "archy_graph",
+            "archy_what_to_refactor_next",
+            "archy_dsm",
+            "archy_simulate",
+            "archy_duplicates",
+            "archy_conventions",
+            "archy_module_view",
+            "archy_brief",
+        }
+    ),
+)
+def test_all_tools_forbid_additional_properties(tool_name: str):
+    """Every advertised inputSchema must reject undeclared properties (#662)."""
+    server = create_server()
+    tool = next(t for t in _list_tools(server) if t.name == tool_name)
+    schema = tool.model_dump(by_alias=True)["inputSchema"]
+    assert schema.get("additionalProperties") is False
+
+
+@pytest.mark.parametrize(
+    ("tool_name", "args", "unknown"),
+    [
+        (
+            "archy_graph",
+            {"path": ".", "focus_modules": ["pkg.a"]},
+            "focus_modules",
+        ),
+        (
+            "archy_dsm",
+            {"path": ".", "module": "pkg.a"},
+            "module",
+        ),
+        (
+            "archy_simulate",
+            {"path": ".", "adds": []},
+            "adds",
+        ),
+    ],
+)
+def test_unknown_tool_argument_is_refused(
+    acyclic_project: Path, tool_name: str, args: dict, unknown: str
+):
+    """A misspelled or invented argument must raise ToolError naming the key (#662)."""
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    call_args = {**args, "path": str(acyclic_project)}
+    with pytest.raises(ToolError, match=unknown):
+        _call_tool(server, tool_name, call_args)
+
+
+def test_known_tool_arguments_still_run(acyclic_project: Path):
+    """Valid calls must keep working after unknown-argument rejection (#662)."""
+    server = create_server()
+    _content, structured = _call_tool(
+        server,
+        "archy_graph",
+        {"path": str(acyclic_project), "focus": ["pkg.a"]},
+    )
+    assert structured is not None
