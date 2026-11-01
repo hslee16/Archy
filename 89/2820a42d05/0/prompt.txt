@@ -1,0 +1,17 @@
+merged
+
+---
+
+lets research https://github.com/haydenschmitty/floorplan. Its an adjacent tool to archy. Is there any feature that we can potentially mirror in archy? What about from an integration perspective? Can archy be used to improve the input into floorplan?
+
+---
+
+yep, lets do that. Lets also run floorplan on archy as well and evaluate the output. perhaps there is a feature that we can mirror
+
+---
+
+yep, file both
+
+---
+
+lets work on 686
