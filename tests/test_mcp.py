@@ -821,9 +821,7 @@ def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
 
     server = create_server()
     path = str(acyclic_project)
-    message = (
-        "--max-chains must be negative (for all) or positive (for a limit); got 0"
-    )
+    message = "--max-chains must be negative (for all) or positive (for a limit); got 0"
     with pytest.raises(ValueError) as caught:
         _run_impact(acyclic_project, files=[Path("pkg/b.py")], max_chains=0)
     assert str(caught.value) == message
