@@ -1,0 +1,92 @@
+<task-notification>
+<task-id>a57f977a8fd98097d</task-id>
+<tool-use-id>toolu_01SgMziZyLFRyhcZUcgSWRWy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/a57f977a8fd98097d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I marked review `suggest_new_reviews--9_files--27d7e5cebed7` as passed.
+
+I applied the default-to-pass bias and did not open the nine files. The changeset is docs (README, SECURITY, `docs/SAFETY.md`), research notes and reports, and one test file (`tests/test_safety_claims.py`). I found no recurring class of mistake that a small, cheap check would catch and that no existing rule already covers.</result>
+<usage><subagent_tokens>18487</subagent_tokens><tool_uses>2</tool_uses><duration_ms>5589</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac69e72acc5f96217</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/ac69e72acc5f96217.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Two U+2014 occurrences, both in `README.md`. The other eight files have none.
+
+1. `/Users/hosanglee/archy/README.md`, line 642
+   - Sentence: "...so this keeps artifacts out, while a first-party package that happens to be called `build` — pip keeps one at `src/pip/_internal/operations/build/` — is scanned instead of vanishing."
+   - Rewrite: "...called `build` (pip keeps one at `src/pip/_internal/operations/build/`) is scanned instead of vanishing."
+
+2. `/Users/hosanglee/archy/README.md`, line 644
+   - Sentence: "Add an optional `exclude:` list of directory basenames for anything else — codegen output, vendored code — to skip."
+   - Rewrite: "Add an optional `exclude:` list of directory basenames for anything else (codegen output, vendored code) to skip."
+
+The review does not pass, so I did not call `mark_review_as_passed`.</result>
+<usage><subagent_tokens>18626</subagent_tokens><tool_uses>2</tool_uses><duration_ms>8057</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adc1f9c83f543298a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/adc1f9c83f543298a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Verdict: fail. I found one violation, and I did not call `mark_review_as_passed`. Every other criterion checked clean. `ruff` is authoritative for line length, and no line exceeds 100 characters.
+
+**Finding 1: DRY**
+- **Lines:** 346-351 (in `_call_every_mcp_tool`) and 379-381 (in `test_mcp_tools_write_only_cache_and_baseline`).
+- **Criterion:** "DRY: no copy-pasted blocks that should be a shared helper".
+- **Offending construct:** Both places build the MCP tool-call arguments with the same logic.
+  - If the tool schema has a `path` property, set `args["path"] = str(proj)`.
+  - If the tool is `archy_impact` or `archy_affected`, set `args["files"] = ["pkg/b.py"]`.
+- **Risk:** The `{"archy_impact", "archy_affected"}` set and the `"pkg/b.py"` literal appear twice. If a tool gains a required argument, one copy can be updated and the other missed.
+- **Fix:** Extract a shared helper and use it in both places.
+  ```python
+  def _mcp_args(tool, proj: Path) -&gt; dict:
+      args: dict = {}
+      if "path" in tool.inputSchema.get("properties", {}):
+          args["path"] = str(proj)
+      if tool.name in {"archy_impact", "archy_affected"}:
+          args["files"] = ["pkg/b.py"]
+      return args
+  ```
+  This also removes the overlong line 379 and its inline conditional expression.
+
+The file is `/Users/hosanglee/archy/tests/test_safety_claims.py`.</result>
+<usage><subagent_tokens>27495</subagent_tokens><tool_uses>2</tool_uses><duration_ms>10709</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0669ec8db93748bb</task-id>
+<tool-use-id>toolu_01FzGpVQp7KiJTLvXQNHS1QT</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/95634ce3-467c-4f4f-a51e-7c5f6a19b957/tasks/a0669ec8db93748bb.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docs update rule" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+- **Tests:** `tests/test_safety_claims.py` passes (30 tests), and it is the suite that backs the claims in `docs/SAFETY.md`.
+- **Subprocess claim:** The only modules in `src/archy` that mention `subprocess` are `coupling.py`, `gitlog.py`, `hotspots.py`, `history.py` and `layers.py`. The `layers.py` hit is a docstring, not a call, so the "git only, four modules" claim holds.
+- **README:** The edit adds a "Security and what archy touches" section that links to `docs/SAFETY.md`. It makes no claims that source changes could invalidate.
+
+I did not independently verify the install file lists against the adapter code. I relied on the tests that pin them.</result>
+<usage><subagent_tokens>25494</subagent_tokens><tool_uses>7</tool_uses><duration_ms>25171</duration_ms></usage>
+</task-notification>
+
+---
+
+lets include archy in the adversarial review moving forward. That is what archy is for.
