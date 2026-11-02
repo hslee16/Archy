@@ -35,7 +35,49 @@ PLUGIN_README = REPO_ROOT / "plugins" / "claude" / "README.md"
 # The version specifier the launcher hands to `uvx`. Pinned in one place so the
 # launcher/README cannot silently disagree (issue #150 moved the spec out of the
 # manifest and into the launcher).
-EXPECTED_SPEC = "archy>=0.36,<1.0"
+EXPECTED_SPEC = "archy>=0.51,<1.0"
+
+# First archy release that registers each tool the bundled skill still names as a
+# callable. The plugin floor must be at least the newest of these; when the skill
+# starts naming a new tool, add it here and raise EXPECTED_SPEC (issue #668).
+TOOL_FIRST_VERSION: dict[str, tuple[int, int, int]] = {
+    "archy_score": (0, 36, 0),
+    "archy_cycles": (0, 36, 0),
+    "archy_check": (0, 36, 0),
+    "archy_impact": (0, 36, 0),
+    "archy_snapshot": (0, 36, 0),
+    "archy_diff": (0, 36, 0),
+    "archy_simulate": (0, 29, 0),
+    "archy_graph": (0, 36, 0),
+    "archy_what_to_refactor_next": (0, 36, 0),
+    "archy_dsm": (0, 36, 0),
+    "archy_duplicates": (0, 37, 0),
+    "archy_conventions": (0, 44, 0),
+    "archy_module_view": (0, 45, 0),
+    "archy_brief": (0, 51, 0),
+}
+
+
+def _spec_lower_bound(spec: str) -> tuple[int, int, int]:
+    """Parse `archy>=X.Y` / `archy>=X.Y.Z` into an (X, Y, Z) tuple."""
+    assert spec.startswith("archy>="), spec
+    lower = spec.split(",", 1)[0].removeprefix("archy>=")
+    parts = [int(p) for p in lower.split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    assert len(parts) == 3, spec
+    return parts[0], parts[1], parts[2]
+
+
+def _skill_table_tools(skill_text: str) -> set[str]:
+    """Tool names in the skill's MCP tool table rows (`| `archy_...` |`)."""
+    names: set[str] = set()
+    for line in skill_text.splitlines():
+        if not line.startswith("| `archy_"):
+            continue
+        name = line.split("`", 2)[1]
+        names.add(name)
+    return names
 
 
 @pytest.fixture
@@ -122,6 +164,26 @@ def test_plugin_launcher_exists_and_pins_spec():
 def test_plugin_readme_pins_same_spec():
     """The README must document the same spec the launcher uses, so they can't drift."""
     assert EXPECTED_SPEC in PLUGIN_README.read_text()
+
+
+def test_plugin_floor_covers_every_skill_table_tool():
+    """The uvx floor must cover every tool the bundled skill's table still names.
+
+    Mutation check: add an `archy_*` row to the skill table without updating
+    TOOL_FIRST_VERSION / EXPECTED_SPEC and this fails (#668).
+    """
+    skill_tools = _skill_table_tools(PLUGIN_SKILL.read_text())
+    assert skill_tools, "skill table parsed no tools"
+    missing = sorted(skill_tools - TOOL_FIRST_VERSION.keys())
+    assert missing == [], f"add first-version entries for {missing}"
+    required = max(TOOL_FIRST_VERSION[name] for name in skill_tools)
+    floor = _spec_lower_bound(EXPECTED_SPEC)
+    assert floor >= required, (
+        f"EXPECTED_SPEC floor {floor} is below newest skill-table tool {required}; "
+        "raise the shim / README / EXPECTED_SPEC together"
+    )
+    # Extra tools in the map (historical) are fine; every current MCP registration
+    # that the skill table names must be covered above.
 
 
 def test_plugin_launcher_is_valid_node_syntax(node_bin: str):
