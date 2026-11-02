@@ -13,7 +13,8 @@ in any package) are reported as `unresolved` rather than silently
 dropped, so callers can tell why a file produced no impact.
 
 archy:owns        CausalChain, CausalHop, Impact, find_impact
-archy:mirrored-by Impact -> archy.cli, archy.mcp, find_impact -> archy.cli, archy.mcp
+archy:mirrored-by Impact -> archy.cli_render, archy.mcp, find_impact -> archy.cli,
+                  archy.mcp
 """
 
 from __future__ import annotations

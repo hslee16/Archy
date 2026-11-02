@@ -60,6 +60,7 @@ layers:
   cli:
     modules:
       - "archy.cli"
+      - "archy.cli_render"
       - "archy.mcp"
       - "archy.mcp_compat"
       - "archy.render"
