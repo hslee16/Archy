@@ -1,0 +1,75 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "908598913b79",
+  "session_id": "cdc5bc73-e2bb-46b7-8e5a-a8e821172e38",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-02T01:33:43.089915Z",
+  "branch": "alee/395-cli-renderers",
+  "checkpoints_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "0691b30b747c",
+  "checkpoint_transcript_start": 207,
+  "transcript_lines_at_start": 207,
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 31213,
+    "cache_read_tokens": 959169,
+    "output_tokens": 4503,
+    "api_call_count": 10
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01C6WMWf7RNto1wHDThpaNnG",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "0691b30b747c",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 218,
+        "end": 219,
+        "entry_ids": [
+          "2da5e4b3-4bd3-40a4-9f63-487b2fad0cbb"
+        ],
+        "tool_use_id": "toolu_01C6WMWf7RNto1wHDThpaNnG"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01C6WMWf7RNto1wHDThpaNnG"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 674,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "reports/LLM code and software architecture.md": 92,
+        "research_notes/LLM code and software architecture/agent_context_evidence.md": 120,
+        "research_notes/LLM code and software architecture/empirical_studies.md": 173,
+        "research_notes/LLM code and software architecture/practitioner_trends.md": 159,
+        "research_notes/LLM code and software architecture/tools_landscape.md": 130
+      }
+    }
+  ]
+}
