@@ -143,7 +143,8 @@ class BriefConventions(ConventionsReport):
     """`ConventionsReport` bounded to `top_n` rows in its ranked sections.
 
     Says how much it dropped (`totals`) rather than handing back a short list
-    that looks complete, which is what the CLI's `brief --format json` does.
+    that looks complete; the CLI's `brief --format json` follows the same
+    truncation contract (`_conventions_to_dict`).
     `gates`, `errors`, `export_gaps` and `doc_gaps` are never truncated: a
     partial inventory of "things you forgot to wire up" reads as a finished
     checklist.
