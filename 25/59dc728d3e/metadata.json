@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2559dc728d3e",
+  "strategy": "manual-commit",
+  "branch": "alee/395-cli-renderers",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "archy.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/25/59dc728d3e/0/metadata.json",
+      "transcript": "/25/59dc728d3e/0/full.jsonl",
+      "content_hash": "/25/59dc728d3e/0/content_hash.txt",
+      "prompt": "/25/59dc728d3e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 48,
+    "cache_creation_tokens": 59607,
+    "cache_read_tokens": 1698640,
+    "output_tokens": 12391,
+    "api_call_count": 24
+  }
+}
