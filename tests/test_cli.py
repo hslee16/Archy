@@ -1671,6 +1671,37 @@ def test_dsm_refuses_a_name_that_matches_nothing(
     assert f"Error: {message}" in result.output
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    [
+        (
+            "--focus",
+            "myapp.cor",
+            "focus 'myapp.cor' is not an internal module; did you mean myapp.core?",
+        ),
+        (
+            "--package",
+            "myap.",
+            "package 'myap.' matches no internal module; "
+            "did you mean myapp, myapp.core, myapp.util?",
+        ),
+        ("--focus", "zzz", "focus 'zzz' is not an internal module"),
+    ],
+)
+def test_dsm_refusal_names_the_near_misses(tmp_path: Path, flag: str, value: str, message: str):
+    """A typo is answered with the name it was meant to be, not just "wrong" (#643)."""
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("")
+    (pkg / "util.py").write_text("from myapp.core import thing\n")
+    result = CliRunner().invoke(main, ["dsm", str(tmp_path), flag, value, "--format", "json"])
+    assert result.exit_code == 1
+    assert result.output == f"Error: {message}\n"
+    exact = CliRunner().invoke(main, ["dsm", str(tmp_path), "--focus", "myapp.core"])
+    assert exact.exit_code == 0, exact.output
+
+
 def test_dsm_rejects_negative_focus_depth(tmp_path: Path):
     project = _make_three_module_project(tmp_path)
     result = CliRunner().invoke(main, ["dsm", str(project), "--focus-depth", "-1"])

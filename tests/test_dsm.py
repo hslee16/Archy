@@ -23,6 +23,7 @@ from archy.dsm import (
     summarize_dsm,
     write_dsm,
 )
+from archy.graph import suggest_modules
 
 
 def _g(*edges: tuple[str, str], calls: dict[tuple[str, str], int] | None = None) -> nx.DiGraph:
@@ -240,6 +241,44 @@ def test_focus_outside_the_package_is_refused_and_says_so():
         match=re.escape("focus 'other.c' is not an internal module within package 'pkg'"),
     ):
         build_dsm(g, focus="other.c", package="pkg")
+
+
+def test_unmatched_focus_and_package_name_the_near_misses():
+    """The refusal names what the typo was probably meant to be (#643)."""
+    g = _g(("myapp.core", "myapp.util"), ("other.c", "other.d"))
+    with pytest.raises(ValueError) as caught:
+        build_dsm(g, focus="myapp.cor", suggest=suggest_modules)
+    assert str(caught.value) == (
+        "focus 'myapp.cor' is not an internal module; did you mean myapp.core?"
+    )
+    with pytest.raises(ValueError) as caught:
+        build_dsm(g, package="myap.", suggest=suggest_modules)
+    assert str(caught.value) == (
+        "package 'myap.' matches no internal module; did you mean myapp.core, myapp.util?"
+    )
+
+
+def test_focus_near_misses_come_from_inside_the_package():
+    """`other.cc` is close to `other.c`, but that is outside the package asked for."""
+    g = _g(("pkg.a", "pkg.b"), ("other.c", "other.d"))
+    with pytest.raises(ValueError) as caught:
+        build_dsm(g, focus="other.cc", package="pkg", suggest=suggest_modules)
+    assert str(caught.value) == "focus 'other.cc' is not an internal module within package 'pkg'"
+    with pytest.raises(ValueError) as caught:
+        build_dsm(g, focus="pkg.bb", package="pkg", suggest=suggest_modules)
+    assert str(caught.value) == (
+        "focus 'pkg.bb' is not an internal module within package 'pkg'; did you mean pkg.b?"
+    )
+
+
+def test_unmatched_name_with_no_near_miss_keeps_the_plain_refusal():
+    g = _g(("myapp.core", "myapp.util"))
+    with pytest.raises(ValueError) as caught:
+        build_dsm(g, focus="zzz", suggest=suggest_modules)
+    assert str(caught.value) == "focus 'zzz' is not an internal module"
+    with pytest.raises(ValueError) as caught:
+        build_dsm(g, package="zzz", suggest=suggest_modules)
+    assert str(caught.value) == "package 'zzz' matches no internal module"
 
 
 # --- Builder: package filter --------------------------------------------------
