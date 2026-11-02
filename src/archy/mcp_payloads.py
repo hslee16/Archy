@@ -130,8 +130,8 @@ class CheckErrorPayload(BaseModel):
     config_path), not a usage error -- so it returns in-band (`isError:false`)
     like DiffErrorPayload / DSMErrorPayload rather than raising. A *malformed*
     config is different: that raises (tier-2 `isError:true`) because the config
-    is broken and the agent cannot recover by retrying. See the module
-    docstring's "Error model" section.
+    is broken and the agent cannot recover by retrying. See the "Error model"
+    section of the `archy.mcp` module docstring.
     """
 
     model_config = ConfigDict(frozen=True)
