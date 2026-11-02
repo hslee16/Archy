@@ -39,7 +39,7 @@ Grounding references, so this spec stays honest about the delta:
   (call edges). Each edge carries a `kinds: tuple[str, ...]` that today holds only
   `"import"` and/or `"call"`, plus `is_relative`, `lines`, `call_lines`,
   `call_count`. Extraction is tree-sitter (`parser.py`, `ImportRef` / `CallRef`).
-- **The wire model drops the type.** The MCP `GraphEdge` model (`mcp.py`) exposes
+- **The wire model drops the type.** The MCP `GraphEdge` model (`mcp_payloads.py`) exposes
   only `source / target / is_relative / lines`. `kinds` and `call_count` never
   reach an agent.
 - **DSM weight is type-blind.** `dsm.py` weights a cell `1.0` for imports or
@@ -109,7 +109,7 @@ Notes:
 1. `graph.py` `_add_or_extend_edge` / `_add_or_extend_call_edge`: populate the
    richer kinds. `graph_to_dict` already emits all edge attrs, so JSON output gets
    it for free.
-2. `mcp.py` `GraphEdge`: **add `kinds` (and optionally `severity`) to the wire
+2. `mcp_payloads.py` `GraphEdge`: **add `kinds` (and optionally `severity`) to the wire
    model.** This is the single most impactful line for agent consumers, who
    currently cannot see edge type at all.
 3. `dsm.py`: add a `weight="severity"` option alongside `imports` / `calls`, using

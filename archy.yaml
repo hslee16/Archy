@@ -63,6 +63,7 @@ layers:
       - "archy.cli_render"
       - "archy.mcp"
       - "archy.mcp_compat"
+      - "archy.mcp_payloads"
       - "archy.render"
       - "archy.scan_config"
   install:

@@ -38,8 +38,7 @@ docs/LEARNINGS.md for the comparison.
 archy:owns        Score, ScoreInputs, compute_acyclicity, compute_complexity,
                   compute_depth, compute_equality, compute_modularity,
                   compute_modularity_weighted, compute_score
-archy:mirrored-by Score -> archy.cli, archy.cli_render, archy.diff, archy.history,
-                  archy.mcp, ScoreInputs -> archy.diff, archy.mcp,
+archy:mirrored-by ScoreInputs -> archy.diff, archy.mcp_payloads,
                   compute_acyclicity -> bench.call_weighted_modularity, bench.dsm,
                   compute_complexity -> archy.diff, bench.call_weighted_modularity,
                   bench.dsm, compute_depth -> bench.call_weighted_modularity,
