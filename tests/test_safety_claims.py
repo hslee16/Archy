@@ -61,11 +61,16 @@ GIT_SUBCOMMANDS = frozenset({"rev-parse", "log"})
 
 
 def _snapshot(root: Path) -> dict[str, str]:
-    """Relative path to content hash for every file under `root`, `.git` excluded."""
+    """Relative path to content hash for every file under `root`, including `.git`.
+
+    Read-only commands may run `git rev-parse` / `git log`, which only read
+    history; neither writes under `.git`. Including the tree means a write such
+    as `.git/leak` turns a before/after assert red (issue #696).
+    """
     out: dict[str, str] = {}
     for p in sorted(root.rglob("*")):
         rel = p.relative_to(root)
-        if ".git" in rel.parts or not p.is_file():
+        if not p.is_file():
             continue
         out[rel.as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
     return out
