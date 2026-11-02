@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d3cfb931cdf9",
+  "strategy": "manual-commit",
+  "branch": "alee/395-mcp-payloads",
+  "checkpoints_count": 25,
+  "files_touched": [
+    "archy.yaml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d3/cfb931cdf9/0/metadata.json",
+      "transcript": "/d3/cfb931cdf9/0/full.jsonl",
+      "content_hash": "/d3/cfb931cdf9/0/content_hash.txt",
+      "prompt": "/d3/cfb931cdf9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 234,
+    "cache_creation_tokens": 135628,
+    "cache_read_tokens": 9952003,
+    "output_tokens": 38266,
+    "api_call_count": 87
+  }
+}
