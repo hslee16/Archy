@@ -816,6 +816,20 @@ def test_check_contracts_config_path_is_relative_to_project(
     assert contracts["contracts"][0]["name"] == "core must not reach cli"
 
 
+def test_dsm_directory_baseline_returns_error_on_the_wire(acyclic_project: Path, tmp_path: Path):
+    baseline = tmp_path / "subdir"
+    baseline.mkdir()
+    result = _dsm(acyclic_project, baseline_path=str(baseline))
+
+    assert isinstance(result, DSMErrorPayload)
+    assert result.model_dump() == {
+        "error": (
+            f"{baseline} is a directory, not a DSM snapshot "
+            "(write one with `archy dsm --format json`)"
+        )
+    }
+
+
 def test_graph_default_is_summary(acyclic_project: Path):
     result = _run_graph(
         acyclic_project, response_format="summary", internal_only=True, max_nodes=500, top_n=20
@@ -917,6 +931,31 @@ def test_archy_cycles_rejects_min_size_below_one(acyclic_project: Path):
     assert structured == {"result": []}
 
 
+def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
+    """MCP archy_impact must reject max_chains=0 the way the CLI does (#640).
+
+    CLI `impact --max-chains 0` raises ClickException with a fixed message.
+    Without the matching MCP guard, max_chains=0 silently returns impacted
+    modules with empty chains (chains_omitted > 0) and no refusal.
+    """
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    path = str(acyclic_project)
+    message = "--max-chains must be negative (for all) or positive (for a limit); got 0"
+    with pytest.raises(ValueError) as caught:
+        _run_impact(acyclic_project, files=[Path("pkg/b.py")], max_chains=0)
+    assert str(caught.value) == message
+    # mcp 2.x wraps as ToolError("Error executing tool <name>: <msg>"); pin the
+    # refusal reaches the agent, not the exact outer wording.
+    with pytest.raises(ToolError):
+        _call_tool(
+            server,
+            "archy_impact",
+            {"path": path, "files": ["pkg/b.py"], "max_chains": 0},
+        )
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
@@ -978,6 +1017,78 @@ def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
     )
     assert isinstance(summary, DSMSummary)
     assert summary.module_count >= 0
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "name"),
+    [
+        ({"group_by": "bogus"}, "group_by"),
+        ({"weight": "bogus"}, "weight"),
+    ],
+)
+def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
+    acyclic_project: Path, monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, str], name: str
+):
+    """group_by/weight used to be cast() straight into build_dsm, so an invalid
+    value was only caught once the DSM pydantic model was built, after a full
+    scan (#645). A scan that never runs cannot raise, so a `_load_graph` that
+    fails if called pins "validated up front" directly.
+    """
+
+    def boom(*args, **kwargs):
+        raise AssertionError(f"{name} must be validated before the project is scanned")
+
+    monkeypatch.setattr("archy.mcp._load_graph", boom)
+
+    # Kept str-only (group_by/weight/response_format) so `**base` unifies to
+    # `dict[str, str]`; mixing in the None/int fields below would widen that
+    # to `str | None | int` and break every str-typed param at the call site.
+    base: dict[str, str] = dict(
+        response_format="summary",
+        group_by="community",
+        weight="imports",
+    )
+    base.update(kwargs)
+    with pytest.raises(ValueError):
+        _run_dsm(
+            acyclic_project,
+            focus=None,
+            focus_depth=1,
+            package=None,
+            baseline_path=None,
+            **base,
+        )
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "name", "allowed"),
+    [
+        ({"group_by": "bogus"}, "group_by", ("community", "layer", "topological")),
+        ({"weight": "bogus"}, "weight", ("imports", "calls")),
+    ],
+)
+def test_archy_dsm_names_the_allowed_group_by_or_weight_values(
+    acyclic_project: Path, kwargs: dict, name: str, allowed: tuple[str, ...]
+):
+    """The refusal must name the allowed values, not leak a raw pydantic error
+    ("1 validation error for DSM ... https://errors.pydantic.dev/...", #645).
+    """
+    from archy.mcp_compat import ToolError
+
+    with pytest.raises(ValueError) as caught:
+        _dsm(acyclic_project, **kwargs)
+    message = str(caught.value)
+    assert "validation error" not in message
+    assert "errors.pydantic.dev" not in message
+    assert name in message
+    for value in allowed:
+        assert value in message
+
+    with pytest.raises(ToolError) as caught_tool:
+        _call_tool(create_server(), "archy_dsm", {"path": str(acyclic_project), **kwargs})
+    tool_message = str(caught_tool.value)
+    assert "validation error" not in tool_message
+    assert "errors.pydantic.dev" not in tool_message
 
 
 def test_archy_score_rejects_strict_tolerance_outside_unit_interval(acyclic_project: Path):
@@ -1470,6 +1581,23 @@ def test_run_simulate_parses_from_alias(acyclic_project: Path):
     assert payload.cycles.added
 
 
+def test_run_simulate_refuses_an_empty_delta(acyclic_project: Path):
+    """Direct helper refuses empty add/remove (#661)."""
+    with pytest.raises(ValueError, match="pass at least one add or remove edge"):
+        _run_simulate(acyclic_project, add=[], remove=[])
+
+
+def test_archy_simulate_refuses_an_empty_delta_on_the_wire(acyclic_project: Path):
+    """MCP tool boundary carries the refusal as ToolError (#661 / #636)."""
+    from archy.mcp_compat import ToolError
+
+    message = "pass at least one add or remove edge"
+    with pytest.raises(ValueError, match=message):
+        _run_simulate(acyclic_project, add=[], remove=[])
+    with pytest.raises(ToolError, match=message):
+        _call_tool(create_server(), "archy_simulate", {"path": str(acyclic_project)})
+
+
 def test_simulate_tool_input_schema_uses_from_to_aliases():
     server = create_server()
     tools = _list_tools(server)
@@ -1483,6 +1611,22 @@ def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
     result = _run_diff(acyclic_project)
     assert isinstance(result, DiffErrorPayload)
     assert "no baseline" in result.error
+
+
+def test_run_diff_directory_baseline_returns_error_on_the_wire(acyclic_project: Path):
+    # `baseline` is resolved relative to `path`, so "subdir" is a folder inside it.
+    target = acyclic_project / "subdir"
+    target.mkdir()
+
+    result = _run_diff(acyclic_project, baseline="subdir")
+
+    assert isinstance(result, DiffErrorPayload)
+    assert result.model_dump() == {
+        "error": (
+            f"{target} is not a readable archy snapshot; re-run `archy snapshot`: "
+            "it is a directory, not a file"
+        )
+    }
 
 
 def test_run_diff_corrupt_baseline_returns_error_on_the_wire(acyclic_project: Path):
@@ -2985,3 +3129,26 @@ def test_impact_affected_expands_conftest(tmp_path: Path):
     payload = structured["result"]
     assert "tests.conftest" not in payload["impacted_tests"]
     assert "tests.test_x" in payload["impacted_tests"]
+
+
+def test_what_to_refactor_next_fresh_repo_note_mentions_commit_history(tmp_path: Path):
+    # #648: a fresh `git init` has no commits; git_churn used to collapse that
+    # into "not a git repository". The note must say what is actually missing.
+    repo = tmp_path
+    _init_git_repo(repo)
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    # Sanity: the fixture really is a repo with zero commits.
+    inside = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"], capture_output=True
+    )
+    assert inside.returncode == 0
+    head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True)
+    assert head.returncode != 0
+
+    payload = _run_what_to_refactor_next(repo, top_n=20, since=None, min_risk=0.0)
+    assert payload.git_available is False
+    assert payload.note is not None
+    assert "no commit history" in payload.note
+    assert "not inside a git repository" not in payload.note

@@ -1,17 +1,35 @@
 # archy's own layer rules - enforced in CI via `archy check .`.
 #
-# The intent is a pure dependency tree:
-#   parser  →  (nothing internal)
-#   graph   →  parser
-#   policy  →  graph
-#   cli     →  parser, graph, policy
+# The intent is a pure dependency tree, bottom to top:
+#   metrics   leaf measurements (reach, instability, risk, entrypoints, gitlog, dsm)
+#   parser    tree-sitter parse + per-function complexity
+#   graph     the import graph and what is computed straight from it
+#   policy    layer rules (archy.layers)
+#   analysis  features built on the graph and policy (diff, impact, simulate, ...)
+#   cli       the two front ends (CLI, MCP) and their glue
+#   install   the agent-config installer; imported only by the CLI
 #
-# Lower layers must not depend on higher ones.
+# Lower layers must not depend on higher ones. `metrics` is the lowest layer
+# and `parser` may import it, so `parser -> metrics` is deliberately not forbidden.
+#
+# The root `archy` module (`__init__`, which holds `__version__`) is left out on
+# purpose: import-linter treats it as the parent of every other module, so a
+# layer containing it makes the transitive contracts underivable ("Modules have
+# shared descendants").
 
 layers:
+  metrics:
+    modules:
+      - "archy.dsm"
+      - "archy.entrypoints"
+      - "archy.gitlog"
+      - "archy.instability"
+      - "archy.reach"
+      - "archy.risk"
   parser:
     modules:
       - "archy.parser"
+      - "archy.complexity"
   graph:
     modules:
       - "archy.graph"
@@ -19,22 +37,65 @@ layers:
       - "archy.score"
       - "archy.history"
       - "archy.trend"
+      - "archy.index"
   policy:
     modules:
       - "archy.layers"
+  analysis:
+    modules:
+      - "archy.affected"
+      - "archy.conventions"
+      - "archy.contracts"
+      - "archy.coupling"
+      - "archy.diff"
+      - "archy.diff_summary"
+      - "archy.duplicates"
+      - "archy.headers"
+      - "archy.hotspots"
+      - "archy.impact"
+      - "archy.ratchet"
+      - "archy.refactor"
+      - "archy.simulate"
+      - "archy.watcher"
   cli:
     modules:
       - "archy.cli"
+      - "archy.cli_render"
       - "archy.mcp"
+      - "archy.mcp_compat"
+      - "archy.render"
       - "archy.scan_config"
+  install:
+    modules:
+      - "archy.install.**"
 
 forbid:
-  - {from: parser, to: graph}
-  - {from: parser, to: policy}
-  - {from: parser, to: cli}
-  - {from: graph,  to: policy}
-  - {from: graph,  to: cli}
-  - {from: policy, to: cli}
+  - {from: metrics,  to: parser}
+  - {from: metrics,  to: graph}
+  - {from: metrics,  to: policy}
+  - {from: metrics,  to: analysis}
+  - {from: metrics,  to: cli}
+  - {from: metrics,  to: install}
+  - {from: parser,   to: graph}
+  - {from: parser,   to: policy}
+  - {from: parser,   to: analysis}
+  - {from: parser,   to: cli}
+  - {from: parser,   to: install}
+  - {from: graph,    to: policy}
+  - {from: graph,    to: analysis}
+  - {from: graph,    to: cli}
+  - {from: graph,    to: install}
+  - {from: policy,   to: analysis}
+  - {from: policy,   to: cli}
+  - {from: policy,   to: install}
+  - {from: analysis, to: cli}
+  - {from: analysis, to: install}
+  - {from: install,  to: metrics}
+  - {from: install,  to: parser}
+  - {from: install,  to: graph}
+  - {from: install,  to: policy}
+  - {from: install,  to: analysis}
+  - {from: install,  to: cli}
 
 # Directories archy must not descend into -- all hold vendored external git
 # clones created by the bench harness, gitignored and absent in CI:

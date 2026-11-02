@@ -492,6 +492,10 @@ def read_dsm(path: Path) -> DSM | None:
 
     if not path.exists():
         return None
+    if path.is_dir():
+        raise ValueError(
+            f"{path} is a directory, not a DSM snapshot (write one with `archy dsm --format json`)"
+        )
     try:
         return dsm_from_dict(json.loads(path.read_text()))
     except (json.JSONDecodeError, KeyError, TypeError, ValidationError) as exc:

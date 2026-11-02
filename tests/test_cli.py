@@ -1737,11 +1737,12 @@ def test_simulate_cli_json_is_valid(tmp_path: Path):
     assert "applied" in payload and "cycles" in payload and "propagation_cost" in payload
 
 
-def test_simulate_cli_empty_delta_renders(tmp_path: Path):
+def test_simulate_cli_empty_delta_is_refused(tmp_path: Path):
+    """No --add/--remove must UsageError instead of coverage complete (#661)."""
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["simulate", str(project)])
-    assert result.exit_code == 0
-    assert "+0 / -0 edge(s)" in result.output
+    assert result.exit_code == 2
+    assert "pass at least one --add or --remove" in result.output
 
 
 def test_simulate_cli_with_nothing_resolved_does_not_print_a_clean_zero(tmp_path: Path):
@@ -2726,6 +2727,41 @@ def test_diff_malformed_baseline_is_a_clean_error(
     assert output == f"Error: {message}\n"
 
 
+@pytest.mark.parametrize(
+    ("command", "option"),
+    [
+        ("render", "--out"),
+        ("snapshot", "--out"),
+        ("diff", "--baseline"),
+        ("dsm", "--diff"),
+    ],
+)
+def test_file_path_option_given_a_directory_is_a_clean_error(
+    tmp_path: Path, command: str, option: str
+):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "mod.py").write_text("x = 1\n")
+    folder = tmp_path / "somedir"
+    folder.mkdir()
+
+    # The real entry point, for the same reason as the malformed-baseline test:
+    # CliRunner would hide a Traceback in Result.exception.
+    proc = subprocess.run(
+        [str(Path(sys.executable).parent / "archy"), command, str(project), option, str(folder)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = proc.stdout + proc.stderr
+
+    assert proc.returncode == 2
+    assert "Traceback" not in output
+    assert option in output
+    assert str(folder) in output
+    assert "is a directory" in output
+
+
 def _make_sdp_ratchet_project(tmp_path: Path) -> Path:
     """The ratchet project with SDP enabled and an edge that violates it,
     asserted present in a full snapshot so the fixture cannot drift into a
@@ -2860,3 +2896,48 @@ def test_diff_strict_locations_are_relative_to_the_working_directory(
 
     assert result.exit_code == 1
     assert f"pkg.d -> pkg.e at {Path('sub', 'pkg', 'd.py')}:1" in result.output
+
+
+def _fresh_git_repo_without_commits(repo: Path) -> None:
+    repo.mkdir()
+    subprocess.run(
+        ["git", "-C", str(repo), "init", "-q", "-b", "main"], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "user.email", "t@t.t"], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "user.name", "t"], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "-C", str(repo), "config", "commit.gpgsign", "false"],
+        check=True,
+        capture_output=True,
+    )
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "app.py").write_text("def f(x):\n    if x: return 1\n    return 0\n")
+
+
+def test_hotspots_names_missing_commit_history_not_missing_repo(tmp_path: Path):
+    # #648: a fresh `git init` (no commits) is a repository, not a missing
+    # one. The error must point the user at committing, not at their git
+    # install, and must not leak a traceback.
+    repo = tmp_path / "repo"
+    _fresh_git_repo_without_commits(repo)
+    result = CliRunner().invoke(main, ["hotspots", str(repo)])
+    assert result.exit_code != 0
+    assert "no commit history" in result.output
+    assert "Traceback" not in result.output
+
+
+def test_what_to_refactor_next_names_missing_commit_history(tmp_path: Path):
+    # #648: fused lens on a zero-commit repo degrades to structural-only, but
+    # the degraded header must not claim there is no git repository.
+    repo = tmp_path / "repo"
+    _fresh_git_repo_without_commits(repo)
+    result = CliRunner().invoke(main, ["what-to-refactor-next", str(repo)])
+    assert result.exit_code == 0, result.output
+    assert "not a git repo" not in result.output.lower()
+    assert "commits" in result.output

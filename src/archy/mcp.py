@@ -178,7 +178,7 @@ from archy.graph import (
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
-from archy.hotspots import git_churn
+from archy.hotspots import NoCommitsError, git_churn
 from archy.impact import DEFAULT_MAX_CHAINS, Impact, find_impact
 from archy.instability import compute_instability
 from archy.layers import (
@@ -642,8 +642,8 @@ class WhatToRefactorPayload(BaseModel):
     empty `priorities` with a `note` is a meaningful answer: nothing is both
     complex and churned and nothing is central+fragile above `min_risk`, so
     there is genuinely nothing to prioritize. `git_available` is False when
-    the project is not under git - the behavioral lens is then skipped and the
-    ranking is structural-only."""
+    the project is not under git (or has no commits yet) - the behavioral
+    lens is then skipped and the ranking is structural-only."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -1856,6 +1856,8 @@ def _run_impact(
     max_chains: int = DEFAULT_MAX_CHAINS,
     co_change: bool = False,
 ) -> Impact:
+    if max_chains == 0:
+        raise ValueError("--max-chains must be negative (for all) or positive (for a limit); got 0")
     graph = _load_graph(path, internal_only=True)
     result = find_impact(graph, _resolve_against(path, files), max_chains=max_chains)
     if not co_change or not result.changed:
@@ -2104,6 +2106,18 @@ def _validate_refactor_lens(lens: str) -> None:
         raise ValueError(f"lens must be 'fused', 'behavioral', or 'structural'; got {lens!r}")
 
 
+def _validate_group_by(group_by: str) -> None:
+    if group_by not in ("community", "layer", "topological"):
+        raise ValueError(
+            f"group_by must be 'community', 'layer', or 'topological'; got {group_by!r}"
+        )
+
+
+def _validate_weight(weight: str) -> None:
+    if weight not in ("imports", "calls"):
+        raise ValueError(f"weight must be 'imports' or 'calls'; got {weight!r}")
+
+
 def _run_graph(
     path: Path,
     *,
@@ -2154,10 +2168,14 @@ def _run_dsm(
     A diff (baseline_path set) is a deliberate, already-compact comparison
     (new_back_edges is the signal), not a dump, so response_format does not
     apply to it. The full matrix is capped at DEFAULT_MAX_DSM_CELLS cells.
+    group_by and weight are validated up front too, before the scan, so a typo
+    never pays for a full build only to fail on a raw pydantic error (#645).
     """
     _validate_response_format(response_format)
     if focus_depth < 0:
         raise ValueError(f"focus_depth must be >= 0; got {focus_depth}")
+    _validate_group_by(group_by)
+    _validate_weight(weight)
     graph = _load_graph(path, internal_only=False)
     current = build_dsm(
         graph,
@@ -2333,16 +2351,22 @@ def _refactor_note(
     git_available: bool,
     path: Path,
     min_risk: float,
+    no_commits: bool = False,
 ) -> str | None:
     """Lens-aware empty/degraded note for archy_what_to_refactor_next.
 
     behavioral needs git; structural never does; fused runs both and degrades
     to structural-only off git. A non-empty single-lens result needs no note.
     """
+    missing_git = (
+        f"{path} has no commit history yet"
+        if no_commits
+        else f"{path} is not inside a git repository (or git is unavailable)"
+    )
     if rows:
         if lens == "fused" and not git_available:
             return (
-                f"{path} is not inside a git repository (or git is unavailable); "
+                f"{missing_git}; "
                 "the CC x churn behavioral lens was skipped and this ranking is "
                 "structural-only (edit-risk). Run inside git for the fused view."
             )
@@ -2350,7 +2374,7 @@ def _refactor_note(
     if lens == "behavioral":
         if not git_available:
             return (
-                f"{path} is not inside a git repository (or git is unavailable); "
+                f"{missing_git}; "
                 "the behavioral lens needs git history to compute per-file churn. "
                 "Use lens='structural' for a git-free 'is this edit dangerous?' "
                 "signal instead."
@@ -2376,7 +2400,7 @@ def _refactor_note(
             "structural lens."
         )
     return (
-        f"{path} is not inside a git repository (or git is unavailable), so the "
+        f"{missing_git}, so the "
         "CC x churn behavioral lens was skipped and only the structural "
         f"edit-risk lens ran. No module is central and fragile above "
         f"min_risk={min_risk}, so nothing was surfaced. Lower min_risk to widen "
@@ -2395,8 +2419,17 @@ def _run_what_to_refactor_next(
 
     graph = _load_graph(path, internal_only=True)
     # The behavioral lens needs git; the structural lens never does, so skip the
-    # git call entirely for structural (since is irrelevant there).
-    churn = None if lens == "structural" else git_churn(path, since=since)
+    # git call entirely for structural (since is irrelevant there). A repo with
+    # zero commits degrades the same way but gets its own note wording.
+    no_commits = False
+    if lens == "structural":
+        churn = None
+    else:
+        try:
+            churn = git_churn(path, since=since)
+        except NoCommitsError:
+            churn = None
+            no_commits = True
     git_available = churn is not None
 
     rows = compute_refactor_priorities(graph, churn=churn, min_risk=min_risk)
@@ -2436,6 +2469,7 @@ def _run_what_to_refactor_next(
         git_available=git_available,
         path=path,
         min_risk=min_risk,
+        no_commits=no_commits,
     )
 
     return WhatToRefactorPayload(

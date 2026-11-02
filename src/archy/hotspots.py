@@ -22,7 +22,9 @@ a renamed file keeps its full churn instead of splitting it across a
 phantom old-path entry that matches no live graph node. If the project
 isn't inside a git repository (or git is unavailable), ``git_churn``
 returns ``None`` rather than raising, and the CLI surfaces the
-diagnostic separately. Diagnostic only - not folded into ``archy score``.
+diagnostic separately; a repository with zero commits raises
+:class:`NoCommitsError` so the message can say "commit first" instead
+of "not a repository". Diagnostic only - not folded into ``archy score``.
 
 The default churn window is full history. The 27-project bench sweep
 in ``bench/hotspots_results.md`` (median Jaccard(full, 12mo) = 0.60,
@@ -33,8 +35,9 @@ result set to fewer than 20 items. Use ``--since`` (a CLI passthrough
 to ``git log --since``) when you want the "what should I refactor
 right now" lens instead of the historical view.
 
-archy:owns        Hotspot, compute_hotspots, git_churn
-archy:mirrored-by compute_hotspots -> archy.cli, archy.refactor,
+archy:owns        Hotspot, NoCommitsError, compute_hotspots, git_churn
+archy:mirrored-by NoCommitsError -> archy.cli, archy.mcp,
+                  compute_hotspots -> archy.cli, archy.refactor,
                   git_churn -> archy.cli, archy.mcp
 """
 
@@ -63,6 +66,15 @@ class Hotspot(BaseModel):
     score: int
 
 
+class NoCommitsError(Exception):
+    """``root`` is a valid git repository that has no commits yet.
+
+    Distinct from :func:`git_churn` returning ``None`` (``root`` isn't inside
+    a repository, or git is unavailable): the user is in a repo, so callers
+    can tell them to commit instead of sending them off to debug git.
+    """
+
+
 def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
     """Per-``.py``-file commit count from ``git log --name-status -M``.
 
@@ -70,7 +82,8 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
     graph's per-node ``path`` attribute without worrying about
     working-directory or repo-root differences. Returns ``None`` if
     ``root`` isn't inside a git repository or git isn't available;
-    returns ``{}`` for an empty (or fully-filtered) history.
+    raises :class:`NoCommitsError` if it is a repository with zero
+    commits; returns ``{}`` for an empty (or fully-filtered) history.
 
     Renamed files keep their full history: a ``git mv`` splits a file's
     commits across the old and new path, so rename (``R``) status lines
@@ -92,7 +105,13 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
         log_proc = subprocess.run(
             cmd, capture_output=True, text=True, errors="surrogateescape", check=True
         )
-    except subprocess.CalledProcessError:
+    except subprocess.CalledProcessError as exc:
+        # A fresh `git init` (zero commits) is a repo, not a missing one: git
+        # fails with exit 128 and "does not have any commits yet", which used
+        # to collapse into the same "not a git repository" message. Surface it
+        # so callers can point the user at committing instead of at git.
+        if exc.stderr and "does not have any commits yet" in exc.stderr:
+            raise NoCommitsError(f"{root} has no commits yet") from exc
         return None
 
     raw_counts: Counter[str] = Counter()

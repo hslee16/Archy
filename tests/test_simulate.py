@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from archy.diff import compute_diff, take_snapshot
 from archy.graph import UnresolvedHint, build_graph
 from archy.simulate import find_simulate
@@ -277,13 +279,20 @@ def test_a_no_op_edge_counts_as_simulated_when_judging_coverage(tmp_path: Path):
     assert result.applied.coverage == "partial"
 
 
-def test_a_fully_resolved_or_empty_delta_is_complete(tmp_path: Path):
+def test_a_fully_resolved_delta_is_complete(tmp_path: Path):
     project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
     g = _internal(project)
     resolved = find_simulate(g, add=[("app.a", "app.b")], remove=[], project_root=project)
     assert resolved.applied.skipped == ()
     assert resolved.applied.coverage == "complete"
-    assert find_simulate(g, add=[], remove=[], project_root=project).applied.coverage == "complete"
+
+
+def test_an_empty_delta_is_refused(tmp_path: Path):
+    """Empty add/remove must not report coverage complete / +0.000 (#661)."""
+    project = _make_pkg(tmp_path, {"a.py": "", "b.py": ""})
+    g = _internal(project)
+    with pytest.raises(ValueError, match="pass at least one add or remove edge"):
+        find_simulate(g, add=[], remove=[], project_root=project)
 
 
 def test_an_unresolved_remove_is_skipped_too(tmp_path: Path):
