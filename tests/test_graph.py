@@ -1132,3 +1132,41 @@ def test_hint_unresolved_does_not_offer_external_modules(tmp_path: Path):
     graph = build_graph(tmp_path)
     assert graph.nodes["requests"]["external"]  # the near miss exists, as an external
     assert hint_unresolved(graph, ["requestz"]) == ()
+
+
+def test_from_external_import_name_call_edges_pin_external_targets(tmp_path: Path, pkg: Path):
+    # #705: `from <external> import name` must bind calls through
+    # `_external_target`. The `import json` form was already pinned; this
+    # form (the common third-party call shape) was not.
+    (pkg / "a.py").write_text(
+        "from requests import get\n"
+        "from os.path import join\n"
+        "from requests import get as g\n"
+        "import json\n"
+        "def f():\n"
+        "    get('x')\n"
+        "    join('a', 'b')\n"
+        "    g('y')\n"
+        "    json.dumps(1)\n"
+    )
+    data = graph_to_dict(build_graph(tmp_path))
+    # dotted external collapses to its top-level package
+    get_edge = _edge(data, "pkg.a", "requests")
+    assert get_edge["call_count"] == 2  # get + g alias
+    assert "call" in get_edge["kinds"]
+    assert "import" in get_edge["kinds"]
+    join_edge = _edge(data, "pkg.a", "os")
+    assert join_edge["call_count"] == 1
+    assert "call" in join_edge["kinds"]
+    json_edge = _edge(data, "pkg.a", "json")
+    assert json_edge["call_count"] == 1
+
+
+def test_relative_import_past_project_root_creates_no_alias_or_call_edge(tmp_path: Path, pkg: Path):
+    # #705: `_resolve_relative_base` returning None (lines 953-955) must not
+    # crash and must not invent a call edge through the unbound name.
+    (pkg / "a.py").write_text("from ......missing import ghost\nghost()\n")
+    g = build_graph(tmp_path)
+    assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
+    # The module still appears; no edge to a fabricated target.
+    assert "pkg.a" in g
