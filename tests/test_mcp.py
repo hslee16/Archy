@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -976,6 +977,29 @@ def test_archy_dsm_refuses_a_name_that_matches_nothing(
     # reason reaches agents on both mcp majors (2.x used to drop ValueError text).
     with pytest.raises(ToolError, match=message):
         _call_tool(create_server(), "archy_dsm", {"path": str(acyclic_project), **kwargs})
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"focus": "pkg.aa"}, "focus 'pkg.aa' is not an internal module; did you mean pkg.a?"),
+        (
+            {"package": "pk."},
+            "package 'pk.' matches no internal module; did you mean pkg, pkg.a, pkg.b?",
+        ),
+        ({"focus": "zzz"}, "focus 'zzz' is not an internal module"),
+    ],
+)
+def test_archy_dsm_refusal_names_the_near_misses(acyclic_project: Path, kwargs: dict, message: str):
+    """The agent is told the right name, so its next call is right (#643)."""
+    from archy.mcp_compat import ToolError
+
+    with pytest.raises(ValueError) as caught:
+        _dsm(acyclic_project, **kwargs)
+    assert str(caught.value) == message
+    with pytest.raises(ToolError, match=re.escape(message)):
+        _call_tool(create_server(), "archy_dsm", {"path": str(acyclic_project), **kwargs})
+    assert _dsm(acyclic_project, focus="pkg.a").module_count == 2
 
 
 def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):

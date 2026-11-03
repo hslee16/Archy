@@ -166,6 +166,7 @@ from archy.graph import (
     internal_subgraph,
     parse_project,
     resolve_modules,
+    suggest_modules,
 )
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
@@ -1780,6 +1781,7 @@ def _run_dsm(
         focus=focus,
         focus_depth=focus_depth,
         package=package,
+        suggest=suggest_modules,
     )
     if baseline_path is not None:
         try:

@@ -112,6 +112,7 @@ from archy.graph import (
     graph_to_dict,
     internal_subgraph,
     parse_project,
+    suggest_modules,
 )
 from archy.headers import apply_header, compute_headers, existing_block, render_header
 from archy.history import append as append_history
@@ -1313,6 +1314,7 @@ def _dsm_from_path(
             focus=focus,
             focus_depth=focus_depth,
             package=package,
+            suggest=suggest_modules,
         )
     except ValueError as exc:
         raise click.ClickException(str(exc)) from exc
