@@ -166,8 +166,8 @@ def parse_file(path: Path) -> ParseResult:
     try:
         encoding, _ = tokenize.detect_encoding(io.BytesIO(source).readline)
     except (SyntaxError, ValueError):
-        # A broken or unknown cookie is damage for tree-sitter to report via
-        # has_errors, not a reason for a whole-tree scan to crash (#649).
+        # A broken or unknown cookie must not crash a whole-tree scan; parse
+        # the raw bytes as-is (#649).
         return parse_source(source)
     if encoding.lower().replace("_", "-") in ("utf-8", "utf-8-sig", "ascii"):
         return parse_source(source)
@@ -176,8 +176,8 @@ def parse_file(path: Path) -> ParseResult:
         # re-encoded from it; decode/encode preserves line numbers (#649).
         return parse_source(source.decode(encoding).encode("utf-8"))
     except UnicodeDecodeError:
-        # Bytes that do not match their own cookie go in raw, the same
-        # tolerate-and-report treatment the callers give OSError (#649).
+        # Bytes that do not match their own cookie are parsed raw rather than
+        # crashing the scan (#649).
         return parse_source(source)
 
 
