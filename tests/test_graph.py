@@ -1163,10 +1163,9 @@ def test_from_external_import_name_call_edges_pin_external_targets(tmp_path: Pat
 
 
 def test_relative_import_past_project_root_creates_no_alias_or_call_edge(tmp_path: Path, pkg: Path):
-    # #705: `_resolve_relative_base` returning None (lines 953-955) must not
-    # crash and must not invent a call edge through the unbound name.
+    # #705: an unresolvable relative base must leave the name unbound so no
+    # call edge is invented, and the failed import must not drop the module.
     (pkg / "a.py").write_text("from ......missing import ghost\nghost()\n")
     g = build_graph(tmp_path)
     assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
-    # The module still appears; no edge to a fabricated target.
     assert "pkg.a" in g
