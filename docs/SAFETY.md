@@ -123,8 +123,7 @@ Known gaps in the tests behind the claims above, each tracked: the network check
 subprocess scan can be bypassed with `os.spawn*`, asyncio subprocesses or aliased
 imports ([#694](https://github.com/hslee16/archy/issues/694)); the git check does
 not look at flags after the subcommand
-([#695](https://github.com/hslee16/archy/issues/695)); `.git` is not in the
-file-tree comparison ([#696](https://github.com/hslee16/archy/issues/696)); and
+([#695](https://github.com/hslee16/archy/issues/695)); and
 uninstall is only weakly pinned, with no test on an existing config
 ([#697](https://github.com/hslee16/archy/issues/697)). Also, the MCP entry
 install writes runs `uvx archy mcp`, so your agent's launcher fetches archy from
