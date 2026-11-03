@@ -202,8 +202,10 @@ def build_dsm(
     as `back_edge_count=0`, which is also what a clean project reports, so a
     mistyped name must be refused rather than answered with a zero.
 
-    `suggest` (the front ends pass `archy.graph.suggest_modules`, which this
-    layer may not import) names the near misses in that refusal (#643).
+    `suggest` (the front ends pass `archy.graph.suggest_modules`; it is injected
+    because `archy.yaml` puts this module in the `metrics` layer and forbids
+    `metrics -> graph`, which `archy check .` enforces) names the near misses in
+    that refusal (#643).
     """
     sub = _internal_subgraph(graph)
 
