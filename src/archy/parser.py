@@ -10,6 +10,8 @@ archy:mirrored-by ParseResult -> archy.duplicates, archy.graph, archy.index,
 
 from __future__ import annotations
 
+import io
+import tokenize
 from pathlib import Path
 
 import tree_sitter_python as tsp
@@ -160,7 +162,23 @@ class ParseResult(BaseModel):
 
 
 def parse_file(path: Path) -> ParseResult:
-    return parse_source(path.read_bytes())
+    source = path.read_bytes()
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(source).readline)
+    except (SyntaxError, ValueError):
+        # A broken or unknown cookie is damage for tree-sitter to report via
+        # has_errors, not a reason for a whole-tree scan to crash (#649).
+        return parse_source(source)
+    if encoding.lower().replace("_", "-") in ("utf-8", "utf-8-sig", "ascii"):
+        return parse_source(source)
+    try:
+        # PEP 263: the cookie names the codec, so hand tree-sitter UTF-8
+        # re-encoded from it; decode/encode preserves line numbers (#649).
+        return parse_source(source.decode(encoding).encode("utf-8"))
+    except UnicodeDecodeError:
+        # Bytes that do not match their own cookie go in raw, the same
+        # tolerate-and-report treatment the callers give OSError (#649).
+        return parse_source(source)
 
 
 def parse_source(source: bytes) -> ParseResult:

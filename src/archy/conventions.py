@@ -786,8 +786,10 @@ def _try_collect_detailed(
     a work-in-progress file into a crash on only one of the two surfaces.
     """
     try:
-        source = module.path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        # Bytes, not read_text("utf-8"): ast.parse honours the PEP 263 cookie,
+        # so a Latin-1 module is parsed instead of being reported as unparsed
+        # (#649).
+        tree = ast.parse(module.path.read_bytes())
     except (OSError, SyntaxError, ValueError, UnicodeDecodeError) as exc:
         rel: str
         if root is not None:

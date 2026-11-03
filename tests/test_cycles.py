@@ -205,3 +205,18 @@ def test_real_project_reexport_mediated_cycle(tmp_path: Path, pkg: Path):
     cycles = find_cycles(g)
     cycle_module_sets = [set(c.modules) for c in cycles]
     assert any({"pkg", "pkg.a"}.issubset(m) for m in cycle_module_sets)
+
+
+def test_real_cycle_through_a_shift_jis_module(tmp_path: Path, pkg: Path):
+    """機能 in Shift-JIS contains a 0x5C byte that reads as a backslash to a
+    UTF-8 grammar, so pkg.a's imports vanished behind a parse error and a real
+    two-module cycle was reported as clean (#649)."""
+    a = pkg / "a.py"
+    a.write_bytes(
+        "# -*- coding: shift_jis -*-\nLABEL = '機能'\nfrom pkg import b\n".encode("shift_jis")
+    )
+    assert b"\x5c'" in a.read_bytes()  # the fixture must exercise the bug
+    (pkg / "b.py").write_text("from pkg import a\n")
+    g = build_graph(tmp_path)
+    cycles = find_cycles(g)
+    assert any(c.modules == ("pkg.a", "pkg.b") for c in cycles)
