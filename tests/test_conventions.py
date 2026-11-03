@@ -1102,6 +1102,8 @@ def test_conventions_report_lists_unparsed_modules(tmp_path: Path):
     assert [u["module"] for u in dumped["unparsed_modules"]] == ["pkg.bad"]
     text = _conventions_to_text(report, top_n=8)
     assert "pkg.bad" in text
+
+
 def test_module_view_sees_an_importer_hidden_behind_a_latin1_cookie(tmp_path: Path):
     """A Latin-1 module with a coding cookie died in read_text as a
     UnicodeDecodeError and silently vanished from a COMPLETE "imported by"
