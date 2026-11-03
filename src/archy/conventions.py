@@ -51,8 +51,8 @@ every other archy command sees.
 
 archy:owns        BaseFamily, ConventionsReport, DocGap, ExportGap, Gate, ModelCensus,
                   ModulePartition, ModuleView, NamingFamily, NamingHome, RegistryEntry,
-                  SharedConstant, SurfaceFamily, camel_suffix, censused_modules,
-                  compute_conventions, compute_module_view
+                  SharedConstant, SurfaceFamily, UnparsedModule, camel_suffix,
+                  censused_modules, compute_conventions, compute_module_view
 archy:mirrored-by ConventionsReport -> archy.cli, archy.cli_render, archy.headers,
                   archy.mcp, archy.mcp_payloads, ModuleView -> archy.cli_render,
                   archy.mcp, compute_conventions -> archy.cli, archy.mcp,
@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import ast
 import re
+import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from pathlib import Path
@@ -383,6 +384,22 @@ class DocGap(BaseModel):
     missing: tuple[str, ...]
 
 
+class UnparsedModule(BaseModel):
+    """A module the census discovered but could not parse.
+
+    Carried by name so a ModuleView can refuse the COMPLETE claim when any
+    exist: an importer that failed to parse is invisible to `imported_by`,
+    and silence there would read as "nobody imports this" (#666).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    module: str
+    path: str
+    reason: str
+    python: str
+
+
 class ModuleView(BaseModel):
     """Everything the census knows about ONE module, complete and unranked.
 
@@ -395,10 +412,13 @@ class ModuleView(BaseModel):
     of graph/cycles/score reach `layers`", and a top-N ranking is the wrong
     shape for both.
 
-    So every list here is COMPLETE for the module named, and truncating any of
-    them would defeat the point. `status` matters for the same reason: a module
-    that was set aside must say so, or its absence reads as "nothing to report"
-    when the truth is "not looked at".
+    So every list here is COMPLETE for the module named when
+    ``census_complete`` is true, and truncating any of them would defeat the
+    point. When some modules could not be parsed,
+    ``census_complete`` is false and ``unparsed_modules`` names each skip so
+    absence from `imported_by` is not mistaken for a negative (#666). `status`
+    matters for the same reason: a module that was set aside must say so, or
+    its absence reads as "nothing to report" when the truth is "not looked at".
     """
 
     model_config = ConfigDict(frozen=True)
@@ -412,6 +432,8 @@ class ModuleView(BaseModel):
     exports: tuple[str, ...] | None
     suffix_families: tuple[str, ...]
     gates: tuple[Gate, ...]
+    census_complete: bool = True
+    unparsed_modules: tuple[UnparsedModule, ...] = ()
 
 
 class ModulePartition(BaseModel):
@@ -442,6 +464,7 @@ class ConventionsReport(BaseModel):
     root: str
     modules_scanned: int
     modules_unparsed: int
+    unparsed_modules: tuple[UnparsedModule, ...] = ()
     naming: tuple[NamingHome, ...]
     surfaces: tuple[SurfaceFamily, ...]
     gates: tuple[Gate, ...]
@@ -741,8 +764,21 @@ def _resolved_imports(
     return resolved - {facts.qualname}
 
 
-def _try_collect(module: Module) -> _ModuleFacts | None:
-    """Parse and census one module, or None when it cannot be read.
+def _unparsed_reason(exc: BaseException) -> str:
+    """One-line reason naming the exception and, for SyntaxError, its locus."""
+    if isinstance(exc, SyntaxError):
+        where = f" (line {exc.lineno})" if exc.lineno is not None else ""
+        msg = exc.msg or str(exc)
+        return f"{type(exc).__name__}: {msg}{where}"
+    return f"{type(exc).__name__}: {exc}"
+
+
+def _try_collect_detailed(
+    module: Module,
+    *,
+    root: Path | None = None,
+) -> tuple[_ModuleFacts | None, UnparsedModule | None]:
+    """Parse one module, or an UnparsedModule naming why it was skipped.
 
     Advisory command: an unreadable or half-written file is a fact to report,
     never a reason to fail. Shared so the two callers cannot drift on WHICH
@@ -750,10 +786,25 @@ def _try_collect(module: Module) -> _ModuleFacts | None:
     a work-in-progress file into a crash on only one of the two surfaces.
     """
     try:
-        tree = ast.parse(module.path.read_text(encoding="utf-8"))
-    except (OSError, SyntaxError, ValueError, UnicodeDecodeError):
-        return None
-    return _collect(tree, module.qualname, is_package=module.is_package)
+        source = module.path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (OSError, SyntaxError, ValueError, UnicodeDecodeError) as exc:
+        rel: str
+        if root is not None:
+            try:
+                rel = str(module.path.resolve().relative_to(root.resolve()))
+            except ValueError:
+                rel = str(module.path)
+        else:
+            rel = str(module.path)
+        skipped = UnparsedModule(
+            module=module.qualname,
+            path=rel,
+            reason=_unparsed_reason(exc),
+            python=sys.version.split()[0],
+        )
+        return None, skipped
+    return _collect(tree, module.qualname, is_package=module.is_package), None
 
 
 def _classify_module(
@@ -1271,7 +1322,7 @@ def _surface_families(
         for source, name in f.internal_imports:
             candidates = defined_in.get(name)
             if not candidates:
-                continue  # not a symbol this project defines
+                continue
             if source in candidates:
                 home = source
             elif len(candidates) == 1:
@@ -1585,11 +1636,12 @@ def compute_conventions(
     )
     modules = kept
     facts: list[_ModuleFacts] = []
-    unparsed = 0
+    skipped: list[UnparsedModule] = []
     for module in modules:
-        collected = _try_collect(module)
+        collected, miss = _try_collect_detailed(module, root=root)
         if collected is None:
-            unparsed += 1
+            assert miss is not None
+            skipped.append(miss)
             continue
         facts.append(collected)
 
@@ -1600,7 +1652,8 @@ def compute_conventions(
     return ConventionsReport(
         root=str(root),
         modules_scanned=len(facts),
-        modules_unparsed=unparsed,
+        modules_unparsed=len(skipped),
+        unparsed_modules=tuple(skipped),
         naming=_naming_families(facts, min_count=min_family),
         surfaces=_surface_families(facts, min_count=min_family),
         gates=gates,
@@ -1641,16 +1694,44 @@ def compute_module_view(
     shadows = _shadow_roots(m.qualname for m in modules)
 
     facts: dict[str, _ModuleFacts] = {}
+    skipped: list[UnparsedModule] = []
     for m in modules:
-        collected = _try_collect(m)
-        if collected is not None:
-            facts[m.qualname] = collected
+        collected, miss = _try_collect_detailed(m, root=root)
+        if collected is None:
+            assert miss is not None
+            skipped.append(miss)
+            continue
+        facts[m.qualname] = collected
+    unparsed = tuple(skipped)
 
     if module not in facts:
+        miss = next((u for u in unparsed if u.module == module), None)
+        if miss is not None:
+            # The module exists on disk but this interpreter cannot census it.
+            # Returning a view (not LookupError) keeps the negative answerable:
+            # the lists are empty because parsing failed, not because the name
+            # is unknown (#666).
+            return ModuleView(
+                module=module,
+                status=(f"could not be parsed (Python {miss.python}): {miss.reason} ({miss.path})"),
+                classes=(),
+                functions=(),
+                imports_internal=(),
+                imported_by=(),
+                exports=None,
+                suffix_families=(),
+                gates=(),
+                census_complete=False,
+                unparsed_modules=(miss,),
+            )
         near = suggest_modules(facts, module)
+        # Also suggest unparsed names: an agent asking for pkg.cache after a
+        # SyntaxError skip must not be told the module does not exist.
+        near_unparsed = [u.module for u in unparsed if module.split(".")[-1] in u.module]
+        suggestions = list(dict.fromkeys([*near, *near_unparsed]))
         raise LookupError(
             f"no module {module!r} under {root}"
-            + (f"; did you mean {', '.join(near[:5])}?" if near else "")
+            + (f"; did you mean {', '.join(suggestions[:5])}?" if suggestions else "")
         )
 
     f = facts[module]
@@ -1659,6 +1740,7 @@ def compute_module_view(
     resolved = {q: _resolved_imports(g, known, reexports) for q, g in facts.items()}
     # Complete on both sides. A "does X import Y" question is answered by the
     # presence or ABSENCE of Y here, so a partial list is worse than none.
+    # When any module was unparsed, that completeness claim is false (#666).
     imports = sorted(resolved[module] - {module})
     by = sorted(q for q, mods in resolved.items() if q != module and module in mods)
     fams = sorted({camel_suffix(c.name) for c in f.classes})
@@ -1673,4 +1755,6 @@ def compute_module_view(
         exports=tuple(sorted(f.exports)) if f.exports is not None else None,
         suffix_families=tuple(fams),
         gates=tuple(gates) + tuple(errors),
+        census_complete=not unparsed,
+        unparsed_modules=unparsed,
     )

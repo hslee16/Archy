@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from archy.cli import _conventions_to_text
+from archy.cli_render import _conventions_to_text, _module_view_to_text
 from archy.conventions import (
     ConventionsReport,
     NamingFamily,
@@ -1055,3 +1055,50 @@ def test_lookup_resolves_each_import_shape_to_a_distinct_module(tmp_path: Path):
     g = build_graph(tmp_path)
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
     assert {t for t in g.successors("app.sub.uses") if t in internal} == resolved
+
+
+def test_module_view_drops_complete_claim_when_an_importer_is_unparsed(tmp_path: Path):
+    # #666: an unparsable importer must not leave ModuleView claiming COMPLETE
+    # with a truncated imported_by list. A SyntaxError fixture (always invalid)
+    # stands in for newer syntax this interpreter cannot parse.
+    project = _project(
+        tmp_path,
+        {
+            "store.py": "class Store: pass\n",
+            "cli.py": "from pkg.store import Store\n",
+            # Final content: imports store so a successful parse would list it,
+            # then a SyntaxError so this interpreter skips the module (#666).
+            "cache.py": "from pkg.store import Store\n\ndef broken(\n",
+        },
+    )
+    view = compute_module_view(project, "pkg.store")
+    dumped = view.model_dump()
+    assert dumped["census_complete"] is False
+    assert list(dumped["imported_by"]) == ["pkg.cli"]
+    assert [u["module"] for u in dumped["unparsed_modules"]] == ["pkg.cache"]
+    assert all("python" in u and "reason" in u and "path" in u for u in dumped["unparsed_modules"])
+    text = _module_view_to_text(view)
+    assert "every list above is COMPLETE" not in text
+    assert "pkg.cache" in text
+    assert "INCOMPLETE" in text
+
+
+def test_module_view_of_an_unparsed_module_names_the_skip_not_lookuperror(tmp_path: Path):
+    project = _project(tmp_path, {"cache.py": "def broken(\n"})
+    view = compute_module_view(project, "pkg.cache")
+    dumped = view.model_dump()
+    assert dumped["census_complete"] is False
+    assert dumped["module"] == "pkg.cache"
+    assert "could not be parsed" in dumped["status"]
+    assert dumped["unparsed_modules"][0]["module"] == "pkg.cache"
+    assert list(dumped["classes"]) == []
+
+
+def test_conventions_report_lists_unparsed_modules(tmp_path: Path):
+    project = _project(tmp_path, {"good.py": "class APayload: pass\n", "bad.py": "def (\n"})
+    report = compute_conventions(project)
+    dumped = report.model_dump()
+    assert dumped["modules_unparsed"] == 1
+    assert [u["module"] for u in dumped["unparsed_modules"]] == ["pkg.bad"]
+    text = _conventions_to_text(report, top_n=8)
+    assert "pkg.bad" in text
