@@ -36,6 +36,8 @@ archy:owns        ModuleHeader, apply_header, compute_headers, existing_block,
 from __future__ import annotations
 
 import ast
+import io
+import tokenize
 from collections.abc import Iterable
 from pathlib import Path
 
@@ -153,7 +155,17 @@ def compute_headers(
         path = paths.get(module)
         if path is None or not path.is_file():
             continue
-        source = path.read_text(encoding="utf-8", errors="replace")
+        raw = path.read_bytes()
+        try:
+            encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
+        except (SyntaxError, ValueError):
+            encoding = "utf-8"  # broken cookie: keep the tolerant read below (#649)
+        try:
+            source = raw.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            # Bytes that do not match their cookie still get a header, via the
+            # tolerant decode this read site has always used (#649).
+            source = raw.decode("utf-8", errors="replace")
         headers.append(
             ModuleHeader(
                 module=module,

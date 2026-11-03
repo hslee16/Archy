@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from archy.parser import parse_source
+from pathlib import Path
+
+import pytest
+
+from archy.parser import parse_file, parse_source
 
 
 def test_extracts_simple_import():
@@ -173,3 +177,37 @@ def test_calls_inside_function_body_are_extracted():
     result = parse_source(src)
     heads = sorted({(c.head, c.chain) for c in result.calls})
     assert heads == [("helper", ("done",)), ("helper", ("run",))]
+
+
+def test_parse_file_honours_a_latin1_cookie(tmp_path: Path):
+    """PEP 263: the cookie names the codec, so the file parses instead of
+    reaching tree-sitter as bytes a UTF-8 grammar cannot read (#649)."""
+    src = '# -*- coding: latin-1 -*-\nGREETING = "Ol\xe1, caf\xe9"\nimport os\n'
+    path = tmp_path / "legacy.py"
+    path.write_bytes(src.encode("latin-1"))
+    with pytest.raises(UnicodeDecodeError):
+        path.read_bytes().decode("utf-8")  # the fixture must exercise the bug
+    result = parse_file(path)
+    assert not result.has_errors
+    assert [(r.module, r.is_relative) for r in result.imports] == [("os", False)]
+
+
+def test_parse_file_honours_a_shift_jis_cookie_whose_text_holds_0x5c(tmp_path: Path):
+    """The last byte of 能 is 0x5C in Shift-JIS; to a UTF-8 grammar that byte is
+    a backslash escaping the closing quote, so the string never ends (#649)."""
+    src = "# -*- coding: shift_jis -*-\nLABEL = '機能'\nfrom pkg import b\n"
+    path = tmp_path / "a.py"
+    path.write_bytes(src.encode("shift_jis"))
+    assert b"\x5c'" in path.read_bytes()  # the raw damage the fix exists for
+    result = parse_file(path)
+    assert not result.has_errors
+    assert [(r.module, r.imported_names) for r in result.imports] == [("pkg", ("b",))]
+
+
+def test_parse_file_survives_a_cookie_naming_an_unknown_codec(tmp_path: Path):
+    """A broken cookie is one unparseable file among the whole tree a scan
+    walks, so parse_file degrades to the raw bytes instead of raising (#649)."""
+    path = tmp_path / "bad.py"
+    path.write_bytes(b"# -*- coding: no-such-codec -*-\nimport os\n")
+    result = parse_file(path)
+    assert [(r.module, r.is_relative) for r in result.imports] == [("os", False)]

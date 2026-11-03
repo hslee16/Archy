@@ -1102,3 +1102,23 @@ def test_conventions_report_lists_unparsed_modules(tmp_path: Path):
     assert [u["module"] for u in dumped["unparsed_modules"]] == ["pkg.bad"]
     text = _conventions_to_text(report, top_n=8)
     assert "pkg.bad" in text
+
+
+def test_module_view_sees_an_importer_hidden_behind_a_latin1_cookie(tmp_path: Path):
+    """A Latin-1 module with a coding cookie died in read_text as a
+    UnicodeDecodeError and silently vanished from a COMPLETE "imported by"
+    answer, which is exactly the answer an agent acts on (#649)."""
+    root = tmp_path
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    legacy = (
+        '# -*- coding: latin-1 -*-\nGREETING = "Ol\xe1, caf\xe9"\nfrom pkg.store import Store\n'
+    )
+    legacy_path = pkg / "legacy.py"
+    legacy_path.write_bytes(legacy.encode("latin-1"))
+    with pytest.raises(UnicodeDecodeError):
+        legacy_path.read_bytes().decode("utf-8")  # the fixture must exercise the bug
+    (pkg / "store.py").write_text("class Store:\n    pass\n")
+    view = compute_module_view(root, "pkg.store")
+    assert view.imported_by == ("pkg.legacy",)
