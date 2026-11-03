@@ -58,6 +58,10 @@ NETWORK_MODULES = frozenset(
 # The only modules allowed to run a subprocess, and the only program they run.
 SUBPROCESS_MODULES = frozenset({"coupling.py", "gitlog.py", "hotspots.py", "history.py"})
 GIT_SUBCOMMANDS = frozenset({"rev-parse", "log"})
+# Flags/operands after the subcommand. A write flag such as --output= must not
+# survive: docs/SAFETY.md says rev-parse and log only read history.
+GIT_REV_PARSE_ARGS = frozenset({"HEAD", "--abbrev-ref", "--show-toplevel"})
+GIT_LOG_ARGS = frozenset({"-M", "--name-status", "--format=", "--format=%H"})
 
 
 def _snapshot(root: Path) -> dict[str, str]:
@@ -276,6 +280,12 @@ def test_runtime_subprocesses_are_read_only_git(sandbox, monkeypatch):
         assert argv[0] == "git", argv
         assert argv[1] == "-C", argv
         assert argv[3] in GIT_SUBCOMMANDS, argv
+        rest = argv[4:]
+        if argv[3] == "rev-parse":
+            bad = [a for a in rest if a not in GIT_REV_PARSE_ARGS]
+        else:
+            bad = [a for a in rest if a not in GIT_LOG_ARGS and not a.startswith("--since=")]
+        assert bad == [], argv
     assert {argv[3] for argv in recorded} == GIT_SUBCOMMANDS
 
 
