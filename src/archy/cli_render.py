@@ -1358,7 +1358,19 @@ def _module_view_to_text(view: ModuleView) -> str:
     if view.gates:
         lines.append("  exits")
         lines += [_gate_row(g) for g in view.gates]
-    lines.append("  🔴 every list above is COMPLETE for this module; absence is an answer")
+    if view.census_complete:
+        lines.append("  🔴 every list above is COMPLETE for this module; absence is an answer")
+    else:
+        skipped = view.unparsed_modules
+        detail = (
+            "; ".join(f"{u.module} ({u.path}): {u.reason} [Python {u.python}]" for u in skipped)
+            or "(unparsed modules not listed)"
+        )
+        lines.append(
+            "  ⚠ lists may be INCOMPLETE: "
+            f"{len(skipped)} module(s) could not be parsed under this Python "
+            f"and were skipped — {detail}"
+        )
     return "\n".join(lines)
 
 
@@ -1383,7 +1395,13 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     m = report.models
     lines = [
         f"# {report.root}: {report.modules_scanned} module(s) parsed"
-        + (f", {report.modules_unparsed} unparsed" if report.modules_unparsed else "")
+        + (
+            f", {report.modules_unparsed} unparsed ("
+            + ", ".join(u.module for u in report.unparsed_modules)
+            + ")"
+            if report.modules_unparsed
+            else ""
+        )
         + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else ""),
         *(
             [
