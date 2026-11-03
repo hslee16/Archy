@@ -1368,8 +1368,8 @@ def _module_view_to_text(view: ModuleView) -> str:
         )
         lines.append(
             "  ⚠ lists may be INCOMPLETE: "
-            f"{len(skipped)} module(s) could not be parsed under this Python "
-            f"and were skipped — {detail}"
+            f"{len(skipped)} module(s) could not be parsed and were skipped: "
+            f"{detail}"
         )
     return "\n".join(lines)
 

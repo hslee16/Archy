@@ -1066,11 +1066,11 @@ def test_module_view_drops_complete_claim_when_an_importer_is_unparsed(tmp_path:
         {
             "store.py": "class Store: pass\n",
             "cli.py": "from pkg.store import Store\n",
-            "cache.py": "def broken(\n",
+            # Final content: imports store so a successful parse would list it,
+            # then a SyntaxError so this interpreter skips the module (#666).
+            "cache.py": "from pkg.store import Store\n\ndef broken(\n",
         },
     )
-    # Make cache also import store so a successful parse would list it.
-    (project / "pkg" / "cache.py").write_text("from pkg.store import Store\n\ndef broken(\n")
     view = compute_module_view(project, "pkg.store")
     dumped = view.model_dump()
     assert dumped["census_complete"] is False
@@ -1089,7 +1089,7 @@ def test_module_view_of_an_unparsed_module_names_the_skip_not_lookuperror(tmp_pa
     dumped = view.model_dump()
     assert dumped["census_complete"] is False
     assert dumped["module"] == "pkg.cache"
-    assert "unparsed" in dumped["status"]
+    assert "could not be parsed" in dumped["status"]
     assert dumped["unparsed_modules"][0]["module"] == "pkg.cache"
     assert list(dumped["classes"]) == []
 

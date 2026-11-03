@@ -414,7 +414,7 @@ class ModuleView(BaseModel):
 
     So every list here is COMPLETE for the module named when
     ``census_complete`` is true, and truncating any of them would defeat the
-    point. When some modules could not be parsed under this interpreter,
+    point. When some modules could not be parsed,
     ``census_complete`` is false and ``unparsed_modules`` names each skip so
     absence from `imported_by` is not mistaken for a negative (#666). `status`
     matters for the same reason: a module that was set aside must say so, or
@@ -771,16 +771,6 @@ def _unparsed_reason(exc: BaseException) -> str:
         msg = exc.msg or str(exc)
         return f"{type(exc).__name__}: {msg}{where}"
     return f"{type(exc).__name__}: {exc}"
-
-
-def _try_collect(module: Module) -> _ModuleFacts | None:
-    """Parse and census one module, or None when it cannot be read.
-
-    Prefer `_try_collect_detailed` when the caller must name the failure; this
-    thin wrapper keeps older call sites that only need the facts-or-skip shape.
-    """
-    facts, _skipped = _try_collect_detailed(module)
-    return facts
 
 
 def _try_collect_detailed(
@@ -1332,7 +1322,7 @@ def _surface_families(
         for source, name in f.internal_imports:
             candidates = defined_in.get(name)
             if not candidates:
-                continue  # not a symbol this project defines
+                continue
             if source in candidates:
                 home = source
             elif len(candidates) == 1:
@@ -1723,7 +1713,7 @@ def compute_module_view(
             # is unknown (#666).
             return ModuleView(
                 module=module,
-                status=(f"unparsed under Python {miss.python}: {miss.reason} ({miss.path})"),
+                status=(f"could not be parsed (Python {miss.python}): {miss.reason} ({miss.path})"),
                 classes=(),
                 functions=(),
                 imports_internal=(),
