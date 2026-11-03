@@ -521,12 +521,13 @@ def _register_tools(server: Server) -> None:
             "archy.yaml edges - nested under the `contracts` field; a failed "
             "contract means an indirect import path violates the architecture, so "
             "restructure rather than weaken the rule. That path reads .importlinter "
-            "(or pyproject.toml, override with `contracts_config_path`) and needs "
+            "(or pyproject.toml, override with `contracts_config_path`, relative to `path`) "
+            "and needs "
             "`pip install archy[contracts]`; if the extra is absent, `contracts` "
             "comes back with `available=false` and an advisory rather than "
             "raising (replaces the removed archy_contracts tool). If no archy.yaml "
             "is found, returns an in-band CheckErrorPayload (an `error` field, not "
-            "a raised error) so you can create one or pass `config_path`, and "
+            "a raised error) so you can create one or pass `config_path` (relative to `path`), and "
             "contracts are not run in that case; a malformed archy.yaml instead "
             "raises (it cannot be checked against)."
         ),
@@ -538,11 +539,18 @@ def _register_tools(server: Server) -> None:
         contracts_config_path: str | None = None,
     ) -> CheckPayload | CheckErrorPayload:
         root = _project_dir(path)
-        result = _run_check(root, config_path=Path(config_path) if config_path else None)
+        result = _run_check(
+            root,
+            config_path=_resolve_against(root, [Path(config_path)])[0] if config_path else None,
+        )
         if contracts and isinstance(result, CheckPayload):
             payload = _run_contracts(
                 root,
-                config_filename=(Path(contracts_config_path) if contracts_config_path else None),
+                config_filename=(
+                    _resolve_against(root, [Path(contracts_config_path)])[0]
+                    if contracts_config_path
+                    else None
+                ),
             )
             # Only a verdict counts as "checked". Requesting contracts and having
             # import-linter turn out to be missing leaves the rules exactly as
@@ -835,7 +843,7 @@ def _register_tools(server: Server) -> None:
             "`group_by='layer'` for layer-violation forensics, or "
             "`group_by='topological'` to localize back-edges. Narrow large "
             "projects with `focus` (qualname + focus_depth-hop neighborhood) or "
-            "`package` (qualname prefix). When `baseline_path` is provided, "
+            "`package` (qualname prefix). When `baseline_path` (relative to `path`) is provided, "
             "returns a DSMDiff regardless of response_format (`new_back_edges` "
             "flags cycles the edit just introduced)."
         ),
@@ -1775,7 +1783,7 @@ def _run_dsm(
     )
     if baseline_path is not None:
         try:
-            before = read_dsm(Path(baseline_path))
+            before = read_dsm(_resolve_against(path, [Path(baseline_path)])[0])
         except ValueError as exc:
             return DSMErrorPayload(error=str(exc))
         if before is None:

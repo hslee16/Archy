@@ -709,6 +709,113 @@ def test_dsm_bad_baseline_returns_error_on_the_wire(acyclic_project: Path, tmp_p
     }
 
 
+@pytest.mark.parametrize("relative", [True, False], ids=["relative", "absolute"])
+def test_dsm_baseline_path_is_relative_to_project(
+    acyclic_project: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    relative: bool,
+):
+    from archy.dsm import build_dsm, write_dsm
+
+    baseline = acyclic_project / "dsm.json"
+    write_dsm(build_dsm(build_graph(acyclic_project)), baseline)
+    monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+    assert baseline.is_file()
+    assert not Path(baseline.name).exists()
+
+    _content, wire = _call_tool(
+        create_server(),
+        "archy_dsm",
+        {
+            "path": str(acyclic_project),
+            "baseline_path": baseline.name if relative else str(baseline),
+        },
+    )
+
+    assert isinstance(wire, dict)
+    result = wire["result"]
+    assert "error" not in result
+    assert result["nodes_added"] == []
+    assert result["nodes_removed"] == []
+    assert result["added"] == []
+    assert result["removed"] == []
+    assert result["new_back_edges"] == []
+
+
+@pytest.mark.parametrize("relative", [True, False], ids=["relative", "absolute"])
+def test_check_config_path_is_relative_to_project(
+    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    relative: bool,
+):
+    _myapp_core_cli(tmp_path, api="from myapp.cli import runner\n")
+    _write_core_cli_forbid_config(tmp_path)
+    config = tmp_path / "rules.yaml"
+    (tmp_path / "archy.yaml").rename(config)
+    monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+    assert config.is_file()
+    assert not Path(config.name).exists()
+
+    _content, wire = _call_tool(
+        create_server(),
+        "archy_check",
+        {"path": str(tmp_path), "config_path": config.name if relative else str(config)},
+    )
+
+    assert isinstance(wire, dict)
+    result = wire["result"]
+    assert result["config_path"] == str(config)
+    assert result["passed"] is False
+    assert [(v["source"], v["target"]) for v in result["violations"]] == [
+        ("myapp.core.api", "myapp.cli.runner")
+    ]
+
+
+@pytest.mark.parametrize("relative", [True, False], ids=["relative", "absolute"])
+def test_check_contracts_config_path_is_relative_to_project(
+    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    relative: bool,
+):
+    _myapp_core_cli(tmp_path, api="from myapp.cli import runner\n")
+    _write_core_cli_forbid_config(tmp_path)
+    config = tmp_path / "contracts.ini"
+    config.write_text(
+        "[importlinter]\n"
+        "root_package = myapp\n"
+        "[importlinter:contract:core-must-not-reach-cli]\n"
+        "name = core must not reach cli\n"
+        "type = forbidden\n"
+        "source_modules = myapp.core.api\n"
+        "forbidden_modules = myapp.cli.runner\n"
+    )
+    monkeypatch.chdir(tmp_path_factory.mktemp("elsewhere"))
+    assert config.is_file()
+    assert not Path(config.name).exists()
+
+    _content, wire = _call_tool(
+        create_server(),
+        "archy_check",
+        {
+            "path": str(tmp_path),
+            "contracts": True,
+            "contracts_config_path": config.name if relative else str(config),
+        },
+    )
+
+    assert isinstance(wire, dict)
+    result = wire["result"]
+    assert result["transitive_checked"] is True
+    contracts = result["contracts"]
+    assert contracts["error"] is None
+    assert contracts["all_kept"] is False
+    assert contracts["broken"] == 1
+    assert contracts["contracts"][0]["name"] == "core must not reach cli"
+
+
 def test_dsm_directory_baseline_returns_error_on_the_wire(acyclic_project: Path, tmp_path: Path):
     baseline = tmp_path / "subdir"
     baseline.mkdir()
