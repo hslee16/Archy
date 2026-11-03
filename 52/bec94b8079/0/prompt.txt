@@ -1,0 +1,10 @@
+does it make sense to include the follwoing into the repo?
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+    reports/
+    research_notes/
+
+---
+
+if not, add them to gitignore
