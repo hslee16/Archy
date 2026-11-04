@@ -12,8 +12,10 @@ archy:gates       exit 1 (config:result.strict), exit 1 (flag:--strict),
 from __future__ import annotations
 
 import difflib
+import functools
 import json
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -161,6 +163,26 @@ def _require(ok: bool, flag: str, constraint: str, value: object) -> None:
         raise click.ClickException(f"--{flag} must be {constraint}; got {value}")
 
 
+def _layer_config_errors(command: Callable[..., None]) -> Callable[..., None]:
+    """Print a match-time LayerConfigError as the one-line CLI error (#750).
+
+    `match_layer` raises while the graph is being read, not while the config is
+    parsed, so the parse-time guards from #524 never see it: `check` reaches it
+    through `compute_coverage`, `snapshot` and `simulate` through their snapshot
+    helpers. Wrapping the command keeps a new match-time call site from
+    reintroducing the traceback.
+    """
+
+    @functools.wraps(command)
+    def wrapper(*args: object, **kwargs: object) -> None:
+        try:
+            command(*args, **kwargs)
+        except LayerConfigError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+    return wrapper
+
+
 @main.command()
 @click.argument(
     "path",
@@ -287,6 +309,7 @@ def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: boo
     help="Explicit .importlinter path for --contracts (default: discovered, else derived "
     "from archy.yaml `forbid:`).",
 )
+@_layer_config_errors
 def check(
     path: Path,
     config_path: Path | None,
@@ -1061,6 +1084,7 @@ def what_to_refactor_next(
         "`diff --strict` baseline."
     ),
 )
+@_layer_config_errors
 def snapshot(path: Path, out_path: Path | None, findings_only: bool) -> None:
     """Capture score, cycles, and layer violations as a baseline for `archy diff`."""
     g, full = _load_graph_pair(path)
@@ -1211,6 +1235,7 @@ def _parse_edge_spec(spec: str) -> tuple[str, str]:
     default="text",
     help="Output format.",
 )
+@_layer_config_errors
 def simulate(
     path: Path, add_specs: tuple[str, ...], remove_specs: tuple[str, ...], fmt: str
 ) -> None:

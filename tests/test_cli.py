@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 import pytest
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 
 from archy.affected import DELETED_OR_RENAMED_REASON
 from archy.cli import (
@@ -32,7 +32,7 @@ from archy.diff import (
 )
 from archy.duplicates import DuplicateGroup, DuplicateMember
 from archy.hotspots import Hotspot
-from archy.layers import ReachViolation, RequiredRule
+from archy.layers import LayerConfigError, ReachViolation, RequiredRule, load_config, match_layer
 from archy.simulate import AppliedDelta, PropagationDelta, SimulateReport
 
 
@@ -2972,3 +2972,69 @@ def test_what_to_refactor_next_names_missing_commit_history(tmp_path: Path):
     assert result.exit_code == 0, result.output
     assert "not a git repo" not in result.output.lower()
     assert "commits" in result.output
+
+
+# --- match-time layer config errors (#750) -----------------------------------
+
+
+def _make_overlapping_layers_project(tmp_path: Path, *, with_edge: bool) -> Path:
+    """`pkg.core.x` matches both `core` and `special`; `with_edge` puts it on an edge.
+
+    Two shapes are needed because they reach different call sites: with an edge
+    the overlap surfaces inside `find_violations`, without one only through
+    `compute_coverage`.
+    """
+    pkg = tmp_path / "pkg"
+    core = pkg / "core"
+    core.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (core / "__init__.py").write_text("")
+    (core / "x.py").write_text("import os\n" if with_edge else "X = 1\n")
+    (pkg / "a.py").write_text("from pkg.core import x\n" if with_edge else "X = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        'layers:\n  core:\n    modules: ["pkg.core.**"]\n  special:\n    modules: ["pkg.core.x"]\n'
+    )
+    return tmp_path
+
+
+def _assert_one_line_overlap_error(result: Result) -> None:
+    assert result.exit_code == 1, result.output
+    assert "Traceback" not in result.output
+    assert "matches multiple layers" in result.output
+    assert "pkg.core.x" in result.output
+    assert "core, special" in result.output
+
+
+def test_check_reports_a_match_time_layer_error_without_a_traceback(tmp_path: Path) -> None:
+    project = _make_overlapping_layers_project(tmp_path, with_edge=False)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+
+    result = CliRunner().invoke(main, ["check", str(project)])
+
+    _assert_one_line_overlap_error(result)
+
+
+def test_snapshot_reports_a_match_time_layer_error_without_a_traceback(tmp_path: Path) -> None:
+    project = _make_overlapping_layers_project(tmp_path, with_edge=True)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+    out = tmp_path / "snap.json"
+
+    result = CliRunner().invoke(main, ["snapshot", str(project), "--out", str(out)])
+
+    _assert_one_line_overlap_error(result)
+    assert not out.exists()
+
+
+def test_simulate_reports_a_match_time_layer_error_without_a_traceback(tmp_path: Path) -> None:
+    project = _make_overlapping_layers_project(tmp_path, with_edge=True)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+
+    result = CliRunner().invoke(main, ["simulate", str(project), "--add", "pkg.core.x:pkg.a"])
+
+    _assert_one_line_overlap_error(result)
