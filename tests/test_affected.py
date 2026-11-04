@@ -305,6 +305,12 @@ def test_compile_glob_filename_pattern():
     assert not p.fullmatch("foo_test.py")
 
 
+def test_compile_glob_question_mark_does_not_cross_separators():
+    p = _compile_glob("tests?test_a.py")
+    assert p.fullmatch("tests_test_a.py")  # one ordinary character matches
+    assert not p.fullmatch("tests/test_a.py")  # but never a separator
+
+
 def test_compile_glob_escapes_regex_metachars():
     p = _compile_glob("file.with.dots.py")
     assert p.fullmatch("file.with.dots.py")
