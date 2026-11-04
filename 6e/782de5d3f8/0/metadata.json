@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6e782de5d3f8",
+  "session_id": "0eca6450-993d-48e5-945c-017d2e0f02fc",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-04T01:17:16.505546Z",
+  "branch": "alee/395-fold-set-diffs",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/archy/diff.py",
+    "tests/test_diff.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "cf6821e09351",
+  "token_usage": {
+    "input_tokens": 34,
+    "cache_creation_tokens": 50504,
+    "cache_read_tokens": 1106867,
+    "output_tokens": 8630,
+    "api_call_count": 17
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-04T01:17:16.487327Z",
+    "agent_lines": 85,
+    "agent_removed": 32,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 85,
+    "total_lines_changed": 117,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
