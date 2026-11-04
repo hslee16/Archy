@@ -29,7 +29,9 @@ from __future__ import annotations
 
 import difflib
 from collections.abc import Iterable, Iterator
+from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
@@ -40,6 +42,13 @@ from archy.instability import compute_instability
 from archy.parser import CallRef, ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
+
+# Longest first so `.cpython-312-….so` wins over bare `.so`.
+_EXTENSION_SUFFIXES_BY_LENGTH = cast(
+    tuple[str, ...],
+    tuple(sorted((str(suffix) for suffix in EXTENSION_SUFFIXES), key=len, reverse=True)),
+)
+_EMPTY_PARSE = ParseResult(imports=(), has_errors=False)
 
 # Names the scan never enters, whatever they hold: version-control and tool
 # bookkeeping that never carry first-party source.
@@ -183,6 +192,11 @@ def parse_project(
         raise ScanTooLargeError(len(modules), root, max_modules)
     parse_results: dict[str, ParseResult] = {}
     for m in modules:
+        if _is_extension_or_stub_leaf(m.path):
+            # Compiled extensions are not Python source; stub-only leaves are
+            # recorded so imports resolve, with no import graph of their own (#665).
+            parse_results[m.qualname] = _EMPTY_PARSE
+            continue
         try:
             parse_results[m.qualname] = parse_file(m.path)
         except OSError:
@@ -533,9 +547,15 @@ def _discover_modules(
     Package roots are directories containing __init__.py whose parent
     directory does NOT contain one. The conventional `src/<pkg>/__init__.py`
     layout is supported because `src` itself is not a package.
+
+    Compiled extension modules (``*.so`` / ``*.pyd`` via
+    ``importlib.machinery.EXTENSION_SUFFIXES``) and ``*.pyi`` stubs with no
+    ``.py`` twin are recorded as internal leaf modules so imports of them
+    resolve to the leaf rather than collapsing onto the package (#665).
     """
     package_roots = _find_package_roots(root, ignored, extra_roots)
     modules: list[Module] = []
+    seen: set[str] = set()
 
     for py_file in _iter_python_files(root, ignored):
         qualname = _qualname_for(py_file, package_roots)
@@ -549,9 +569,119 @@ def _discover_modules(
                 is_package=py_file.name == "__init__.py",
             )
         )
+        seen.add(qualname)
+
+    for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored):
+        qualname = _qualname_for_stem(leaf_path, stem, package_roots)
+        if qualname is None or qualname in seen:
+            continue
+        modules.append(
+            Module(
+                qualname=qualname,
+                path=leaf_path.resolve(),
+                is_package=False,
+            )
+        )
+        seen.add(qualname)
 
     modules.sort(key=lambda m: m.qualname)
     return modules
+
+
+def _extension_module_stem(filename: str) -> str | None:
+    """Return the importable module stem for a compiled-extension filename."""
+    for suffix in _EXTENSION_SUFFIXES_BY_LENGTH:
+        if filename.endswith(suffix):
+            return filename[: -len(suffix)]
+    # EXTENSION_SUFFIXES is host-local; bare .pyd covers a Windows-built tree
+    # scanned on POSIX (and vice versa for non-host tagged .so via the glob).
+    if filename.endswith(".pyd"):
+        return filename[:-4]
+    return None
+
+
+def _iter_extension_and_stub_leaves(
+    root: Path,
+    ignored: frozenset[str],
+) -> list[tuple[Path, str]]:
+    """Paths that define an internal leaf with no ``.py`` twin.
+
+    Extension binaries win over a sibling ``.pyi`` for the same stem so the
+    module is recorded once. A ``.pyi`` whose ``.py`` twin exists is skipped
+    here; discovery of the ``.py`` already owns that qualname.
+    """
+    chosen: dict[tuple[Path, str], Path] = {}
+    for path in sorted(root.rglob("*.pyi")):
+        if is_ignored_path(path, ignored, root):
+            continue
+        if path.with_suffix(".py").is_file():
+            continue
+        stem = path.name[:-4]
+        # Skip __init__.pyi: mapping it as a leaf would invent pkg.sub.__init__
+        # (unlike _qualname_for, which drops a trailing __init__). Package roots
+        # still need an __init__.py, so this edge case is rare but misleading.
+        if stem == "__init__":
+            continue
+        chosen.setdefault((path.parent.resolve(), stem), path)
+    # WHY: EXTENSION_SUFFIXES lists only this host's tags, so a Windows .pyd
+    # (or non-host .so) would be missed on POSIX without these broad globs.
+    for pattern in ("*.so", "*.pyd"):
+        for path in sorted(root.rglob(pattern)):
+            if is_ignored_path(path, ignored, root):
+                continue
+            stem = _extension_module_stem(path.name)
+            if stem is None:
+                continue
+            chosen[(path.parent.resolve(), stem)] = path
+    return sorted(
+        ((path, stem) for (_parent, stem), path in chosen.items()),
+        key=lambda item: (item[0].as_posix(), item[1]),
+    )
+
+
+def _qualname_under_roots(
+    path: Path,
+    leaf_parts: list[str],
+    package_roots: list[Path],
+) -> str | None:
+    """Owners-first dotted name for ``path`` with precomputed leaf parts.
+
+    A root that contains the file names it. Without this, a repo-root
+    package (benchmarks/, examples/) that sorts before src/mypkg captures
+    src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
+    (#516). Files under no root (init-less tests/, top-level scripts) still
+    fall back to the first root whose parent holds them.
+    """
+    abs_path = path.resolve()
+    owners = [r for r in package_roots if abs_path.is_relative_to(r)]
+    for pkg_root in owners or package_roots:
+        try:
+            rel_parent = abs_path.parent.relative_to(pkg_root.parent)
+        except ValueError:
+            continue
+        # leaf_parts already carries the module stem (or is empty for
+        # __init__.py → package), so a bare `".".join` is enough; the old
+        # `else pkg_root.name` branch was dead when a stem was present.
+        parts = [*rel_parent.parts, *leaf_parts]
+        return ".".join(parts) if parts else pkg_root.name
+    return None
+
+
+def _qualname_for_stem(
+    path: Path,
+    stem: str,
+    package_roots: list[Path],
+) -> str | None:
+    """Dotted qualname for an extension/stub leaf using an explicit module stem."""
+    return _qualname_under_roots(path, [stem], package_roots)
+
+
+def _is_extension_or_stub_leaf(path: Path) -> bool:
+    """True when ``path`` is a discovered binary/stub leaf (empty parse)."""
+    name = path.name
+    if name.endswith(".pyi"):
+        return True
+    return _extension_module_stem(name) is not None
 
 
 def _find_package_roots(
@@ -628,23 +758,10 @@ def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
 
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
-    abs_path = py_file.resolve()
-    # A root that contains the file names it. Without this, a repo-root
-    # package (benchmarks/, examples/) that sorts before src/mypkg captures
-    # src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
-    # (#516). Files under no root (init-less tests/, top-level scripts) still
-    # fall back to the first root whose parent holds them.
-    owners = [r for r in package_roots if abs_path.is_relative_to(r)]
-    for pkg_root in owners or package_roots:
-        try:
-            rel = abs_path.relative_to(pkg_root.parent)
-        except ValueError:
-            continue
-        parts = list(rel.with_suffix("").parts)
-        if parts[-1] == "__init__":
-            parts.pop()
-        return ".".join(parts) if parts else pkg_root.name
-    return None
+    """Dotted qualname for a ``.py`` file; delegates to ``_qualname_under_roots``."""
+    # __init__.py names the package (empty leaf); other files contribute stem.
+    leaf: list[str] = [] if py_file.name == "__init__.py" else [py_file.stem]
+    return _qualname_under_roots(py_file, leaf, package_roots)
 
 
 def _resolve_targets(
