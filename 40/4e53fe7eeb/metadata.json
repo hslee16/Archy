@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "404e53fe7eeb",
+  "strategy": "manual-commit",
+  "branch": "alee/395-mcp-runs",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "AGENTS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/40/4e53fe7eeb/0/metadata.json",
+      "transcript": "/40/4e53fe7eeb/0/full.jsonl",
+      "content_hash": "/40/4e53fe7eeb/0/content_hash.txt",
+      "prompt": "/40/4e53fe7eeb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 302,
+    "cache_creation_tokens": 362323,
+    "cache_read_tokens": 14446121,
+    "output_tokens": 48738,
+    "api_call_count": 113
+  }
+}
