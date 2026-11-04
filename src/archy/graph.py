@@ -593,6 +593,8 @@ def _extension_module_stem(filename: str) -> str | None:
     for suffix in _EXTENSION_SUFFIXES_BY_LENGTH:
         if filename.endswith(suffix):
             return filename[: -len(suffix)]
+    # EXTENSION_SUFFIXES is host-local; bare .pyd covers a Windows-built tree
+    # scanned on POSIX (and vice versa for non-host tagged .so via the glob).
     if filename.endswith(".pyd"):
         return filename[:-4]
     return None
@@ -615,7 +617,14 @@ def _iter_extension_and_stub_leaves(
         if path.with_suffix(".py").is_file():
             continue
         stem = path.name[:-4]
+        # Skip __init__.pyi: mapping it as a leaf would invent pkg.sub.__init__
+        # (unlike _qualname_for, which drops a trailing __init__). Package roots
+        # still need an __init__.py, so this edge case is rare but misleading.
+        if stem == "__init__":
+            continue
         chosen.setdefault((path.parent.resolve(), stem), path)
+    # WHY: EXTENSION_SUFFIXES lists only this host's tags, so a Windows .pyd
+    # (or non-host .so) would be missed on POSIX without these broad globs.
     for pattern in ("*.so", "*.pyd"):
         for path in sorted(root.rglob(pattern)):
             if is_ignored_path(path, ignored, root):
@@ -630,12 +639,19 @@ def _iter_extension_and_stub_leaves(
     )
 
 
-def _qualname_for_stem(
+def _qualname_under_roots(
     path: Path,
-    stem: str,
+    leaf_parts: list[str],
     package_roots: list[Path],
 ) -> str | None:
-    """Dotted qualname for an extension/stub leaf using an explicit module stem."""
+    """Owners-first dotted name for ``path`` with precomputed leaf parts.
+
+    A root that contains the file names it. Without this, a repo-root
+    package (benchmarks/, examples/) that sorts before src/mypkg captures
+    src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
+    (#516). Files under no root (init-less tests/, top-level scripts) still
+    fall back to the first root whose parent holds them.
+    """
     abs_path = path.resolve()
     owners = [r for r in package_roots if abs_path.is_relative_to(r)]
     for pkg_root in owners or package_roots:
@@ -643,9 +659,21 @@ def _qualname_for_stem(
             rel_parent = abs_path.parent.relative_to(pkg_root.parent)
         except ValueError:
             continue
-        parts = [*rel_parent.parts, stem]
+        # leaf_parts already carries the module stem (or is empty for
+        # __init__.py → package), so a bare `".".join` is enough; the old
+        # `else pkg_root.name` branch was dead when a stem was present.
+        parts = [*rel_parent.parts, *leaf_parts]
         return ".".join(parts) if parts else pkg_root.name
     return None
+
+
+def _qualname_for_stem(
+    path: Path,
+    stem: str,
+    package_roots: list[Path],
+) -> str | None:
+    """Dotted qualname for an extension/stub leaf using an explicit module stem."""
+    return _qualname_under_roots(path, [stem], package_roots)
 
 
 def _is_extension_or_stub_leaf(path: Path) -> bool:
@@ -730,23 +758,10 @@ def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
 
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
-    abs_path = py_file.resolve()
-    # A root that contains the file names it. Without this, a repo-root
-    # package (benchmarks/, examples/) that sorts before src/mypkg captures
-    # src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
-    # (#516). Files under no root (init-less tests/, top-level scripts) still
-    # fall back to the first root whose parent holds them.
-    owners = [r for r in package_roots if abs_path.is_relative_to(r)]
-    for pkg_root in owners or package_roots:
-        try:
-            rel = abs_path.relative_to(pkg_root.parent)
-        except ValueError:
-            continue
-        parts = list(rel.with_suffix("").parts)
-        if parts[-1] == "__init__":
-            parts.pop()
-        return ".".join(parts) if parts else pkg_root.name
-    return None
+    """Dotted qualname for a ``.py`` file; delegates to ``_qualname_under_roots``."""
+    # __init__.py names the package (empty leaf); other files contribute stem.
+    leaf: list[str] = [] if py_file.name == "__init__.py" else [py_file.stem]
+    return _qualname_under_roots(py_file, leaf, package_roots)
 
 
 def _resolve_targets(

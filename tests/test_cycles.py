@@ -7,6 +7,7 @@ import pytest
 
 from archy.cycles import find_cycles
 from archy.graph import build_graph
+from archy.mcp_runs import run_cycles
 
 
 def _g(*edges: tuple[str, str, tuple[int, ...]]) -> nx.DiGraph:
@@ -240,8 +241,6 @@ def test_extension_module_with_pyi_is_not_a_false_cycle(tmp_path: Path, pkg: Pat
     assert "pkg._speedups" in g
     assert ("pkg.api", "pkg._speedups") in g.edges
     assert find_cycles(g) == []
-
-    from archy.mcp_runs import run_cycles
 
     assert [c.model_dump() for c in run_cycles(tmp_path, min_size=2, internal_only=True)] == []
 
