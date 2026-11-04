@@ -3,9 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from archy.diff import compute_diff, read_snapshot, take_snapshot, write_snapshot
+from archy.cycles import Cycle, CycleEdge
+from archy.diff import (
+    _cycle_set_diff,
+    _sdp_violation_set_diff,
+    compute_diff,
+    read_snapshot,
+    take_snapshot,
+    write_snapshot,
+)
 from archy.graph import build_graph
-from archy.layers import ReachViolation, RequiredRule
+from archy.layers import ReachViolation, RequiredRule, SdpViolation
 
 
 def _make_clean(tmp_path: Path) -> Path:
@@ -376,3 +384,42 @@ def test_create_baseline_command_quotes_paths_with_spaces(tmp_path: Path):
     command = create_baseline_command(Path("my proj"), Path("my proj/base.json"))
 
     assert command == "archy snapshot 'my proj' --findings-only --out 'my proj/base.json'"
+
+
+def _sdp(source: str, target: str, *, lines: tuple[int, ...] = (1,)) -> SdpViolation:
+    return SdpViolation(
+        source=source,
+        target=target,
+        source_instability=0.1,
+        target_instability=0.9,
+        lines=lines,
+    )
+
+
+def _cycle(*modules: str, lines: tuple[int, ...] = (1,)) -> Cycle:
+    edges = tuple(
+        CycleEdge(source=m, target=modules[(i + 1) % len(modules)], lines=lines)
+        for i, m in enumerate(modules)
+    )
+    return Cycle(modules=modules, edges=edges)
+
+
+def test_sdp_diff_identity_is_the_ordered_source_target_pair():
+    # Hand-worked: a->b is kept (same pair, different line numbers and
+    # instability are NOT a change); a->c is new; b->a is a DIFFERENT pair from
+    # a->b, so it is added rather than matched; a->d is gone.
+    baseline = (_sdp("a", "b", lines=(3,)), _sdp("a", "d"))
+    current = (_sdp("a", "b", lines=(9,)), _sdp("a", "c"), _sdp("b", "a"))
+    diff = _sdp_violation_set_diff(baseline, current)
+    assert {(v.source, v.target) for v in diff.added} == {("a", "c"), ("b", "a")}
+    assert {(v.source, v.target) for v in diff.resolved} == {("a", "d")}
+
+
+def test_cycle_diff_identity_is_the_module_set_not_the_rotation():
+    # The same three modules found starting from a different member is the same
+    # cycle; a different member set is a different cycle.
+    baseline = (_cycle("a", "b", "c"), _cycle("x", "y"))
+    current = (_cycle("b", "c", "a"), _cycle("p", "q"))
+    diff = _cycle_set_diff(baseline, current)
+    assert [set(c.modules) for c in diff.added] == [{"p", "q"}]
+    assert [set(c.modules) for c in diff.resolved] == [{"x", "y"}]
