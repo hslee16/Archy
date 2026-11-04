@@ -220,3 +220,40 @@ def test_real_cycle_through_a_shift_jis_module(tmp_path: Path, pkg: Path):
     g = build_graph(tmp_path)
     cycles = find_cycles(g)
     assert any(c.modules == ("pkg.a", "pkg.b") for c in cycles)
+
+
+def test_extension_module_with_pyi_is_not_a_false_cycle(tmp_path: Path, pkg: Path):
+    """#665: importing a compiled extension (+ .pyi stub) must not fake a cycle.
+
+    Discovery used to see only ``*.py``, so ``from ._speedups import fast``
+    collapsed onto the package and ``pkg <-> pkg.api`` looked like a cycle.
+    """
+    (pkg / "__init__.py").write_text("from .api import fast\n")
+    (pkg / "api.py").write_text("from ._speedups import fast\n")
+    (pkg / "_speedups.pyi").write_text("def fast() -> str: ...\n")
+    so_path = pkg / "_speedups.cpython-312-x86_64-linux-gnu.so"
+    so_path.write_bytes(b"\x00ELF")
+    assert so_path.is_file()
+    assert not (pkg / "_speedups.py").exists()
+
+    g = build_graph(tmp_path)
+    assert "pkg._speedups" in g
+    assert ("pkg.api", "pkg._speedups") in g.edges
+    assert find_cycles(g) == []
+
+    from archy.mcp_runs import run_cycles
+
+    assert [c.model_dump() for c in run_cycles(tmp_path, min_size=2, internal_only=True)] == []
+
+
+def test_pyi_only_stub_without_extension_is_an_internal_leaf(tmp_path: Path, pkg: Path):
+    """#665: a ``.pyi`` with no ``.py`` twin is still an internal leaf module."""
+    (pkg / "__init__.py").write_text("")
+    (pkg / "api.py").write_text("from ._types import Label\n")
+    (pkg / "_types.pyi").write_text("Label = str\n")
+    assert not (pkg / "_types.py").exists()
+
+    g = build_graph(tmp_path)
+    assert "pkg._types" in g
+    assert ("pkg.api", "pkg._types") in g.edges
+    assert find_cycles(g) == []
