@@ -37,7 +37,9 @@ from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Callable, Hashable
 from pathlib import Path
+from typing import TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -773,27 +775,42 @@ def score_delta(baseline: Score, current: Score) -> ScoreDelta:
     )
 
 
-def _cycle_set_diff(baseline: tuple[Cycle, ...], current: tuple[Cycle, ...]) -> CycleSetDiff:
-    baseline_keys = {frozenset(c.modules) for c in baseline}
-    current_keys = {frozenset(c.modules) for c in current}
-    return CycleSetDiff(
-        added=tuple(c for c in current if frozenset(c.modules) not in baseline_keys),
-        resolved=tuple(c for c in baseline if frozenset(c.modules) not in current_keys),
+_T = TypeVar("_T")
+
+
+def _added_resolved(
+    baseline: tuple[_T, ...],
+    current: tuple[_T, ...],
+    key: Callable[[_T], Hashable],
+    *,
+    resolvable: Callable[[_T], bool] = lambda _: True,
+) -> tuple[tuple[_T, ...], tuple[_T, ...]]:
+    """Split two snapshots into (added, resolved) by identity ``key``.
+
+    ``resolvable`` lets a caller veto a "resolved" row it cannot vouch for.
+    """
+    baseline_keys = {key(v) for v in baseline}
+    current_keys = {key(v) for v in current}
+    return (
+        tuple(v for v in current if key(v) not in baseline_keys),
+        tuple(v for v in baseline if key(v) not in current_keys and resolvable(v)),
     )
+
+
+def _cycle_set_diff(baseline: tuple[Cycle, ...], current: tuple[Cycle, ...]) -> CycleSetDiff:
+    added, resolved = _added_resolved(baseline, current, lambda c: frozenset(c.modules))
+    return CycleSetDiff(added=added, resolved=resolved)
 
 
 def _violation_set_diff(
     baseline: tuple[Violation, ...], current: tuple[Violation, ...]
 ) -> ViolationSetDiff:
-    def _key(v: Violation) -> tuple[str, str, str, str]:
-        return (v.rule.from_layer, v.rule.to_layer, v.source, v.target)
-
-    baseline_keys = {_key(v) for v in baseline}
-    current_keys = {_key(v) for v in current}
-    return ViolationSetDiff(
-        added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
+    added, resolved = _added_resolved(
+        baseline,
+        current,
+        lambda v: (v.rule.from_layer, v.rule.to_layer, v.source, v.target),
     )
+    return ViolationSetDiff(added=added, resolved=resolved)
 
 
 def _reach_violation_set_diff(
@@ -804,34 +821,23 @@ def _reach_violation_set_diff(
     def _key(v: ReachViolation) -> tuple[str, str, str, str]:
         return (v.rule.source, v.rule.within or "", v.rule.must_reach, v.module or "")
 
-    baseline_keys = {_key(v) for v in baseline}
-    current_keys = {_key(v) for v in current}
     # A rule that is dead NOW (one `module=None` row) evaluated no module, so
     # its baseline failures are unknown, not fixed. Reporting them as resolved
     # would tell the reader an unreadable pyproject.toml repaired the code. The
     # reverse needs no guard: a rule coming back to life reports its failures as
     # added, which over-reports and is the safe direction.
     dead_now = {_key(v)[:3] for v in current if v.module is None}
-    return ReachViolationSetDiff(
-        added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(
-            v for v in baseline if _key(v) not in current_keys and _key(v)[:3] not in dead_now
-        ),
+    added, resolved = _added_resolved(
+        baseline, current, _key, resolvable=lambda v: _key(v)[:3] not in dead_now
     )
+    return ReachViolationSetDiff(added=added, resolved=resolved)
 
 
 def _sdp_violation_set_diff(
     baseline: tuple[SdpViolation, ...], current: tuple[SdpViolation, ...]
 ) -> SdpViolationSetDiff:
-    def _key(v: SdpViolation) -> tuple[str, str]:
-        return (v.source, v.target)
-
-    baseline_keys = {_key(v) for v in baseline}
-    current_keys = {_key(v) for v in current}
-    return SdpViolationSetDiff(
-        added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
-    )
+    added, resolved = _added_resolved(baseline, current, lambda v: (v.source, v.target))
+    return SdpViolationSetDiff(added=added, resolved=resolved)
 
 
 def _expect_dict(value: object) -> dict[str, object]:
