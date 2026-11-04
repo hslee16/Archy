@@ -24,36 +24,38 @@ def load_manifest() -> list[dict]:
     return yaml.safe_load(MANIFEST.read_text())["projects"]
 
 
-def clone_or_update(proj: dict) -> Path | None:
-    """Clone/checkout a project at its pinned SHA; never raises -- on any failure
-    return None so the caller can skip the project and keep the sweep going. The
-    archy self-entry uses REPO_ROOT directly (its pin may name a tag that does
-    not exist yet during a release PR)."""
+def clone_or_update(proj: dict) -> Path:
+    """Clone or update a project repo to the specified ref.
+
+    Returns the path to the local checkout.
+    """
     name = proj["name"]
-    sha = proj["sha"]
-    if name == "archy":
-        return REPO_ROOT
-    target = WORKDIR / name
-    if not target.exists():
-        WORKDIR.mkdir(parents=True, exist_ok=True)
-        res = subprocess.run(
-            ["git", "clone", "--quiet", f"https://github.com/{proj['repo']}.git", str(target)],
-        )
-        if res.returncode != 0:
-            return None
-    has_sha = subprocess.run(
-        ["git", "-C", str(target), "cat-file", "-e", sha],
-        capture_output=True,
-    )
-    if has_sha.returncode != 0:
-        subprocess.run(["git", "-C", str(target), "fetch", "--quiet", "origin"], check=False)
-    if (
+    url = proj["url"]
+    ref = proj.get("ref", "HEAD")
+    dest = WORKDIR / name
+
+    if dest.exists():
         subprocess.run(
-            ["git", "-C", str(target), "checkout", "--quiet", sha],
-        ).returncode
-        != 0
-    ):
-        return None
-    subprocess.run(["git", "-C", str(target), "reset", "--hard", "--quiet", sha], check=False)
-    subprocess.run(["git", "-C", str(target), "clean", "-fdx", "--quiet"], check=False)
-    return target
+            ["git", "-C", str(dest), "fetch", "--all", "--prune"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(dest), "checkout", ref],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(dest), "reset", "--hard", "FETCH_HEAD"],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        WORKDIR.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["git", "clone", "--depth", "1", "--branch", ref, url, str(dest)],
+            check=True,
+            capture_output=True,
+        )
+
+    return dest
