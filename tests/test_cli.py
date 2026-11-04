@@ -1332,7 +1332,7 @@ def test_affected_filter_with_regex_metachars_does_not_crash(tmp_path: Path):
 
 _FILTER_MISS = (
     "matches no file in the graph "
-    "(paths are project-relative; files outside a package are not scanned)"
+    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
 )
 
 

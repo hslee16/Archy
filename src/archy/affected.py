@@ -37,7 +37,7 @@ DELETED_OR_RENAMED_REASON = (
 
 _FILTER_MATCHED_NOTHING = (
     "matches no file in the graph "
-    "(paths are project-relative; files outside a package are not scanned)"
+    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
 )
 
 # Auto-detected test conventions. A node is treated as a test if its
@@ -162,11 +162,12 @@ def _refuse_unmatched_filter(
     Every file the filter misses counts as a non-test, so a typo moved each test
     into `impacted_modules` and the empty `impacted_tests` then read as "no
     static edge reaches this" (#660). The check runs over the whole graph, not
-    the impacted set: a filter that matches some file but no impacted one is a
+    the impacted set: a filter that matches a test but no impacted one is a
     true empty answer. Refusing is a design choice following AGENTS.md, "A name
-    that matched nothing is a refusal"; no lint enforces that rule, and `--quiet`
-    has no payload that could carry a reason instead. Near misses are directories,
-    written as filters, because that is the form the caller has to type next.
+    that matched nothing is a refusal"; no lint enforces that rule, and the
+    stdout of `--quiet` is the path list xargs reads, so a reason cannot go there.
+    Near misses are directories, written as filters, because that is the form
+    the caller has to type next.
     """
     paths = [Path(raw) for _, data in graph.nodes(data=True) if (raw := data.get("path"))]
     if any(is_test(path) for path in paths):

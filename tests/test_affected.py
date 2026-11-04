@@ -11,7 +11,7 @@ from archy.graph import build_graph
 
 _FILTER_MISS = (
     "matches no file in the graph "
-    "(paths are project-relative; files outside a package are not scanned)"
+    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
 )
 
 # Setup pattern inlines `_make_project` + `build_graph` per test, matching
@@ -411,7 +411,7 @@ def test_near_misses_for_an_unmatched_filter_include_directories_holding_only_di
         find_affected(graph, [], project_root=tmp_path, test_filter="sr/**")
 
 
-def test_filter_naming_files_outside_every_package_is_refused_and_says_so(tmp_path: Path):
+def test_filter_naming_files_the_graph_does_not_hold_is_refused_and_says_so(tmp_path: Path):
     """A real `tests/` beside a `src/` layout has no node to match; the message must explain."""
     (tmp_path / "src" / "app").mkdir(parents=True)
     (tmp_path / "src" / "app" / "__init__.py").write_text("")
