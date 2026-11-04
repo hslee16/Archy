@@ -411,7 +411,7 @@ git diff --name-only HEAD | archy affected . --stdin --quiet | xargs pytest
 archy affected . src/foo.py --filter "tests/integration/**" --json
 ```
 
-Test classification defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `--filter <glob>`. A filter that matches no file in the graph is an error (exit 1) rather than an empty selection, and it ends with a `did you mean` when a directory is close. Internal modules only; vendored or third-party code is not traced.
+Test classification defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `--filter <glob>`. A filter that matches no file in the graph is an error (exit 1) rather than an empty selection, and it ends with a `did you mean` when a directory is close. A `tests/` with no `__init__.py` beside a `src/` layout is not in the graph, so a filter for it is refused too. Internal modules only; vendored or third-party code is not traced.
 
 ### Design Structure Matrix (`archy dsm`)
 
