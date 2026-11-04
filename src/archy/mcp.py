@@ -958,6 +958,3 @@ def _register_tools(server: Server) -> None:
     # freshness is diagnostic plumbing, not a mid-task decision (every tool
     # syncs on demand, so a result is never stale); the capability now lives in
     # the CLI as `archy index status`.
-
-
-# --- thin internals ----------------------------------------------------------
