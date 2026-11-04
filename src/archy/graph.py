@@ -10,18 +10,19 @@ archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
                   resolve_from_import, resolve_modules, resolve_relative_import,
                   suggest_files, suggest_modules
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
-                  archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
-                  UnresolvedHint -> archy.impact, archy.mcp, archy.mcp_payloads,
+                  archy.index, ScanTooLargeError -> archy.cli, archy.mcp_runs,
+                  UnresolvedHint -> archy.impact, archy.mcp_payloads, archy.mcp_runs,
                   archy.simulate, assemble_graph -> archy.index, archy.watcher,
                   bench.pattern_detection, discover_modules -> archy.cli,
-                  archy.conventions, archy.index, archy.mcp, archy.watcher,
-                  graph_to_dict -> archy.cli, archy.mcp, hint_unresolved -> archy.mcp,
-                  archy.simulate, internal_subgraph -> archy.cli, archy.mcp,
-                  parse_project -> archy.cli, archy.mcp,
+                  archy.conventions, archy.index, archy.mcp_runs, archy.watcher,
+                  graph_to_dict -> archy.cli, archy.mcp_runs,
+                  hint_unresolved -> archy.mcp_runs, archy.simulate,
+                  internal_subgraph -> archy.cli, archy.mcp_runs,
+                  parse_project -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
-                  bench.pattern_detection, resolve_modules -> archy.mcp,
+                  bench.pattern_detection, resolve_modules -> archy.mcp_runs,
                   archy.simulate, suggest_modules -> archy.cli, archy.conventions,
-                  archy.mcp
+                  archy.mcp_runs
 """
 
 from __future__ import annotations

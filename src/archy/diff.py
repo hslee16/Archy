@@ -19,18 +19,19 @@ archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
                   missing_baseline_hint, read_snapshot, score_delta, snapshot_to_dict,
                   strict_baseline_problem, strict_verdict, take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli_render, archy.diff_summary, archy.mcp,
-                  DiffSummary -> archy.cli_render, archy.diff_summary, archy.simulate,
-                  ScoreDelta -> archy.cli_render, archy.simulate,
-                  compute_diff -> archy.cli, archy.mcp, archy.simulate,
+                  archy.mcp_runs, DiffSummary -> archy.cli_render, archy.diff_summary,
+                  archy.simulate, ScoreDelta -> archy.cli_render, archy.simulate,
+                  compute_diff -> archy.cli, archy.mcp_runs, archy.simulate,
                   bench.delta_direction, bench.simulate_oracle,
-                  create_baseline_command -> archy.cli, archy.mcp,
-                  default_baseline_path -> archy.cli, archy.mcp,
-                  missing_baseline_hint -> archy.cli, archy.mcp,
-                  read_snapshot -> archy.cli, archy.mcp,
-                  strict_baseline_problem -> archy.cli, archy.mcp,
-                  strict_verdict -> archy.cli, archy.mcp, take_snapshot -> archy.cli,
-                  archy.mcp, archy.simulate, bench.delta_direction,
-                  bench.simulate_oracle, write_snapshot -> archy.cli, archy.mcp
+                  create_baseline_command -> archy.cli, archy.mcp_runs,
+                  default_baseline_path -> archy.cli, archy.mcp_runs,
+                  missing_baseline_hint -> archy.cli, archy.mcp_runs,
+                  read_snapshot -> archy.cli, archy.mcp_runs,
+                  strict_baseline_problem -> archy.cli, archy.mcp_runs,
+                  strict_verdict -> archy.cli, archy.mcp_runs,
+                  take_snapshot -> archy.cli, archy.mcp_runs, archy.simulate,
+                  bench.delta_direction, bench.simulate_oracle,
+                  write_snapshot -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations

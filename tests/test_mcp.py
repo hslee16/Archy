@@ -31,32 +31,33 @@ from archy.layers import LayerConfigError
 from archy.mcp import (
     CheckErrorPayload,
     CheckPayload,
-    ContractsPayload,
     DiffErrorPayload,
     DSMErrorPayload,
     DSMTooLargePayload,
-    ForbiddenEdge,
     GraphPayload,
     GraphSummaryPayload,
     GraphTooLargePayload,
     _advertise_serialization_output_schemas,
-    _run_affected,
-    _run_brief,
-    _run_check,
-    _run_cycles,
-    _run_diff,
-    _run_dsm,
-    _run_graph,
-    _run_graph_dump,
-    _run_graph_focus,
-    _run_graph_summary,
-    _run_impact,
-    _run_score,
-    _run_simulate,
-    _run_snapshot,
-    _run_trend,
-    _run_what_to_refactor_next,
     create_server,
+)
+from archy.mcp_payloads import ContractsPayload, ForbiddenEdge
+from archy.mcp_runs import (
+    run_affected,
+    run_brief,
+    run_check,
+    run_cycles,
+    run_diff,
+    run_dsm,
+    run_graph,
+    run_graph_dump,
+    run_graph_focus,
+    run_graph_summary,
+    run_impact,
+    run_score,
+    run_simulate,
+    run_snapshot,
+    run_trend,
+    run_what_to_refactor_next,
 )
 from archy.scan_config import graph_kwargs
 from archy.simulate import EdgeSpec, SimulateReport
@@ -118,7 +119,7 @@ def test_check_passed_respects_the_layer_presence_floor(tmp_path: Path):
         "forbid:\n  - {from: services, to: routes}\n"
     )
 
-    payload = _run_check(tmp_path, config_path=None)
+    payload = run_check(tmp_path, config_path=None)
 
     assert isinstance(payload, CheckPayload)
     assert payload.violations == ()
@@ -550,7 +551,7 @@ def _dsm(
     package: str | None = None,
     baseline_path: str | None = None,
 ):
-    return _run_dsm(
+    return run_dsm(
         path,
         response_format=response_format,
         group_by=group_by,
@@ -619,12 +620,12 @@ def _write_core_cli_forbid_config(root: Path) -> None:
     )
 
 
-@pytest.mark.parametrize("runner", [_run_graph, _run_dsm])
+@pytest.mark.parametrize("runner", [run_graph, run_dsm])
 def test_response_format_rejects_unknown_value(acyclic_project: Path, runner):
     # Both heavy tools validate the enum up front, before any graph work.
     kwargs = (
         dict(internal_only=True, max_nodes=500, top_n=20)
-        if runner is _run_graph
+        if runner is run_graph
         else dict(
             group_by="community",
             weight="imports",
@@ -676,7 +677,7 @@ def test_dsm_summary_localizes_back_edges(tmp_path: Path):
 def test_dsm_full_oversized_returns_too_large(tmp_path: Path, monkeypatch):
     # The full matrix is capped; over the ceiling it refuses with an explicit
     # indicator pointing at the summary / focus / package escape hatches.
-    monkeypatch.setattr("archy.mcp.DEFAULT_MAX_DSM_CELLS", 2)
+    monkeypatch.setattr("archy.mcp_runs.DEFAULT_MAX_DSM_CELLS", 2)
     project = _fan_out_project(tmp_path, fan=5)  # 5 cells > cap of 2
     result = _dsm(project, response_format="full")
     assert isinstance(result, DSMTooLargePayload)
@@ -688,7 +689,7 @@ def test_dsm_diff_ignores_response_format(acyclic_project: Path, tmp_path: Path)
     # A baseline diff is a deliberate, already-compact comparison; summary mode
     # must not suppress it.
     from archy.dsm import DSMDiff, build_dsm, write_dsm
-    from archy.mcp import _load_graph
+    from archy.mcp_runs import _load_graph
 
     baseline = tmp_path / "baseline.json"
     write_dsm(build_dsm(_load_graph(acyclic_project, internal_only=False)), baseline)
@@ -832,14 +833,14 @@ def test_dsm_directory_baseline_returns_error_on_the_wire(acyclic_project: Path,
 
 
 def test_graph_default_is_summary(acyclic_project: Path):
-    result = _run_graph(
+    result = run_graph(
         acyclic_project, response_format="summary", internal_only=True, max_nodes=500, top_n=20
     )
     assert isinstance(result, GraphSummaryPayload)
 
 
 def test_graph_full_returns_dump(acyclic_project: Path):
-    result = _run_graph(
+    result = run_graph(
         acyclic_project, response_format="full", internal_only=True, max_nodes=500, top_n=20
     )
     assert isinstance(result, GraphPayload)
@@ -853,7 +854,7 @@ def test_create_server_registers_loop_prompt():
 
 
 def test_run_score_payload_shape(acyclic_project: Path):
-    payload = _run_score(
+    payload = run_score(
         acyclic_project,
         internal_only=True,
         record=False,
@@ -868,7 +869,7 @@ def test_run_score_payload_shape(acyclic_project: Path):
 
 
 def test_run_score_strict_includes_gate_block(acyclic_project: Path):
-    payload = _run_score(
+    payload = run_score(
         acyclic_project,
         internal_only=True,
         record=False,
@@ -921,13 +922,13 @@ def test_archy_cycles_rejects_min_size_below_one(acyclic_project: Path):
     for bad in (0, -5):
         message = f"min_size must be >= 1; got {bad}"
         with pytest.raises(ValueError) as caught:
-            _run_cycles(acyclic_project, min_size=bad, internal_only=True)
+            run_cycles(acyclic_project, min_size=bad, internal_only=True)
         assert str(caught.value) == message
         with pytest.raises(ToolError):
             _call_tool(server, "archy_cycles", {"path": path, "min_size": bad})
 
     # Boundary that must still succeed (acyclic project -> empty list).
-    assert _run_cycles(acyclic_project, min_size=1, internal_only=True) == []
+    assert run_cycles(acyclic_project, min_size=1, internal_only=True) == []
     _content, structured = _call_tool(server, "archy_cycles", {"path": path, "min_size": 1})
     assert structured == {"result": []}
 
@@ -945,7 +946,7 @@ def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
     path = str(acyclic_project)
     message = "--max-chains must be negative (for all) or positive (for a limit); got 0"
     with pytest.raises(ValueError) as caught:
-        _run_impact(acyclic_project, files=[Path("pkg/b.py")], max_chains=0)
+        run_impact(acyclic_project, files=[Path("pkg/b.py")], max_chains=0)
     assert str(caught.value) == message
     # mcp 2.x wraps as ToolError("Error executing tool <name>: <msg>"); pin the
     # refusal reaches the agent, not the exact outer wording.
@@ -1010,7 +1011,7 @@ def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
     path = str(acyclic_project)
     message = "focus_depth must be >= 0; got -1"
     with pytest.raises(ValueError) as caught:
-        _run_dsm(
+        run_dsm(
             acyclic_project,
             response_format="summary",
             group_by="community",
@@ -1029,7 +1030,7 @@ def test_archy_dsm_rejects_negative_focus_depth(acyclic_project: Path):
         )
 
     # focus_depth=0 is a valid CLI bound and must still succeed.
-    summary = _run_dsm(
+    summary = run_dsm(
         acyclic_project,
         response_format="summary",
         group_by="community",
@@ -1062,7 +1063,7 @@ def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
     def boom(*args, **kwargs):
         raise AssertionError(f"{name} must be validated before the project is scanned")
 
-    monkeypatch.setattr("archy.mcp._load_graph", boom)
+    monkeypatch.setattr("archy.mcp_runs._load_graph", boom)
 
     # Kept str-only (group_by/weight/response_format) so `**base` unifies to
     # `dict[str, str]`; mixing in the None/int fields below would widen that
@@ -1074,7 +1075,7 @@ def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
     )
     base.update(kwargs)
     with pytest.raises(ValueError):
-        _run_dsm(
+        run_dsm(
             acyclic_project,
             focus=None,
             focus_depth=1,
@@ -1137,7 +1138,7 @@ def test_archy_score_rejects_strict_tolerance_outside_unit_interval(acyclic_proj
     def reject(tolerance: float, *, strict: bool) -> None:
         message = f"strict_tolerance must be in [0, 1]; got {tolerance}"
         with pytest.raises(ValueError) as caught:
-            _run_score(
+            run_score(
                 acyclic_project,
                 internal_only=True,
                 record=False,
@@ -1147,7 +1148,7 @@ def test_archy_score_rejects_strict_tolerance_outside_unit_interval(acyclic_proj
         assert str(caught.value) == message
         # mcp 2.x ToolError is "Error executing tool archy_score" without the
         # underlying ValueError text; 1.x keeps it. The exact message is pinned
-        # on the direct _run_score raise above.
+        # on the direct run_score raise above.
         with pytest.raises(ToolError):
             _call_tool(
                 server,
@@ -1181,7 +1182,7 @@ def test_run_cycles_payload_shape(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("from pkg.b import thing\n")
     (pkg / "b.py").write_text("from pkg.a import other\n")
-    [cycle] = _run_cycles(tmp_path, min_size=2, internal_only=True)
+    [cycle] = run_cycles(tmp_path, min_size=2, internal_only=True)
     assert sorted(cycle.modules) == ["pkg.a", "pkg.b"]
     edge = cycle.edges[0]
     assert edge.source and edge.target
@@ -1190,7 +1191,7 @@ def test_run_cycles_payload_shape(tmp_path: Path):
 def test_run_check_payload_shape(tmp_path: Path):
     _myapp_core_cli(tmp_path, api="from myapp.cli.runner import go\n")
     _write_core_cli_forbid_config(tmp_path)
-    result = _run_check(tmp_path, config_path=None)
+    result = run_check(tmp_path, config_path=None)
     assert isinstance(result, CheckPayload)
     assert result.passed is False
     [violation] = result.violations
@@ -1225,7 +1226,7 @@ def test_run_check_fails_the_gate_on_a_required_reach_violation(tmp_path: Path):
     review rounds in a row: the surface agents actually call kept saying the
     codebase was fine for the exact case the check exists to catch.
     """
-    result = _run_check(_write_registry_project(tmp_path, bootstrap=""), config_path=None)
+    result = run_check(_write_registry_project(tmp_path, bootstrap=""), config_path=None)
     assert isinstance(result, CheckPayload)
     assert result.passed is False
     assert result.violations == ()  # nothing forbidden; the gate failed on reach alone
@@ -1239,7 +1240,7 @@ def test_run_check_required_reach_survives_model_dump(tmp_path: Path):
     Asserting on the attribute would pass while the agent received `passed:
     false` with no explanation of what to fix.
     """
-    result = _run_check(_write_registry_project(tmp_path, bootstrap=""), config_path=None)
+    result = run_check(_write_registry_project(tmp_path, bootstrap=""), config_path=None)
     assert isinstance(result, CheckPayload)
     dumped = result.model_dump()
     assert dumped["passed"] is False
@@ -1251,7 +1252,7 @@ def test_run_check_required_reach_survives_model_dump(tmp_path: Path):
 
 def test_run_check_required_reach_passes_through_the_package_init(tmp_path: Path):
     project = _write_registry_project(tmp_path, bootstrap="from app.core import model_registry\n")
-    result = _run_check(project, config_path=None)
+    result = run_check(project, config_path=None)
     assert isinstance(result, CheckPayload)
     assert result.passed is True
     assert result.required_violations == ()
@@ -1268,7 +1269,7 @@ def test_run_check_entrypoints_rule_survives_model_dump(tmp_path: Path):
         "    within: 'app.**'\n"
         "    must_reach: app.core.model_registry\n"
     )
-    result = _run_check(project, config_path=None)
+    result = run_check(project, config_path=None)
     assert isinstance(result, CheckPayload)
     dumped = result.model_dump()
     assert dumped["passed"] is False
@@ -1284,7 +1285,7 @@ def test_run_check_missing_config_returns_in_band(tmp_path: Path):
     pkg = tmp_path / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
-    result = _run_check(tmp_path, config_path=None)
+    result = run_check(tmp_path, config_path=None)
     assert isinstance(result, CheckErrorPayload)
     assert "archy.yaml" in result.error
 
@@ -1297,7 +1298,7 @@ def test_run_check_malformed_config_raises(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (tmp_path / "archy.yaml").write_text("layers: [not a mapping\n")
     with pytest.raises(LayerConfigError):
-        _run_check(tmp_path, config_path=None)
+        run_check(tmp_path, config_path=None)
 
 
 def test_check_contracts_reports_an_unfalsifiable_contract_as_unverified(tmp_path: Path):
@@ -1395,7 +1396,7 @@ def test_run_check_reports_sdp_violations_when_enabled(tmp_path: Path):
     (project / "archy.yaml").write_text(
         "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  tolerance: 0.0\n"
     )
-    result = _run_check(project, config_path=None)
+    result = run_check(project, config_path=None)
     assert isinstance(result, CheckPayload)
     assert result.passed is False
     assert result.violations == ()
@@ -1406,7 +1407,7 @@ def test_run_check_reports_sdp_violations_when_enabled(tmp_path: Path):
 def test_run_check_skips_sdp_when_disabled(tmp_path: Path):
     project = _make_sdp_violating_project(tmp_path)
     (project / "archy.yaml").write_text("layers: {}\nforbid: []\n")
-    result = _run_check(project, config_path=None)
+    result = run_check(project, config_path=None)
     assert isinstance(result, CheckPayload)
     assert result.passed is True
     assert result.sdp_violations == ()
@@ -1417,7 +1418,7 @@ def test_run_check_warn_mode_reports_violations_but_passes(tmp_path: Path):
     (project / "archy.yaml").write_text(
         "layers: {}\nforbid: []\nsdp:\n  enabled: true\n  mode: warn\n"
     )
-    result = _run_check(project, config_path=None)
+    result = run_check(project, config_path=None)
     assert isinstance(result, CheckPayload)
     # Violations still reported, but passed=True so CI/agents can adopt SDP
     # without it being a hard gate yet.
@@ -1426,14 +1427,14 @@ def test_run_check_warn_mode_reports_violations_but_passes(tmp_path: Path):
 
 
 def test_run_trend_payload_shape(acyclic_project: Path):
-    _run_score(
+    run_score(
         acyclic_project,
         internal_only=True,
         record=True,
         strict=False,
         strict_tolerance=0.02,
     )
-    [row] = _run_trend(acyclic_project, last_n=10)
+    [row] = run_trend(acyclic_project, last_n=10)
     assert row.timestamp
     assert row.score is not None
     assert row.score.overall > 0
@@ -1460,7 +1461,7 @@ def test_run_trend_validates_last_n(acyclic_project: Path, bad: int):
     # Previously last_n <= 0 silently returned the entire history; now it is a
     # clear validation error so an agent doesn't accidentally dump everything.
     with pytest.raises(ValueError, match="last_n"):
-        _run_trend(acyclic_project, last_n=bad)
+        run_trend(acyclic_project, last_n=bad)
 
 
 def test_run_impact_payload_shape(tmp_path: Path):
@@ -1469,13 +1470,13 @@ def test_run_impact_payload_shape(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (pkg / "lib.py").write_text("")
     (pkg / "main.py").write_text("from app.lib import x\n")
-    result = _run_impact(tmp_path, files=[Path("app/lib.py")])
+    result = run_impact(tmp_path, files=[Path("app/lib.py")])
     assert result.changed == ("app.lib",)
     assert result.impacted == ("app.main",)
 
 
 def test_run_snapshot_writes_baseline_and_returns_payload(acyclic_project: Path):
-    payload = _run_snapshot(acyclic_project)
+    payload = run_snapshot(acyclic_project)
     assert payload.baseline_path.endswith("baseline.json")
     assert payload.score is not None
     assert payload.score.overall > 0
@@ -1495,7 +1496,7 @@ def test_snapshot_brief_mirrors_score_and_acyclic_invariant(acyclic_project: Pat
     """
     from archy.score import compute_score
 
-    payload = _run_snapshot(acyclic_project)
+    payload = run_snapshot(acyclic_project)
     brief = payload.invariant_brief
     independent = compute_score(build_graph(acyclic_project))
 
@@ -1532,7 +1533,7 @@ def test_snapshot_brief_load_bearing_ranked_and_capped(tmp_path: Path):
     assert len(all_risks) == 8  # more modules than the cap, so the cap truncates
     assert len(set(all_risks.values())) > 2  # distinct risks, so a ranking is visible
 
-    brief = _run_snapshot(tmp_path).invariant_brief
+    brief = run_snapshot(tmp_path).invariant_brief
     risks = [m.edit_risk for m in brief.load_bearing]
     assert risks == sorted(risks, reverse=True)
     assert len(brief.load_bearing) == 5
@@ -1550,13 +1551,13 @@ def test_snapshot_brief_load_bearing_ranked_and_capped(tmp_path: Path):
 def test_snapshot_brief_reports_layers_and_forbidden_edges(tmp_path: Path):
     _myapp_core_cli(tmp_path, runner="from myapp.core.api import go\n")
     _write_core_cli_forbid_config(tmp_path)
-    brief = _run_snapshot(tmp_path).invariant_brief
+    brief = run_snapshot(tmp_path).invariant_brief
     assert {layer.name for layer in brief.layers} == {"core", "cli"}
     assert ForbiddenEdge(from_layer="core", to_layer="cli") in brief.forbidden_edges
 
 
 def test_snapshot_brief_no_config_has_empty_layers(acyclic_project: Path):
-    brief = _run_snapshot(acyclic_project).invariant_brief
+    brief = run_snapshot(acyclic_project).invariant_brief
     assert brief.layers == ()
     assert brief.forbidden_edges == ()
     assert brief.required_reach == ()
@@ -1566,7 +1567,7 @@ def test_snapshot_brief_reports_required_reach_rules(tmp_path: Path):
     """Prevention, not correction: a missing import looks like nothing at all,
     so an agent that is not told the rule up front cannot infer it from code."""
     project = _write_registry_project(tmp_path, bootstrap="")
-    brief = _run_snapshot(project).invariant_brief
+    brief = run_snapshot(project).invariant_brief
     dumped = brief.model_dump()["required_reach"]
     assert dumped == (
         {
@@ -1587,7 +1588,7 @@ def test_snapshot_brief_carries_an_entrypoints_rule_scope(tmp_path: Path):
         "    within: 'app.**'\n"
         "    must_reach: app.core.model_registry\n"
     )
-    [rule] = _run_snapshot(project).invariant_brief.model_dump()["required_reach"]
+    [rule] = run_snapshot(project).invariant_brief.model_dump()["required_reach"]
     assert rule["source"] == "@entrypoints"
     assert rule["within"] == "app.**"
 
@@ -1595,7 +1596,7 @@ def test_snapshot_brief_carries_an_entrypoints_rule_scope(tmp_path: Path):
 def test_run_simulate_parses_from_alias(acyclic_project: Path):
     # `from` is a Python keyword; the wire field must be the alias `from`, not
     # `from_`. If the alias breaks, agents cannot call the tool at all.
-    payload = _run_simulate(
+    payload = run_simulate(
         acyclic_project,
         add=[EdgeSpec.model_validate({"from": "pkg.b", "to": "pkg.a"})],
         remove=[],
@@ -1608,7 +1609,7 @@ def test_run_simulate_parses_from_alias(acyclic_project: Path):
 def test_run_simulate_refuses_an_empty_delta(acyclic_project: Path):
     """Direct helper refuses empty add/remove (#661)."""
     with pytest.raises(ValueError, match="pass at least one add or remove edge"):
-        _run_simulate(acyclic_project, add=[], remove=[])
+        run_simulate(acyclic_project, add=[], remove=[])
 
 
 def test_archy_simulate_refuses_an_empty_delta_on_the_wire(acyclic_project: Path):
@@ -1617,7 +1618,7 @@ def test_archy_simulate_refuses_an_empty_delta_on_the_wire(acyclic_project: Path
 
     message = "pass at least one add or remove edge"
     with pytest.raises(ValueError, match=message):
-        _run_simulate(acyclic_project, add=[], remove=[])
+        run_simulate(acyclic_project, add=[], remove=[])
     with pytest.raises(ToolError, match=message):
         _call_tool(create_server(), "archy_simulate", {"path": str(acyclic_project)})
 
@@ -1632,7 +1633,7 @@ def test_simulate_tool_input_schema_uses_from_to_aliases():
 
 
 def test_run_diff_without_baseline_returns_error(acyclic_project: Path):
-    result = _run_diff(acyclic_project)
+    result = run_diff(acyclic_project)
     assert isinstance(result, DiffErrorPayload)
     assert "no baseline" in result.error
 
@@ -1642,7 +1643,7 @@ def test_run_diff_directory_baseline_returns_error_on_the_wire(acyclic_project: 
     target = acyclic_project / "subdir"
     target.mkdir()
 
-    result = _run_diff(acyclic_project, baseline="subdir")
+    result = run_diff(acyclic_project, baseline="subdir")
 
     assert isinstance(result, DiffErrorPayload)
     assert result.model_dump() == {
@@ -1658,7 +1659,7 @@ def test_run_diff_corrupt_baseline_returns_error_on_the_wire(acyclic_project: Pa
     target.parent.mkdir(parents=True)
     target.write_text("not json\n")
 
-    dumped = _run_diff(acyclic_project).model_dump()
+    dumped = run_diff(acyclic_project).model_dump()
 
     assert dumped == {
         "error": (
@@ -1669,8 +1670,8 @@ def test_run_diff_corrupt_baseline_returns_error_on_the_wire(acyclic_project: Pa
 
 
 def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
-    _run_snapshot(acyclic_project)
-    result = _run_diff(acyclic_project)
+    run_snapshot(acyclic_project)
+    result = run_diff(acyclic_project)
     assert isinstance(result, DiffReport)
     assert result.score_delta is not None
     assert result.score_delta.overall == 0.0
@@ -1679,7 +1680,7 @@ def test_run_diff_after_snapshot_reports_zero_delta(acyclic_project: Path):
 
 
 def test_graph_focus_default_returns_local_neighborhood(acyclic_project: Path):
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         acyclic_project,
         modules=["pkg.a"],
         depth=1,
@@ -1697,7 +1698,7 @@ def test_graph_focus_default_returns_local_neighborhood(acyclic_project: Path):
 
 
 def test_graph_focus_direction_out_excludes_callers(project_with_caller: Path):
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         project_with_caller,
         modules=["pkg.a"],
         depth=1,
@@ -1710,7 +1711,7 @@ def test_graph_focus_direction_out_excludes_callers(project_with_caller: Path):
 
 
 def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Path):
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         project_with_caller,
         modules=["pkg.a"],
         depth=1,
@@ -1723,7 +1724,7 @@ def test_graph_focus_direction_in_excludes_dependencies(project_with_caller: Pat
 
 
 def test_graph_focus_resolves_file_paths(acyclic_project: Path):
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         acyclic_project,
         modules=["pkg/a.py"],
         depth=0,
@@ -1736,7 +1737,7 @@ def test_graph_focus_resolves_file_paths(acyclic_project: Path):
 
 
 def test_graph_focus_reports_unresolved(acyclic_project: Path):
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         acyclic_project,
         modules=["pkg.a", "nonexistent.module", "missing/file.py"],
         depth=0,
@@ -1748,7 +1749,7 @@ def test_graph_focus_reports_unresolved(acyclic_project: Path):
 
 
 def test_graph_focus_suggests_the_module_for_an_unresolved_name(acyclic_project: Path):
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         acyclic_project,
         modules=["pkg.aa", "pkg/aa.py", "nothing.close"],
         depth=0,
@@ -1763,7 +1764,7 @@ def test_graph_focus_suggests_the_module_for_an_unresolved_name(acyclic_project:
 
 def test_graph_focus_suggests_even_when_another_name_resolved(acyclic_project: Path):
     """The mixed case returns through a different branch than the all-unresolved one."""
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         acyclic_project, modules=["pkg.a", "pkg.bb"], depth=0, direction="both", internal_only=True
     )
     assert {n.id for n in payload.nodes} == {"pkg.a"}
@@ -1793,7 +1794,7 @@ def test_graph_focus_multi_seed_unions_ego_graphs(tmp_path: Path):
     (pkg / "c.py").write_text("from pkg.d import y\n")
     (pkg / "d.py").write_text("")
 
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         tmp_path,
         modules=["pkg.a", "pkg.c"],
         depth=1,
@@ -1806,7 +1807,7 @@ def test_graph_focus_multi_seed_unions_ego_graphs(tmp_path: Path):
 
 def test_graph_focus_validates_direction(acyclic_project: Path):
     with pytest.raises(ValueError, match="direction"):
-        _run_graph_focus(
+        run_graph_focus(
             acyclic_project,
             modules=["pkg.a"],
             depth=1,
@@ -1824,7 +1825,7 @@ def test_graph_summary_top_n_ranking(tmp_path: Path):
     (pkg / "b.py").write_text("from pkg.hub import y\n")
     (pkg / "c.py").write_text("from pkg.hub import z\nfrom pkg.a import w\n")
 
-    summary = _run_graph_summary(tmp_path, top_n=3)
+    summary = run_graph_summary(tmp_path, top_n=3)
     assert summary.module_count == 5  # pkg, pkg.hub, pkg.a, pkg.b, pkg.c
     # hub has the highest fan-in (a, b, c all import it).
     assert summary.top_fan_in[0].module == "pkg.hub"
@@ -1841,7 +1842,7 @@ def test_graph_summary_counts_external_deps(tmp_path: Path):
     (pkg / "a.py").write_text("import requests\nimport json\n")
     (pkg / "b.py").write_text("import requests\n")
 
-    summary = _run_graph_summary(tmp_path, top_n=10)
+    summary = run_graph_summary(tmp_path, top_n=10)
     ext_names = {e.module for e in summary.external_deps}
     assert "requests" in ext_names
     requests_entry = next(e for e in summary.external_deps if e.module == "requests")
@@ -1850,7 +1851,7 @@ def test_graph_summary_counts_external_deps(tmp_path: Path):
 
 def test_graph_summary_validates_top_n(acyclic_project: Path):
     with pytest.raises(ValueError, match="top_n"):
-        _run_graph_summary(acyclic_project, top_n=0)
+        run_graph_summary(acyclic_project, top_n=0)
 
 
 def test_graph_dump_matches_cli_json(acyclic_project: Path):
@@ -1862,7 +1863,7 @@ def test_graph_dump_matches_cli_json(acyclic_project: Path):
     (#439). Shelling out to the CLI makes the GRAPH CONSTRUCTION independent:
     a fresh subprocess doing its own `build_graph` against the cached manager's.
     It does NOT make the SERIALIZATION independent, because `cli.graph` and
-    `mcp._graph_payload_from` both still call `graph_to_dict`, so a consistent
+    `mcp_runs._graph_payload_from` both still call `graph_to_dict`, so a consistent
     regression inside that function moves both sides together and passes here.
     `tests/test_graph.py::test_graph_to_dict_shape_is_pinned_by_hand` is what
     covers that, against a dict written out by hand.
@@ -1876,7 +1877,7 @@ def test_graph_dump_matches_cli_json(acyclic_project: Path):
     assert cli.returncode == 0, cli.stderr
     expected = json.loads(cli.stdout[cli.stdout.index("{") :])
 
-    payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=500)
+    payload = run_graph_dump(acyclic_project, internal_only=True, max_nodes=500)
 
     assert isinstance(payload, GraphPayload)
     assert payload.root == expected["root"]
@@ -1894,7 +1895,7 @@ def test_graph_dump_matches_cli_json(acyclic_project: Path):
 
 
 def test_graph_dump_refuses_oversized_graph(acyclic_project: Path):
-    payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=1)
+    payload = run_graph_dump(acyclic_project, internal_only=True, max_nodes=1)
     assert isinstance(payload, GraphTooLargePayload)
     assert payload.max_nodes == 1
     assert payload.node_count > 1
@@ -1906,13 +1907,13 @@ def test_graph_dump_validates_max_nodes(acyclic_project: Path, bad: int):
     # A non-positive max_nodes used to fall through to the size guard and
     # return a confusing GraphTooLargePayload; reject it up front instead.
     with pytest.raises(ValueError, match="max_nodes"):
-        _run_graph_dump(acyclic_project, internal_only=True, max_nodes=bad)
+        run_graph_dump(acyclic_project, internal_only=True, max_nodes=bad)
 
 
 def test_manager_cache_key_distinguishes_config(tmp_path: Path):
     # Regression for the stale-manager blocker: the key must fold in the
     # graph-building kwargs, not just the root, or a config change is ignored.
-    from archy.mcp import _manager_cache_key
+    from archy.mcp_runs import _manager_cache_key
 
     base = _manager_cache_key(tmp_path, {})
     same = _manager_cache_key(tmp_path, {"extra_roots": ()})
@@ -1928,7 +1929,7 @@ def test_manager_cache_key_distinguishes_config(tmp_path: Path):
 
 
 def test_manager_for_reuses_or_evicts_by_config(tmp_path: Path):
-    from archy.mcp import _MANAGERS, _manager_for
+    from archy.mcp_runs import _MANAGERS, _manager_for
 
     created = []
 
@@ -1968,7 +1969,7 @@ def test_refactor_structural_lens_ranks_central_volatile_first(tmp_path: Path):
     # restores the old high-risk behavior (no floor).
     _hub_project(tmp_path, spokes=3)
 
-    payload = _run_what_to_refactor_next(
+    payload = run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=5, since=None, min_risk=0.0
     )
     top = payload.priorities[0]
@@ -1985,7 +1986,7 @@ def test_refactor_structural_lens_skips_git(tmp_path: Path):
     # git_available=False) even with no repository present.
     _hub_project(tmp_path, spokes=1)
 
-    payload = _run_what_to_refactor_next(
+    payload = run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=5, since="2025-01-01", min_risk=0.0
     )
     assert payload.git_available is False
@@ -1996,7 +1997,7 @@ def test_refactor_structural_lens_skips_git(tmp_path: Path):
 def test_refactor_structural_lens_top_n_caps_results(tmp_path: Path):
     _hub_project(tmp_path, spokes=4)
 
-    payload = _run_what_to_refactor_next(
+    payload = run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=2, since=None, min_risk=0.0
     )
     assert len(payload.priorities) <= 2
@@ -2008,7 +2009,7 @@ def test_graph_tool_focus_routes_to_subgraph(acyclic_project: Path):
     # v0.36 (#227): archy_graph(focus=...) replaces archy_graph_focus. With focus
     # set the tool returns a bounded GraphPayload subgraph, ignoring
     # response_format/max_nodes/top_n.
-    payload = _run_graph(
+    payload = run_graph(
         acyclic_project,
         response_format="summary",
         focus=["pkg.a"],
@@ -2027,7 +2028,7 @@ def test_graph_tool_focus_still_validates_response_format(acyclic_project: Path)
     # response_format is validated up front even when focus short-circuits the
     # summary/dump branches, so a bad enum value still raises.
     with pytest.raises(ValueError, match="response_format must be"):
-        _run_graph(
+        run_graph(
             acyclic_project,
             response_format="xml",
             focus=["pkg.a"],
@@ -2064,7 +2065,7 @@ def test_impact_mode_blast_returns_chains(acyclic_project: Path):
     `isinstance(result, Impact)`, which the `-> Impact` annotation guarantees on
     every return path, so an entirely empty `Impact` passed it (#441).
     """
-    result = _run_impact(acyclic_project, files=[Path("pkg/b.py")])
+    result = run_impact(acyclic_project, files=[Path("pkg/b.py")])
 
     assert result.changed == ("pkg.b",)
     assert result.impacted == ("pkg.a",)
@@ -2075,7 +2076,7 @@ def test_impact_mode_blast_returns_chains(acyclic_project: Path):
     assert [(h.source, h.target, h.lines) for h in chain.hops] == [("pkg.a", "pkg.b", (1,))]
 
     # The old comment claimed this covered `mode='blast'` routing, but
-    # `_run_impact` has no `mode` parameter, so nothing here went through it.
+    # `run_impact` has no `mode` parameter, so nothing here went through it.
     # Route through the tool so the claim the test makes is one it tests.
     _, structured = _call_tool(
         create_server(),
@@ -2102,7 +2103,7 @@ def test_impact_mode_affected_returns_test_split(tmp_path: Path):
     tests.mkdir()
     (tests / "test_a.py").write_text("from pkg.a import thing\n")
 
-    result = _run_affected(tmp_path, files=[Path("pkg/a.py")], depth=5, test_filter=None)
+    result = run_affected(tmp_path, files=[Path("pkg/a.py")], depth=5, test_filter=None)
     assert isinstance(result, Affected)
     assert "pkg.tests.test_a" in set(result.impacted_tests) or any(
         "test_a" in t for t in result.impacted_tests
@@ -2123,7 +2124,7 @@ def test_impact_tool_validates_mode(acyclic_project: Path):
 
 def test_refactor_validates_lens(acyclic_project: Path):
     with pytest.raises(ValueError, match="lens must be"):
-        _run_what_to_refactor_next(
+        run_what_to_refactor_next(
             acyclic_project, lens="sideways", top_n=5, since=None, min_risk=0.15
         )
 
@@ -2139,7 +2140,7 @@ def test_graph_focus_preserves_edge_attributes(tmp_path: Path):
     (pkg / "b.py").write_text("")
     (pkg / "d.py").write_text("from pkg.b import w\n")
 
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         tmp_path,
         modules=["pkg.a", "pkg.d"],
         depth=1,
@@ -2167,7 +2168,7 @@ def test_graph_focus_edge_attributes_survive_model_dump(tmp_path: Path):
     (pkg / "a.py").write_text("\nfrom pkg.b import x\nfrom .b import y\n")
     (pkg / "b.py").write_text("")
 
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         tmp_path, modules=["pkg.a"], depth=1, direction="out", internal_only=True
     )
     wire = payload.model_dump()
@@ -2183,7 +2184,7 @@ def test_graph_focus_internal_only_false_keeps_external_neighbors(tmp_path: Path
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("import requests\n")
 
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         tmp_path,
         modules=["pkg.a"],
         depth=1,
@@ -2205,7 +2206,7 @@ def test_graph_focus_multi_seed_with_overlap_dedups_nodes(tmp_path: Path):
     (pkg / "b.py").write_text("from pkg.shared import y\n")
     (pkg / "shared.py").write_text("")
 
-    payload = _run_graph_focus(
+    payload = run_graph_focus(
         tmp_path,
         modules=["pkg.a", "pkg.b"],
         depth=1,
@@ -2222,7 +2223,7 @@ def test_graph_dump_at_max_nodes_boundary_succeeds(acyclic_project: Path):
     # off-by-one risk in the guardrail condition.
     exact = _internal_graph(acyclic_project).number_of_nodes()
 
-    payload = _run_graph_dump(acyclic_project, internal_only=True, max_nodes=exact)
+    payload = run_graph_dump(acyclic_project, internal_only=True, max_nodes=exact)
     assert isinstance(payload, GraphPayload)
     assert len(payload.nodes) == exact
 
@@ -2231,7 +2232,7 @@ def test_graph_summary_empty_project_does_not_divide_by_zero(tmp_path: Path):
     # No packages, no edges. Summary must return zeros instead of crashing on
     # `1 / n` in PageRank or instability.
     (tmp_path / "not_a_package.py").write_text("x = 1\n")
-    summary = _run_graph_summary(tmp_path, top_n=5)
+    summary = run_graph_summary(tmp_path, top_n=5)
     assert summary.module_count == 0
     assert summary.internal_edge_count == 0
     assert summary.top_pagerank == ()
@@ -2246,7 +2247,7 @@ def test_graph_summary_single_node_assigns_full_pagerank_mass(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (pkg / "lone.py").write_text("")
 
-    summary = _run_graph_summary(tmp_path, top_n=5)
+    summary = run_graph_summary(tmp_path, top_n=5)
     pr = {e.module: e.value for e in summary.top_pagerank}
     # Two internal nodes (pkg, pkg.lone) -> 0.5 each at the fixed point.
     assert pr["pkg.lone"] == pytest.approx(0.5, abs=1e-6)
@@ -2260,7 +2261,7 @@ def test_pagerank_matches_networkx_when_available(tmp_path: Path):
     np = pytest.importorskip("numpy")  # noqa: F841
     import networkx as nx
 
-    from archy.mcp import _pagerank
+    from archy.mcp_runs import _pagerank
 
     # Hand-built graph: a small DAG with a hub, plus a dangling sink. Covers
     # the dangling-redistribution branch and a non-trivial ranking.
@@ -2287,7 +2288,7 @@ def test_pagerank_converges_early_on_stable_graph():
     # under PageRank, so iteration 1 should already be within tol of iteration 0.
     import networkx as nx
 
-    from archy.mcp import _pagerank
+    from archy.mcp_runs import _pagerank
 
     g: nx.DiGraph = nx.DiGraph()
     g.add_edges_from([(u, v) for u in "abc" for v in "abc" if u != v])
@@ -2310,7 +2311,7 @@ def test_archy_yaml_exclude_plumbed_through_mcp(tmp_path: Path):
     (gen / "__init__.py").write_text("from myapp.baml_client.b import x\n")
     (gen / "b.py").write_text("from myapp.baml_client import other\n")
     (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nexclude: [baml_client]\n")
-    assert _run_cycles(tmp_path, min_size=2, internal_only=True) == []
+    assert run_cycles(tmp_path, min_size=2, internal_only=True) == []
 
 
 def test_archy_yaml_roots_plumbed_through_mcp(tmp_path: Path):
@@ -2321,7 +2322,7 @@ def test_archy_yaml_roots_plumbed_through_mcp(tmp_path: Path):
     (app / "libs" / "db.py").write_text("import os\n")
     (app / "main.py").write_text("from app.libs.db import x\n")
     (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nroots: [app]\n")
-    payload = _run_graph_dump(tmp_path, internal_only=True, max_nodes=100)
+    payload = run_graph_dump(tmp_path, internal_only=True, max_nodes=100)
     assert isinstance(payload, GraphPayload)
     assert {"app.main", "app.libs.db"} <= {n.id for n in payload.nodes}
 
@@ -2332,7 +2333,7 @@ def test_warm_paths_fall_back_cold_when_the_cache_fails(
 ):
     # The index is an optimization, never a dependency: a cache that cannot open
     # (read-only filesystem, locked database) must still yield an answer (#395).
-    import archy.mcp as mcp_module
+    import archy.mcp_runs as mcp_module
 
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -2406,7 +2407,7 @@ def test_refactor_behavioral_lens_shape_and_ranking(tmp_path: Path):
     # v0.36 (#227): the behavioral lens replaces archy_hotspots. It surfaces only
     # CC x churn hotspots, ranked by hotspot_score (== cc_sum * churn).
     _init_hotspot_repo(tmp_path)
-    payload = _run_what_to_refactor_next(
+    payload = run_what_to_refactor_next(
         tmp_path, lens="behavioral", top_n=20, since=None, min_risk=0.0
     )
     assert payload.note is None
@@ -2429,7 +2430,7 @@ def test_refactor_behavioral_lens_shape_and_ranking(tmp_path: Path):
 
 def test_refactor_behavioral_lens_top_n_caps_results(tmp_path: Path):
     _init_hotspot_repo(tmp_path)
-    payload = _run_what_to_refactor_next(
+    payload = run_what_to_refactor_next(
         tmp_path, lens="behavioral", top_n=1, since=None, min_risk=0.0
     )
     assert payload.shown <= 1
@@ -2439,7 +2440,7 @@ def test_refactor_behavioral_lens_top_n_caps_results(tmp_path: Path):
 
 def test_refactor_validates_top_n(tmp_path: Path):
     with pytest.raises(ValueError, match="top_n"):
-        _run_what_to_refactor_next(tmp_path, lens="behavioral", top_n=0, since=None, min_risk=0.0)
+        run_what_to_refactor_next(tmp_path, lens="behavioral", top_n=0, since=None, min_risk=0.0)
 
 
 def test_refactor_behavioral_lens_diagnostic_when_not_in_git_repo(tmp_path: Path):
@@ -2449,7 +2450,7 @@ def test_refactor_behavioral_lens_diagnostic_when_not_in_git_repo(tmp_path: Path
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("def f():\n    if True: return 1\n")
-    payload = _run_what_to_refactor_next(
+    payload = run_what_to_refactor_next(
         tmp_path, lens="behavioral", top_n=20, since=None, min_risk=0.0
     )
     assert payload.priorities == ()
@@ -2481,7 +2482,7 @@ def test_what_to_refactor_next_fuses_both_lenses(tmp_path: Path):
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-q", "-m", "touch hot")
 
-    payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
+    payload = run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
     assert payload.git_available is True
     assert payload.note is None
     # Only `pkg.hot` clears both floors, so the fused ranking is one row long.
@@ -2499,7 +2500,7 @@ def test_what_to_refactor_next_structural_only_without_git(tmp_path: Path):
     # explains the degraded mode. The list is still populated structurally.
     _hub_project(tmp_path, spokes=3)
 
-    payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
+    payload = run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=0.1)
     assert payload.git_available is False
     assert payload.priorities
     assert all(e.lenses == ("edit_risk",) for e in payload.priorities)
@@ -2520,7 +2521,7 @@ def test_what_to_refactor_next_honest_null(tmp_path: Path):
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-q", "-m", "init")
 
-    payload = _run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=1.0)
+    payload = run_what_to_refactor_next(tmp_path, top_n=5, since=None, min_risk=1.0)
     assert payload.priorities == ()
     assert payload.total == 0
     assert payload.note is not None
@@ -2529,9 +2530,9 @@ def test_what_to_refactor_next_honest_null(tmp_path: Path):
 
 def test_what_to_refactor_next_validates_args(acyclic_project: Path):
     with pytest.raises(ValueError, match="top_n"):
-        _run_what_to_refactor_next(acyclic_project, top_n=0, since=None, min_risk=0.15)
+        run_what_to_refactor_next(acyclic_project, top_n=0, since=None, min_risk=0.15)
     with pytest.raises(ValueError, match="min_risk"):
-        _run_what_to_refactor_next(acyclic_project, top_n=5, since=None, min_risk=1.5)
+        run_what_to_refactor_next(acyclic_project, top_n=5, since=None, min_risk=1.5)
 
 
 def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
@@ -2562,7 +2563,7 @@ def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
     _git(repo, "add", ".")
     _git(repo, "commit", "-q", "-m", "recent tweak hot")
 
-    full = _run_what_to_refactor_next(repo, lens="behavioral", top_n=20, since=None, min_risk=0.0)
+    full = run_what_to_refactor_next(repo, lens="behavioral", top_n=20, since=None, min_risk=0.0)
     full_modules = {h.module for h in full.priorities}
     assert "pkg.hot" in full_modules
     assert "pkg.old" in full_modules
@@ -2571,7 +2572,7 @@ def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
     assert hot_full.churn == 2
     assert old_full.churn == 1
 
-    filtered = _run_what_to_refactor_next(
+    filtered = run_what_to_refactor_next(
         repo, lens="behavioral", top_n=20, since="2025-01-01", min_risk=0.0
     )
     assert filtered.since == "2025-01-01"
@@ -2588,7 +2589,7 @@ def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
 
 def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):
     from archy.graph import ScanTooLargeError
-    from archy.mcp import _load_graph
+    from archy.mcp_runs import _load_graph
 
     pkg = tmp_path / "myapp"
     pkg.mkdir()
@@ -2602,7 +2603,7 @@ def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):
 
 
 def test_mcp_check_trips_scan_size_guard(tmp_path: Path):
-    # `_run_check` builds its scan arguments from the config it loaded, not via
+    # `run_check` builds its scan arguments from the config it loaded, not via
     # `graph_kwargs`, so the guard needs pinning on this path separately.
     from archy.graph import ScanTooLargeError
 
@@ -2613,7 +2614,7 @@ def test_mcp_check_trips_scan_size_guard(tmp_path: Path):
         (pkg / f"mod{i}.py").write_text("x = 1\n")
     (tmp_path / "archy.yaml").write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
     with pytest.raises(ScanTooLargeError):
-        _run_check(tmp_path, config_path=None)
+        run_check(tmp_path, config_path=None)
 
 
 def test_mcp_check_applies_config_roots(tmp_path: Path):
@@ -2638,12 +2639,12 @@ def test_mcp_check_applies_config_roots(tmp_path: Path):
     config = tmp_path / "archy.yaml"
 
     config.write_text(rules)
-    without = _run_check(tmp_path, config_path=None)
+    without = run_check(tmp_path, config_path=None)
     assert isinstance(without, CheckPayload)
     assert without.violations == ()
 
     config.write_text(rules + "roots: [app]\n")
-    with_roots = _run_check(tmp_path, config_path=None)
+    with_roots = run_check(tmp_path, config_path=None)
     assert isinstance(with_roots, CheckPayload)
     assert [(v.source, v.target) for v in with_roots.violations] == [
         ("app.libs.db", "app.routers.user")
@@ -2678,7 +2679,7 @@ def test_mcp_check_respects_config_exclude(tmp_path: Path):
     config = project / "archy.yaml"
 
     config.write_text(rules)
-    without_exclude = _run_check(project, config_path=None)
+    without_exclude = run_check(project, config_path=None)
 
     assert isinstance(without_exclude, CheckPayload)
     assert without_exclude.passed is False
@@ -2687,7 +2688,7 @@ def test_mcp_check_respects_config_exclude(tmp_path: Path):
     ]
 
     config.write_text(rules + "exclude: [generated]\n")
-    with_exclude = _run_check(project, config_path=None)
+    with_exclude = run_check(project, config_path=None)
 
     assert isinstance(with_exclude, CheckPayload)
     assert with_exclude.passed is True
@@ -2807,7 +2808,7 @@ def test_check_payload_carries_the_exact_pattern_hint(tmp_path: Path):
         "forbid:\n  - {from: store, to: api}\n"
     )
 
-    payload = _run_check(tmp_path, config_path=None)
+    payload = run_check(tmp_path, config_path=None)
 
     assert isinstance(payload, CheckPayload)
     assert payload.violations == ()
@@ -2846,7 +2847,7 @@ def test_check_says_it_only_saw_direct_edges(tmp_path: Path):
     differentiator.
     """
 
-    payload = _run_check(_transitive_project(tmp_path), config_path=None)
+    payload = run_check(_transitive_project(tmp_path), config_path=None)
 
     assert isinstance(payload, CheckPayload)
     # The direct pass is genuinely clean; that is the whole trap.
@@ -2867,7 +2868,7 @@ def test_check_stays_quiet_when_there_is_nothing_to_verify(tmp_path: Path):
     (tmp_path / "app" / "api.py").write_text("x = 1\n")
     (tmp_path / "archy.yaml").write_text("layers:\n  api:\n    modules: ['app.api']\n")
 
-    payload = _run_check(tmp_path, config_path=None)
+    payload = run_check(tmp_path, config_path=None)
 
     assert isinstance(payload, CheckPayload)
     assert payload.model_dump()["transitive_unverified_reason"] is None
@@ -2878,7 +2879,7 @@ def test_check_transitive_checked_needs_a_verdict_not_a_request(tmp_path: Path, 
     leaves the rules exactly as unverified as not asking, so
     transitive_checked=True there would reintroduce the bug the field closes.
 
-    The REASON has to move with the flag. `_run_check` computes its reason before
+    The REASON has to move with the flag. `run_check` computes its reason before
     contracts are attempted, so it names contracts=True; replaying that at a
     caller who just passed contracts=True and watched it fail sends them round a
     loop they have already been through. Goes through the registered tool, not
@@ -2928,14 +2929,14 @@ def _add_cycle_and_resnapshot(project: Path) -> None:
     .archy/baseline.json with the new cycle already in it."""
     (project / "pkg" / "d.py").write_text("import pkg.e\n")
     (project / "pkg" / "e.py").write_text("import pkg.d\n")
-    _run_snapshot(project)
+    run_snapshot(project)
 
 
 def test_run_diff_strict_needs_a_committed_baseline(tmp_path: Path):
     project = _write_cyclic_ratchet_project(tmp_path)
-    _run_snapshot(project)
+    run_snapshot(project)
 
-    result = _run_diff(project, strict=True)
+    result = run_diff(project, strict=True)
 
     assert isinstance(result, DiffErrorPayload)
     assert "strict=True needs `baseline`" in result.error
@@ -2948,7 +2949,7 @@ def test_run_diff_strict_is_not_grandfathered_by_a_resnapshot(tmp_path: Path):
     project = _write_cyclic_ratchet_project(tmp_path)
     _add_cycle_and_resnapshot(project)
 
-    result = _run_diff(project, baseline="archy-baseline.json", strict=True)
+    result = run_diff(project, baseline="archy-baseline.json", strict=True)
 
     assert isinstance(result, DiffReport)
     dumped = result.model_dump()
@@ -2961,7 +2962,7 @@ def test_run_diff_strict_is_not_grandfathered_by_a_resnapshot(tmp_path: Path):
 def test_run_diff_strict_passes_on_carried_findings(tmp_path: Path):
     project = _write_cyclic_ratchet_project(tmp_path)
 
-    result = _run_diff(project, baseline="archy-baseline.json", strict=True)
+    result = run_diff(project, baseline="archy-baseline.json", strict=True)
 
     assert isinstance(result, DiffReport)
     assert result.model_dump()["strict"]["passed"] is True
@@ -2974,7 +2975,7 @@ def test_run_diff_strict_refuses_the_default_snapshot_file(tmp_path: Path):
     project = _write_cyclic_ratchet_project(tmp_path)
     _add_cycle_and_resnapshot(project)
 
-    result = _run_diff(project, baseline=".archy/baseline.json", strict=True)
+    result = run_diff(project, baseline=".archy/baseline.json", strict=True)
 
     assert isinstance(result, DiffErrorPayload)
     assert "the file `archy snapshot` overwrites" in result.error
@@ -2983,7 +2984,7 @@ def test_run_diff_strict_refuses_the_default_snapshot_file(tmp_path: Path):
 def test_run_diff_missing_committed_baseline_says_it_resolves_against_path(tmp_path: Path):
     project = _write_cyclic_ratchet_project(tmp_path)
 
-    result = _run_diff(project, baseline="nope.json", strict=True)
+    result = run_diff(project, baseline="nope.json", strict=True)
 
     assert isinstance(result, DiffErrorPayload)
     assert f"archy snapshot {project} --findings-only --out {project / 'nope.json'}" in result.error
@@ -3005,7 +3006,7 @@ def test_run_diff_strict_refuses_when_the_layer_rules_disappeared(tmp_path: Path
     write_snapshot(snap, project / "archy-baseline.json", findings_only=True)
     (project / "archy.yaml").unlink()
 
-    result = _run_diff(project, baseline="archy-baseline.json", strict=True)
+    result = run_diff(project, baseline="archy-baseline.json", strict=True)
 
     assert isinstance(result, DiffReport)
     assert result.model_dump()["strict"]["passed"] is False
@@ -3039,11 +3040,11 @@ def _write_brief_project(tmp_path: Path, *, with_config: bool) -> Path:
 
 def test_brief_bounds_ranked_sections_and_reports_what_it_dropped(tmp_path: Path):
     project = _write_brief_project(tmp_path, with_config=False)
-    full = _run_brief(project, top_n=50, with_contracts=False, include_tests=False)
+    full = run_brief(project, top_n=50, with_contracts=False, include_tests=False)
     # The fixture must exercise the truncation before the outcome means anything.
     assert full.conventions.totals["naming"] >= 2
 
-    bounded = _run_brief(project, top_n=1, with_contracts=False, include_tests=False)
+    bounded = run_brief(project, top_n=1, with_contracts=False, include_tests=False)
     assert len(bounded.conventions.naming) == 1
     assert bounded.conventions.top_n == 1
     assert bounded.conventions.totals == full.conventions.totals
@@ -3055,7 +3056,7 @@ def test_brief_bounds_ranked_sections_and_reports_what_it_dropped(tmp_path: Path
 
 def test_brief_without_a_config_has_no_coverage_and_no_reason(tmp_path: Path):
     project = _write_brief_project(tmp_path, with_config=False)
-    payload = _run_brief(project, top_n=8, with_contracts=False, include_tests=False)
+    payload = run_brief(project, top_n=8, with_contracts=False, include_tests=False)
     assert payload.coverage is None
     assert payload.transitive_checked is False
     assert payload.transitive_unverified_reason is None
@@ -3063,7 +3064,7 @@ def test_brief_without_a_config_has_no_coverage_and_no_reason(tmp_path: Path):
 
 def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
     project = _write_brief_project(tmp_path, with_config=True)
-    payload = _run_brief(project, top_n=8, with_contracts=False, include_tests=False)
+    payload = run_brief(project, top_n=8, with_contracts=False, include_tests=False)
     assert payload.coverage is not None
     assert payload.transitive_checked is False
     dumped = payload.model_dump()
@@ -3082,9 +3083,9 @@ def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
 def test_brief_reads_the_contracts_verdict(
     tmp_path: Path, monkeypatch, contracts: ContractsPayload, checked: bool, reason_has
 ):
-    monkeypatch.setattr("archy.mcp._run_contracts", lambda *a, **k: contracts)
+    monkeypatch.setattr("archy.mcp_runs.run_contracts", lambda *a, **k: contracts)
     project = _write_brief_project(tmp_path, with_config=True)
-    payload = _run_brief(project, top_n=8, with_contracts=True, include_tests=False)
+    payload = run_brief(project, top_n=8, with_contracts=True, include_tests=False)
     assert payload.transitive_checked is checked
     if reason_has is None:
         assert payload.transitive_unverified_reason is None
@@ -3135,7 +3136,7 @@ def test_impact_affected_expands_conftest(tmp_path: Path):
     )
     (tests / "test_x.py").write_text("def test_x(built):\n    assert built == 1\n")
 
-    result = _run_affected(tmp_path, files=[Path("app/factory.py")], depth=5, test_filter=None)
+    result = run_affected(tmp_path, files=[Path("app/factory.py")], depth=5, test_filter=None)
     assert isinstance(result, Affected)
     assert "tests.conftest" not in result.impacted_tests
     assert "tests.test_x" in result.impacted_tests
@@ -3171,7 +3172,7 @@ def test_what_to_refactor_next_fresh_repo_note_mentions_commit_history(tmp_path:
     head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True)
     assert head.returncode != 0
 
-    payload = _run_what_to_refactor_next(repo, top_n=20, since=None, min_risk=0.0)
+    payload = run_what_to_refactor_next(repo, top_n=20, since=None, min_risk=0.0)
     assert payload.git_available is False
     assert payload.note is not None
     assert "no commit history" in payload.note

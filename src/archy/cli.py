@@ -2232,7 +2232,7 @@ def _run_check_contracts(path: Path, config_filename: Path | None) -> ContractsO
     turn a passing check into a failing one because an optional dependency is
     absent would make `--contracts` unsafe to leave on in CI.
 
-    The two failures are distinguished the way `mcp._run_contracts` distinguishes
+    The two failures are distinguished the way `mcp_runs.run_contracts` distinguishes
     them: a missing dependency is `available=False`, while a config archy could
     not read is `available=True` with the reason attached.
     """

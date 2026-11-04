@@ -13,7 +13,8 @@ from click.testing import CliRunner
 
 from archy.cli import main
 from archy.diff import DiffReport
-from archy.mcp import DiffErrorPayload, _run_diff
+from archy.mcp_payloads import DiffErrorPayload
+from archy.mcp_runs import run_diff
 
 _ISSUE_YAML = """\
 layers:
@@ -72,7 +73,7 @@ def _surfaces(root: Path):
     )
     assert raw.exit_code == text.exit_code, raw.output
     cli = json.loads(raw.output)["strict"]
-    mcp_result = _run_diff(root, baseline="base.json", strict=True)
+    mcp_result = run_diff(root, baseline="base.json", strict=True)
     assert isinstance(mcp_result, DiffReport)
     mcp = mcp_result.model_dump()["strict"]
     assert mcp["passed"] is cli["passed"]
@@ -369,12 +370,12 @@ def _strip_rules(root: Path) -> None:
 
 
 def test_mcp_dump_is_not_an_error_payload(tmp_path: Path):
-    """`_run_diff` returns the report; a mistaken error payload has no strict."""
+    """`run_diff` returns the report; a mistaken error payload has no strict."""
     root = _project(tmp_path, _ISSUE_YAML)
     _snapshot(root)
     (root / "archy.yaml").write_text(_ISSUE_YAML + "exclude: [domain]\n")
 
-    result = _run_diff(root, baseline="base.json", strict=True)
+    result = run_diff(root, baseline="base.json", strict=True)
 
     assert not isinstance(result, DiffErrorPayload)
     assert isinstance(result, DiffReport)

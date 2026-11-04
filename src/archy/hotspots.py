@@ -36,9 +36,9 @@ to ``git log --since``) when you want the "what should I refactor
 right now" lens instead of the historical view.
 
 archy:owns        Hotspot, NoCommitsError, compute_hotspots, git_churn
-archy:mirrored-by NoCommitsError -> archy.cli, archy.mcp,
+archy:mirrored-by NoCommitsError -> archy.cli, archy.mcp_runs,
                   compute_hotspots -> archy.cli, archy.refactor,
-                  git_churn -> archy.cli, archy.mcp
+                  git_churn -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations

@@ -18,7 +18,7 @@ Modules with no incoming or outgoing internal edges are reported as
 callers can rely on a complete map.
 
 archy:owns        compute_instability
-archy:mirrored-by compute_instability -> archy.graph, archy.layers, archy.mcp,
+archy:mirrored-by compute_instability -> archy.graph, archy.layers, archy.mcp_runs,
                   archy.refactor, archy.risk
 """
 

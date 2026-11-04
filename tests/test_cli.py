@@ -2242,7 +2242,7 @@ def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: P
 
 def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch):
     """An unreadable contracts config is `available=True` with a reason, the way
-    `mcp._run_contracts` distinguishes it from a missing dependency."""
+    `mcp_runs.run_contracts` distinguishes it from a missing dependency."""
     _stub_run_contracts_raising(monkeypatch, ContractsConfigError("no contracts config found"))
     root = _make_uncovered_forbid_project(tmp_path)
 

@@ -28,9 +28,9 @@ surface end-to-end so a pin override breaks loudly.
 
 archy:owns        ContractCheck, ContractsConfigError, ContractsNotAvailable,
                   ContractsResult, run_contracts
-archy:mirrored-by ContractsConfigError -> archy.cli, archy.mcp,
-                  ContractsNotAvailable -> archy.cli, archy.mcp,
-                  run_contracts -> archy.cli, archy.mcp
+archy:mirrored-by ContractsConfigError -> archy.cli, archy.mcp_runs,
+                  ContractsNotAvailable -> archy.cli, archy.mcp_runs,
+                  run_contracts -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations
