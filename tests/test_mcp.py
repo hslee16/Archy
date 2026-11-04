@@ -2166,6 +2166,7 @@ def test_archy_impact_keeps_the_static_caveat_when_a_sound_filter_selects_nothin
     assert dumped["impacted_tests"] == ()
     assert "importlib.import_module" in dumped["empty_caveat"]
     _, structured = _call_tool(create_server(), "archy_impact", {**args, "test_filter": "tests/**"})
+    assert structured is not None
     # A union return type wraps the payload under `result`.
     assert "importlib.import_module" in structured["result"]["empty_caveat"]
 
