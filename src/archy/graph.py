@@ -31,6 +31,7 @@ import difflib
 from collections.abc import Iterable, Iterator
 from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
@@ -43,8 +44,9 @@ from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 
 # Longest first so `.cpython-312-….so` wins over bare `.so`.
-_EXTENSION_SUFFIXES_BY_LENGTH = tuple(
-    sorted([str(suffix) for suffix in EXTENSION_SUFFIXES], key=len, reverse=True)
+_EXTENSION_SUFFIXES_BY_LENGTH = cast(
+    tuple[str, ...],
+    tuple(sorted((str(suffix) for suffix in EXTENSION_SUFFIXES), key=len, reverse=True)),
 )
 _EMPTY_PARSE = ParseResult(imports=(), has_errors=False)
 
