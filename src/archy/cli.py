@@ -105,6 +105,7 @@ from archy.duplicates import (
     demote_independent,
     is_test_path,
 )
+from archy.gitlog import InvalidSinceError, resolve_repo_root, since_window_empty
 from archy.graph import (
     ScanTooLargeError,
     build_graph,
@@ -153,6 +154,21 @@ if TYPE_CHECKING:
 @click.version_option(__version__)
 def main() -> None:
     """archy - architectural sensor for Python codebases."""
+
+
+def _empty_since_window(path: Path, since: str | None, rows: object) -> bool:
+    """True when ``since`` selected an empty commit window and ``rows`` is empty.
+
+    Shared by hotspots / coupling / what-to-refactor-next so the
+    ``if since and not rows: resolve_repo_root; since_window_empty`` block
+    lives in one place.
+    """
+    if not since or rows:
+        return False
+    repo = resolve_repo_root(path)
+    if repo is None:
+        return False
+    return since_window_empty(repo, since)
 
 
 def _require(ok: bool, flag: str, constraint: str, value: object) -> None:
@@ -718,7 +734,11 @@ def affected(
 @click.option(
     "--since",
     default=None,
-    help="Restrict churn to commits since this date or refspec (passed to `git log --since`).",
+    help=(
+        "Restrict churn to commits after this date "
+        "(e.g. 2024-01-01, 2 weeks ago) or git ref "
+        "(tag/branch/SHA); invalid values are refused."
+    ),
 )
 @click.option(
     "--format",
@@ -742,6 +762,8 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
     g = _load_graph(path, internal_only=True)
     try:
         churn = git_churn(path, since=since)
+    except InvalidSinceError as exc:
+        raise click.ClickException(str(exc)) from exc
     except NoCommitsError as exc:
         raise click.ClickException(
             f"{path} is a git repository with no commit history yet; "
@@ -753,11 +775,12 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
             "`archy hotspots` needs git history to compute per-file churn."
         )
     rows = compute_hotspots(g, churn=churn)
+    empty_window = _empty_since_window(path, since, rows)
     if fmt == "json":
-        payload = _hotspots_to_dict(rows, top_n=top_n, since=since)
+        payload = _hotspots_to_dict(rows, top_n=top_n, since=since, empty_window=empty_window)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        click.echo(_hotspots_to_text(rows, top_n=top_n, since=since))
+        click.echo(_hotspots_to_text(rows, top_n=top_n, since=since, empty_window=empty_window))
 
 
 @main.command()
@@ -777,7 +800,11 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
 @click.option(
     "--since",
     default=None,
-    help="Restrict history to commits since this date or refspec (passed to `git log --since`).",
+    help=(
+        "Restrict history to commits after this date "
+        "(e.g. 2024-01-01, 2 weeks ago) or git ref "
+        "(tag/branch/SHA); invalid values are refused."
+    ),
 )
 @click.option(
     "--min-support",
@@ -839,18 +866,36 @@ def coupling(
     g = _load_graph(path, internal_only=True)
     module_paths = internal_module_paths(g)
     keep = frozenset(p for p in module_paths if include_tests or not is_test_path(p))
-    cochange = git_cochange(path, since=since, keep_paths=keep)
+    try:
+        cochange = git_cochange(path, since=since, keep_paths=keep)
+    except InvalidSinceError as exc:
+        raise click.ClickException(str(exc)) from exc
     if cochange is None:
         raise click.ClickException(
             f"{path} is not inside a git repository, has no commit history, or git "
             "is unavailable; `archy coupling` needs git history to compute co-change."
         )
     rows = compute_coupling(g, cochange, min_support=min_support, min_confidence=min_confidence)
+    empty_window = _empty_since_window(path, since, rows)
     if fmt == "json":
-        payload = _coupling_to_dict(rows, top_n=top_n, since=since, min_support=min_support)
+        payload = _coupling_to_dict(
+            rows,
+            top_n=top_n,
+            since=since,
+            min_support=min_support,
+            empty_window=empty_window,
+        )
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        click.echo(_coupling_to_text(rows, top_n=top_n, since=since, min_support=min_support))
+        click.echo(
+            _coupling_to_text(
+                rows,
+                top_n=top_n,
+                since=since,
+                min_support=min_support,
+                empty_window=empty_window,
+            )
+        )
 
 
 @main.command()
@@ -978,7 +1023,11 @@ def duplicates(
 @click.option(
     "--since",
     default=None,
-    help="Restrict churn to commits since this date or refspec (passed to `git log --since`).",
+    help=(
+        "Restrict churn to commits after this date "
+        "(e.g. 2024-01-01, 2 weeks ago) or git ref "
+        "(tag/branch/SHA); invalid values are refused."
+    ),
 )
 @click.option(
     "--min-risk",
@@ -1012,10 +1061,13 @@ def what_to_refactor_next(
     no_commits = False
     try:
         churn = git_churn(path, since=since)
+    except InvalidSinceError as exc:
+        raise click.ClickException(str(exc)) from exc
     except NoCommitsError:
         churn = None
         no_commits = True
     rows = compute_refactor_priorities(g, churn=churn, min_risk=min_risk)
+    empty_window = churn is not None and _empty_since_window(path, since, rows)
     if fmt == "json":
         payload = _refactor_to_dict(
             rows,
@@ -1024,6 +1076,7 @@ def what_to_refactor_next(
             min_risk=min_risk,
             git_available=churn is not None,
             no_commits=no_commits,
+            empty_window=empty_window,
         )
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
@@ -1034,6 +1087,8 @@ def what_to_refactor_next(
                 min_risk=min_risk,
                 git_available=churn is not None,
                 no_commits=no_commits,
+                empty_window=empty_window,
+                since=since,
             )
         )
 

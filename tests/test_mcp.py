@@ -2587,6 +2587,23 @@ def test_behavioral_lens_since_propagates_to_git_churn(tmp_path: Path):
 # --- scan-size guard (#216) ---------------------------------------------------
 
 
+def test_what_to_refactor_next_refuses_garbage_since(tmp_path: Path):
+    """#663: MCP must refuse a typo `since`, not return an empty calm ranking."""
+    repo = tmp_path
+    _init_git_repo(repo)
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "hot.py").write_text("def f(x):\n    if x: return 1\n    return 0\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "init")
+
+    with pytest.raises(ValueError, match="garbage-ref"):
+        run_what_to_refactor_next(
+            repo, lens="behavioral", top_n=5, since="garbage-ref", min_risk=0.0
+        )
+
+
 def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):
     from archy.graph import ScanTooLargeError
     from archy.mcp_runs import _load_graph

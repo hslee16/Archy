@@ -911,12 +911,36 @@ def _impact_to_dict(result: Impact) -> dict:
     }
 
 
-def _hotspots_to_dict(rows: list[Hotspot], *, top_n: int, since: str | None) -> dict:
+def _empty_window_note(since: str) -> str:
+    """Shared wording for an empty ``--since`` commit window."""
+    return (
+        f"No commits in the --since window ({since}). "
+        "Widen the window or omit --since to use full history."
+    )
+
+
+def _hotspots_note(rows: list[Hotspot], *, since: str | None, empty_window: bool) -> str | None:
+    """Explain an empty hotspot list; name an empty --since window explicitly."""
+    if rows:
+        return None
+    if empty_window and since:
+        return _empty_window_note(since)
+    return None
+
+
+def _hotspots_to_dict(
+    rows: list[Hotspot],
+    *,
+    top_n: int,
+    since: str | None,
+    empty_window: bool = False,
+) -> dict:
     return {
         "since": since,
         "total": len(rows),
         "shown": min(top_n, len(rows)),
         "hotspots": [r.model_dump() for r in rows[:top_n]],
+        "note": _hotspots_note(rows, since=since, empty_window=empty_window),
     }
 
 
@@ -926,8 +950,17 @@ def _count_header(count: int, noun: str, shown: int, since: str | None) -> str:
     return f"{header} since {since}" if since else header
 
 
-def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> str:
+def _hotspots_to_text(
+    rows: list[Hotspot],
+    *,
+    top_n: int,
+    since: str | None,
+    empty_window: bool = False,
+) -> str:
     if not rows:
+        note = _hotspots_note(rows, since=since, empty_window=empty_window)
+        if note:
+            return f"# {note}"
         suffix = f" since {since}" if since else ""
         return f"# No hotspots found{suffix} (need both cc_sum > 0 and churn > 0)."
     shown = rows[:top_n]
@@ -941,15 +974,24 @@ def _hotspots_to_text(rows: list[Hotspot], *, top_n: int, since: str | None) -> 
     return "\n".join(lines)
 
 
-def _coupling_note(rows: list[CouplingPair], *, min_support: int, since: str | None) -> str | None:
+def _coupling_note(
+    rows: list[CouplingPair],
+    *,
+    min_support: int,
+    since: str | None,
+    empty_window: bool = False,
+) -> str | None:
     """Machine-readable explanation for the empty case (mirrors _refactor_note).
 
     An empty list is a real answer: either the history is too short to clear
     `--min-support`, or every co-changing pair already has a structural edge (so
     the graph already captures it). Say which lever to relax rather than imply
-    the project has no coupling."""
+    the project has no coupling. An empty --since window is named separately so
+    it is not mistaken for "no hidden coupling"."""
     if rows:
         return None
+    if empty_window and since:
+        return _empty_window_note(since)
     suffix = f" since {since}" if since else ""
     return (
         f"No structurally-unconnected module pairs co-change above the thresholds{suffix}. "
@@ -959,7 +1001,12 @@ def _coupling_note(rows: list[CouplingPair], *, min_support: int, since: str | N
 
 
 def _coupling_to_dict(
-    rows: list[CouplingPair], *, top_n: int, since: str | None, min_support: int
+    rows: list[CouplingPair],
+    *,
+    top_n: int,
+    since: str | None,
+    min_support: int,
+    empty_window: bool = False,
 ) -> dict:
     return {
         "since": since,
@@ -967,15 +1014,23 @@ def _coupling_to_dict(
         "total": len(rows),
         "shown": min(top_n, len(rows)),
         "pairs": [r.model_dump() for r in rows[:top_n]],
-        "note": _coupling_note(rows, min_support=min_support, since=since),
+        "note": _coupling_note(
+            rows, min_support=min_support, since=since, empty_window=empty_window
+        ),
     }
 
 
 def _coupling_to_text(
-    rows: list[CouplingPair], *, top_n: int, since: str | None, min_support: int
+    rows: list[CouplingPair],
+    *,
+    top_n: int,
+    since: str | None,
+    min_support: int,
+    empty_window: bool = False,
 ) -> str:
     if not rows:
-        return f"# {_coupling_note(rows, min_support=min_support, since=since)}"
+        note = _coupling_note(rows, min_support=min_support, since=since, empty_window=empty_window)
+        return f"# {note}"
     shown = rows[:top_n]
     lines = [
         _count_header(len(rows), "hidden-coupling pair(s)", len(shown), since),
@@ -1123,6 +1178,8 @@ def _refactor_note(
     min_risk: float,
     git_available: bool,
     no_commits: bool = False,
+    empty_window: bool = False,
+    since: str | None = None,
 ) -> str | None:
     """Machine-readable explanation for the empty / git-absent cases.
 
@@ -1130,6 +1187,8 @@ def _refactor_note(
     the same "nothing to prioritize" / "structural-only" signal rather than
     leaving the caller to infer it from an empty list."""
     if not rows:
+        if empty_window and since and git_available:
+            return _empty_window_note(since)
         if git_available:
             return (
                 "No refactoring priorities surfaced: no file is both complex "
@@ -1170,6 +1229,7 @@ def _refactor_to_dict(
     min_risk: float,
     git_available: bool,
     no_commits: bool = False,
+    empty_window: bool = False,
 ) -> dict:
     return {
         "since": since,
@@ -1179,7 +1239,12 @@ def _refactor_to_dict(
         "shown": min(top_n, len(rows)),
         "priorities": [r.model_dump() for r in rows[:top_n]],
         "note": _refactor_note(
-            rows, min_risk=min_risk, git_available=git_available, no_commits=no_commits
+            rows,
+            min_risk=min_risk,
+            git_available=git_available,
+            no_commits=no_commits,
+            empty_window=empty_window,
+            since=since,
         ),
     }
 
@@ -1191,8 +1256,12 @@ def _refactor_to_text(
     min_risk: float,
     git_available: bool,
     no_commits: bool = False,
+    empty_window: bool = False,
+    since: str | None = None,
 ) -> str:
     if not rows:
+        if empty_window and since and git_available:
+            return f"# {_empty_window_note(since)}"
         if git_available:
             return (
                 "# Nothing to refactor: no file is both complex and churned, and "

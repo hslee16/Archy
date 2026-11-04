@@ -728,7 +728,10 @@ def _register_tools(server: Server) -> None:
             "composite only (git-free; answers 'is this edit dangerous?'). Each "
             "entry says which lenses fired and carries a one-line `rationale`. "
             f"`min_risk` (default {DEFAULT_MIN_RISK}) is the structural floor; "
-            "pass 0 to surface every module on the structural lens. An empty "
+            "pass 0 to surface every module on the structural lens. `since` "
+            "restricts the behavioral (churn) lens to commits after a date "
+            "(e.g. 2024-01-01, 2 weeks ago) or a git ref (tag/branch/SHA); a "
+            "value that is neither is refused. An empty "
             "`priorities` with a `note` is a real answer: there is genuinely "
             "nothing to prioritize."
         ),
