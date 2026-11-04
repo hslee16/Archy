@@ -156,6 +156,21 @@ def main() -> None:
     """archy - architectural sensor for Python codebases."""
 
 
+def _empty_since_window(path: Path, since: str | None, rows: object) -> bool:
+    """True when ``since`` selected an empty commit window and ``rows`` is empty.
+
+    Shared by hotspots / coupling / what-to-refactor-next so the
+    ``if since and not rows: resolve_repo_root; since_window_empty`` block
+    lives in one place.
+    """
+    if not since or rows:
+        return False
+    repo = resolve_repo_root(path)
+    if repo is None:
+        return False
+    return since_window_empty(repo, since)
+
+
 def _require(ok: bool, flag: str, constraint: str, value: object) -> None:
     """Raise a uniform ClickException for a failed CLI option bound-check."""
     if not ok:
@@ -760,11 +775,7 @@ def hotspots(path: Path, top_n: int, since: str | None, fmt: str) -> None:
             "`archy hotspots` needs git history to compute per-file churn."
         )
     rows = compute_hotspots(g, churn=churn)
-    empty_window = False
-    if since and not rows:
-        repo = resolve_repo_root(path)
-        if repo is not None:
-            empty_window = since_window_empty(repo, since)
+    empty_window = _empty_since_window(path, since, rows)
     if fmt == "json":
         payload = _hotspots_to_dict(rows, top_n=top_n, since=since, empty_window=empty_window)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
@@ -865,11 +876,7 @@ def coupling(
             "is unavailable; `archy coupling` needs git history to compute co-change."
         )
     rows = compute_coupling(g, cochange, min_support=min_support, min_confidence=min_confidence)
-    empty_window = False
-    if since and not rows:
-        repo = resolve_repo_root(path)
-        if repo is not None:
-            empty_window = since_window_empty(repo, since)
+    empty_window = _empty_since_window(path, since, rows)
     if fmt == "json":
         payload = _coupling_to_dict(
             rows,
@@ -1060,11 +1067,7 @@ def what_to_refactor_next(
         churn = None
         no_commits = True
     rows = compute_refactor_priorities(g, churn=churn, min_risk=min_risk)
-    empty_window = False
-    if since and churn is not None and not rows:
-        repo = resolve_repo_root(path)
-        if repo is not None:
-            empty_window = since_window_empty(repo, since)
+    empty_window = churn is not None and _empty_since_window(path, since, rows)
     if fmt == "json":
         payload = _refactor_to_dict(
             rows,

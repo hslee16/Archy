@@ -37,8 +37,9 @@ from pathlib import Path
 # `--since now` from being refused as a typo.
 _NOW_LIKE = frozenset({"now", "today"})
 # git's "about now" for an unparseable --since is the current epoch second;
-# allow a small skew for the resolve call itself.
-_NOW_SKEW_SECONDS = 120
+# only absorb the resolve-call skew itself. A wider window (e.g. 120s) also
+# refused legitimate relative dates like "1 minute ago" / "30 seconds ago".
+_NOW_SKEW_SECONDS = 2
 
 
 class InvalidSinceError(ValueError):

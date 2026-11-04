@@ -313,6 +313,22 @@ def test_git_churn_since_garbage_refuses(tmp_path: Path):
     assert "garbage-ref" in result.output
 
 
+def test_git_churn_since_one_minute_ago_is_accepted(tmp_path: Path):
+    """#663/#737: relative dates near now must not trip the garbage-now heuristic."""
+    from archy.gitlog import resolve_since_log_args
+
+    repo = tmp_path
+    _init_repo(repo)
+    (repo / "a.py").write_text("x = 1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "init")
+
+    args = resolve_since_log_args(repo, "1 minute ago")
+    assert args == ("--since=1 minute ago",)
+    churn = git_churn(repo, since="1 minute ago")
+    assert churn is not None
+
+
 def test_cli_hotspots_since_empty_window_note(tmp_path: Path):
     """#663: when the window holds 0 commits, JSON note says so."""
     import json as _json

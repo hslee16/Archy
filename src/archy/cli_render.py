@@ -911,15 +911,20 @@ def _impact_to_dict(result: Impact) -> dict:
     }
 
 
+def _empty_window_note(since: str) -> str:
+    """Shared wording for an empty ``--since`` commit window."""
+    return (
+        f"No commits in the --since window ({since}). "
+        "Widen the window or omit --since to use full history."
+    )
+
+
 def _hotspots_note(rows: list[Hotspot], *, since: str | None, empty_window: bool) -> str | None:
     """Explain an empty hotspot list; name an empty --since window explicitly."""
     if rows:
         return None
     if empty_window and since:
-        return (
-            f"No commits in the --since window ({since}). "
-            "Widen the window or omit --since to use full history."
-        )
+        return _empty_window_note(since)
     return None
 
 
@@ -986,10 +991,7 @@ def _coupling_note(
     if rows:
         return None
     if empty_window and since:
-        return (
-            f"No commits in the --since window ({since}). "
-            "Widen the window or omit --since to use full history."
-        )
+        return _empty_window_note(since)
     suffix = f" since {since}" if since else ""
     return (
         f"No structurally-unconnected module pairs co-change above the thresholds{suffix}. "
@@ -1186,10 +1188,7 @@ def _refactor_note(
     leaving the caller to infer it from an empty list."""
     if not rows:
         if empty_window and since and git_available:
-            return (
-                f"No commits in the --since window ({since}). "
-                "Widen the window or omit --since to use full history."
-            )
+            return _empty_window_note(since)
         if git_available:
             return (
                 "No refactoring priorities surfaced: no file is both complex "
@@ -1262,10 +1261,7 @@ def _refactor_to_text(
 ) -> str:
     if not rows:
         if empty_window and since and git_available:
-            return (
-                f"# No commits in the --since window ({since}). "
-                "Widen the window or omit --since to use full history."
-            )
+            return f"# {_empty_window_note(since)}"
         if git_available:
             return (
                 "# Nothing to refactor: no file is both complex and churned, and "
