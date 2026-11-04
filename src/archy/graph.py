@@ -43,8 +43,8 @@ from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 
 # Longest first so `.cpython-312-….so` wins over bare `.so`.
-_EXTENSION_SUFFIXES_BY_LENGTH: tuple[str, ...] = tuple(
-    sorted(EXTENSION_SUFFIXES, key=len, reverse=True)
+_EXTENSION_SUFFIXES_BY_LENGTH = tuple(
+    sorted([str(suffix) for suffix in EXTENSION_SUFFIXES], key=len, reverse=True)
 )
 _EMPTY_PARSE = ParseResult(imports=(), has_errors=False)
 
@@ -584,7 +584,6 @@ def _discover_modules(
 
     modules.sort(key=lambda m: m.qualname)
     return modules
-
 
 
 def _extension_module_stem(filename: str) -> str | None:
