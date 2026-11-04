@@ -27,7 +27,7 @@ you *what to decide*. This is the lightweight human-facing layer the review
 brief consumes.
 
 archy:owns        summarize_diff
-archy:mirrored-by summarize_diff -> archy.cli, archy.mcp, archy.simulate
+archy:mirrored-by summarize_diff -> archy.cli, archy.mcp_runs, archy.simulate
 """
 
 from __future__ import annotations

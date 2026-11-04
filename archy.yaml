@@ -64,6 +64,7 @@ layers:
       - "archy.mcp"
       - "archy.mcp_compat"
       - "archy.mcp_payloads"
+      - "archy.mcp_runs"
       - "archy.render"
       - "archy.scan_config"
   install:

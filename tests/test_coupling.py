@@ -18,7 +18,7 @@ from archy.coupling import (
     git_cochange,
     internal_module_paths,
 )
-from archy.mcp import _run_impact
+from archy.mcp_runs import run_impact
 
 # --------------------------------------------------------------------------- #
 # compute_coupling unit tests (constructed graph + CoChangeData, no disk)
@@ -404,7 +404,7 @@ def test_coupling_pair_is_frozen_model():
 
 def test_run_impact_co_change_surfaces_hidden_partner(tmp_path: Path):
     _make_coupled_project(tmp_path)  # pkg.a and pkg.b co-change 6x, no import edge
-    result = _run_impact(tmp_path, files=[tmp_path / "pkg" / "a.py"], co_change=True)
+    result = run_impact(tmp_path, files=[tmp_path / "pkg" / "a.py"], co_change=True)
     assert result.changed == ("pkg.a",)
     assert "pkg.b" not in result.impacted  # no structural edge -> not in blast radius
     hints = {(h.coupled_to, h.module) for h in result.co_changed}
@@ -413,7 +413,7 @@ def test_run_impact_co_change_surfaces_hidden_partner(tmp_path: Path):
 
 def test_run_impact_co_change_off_is_git_free_and_empty(tmp_path: Path):
     _make_coupled_project(tmp_path)
-    result = _run_impact(tmp_path, files=[tmp_path / "pkg" / "a.py"])  # co_change defaults False
+    result = run_impact(tmp_path, files=[tmp_path / "pkg" / "a.py"])  # co_change defaults False
     assert result.co_changed == ()
 
 
@@ -423,5 +423,5 @@ def test_run_impact_co_change_without_git_is_empty(tmp_path: Path):
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("VALUE = 1\n")
-    result = _run_impact(tmp_path, files=[pkg / "a.py"], co_change=True)
+    result = run_impact(tmp_path, files=[pkg / "a.py"], co_change=True)
     assert result.co_changed == ()

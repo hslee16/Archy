@@ -53,10 +53,10 @@ archy:owns        BaseFamily, ConventionsReport, DocGap, ExportGap, Gate, ModelC
                   ModulePartition, ModuleView, NamingFamily, NamingHome, RegistryEntry,
                   SharedConstant, SurfaceFamily, UnparsedModule, camel_suffix,
                   censused_modules, compute_conventions, compute_module_view
-archy:mirrored-by ConventionsReport -> archy.cli, archy.cli_render, archy.headers,
-                  archy.mcp, archy.mcp_payloads, ModuleView -> archy.cli_render,
-                  archy.mcp, compute_conventions -> archy.cli, archy.mcp,
-                  bench.conventions_bench, compute_module_view -> archy.cli, archy.mcp
+archy:mirrored-by ModuleView -> archy.cli_render, archy.mcp, archy.mcp_runs,
+                  compute_conventions -> archy.cli, archy.mcp_runs,
+                  bench.conventions_bench, compute_module_view -> archy.cli,
+                  archy.mcp_runs
 """
 
 from __future__ import annotations
