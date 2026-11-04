@@ -237,3 +237,105 @@ def test_cli_hotspots_top_limits_rows(tmp_path: Path):
     assert result.exit_code == 0, result.output
     payload = _json.loads(result.output)
     assert len(payload["hotspots"]) <= 1
+
+
+def test_git_churn_since_tag_counts_only_after_tag(tmp_path: Path):
+    """#663: a tag must bound the window to commits after the tag.
+
+    Assert the fixture has commits on both sides of the tag before asserting
+    the filtered churn, so a fixture drift cannot make the test vacuously green.
+    """
+    import json as _json
+
+    repo = tmp_path
+    _init_repo(repo)
+    pkg = repo / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "hot.py").write_text("def f(x):\n    if x:\n        return 1\n    return 0\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "before tag")
+    _git(repo, "tag", "v1.0.0")
+
+    (pkg / "hot.py").write_text((pkg / "hot.py").read_text() + "\n# after\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "after tag")
+
+    before = subprocess.run(
+        ["git", "-C", str(repo), "log", "--oneline", "v1.0.0"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    after = subprocess.run(
+        ["git", "-C", str(repo), "log", "--oneline", "v1.0.0..HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert len([line for line in before.stdout.splitlines() if line]) >= 1
+    assert len([line for line in after.stdout.splitlines() if line]) == 1
+
+    full = git_churn(repo)
+    assert full is not None
+    key = str((pkg / "hot.py").resolve())
+    assert full[key] == 2
+
+    bounded = git_churn(repo, since="v1.0.0")
+    assert bounded is not None
+    assert bounded[key] == 1
+
+    # CLI JSON note stays null when the window has commits but still finds hotspots.
+    result = CliRunner().invoke(
+        main, ["hotspots", str(repo), "--since", "v1.0.0", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.output)
+    assert payload["total"] >= 1
+    assert payload["note"] is None
+
+
+def test_git_churn_since_garbage_refuses(tmp_path: Path):
+    """#663: a typo must refuse, not silently match 0 commits."""
+    from archy.gitlog import InvalidSinceError
+
+    repo = tmp_path
+    _init_repo(repo)
+    (repo / "a.py").write_text("x = 1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "init")
+
+    with pytest.raises(InvalidSinceError, match="garbage-ref"):
+        git_churn(repo, since="garbage-ref")
+
+    result = CliRunner().invoke(main, ["hotspots", str(repo), "--since", "garbage-ref"])
+    assert result.exit_code == 1
+    assert "garbage-ref" in result.output
+
+
+def test_cli_hotspots_since_empty_window_note(tmp_path: Path):
+    """#663: when the window holds 0 commits, JSON note says so."""
+    import json as _json
+
+    repo = tmp_path
+    _make_hotspot_project(repo)
+    _git(repo, "tag", "v-at-head")
+
+    # Confirm the window is empty before asserting the note.
+    after = subprocess.run(
+        ["git", "-C", str(repo), "log", "--oneline", "v-at-head..HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert after.stdout.strip() == ""
+
+    result = CliRunner().invoke(
+        main, ["hotspots", str(repo), "--since", "v-at-head", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    payload = _json.loads(result.output)
+    assert payload["total"] == 0
+    assert payload["note"] is not None
+    assert "No commits in the --since window" in payload["note"]
+    assert "v-at-head" in payload["note"]

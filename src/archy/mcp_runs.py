@@ -68,6 +68,7 @@ from archy.duplicates import (
     demote_independent,
     is_test_path,
 )
+from archy.gitlog import resolve_repo_root, resolve_since_log_args, since_window_empty
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -1062,11 +1063,14 @@ def _refactor_note(
     path: Path,
     min_risk: float,
     no_commits: bool = False,
+    empty_window: bool = False,
+    since: str | None = None,
 ) -> str | None:
     """Lens-aware empty/degraded note for archy_what_to_refactor_next.
 
     behavioral needs git; structural never does; fused runs both and degrades
     to structural-only off git. A non-empty single-lens result needs no note.
+    An empty --since window is named so it is not mistaken for a calm codebase.
     """
     missing_git = (
         f"{path} has no commit history yet"
@@ -1081,6 +1085,11 @@ def _refactor_note(
                 "structural-only (edit-risk). Run inside git for the fused view."
             )
         return None
+    if empty_window and since and git_available:
+        return (
+            f"No commits in the --since window ({since}). "
+            "Widen the window or omit --since to use full history."
+        )
     if lens == "behavioral":
         if not git_available:
             return (
@@ -1126,6 +1135,12 @@ def run_what_to_refactor_next(
         raise ValueError(f"top_n must be >= 1; got {top_n}")
     if not 0.0 <= min_risk <= 1.0:
         raise ValueError(f"min_risk must be in [0, 1]; got {min_risk}")
+    # Refuse a garbage `since` even when lens='structural' skips the git call,
+    # so a typo cannot silently look like "nothing to prioritize".
+    if since is not None:
+        repo = resolve_repo_root(path)
+        if repo is not None:
+            resolve_since_log_args(repo, since)
 
     graph = _load_graph(path, internal_only=True)
     # The behavioral lens needs git; the structural lens never does, so skip the
@@ -1173,6 +1188,11 @@ def run_what_to_refactor_next(
         for r in shown
     )
 
+    empty_window = False
+    if since and git_available and not rows:
+        repo = resolve_repo_root(path)
+        if repo is not None:
+            empty_window = since_window_empty(repo, since)
     note = _refactor_note(
         lens=lens,
         rows=rows,
@@ -1180,6 +1200,8 @@ def run_what_to_refactor_next(
         path=path,
         min_risk=min_risk,
         no_commits=no_commits,
+        empty_window=empty_window,
+        since=since,
     )
 
     return WhatToRefactorPayload(

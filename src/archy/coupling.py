@@ -60,7 +60,12 @@ from typing import NamedTuple
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
-from archy.gitlog import fold_rename, normalize_py_path, resolve_repo_root
+from archy.gitlog import (
+    fold_rename,
+    normalize_py_path,
+    resolve_repo_root,
+    resolve_since_log_args,
+)
 
 # Placeholder defaults; calibrated on the bench (bench/coupling_sweep.py ->
 # bench/coupling_results.md) before shipping, mirroring how the duplicate
@@ -168,7 +173,7 @@ def git_cochange(
     # so the `R` lines the rename-folding relies on are always present.
     cmd = ["git", "-C", str(repo_root), "log", "-M", "--name-status", "--format=%H"]
     if since:
-        cmd.append(f"--since={since}")
+        cmd.extend(resolve_since_log_args(repo_root, since))
     try:
         log_proc = subprocess.run(
             cmd, capture_output=True, text=True, errors="surrogateescape", check=True
