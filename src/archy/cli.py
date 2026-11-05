@@ -676,7 +676,8 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> No
     type=str,
     default=None,
     help="Recursive glob (matched against project-relative paths) identifying test files. "
-    "Defaults to pytest conventions: test_*.py, *_test.py, anything under a tests/ directory.",
+    "Defaults to pytest conventions: test_*.py, *_test.py, anything under a tests/ directory. "
+    "A glob that matches no file is an error, with a did-you-mean when a directory is close.",
 )
 @click.option(
     "-j",
@@ -727,7 +728,10 @@ def affected(
 
     g = _load_graph(path, internal_only=True)
     resolved = [path / f for f in file_list]
-    result = find_affected(g, resolved, project_root=path, depth=depth, test_filter=test_filter)
+    try:
+        result = find_affected(g, resolved, project_root=path, depth=depth, test_filter=test_filter)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
 
     if as_json:
         click.echo(json.dumps(_affected_to_dict(result), indent=2, sort_keys=True))

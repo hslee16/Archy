@@ -21,8 +21,8 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   parse_project -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
                   bench.pattern_detection, resolve_modules -> archy.mcp_runs,
-                  archy.simulate, suggest_modules -> archy.cli, archy.conventions,
-                  archy.mcp_runs
+                  archy.simulate, suggest_modules -> archy.affected, archy.cli,
+                  archy.conventions, archy.mcp_runs
 """
 
 from __future__ import annotations

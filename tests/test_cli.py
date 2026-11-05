@@ -31,6 +31,7 @@ from archy.diff import (
     ViolationSetDiff,
 )
 from archy.duplicates import DuplicateGroup, DuplicateMember
+from archy.graph import build_graph
 from archy.hotspots import Hotspot
 from archy.layers import LayerConfigError, ReachViolation, RequiredRule, load_config, match_layer
 from archy.simulate import AppliedDelta, PropagationDelta, SimulateReport
@@ -1342,11 +1343,54 @@ def test_affected_filter_with_regex_metachars_does_not_crash(tmp_path: Path):
     _make_app_with_test_module(tmp_path)
     args = ["affected", str(tmp_path), "app/core.py", "--filter", "[", "--json"]
     result = CliRunner().invoke(main, args)
+    # `[` matches nothing here, so it is refused (#660); the refusal is the clean
+    # exit a ClickException gives, where a `re.error` would surface as itself.
+    assert isinstance(result.exception, SystemExit), result.exception
+    assert result.exit_code == 1
+
+
+_FILTER_MISS = (
+    "matches no file in the graph "
+    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
+)
+
+
+@pytest.mark.parametrize("output_flags", [(), ("--json",), ("--quiet",)])
+@pytest.mark.parametrize(
+    ("test_filter", "message"),
+    [
+        ("test/**", f"test filter 'test/**' {_FILTER_MISS}; did you mean tests/**?"),
+        ("[", f"test filter '[' {_FILTER_MISS}"),
+    ],
+)
+def test_affected_refuses_a_filter_that_matches_no_file(
+    tmp_path: Path, output_flags: tuple[str, ...], test_filter: str, message: str
+):
+    """#660: text and JSON blamed static edges, and `-q` printed nothing and exited 0."""
+    _make_app_with_test_module(tmp_path)
+    args = ["affected", str(tmp_path), "app/core.py", *output_flags, "--filter"]
+    # The fixture's edge is real: the correct filter selects the test on this same surface.
+    assert build_graph(tmp_path).has_edge("tests.test_core", "app.core")
+    sound = CliRunner().invoke(main, [*args, "tests/**"])
+    assert sound.exit_code == 0, sound.output
+    assert "test_core" in sound.stdout
+
+    refused = CliRunner().invoke(main, [*args, test_filter])
+    assert refused.exit_code == 1
+    assert refused.stderr == f"Error: {message}\n"
+    assert refused.stdout == ""
+
+
+def test_affected_filter_reads_paths_against_a_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """`archy affected .` is the documented shape, and must not refuse a sound filter."""
+    _make_app_with_test_module(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    args = ["affected", ".", "app/core.py", "--filter", "tests/**", "--quiet"]
+    result = CliRunner().invoke(main, args)
     assert result.exit_code == 0, result.output
-    assert result.exception is None
-    payload = json.loads(result.output)
-    # `[` matches nothing here, so the test module is classified as a module.
-    assert payload["impacted_tests"] == []
+    assert result.output.strip().endswith("tests/test_core.py")
 
 
 def test_affected_merges_stdin_and_positional_files(tmp_path: Path):

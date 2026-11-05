@@ -2110,6 +2110,67 @@ def test_impact_mode_affected_returns_test_split(tmp_path: Path):
     )
 
 
+_FILTER_MISS = (
+    "matches no file in the graph "
+    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
+)
+
+
+def _project_with_a_test_of_a(root: Path) -> dict:
+    """`tests/test_a.py` imports `pkg/a.py`; returns the `archy_impact` args for it."""
+    for package in ("pkg", "tests"):
+        (root / package).mkdir()
+        (root / package / "__init__.py").write_text("")
+    (root / "pkg" / "a.py").write_text("")
+    (root / "pkg" / "lone.py").write_text("")
+    (root / "tests" / "test_a.py").write_text("from pkg.a import thing\n")
+    return {"path": str(root), "files": ["pkg/a.py"], "mode": "affected"}
+
+
+@pytest.mark.parametrize(
+    ("test_filter", "message"),
+    [
+        (
+            "test/**",
+            f"test filter 'test/**' {_FILTER_MISS}; did you mean tests/**?",
+        ),
+        ("[", f"test filter '[' {_FILTER_MISS}"),
+    ],
+    ids=["typo", "invalid-glob"],
+)
+def test_archy_impact_refuses_a_test_filter_that_matches_no_file(
+    tmp_path: Path, test_filter: str, message: str
+):
+    """#660: the agent was told nothing imports the code when its filter matched no file."""
+    from archy.mcp_compat import ToolError
+
+    args = _project_with_a_test_of_a(tmp_path)
+    files = [Path("pkg/a.py")]
+    assert build_graph(tmp_path).has_edge("tests.test_a", "pkg.a")  # the edge is real
+    sound = run_affected(tmp_path, files=files, depth=5, test_filter="tests/**").model_dump()
+    assert sound["impacted_tests"] == ("tests.test_a",)
+    assert sound["empty_caveat"] is None
+
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        run_affected(tmp_path, files=files, depth=5, test_filter=test_filter)
+    # A refusal has no return model, so the wire form to pin here is the ToolError text.
+    with pytest.raises(ToolError, match=f"{re.escape(message)}$"):
+        _call_tool(create_server(), "archy_impact", {**args, "test_filter": test_filter})
+
+
+def test_archy_impact_keeps_the_static_caveat_when_a_sound_filter_selects_nothing(tmp_path: Path):
+    """The comparison case for the refusal: the filter matches `tests/test_a.py`, just not here."""
+    args = {**_project_with_a_test_of_a(tmp_path), "files": ["pkg/lone.py"]}
+    files = [Path("pkg/lone.py")]
+    dumped = run_affected(tmp_path, files=files, depth=5, test_filter="tests/**").model_dump()
+    assert dumped["impacted_tests"] == ()
+    assert "importlib.import_module" in dumped["empty_caveat"]
+    _, structured = _call_tool(create_server(), "archy_impact", {**args, "test_filter": "tests/**"})
+    assert structured is not None
+    # A union return type wraps the payload under `result`.
+    assert "importlib.import_module" in structured["result"]["empty_caveat"]
+
+
 def test_impact_tool_validates_mode(acyclic_project: Path):
     from archy.mcp_compat import ToolError
 
