@@ -37,7 +37,7 @@ DELETED_OR_RENAMED_REASON = (
 
 _FILTER_MATCHED_NOTHING = (
     "matches no file in the graph "
-    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
+    "(paths are project-relative; only files inside a package, and test files, are scanned)"
 )
 
 # Auto-detected test conventions. A node is treated as a test if its

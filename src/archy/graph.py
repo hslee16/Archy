@@ -557,10 +557,11 @@ def _discover_modules(
     modules: list[Module] = []
     seen: set[str] = set()
 
+    outside: list[Path] = []
     for py_file in _iter_python_files(root, ignored):
         qualname = _qualname_for(py_file, package_roots)
         if qualname is None:
-            # Top-level scripts not inside any package are skipped for v1.
+            outside.append(py_file)
             continue
         modules.append(
             Module(
@@ -569,6 +570,20 @@ def _discover_modules(
                 is_package=py_file.name == "__init__.py",
             )
         )
+        seen.add(qualname)
+
+    # Test files no package root names (an init-less `tests/` beside a `src/`
+    # layout) get their path from the scan root, as a flat layout already gives
+    # them. Only test files: `docs/conf.py`, `noxfile.py` and `examples/` are
+    # scripts nothing imports, and naming them would move module counts and
+    # scores for a reason that has nothing to do with test selection. Last, so a
+    # fallback name that equals a real module is skipped rather than
+    # overwriting it (#529).
+    for py_file in outside:
+        qualname = _scan_root_qualname(py_file, root)
+        if qualname is None or qualname in seen:
+            continue
+        modules.append(Module(qualname=qualname, path=py_file.resolve(), is_package=False))
         seen.add(qualname)
 
     for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored):
@@ -665,6 +680,34 @@ def _qualname_under_roots(
         parts = [*rel_parent.parts, *leaf_parts]
         return ".".join(parts) if parts else pkg_root.name
     return None
+
+
+def _scan_root_qualname(py_file: Path, root: Path) -> str | None:
+    """Dotted name of a test file relative to the scan root, or None if it is not one.
+
+    Also None when any path part is not a valid identifier (`my-tests/test_a.py`),
+    because such a name could never be imported and would only add noise.
+    """
+    try:
+        rel = py_file.resolve().relative_to(root.resolve())
+    except ValueError:
+        return None
+    parts = rel.with_suffix("").parts
+    if not _is_conventional_test_file(rel) or not all(part.isidentifier() for part in parts):
+        return None
+    return ".".join(parts)
+
+
+def _is_conventional_test_file(rel: Path) -> bool:
+    """`test_*.py`, `*_test.py`, or anything under a `tests/` directory.
+
+    The same default `archy affected` uses to decide what is a test
+    (`affected._AUTO_TEST_GLOBS` / `_AUTO_TEST_DIR`); `affected` imports this
+    module, so the rule is restated here and a test pins that the two agree.
+    A `--filter` glob can call other files tests, but the graph has to decide
+    what to scan before any filter exists.
+    """
+    return rel.name.startswith("test_") or rel.name.endswith("_test.py") or "tests" in rel.parts
 
 
 def _qualname_for_stem(
