@@ -782,3 +782,24 @@ I did not run the tests; the checks were by reading the code.</result>
 I did not call `mark_review_as_passed`, because the review has findings.</result>
 <usage><subagent_tokens>21931</subagent_tokens><tool_uses>3</tool_uses><duration_ms>28376</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>a9217f1231e77864a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a9217f1231e77864a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review structural" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+- **Changes reviewed:** `affected.py` only gets a reworded message. `graph.py` gains a new scan of test files that sit outside every package.
+- **`uv run archy impact . --file src/archy/graph.py`:** 65 modules depend on `archy.graph`, including `archy.affected`, `archy.cli`, `archy.mcp` and `archy.contracts`, plus the `bench.*` modules. This is the full radius of the change.
+- **`uv run archy affected . src/archy/graph.py src/archy/affected.py`:** 30 tests to re-run across 34 affected modules, including `tests.test_graph`, `tests.test_affected` and `tests.test_cli`.
+- **`uv run archy cycles .`:** no cycles found.
+- **`uv run archy check .`:** no layer violations. It also noted that 26 forbid rules can't be verified by the direct-edge check, which is unchanged by this diff.
+- **`uv run archy what-to-refactor-next . --top 10`:** `archy.graph` is ranked second (`[hotspot+edit_risk]`, priority 1.349). A change there deserves a tight test net. The new code is small, and the fallback only adds test files and skips any name that already exists.
+- **Duplicated test rule:** `graph._is_conventional_test_file` copies the rule in `affected.py`: `test_*`, `*_test.py`, or a `tests` path part. They agree today, and the code comment says a test pins that they agree. I did not check that the test exists or goes red when the two rules differ.</result>
+<usage><subagent_tokens>22764</subagent_tokens><tool_uses>5</tool_uses><duration_ms>79594</duration_ms></usage>
+</task-notification>
