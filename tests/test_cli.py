@@ -1427,6 +1427,47 @@ def test_contracts_json_says_verified_separately_from_all_kept(tmp_path: Path):
     assert payload["contracts"][0]["unmatched_expressions"] == ["top.*.handlers"]
 
 
+def _write_zero_contracts_project(tmp_path: Path) -> Path:
+    """A package whose `.importlinter` is present but defines no contracts."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("X = 1\n")
+    (tmp_path / ".importlinter").write_text("[importlinter]\nroot_package = pkg\n")
+    (tmp_path / "archy.yaml").write_text(
+        'layers:\n  hi:\n    modules: ["pkg.a"]\n  lo:\n    modules: ["pkg.b"]\n'
+    )
+    return tmp_path
+
+
+def test_contracts_exits_one_when_config_defines_zero_contracts(tmp_path: Path):
+    """#775: 0 kept, 0 broken at exit 0 reads as protection that is not there."""
+    root = _write_zero_contracts_project(tmp_path)
+
+    result = CliRunner().invoke(main, ["contracts", str(root)])
+
+    assert result.exit_code == 1
+    assert "no contracts defined" in result.output
+
+    result = CliRunner().invoke(main, ["contracts", str(root), "--format", "json"])
+
+    payload = json.loads(result.output)
+    assert payload["contracts"] == []
+    assert payload["all_kept"] is True
+    assert payload["verified"] is False
+
+
+def test_check_contracts_does_not_claim_checked_with_zero_contracts(tmp_path: Path):
+    """#775 on the `check` surface: no verdict, and the reason says why."""
+    root = _write_zero_contracts_project(tmp_path)
+
+    result = CliRunner().invoke(main, ["check", str(root), "--contracts", "--format", "json"])
+
+    payload = json.loads(result.output)
+    assert payload["transitive_checked"] is False
+    assert "0 contracts" in payload["transitive_unverified_reason"]
+
+
 def test_check_contracts_does_not_claim_a_transitive_check_it_did_not_do(tmp_path: Path):
     """#457. `transitive_checked` answers "were the forbid rules evaluated
     transitively". A contract whose patterns matched nothing was not evaluated,

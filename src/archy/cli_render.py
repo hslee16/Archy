@@ -774,6 +774,11 @@ def _contracts_to_text(result: ContractsResult) -> str:
     if result.unverifiable:
         summary += f", {result.unverifiable} unverifiable"
     lines = [summary]
+    if not result.contracts:
+        lines.append(
+            "    ! no contracts defined: nothing was verified; add a contract "
+            "section to `.importlinter` (or a `forbid:` rule to `archy.yaml`)"
+        )
     for c in result.contracts:
         # A contract that could not have failed gets its own marker. Rendering
         # it as `OK` is the whole of #435: it reads as protection that is not

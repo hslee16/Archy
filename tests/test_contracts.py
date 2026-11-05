@@ -527,3 +527,93 @@ def test_a_floating_layer_pattern_in_a_forbid_rule_is_refused_clearly(tmp_path: 
     )
     with pytest.raises(ContractsConfigError, match="has no root package"):
         run_contracts(tmp_path)
+
+
+def _write_empty_contracts_project(root: Path) -> None:
+    """A package with a PRESENT config that defines zero contracts."""
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("X = 1\n")
+    (root / ".importlinter").write_text("[importlinter]\nroot_package = pkg\n")
+
+
+def _purge_pkg(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in list(sys.modules):
+        if name == "pkg" or name.startswith("pkg."):
+            monkeypatch.delitem(sys.modules, name, raising=False)
+
+
+def test_zero_contracts_is_not_verified(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """#775: a present config with nothing in it checked nothing.
+
+    `all_kept` stays True (nothing broke); `verified` must be False, or a
+    deleted contract section keeps CI green with no line saying so.
+    """
+    _purge_pkg(monkeypatch)
+    _write_empty_contracts_project(tmp_path)
+    result = run_contracts(tmp_path)
+    assert result.contracts == ()
+    assert result.all_kept
+    assert result.verified is False
+
+
+def test_archy_yaml_without_forbid_is_not_verified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#775, second shape: layers but no `forbid:` rules, same verdict."""
+    _purge_pkg(monkeypatch)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("X = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        'layers:\n  hi:\n    modules: ["pkg.a"]\n  lo:\n    modules: ["pkg.b"]\n'
+    )
+    result = run_contracts(tmp_path)
+    assert result.contracts == ()
+    assert result.verified is False
+
+
+def test_malformed_importlinter_is_a_config_error_naming_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#801: malformed INI must not escape as a configparser traceback."""
+    _purge_pkg(monkeypatch)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (tmp_path / ".importlinter").write_text("this is not ini\n")
+    with pytest.raises(ContractsConfigError) as excinfo:
+        run_contracts(tmp_path)
+    assert ".importlinter" in str(excinfo.value)
+    assert excinfo.type is ContractsConfigError
+
+
+def test_unknown_contract_type_is_a_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#801: an unknown `type =` names the file and the valid types."""
+    _purge_pkg(monkeypatch)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (tmp_path / ".importlinter").write_text(
+        "[importlinter]\nroot_package = pkg\n\n"
+        "[importlinter:contract:1]\nname = x\ntype = nonsense\n"
+    )
+    with pytest.raises(ContractsConfigError, match="unknown contract type"):
+        run_contracts(tmp_path)
+
+
+def test_pyproject_without_importlinter_section_is_a_config_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#801: `--config pyproject.toml` without the section is a clean error."""
+    _purge_pkg(monkeypatch)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (tmp_path / "pyproject.toml").write_text('[project]\nname = "x"\n')
+    with pytest.raises(ContractsConfigError, match="Could not read any configuration"):
+        run_contracts(tmp_path, config_filename="pyproject.toml")

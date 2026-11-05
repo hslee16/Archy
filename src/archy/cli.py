@@ -381,6 +381,7 @@ def check(
                     violations,
                     no_verdict_error=_no_verdict_error(contracts_result),
                     unverifiable=_unverifiable_contracts(contracts_result),
+                    empty_contracts=_empty_contracts(contracts_result),
                 )
             ),
         }
@@ -2206,6 +2207,7 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
                     [],
                     no_verdict_error=_no_verdict_error(contracts),
                     unverifiable=_unverifiable_contracts(contracts),
+                    empty_contracts=_empty_contracts(contracts),
                 )
                 # brief tolerates a missing or malformed archy.yaml and still
                 # reports; `check` cannot get here without one.
@@ -2316,13 +2318,15 @@ def _transitive_checked(outcome: ContractsOutcome | None) -> bool:
     JSON payloads cannot drift apart on it.
 
     A contract that could not have failed is not a verdict either, so ANY
-    unverifiable contract makes this false (#457). That matches `verified` on
-    the result itself, so the two fields tell one story rather than two; the
-    reason field carries how many, which is where the precision goes.
+    unverifiable contract makes this false (#457). A run that evaluated zero
+    contracts is not a verdict for the same reason: nothing was checked (#775).
+    That matches `verified` on the result itself, so the two fields tell one
+    story rather than two; the reason field carries how many, which is where
+    the precision goes.
     """
     if outcome is None or outcome.result is None:
         return False
-    return outcome.result.unverifiable == 0
+    return len(outcome.result.contracts) > 0 and outcome.result.unverifiable == 0
 
 
 def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
@@ -2344,6 +2348,16 @@ def _unverifiable_contracts(outcome: ContractsOutcome | None) -> int:
     return outcome.result.unverifiable if outcome is not None and outcome.result else 0
 
 
+def _empty_contracts(outcome: ContractsOutcome | None) -> bool:
+    """Did a contracts run evaluate zero contracts, so nothing was checked.
+
+    An `.importlinter` with no contract sections (or an `archy.yaml` with
+    layers but no `forbid:` rules) runs clean and reports nothing: without
+    this the run looks verified while no rule existed to fail (#775).
+    """
+    return outcome is not None and outcome.result is not None and len(outcome.result.contracts) == 0
+
+
 def _transitive_unverified_reason(
     config: LayerConfig,
     coverage: LayerCoverage,
@@ -2351,6 +2365,7 @@ def _transitive_unverified_reason(
     *,
     no_verdict_error: str | None = None,
     unverifiable: int = 0,
+    empty_contracts: bool = False,
 ) -> str | None:
     """The text handoff's reason, for a reader that cannot parse prose.
 
@@ -2369,6 +2384,13 @@ def _transitive_unverified_reason(
     edges are fully governed would report `transitive_checked: false` with no
     reason at all.
     """
+    if empty_contracts:
+        return (
+            "contracts ran but the config defined 0 contracts, so nothing was "
+            "checked transitively. Add a contract section to `.importlinter` "
+            "(or a `forbid:` rule to `archy.yaml`); `archy contracts` lists "
+            "what ran."
+        )
     if unverifiable:
         return (
             f"{unverifiable} contract(s) could not have failed: their module patterns "

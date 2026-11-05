@@ -409,7 +409,8 @@ def contracts_verdict(contracts: ContractsPayload) -> tuple[bool, str | None]:
     CLI's `_transitive_checked`).
     """
     unverifiable = contracts.unverifiable or 0
-    checked = contracts.available and contracts.error is None and unverifiable == 0
+    empty = not (contracts.contracts or ())
+    checked = contracts.available and contracts.error is None and unverifiable == 0 and not empty
     reason = (
         f"{unverifiable} contract(s) could not have failed: their module patterns "
         "matched nothing, so the rule holds whatever the code does. Fix the "
@@ -418,6 +419,12 @@ def contracts_verdict(contracts: ContractsPayload) -> tuple[bool, str | None]:
         if unverifiable
         else None
     )
+    if reason is None and empty and contracts.available and contracts.error is None:
+        reason = (
+            "contracts ran but the config defined 0 contracts, so nothing was "
+            "checked transitively. Add a contract section to `.importlinter` "
+            "(or a `forbid:` rule to `archy.yaml`)."
+        )
     return checked, reason
 
 
