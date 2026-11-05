@@ -18,7 +18,13 @@ from click.testing import CliRunner
 from archy.affected import _test_classifier
 from archy.cli import main
 from archy.graph import _is_conventional_test_file, build_graph
+from archy.layers import load_config
 from archy.mcp_runs import run_affected
+from archy.scan_config import scan_kwargs
+
+
+def _internal(graph) -> set[str]:
+    return {n for n, d in graph.nodes(data=True) if not d.get("external")}
 
 
 def _src_layout(root: Path) -> Path:
@@ -70,15 +76,14 @@ def test_only_test_files_outside_a_package_are_named(tmp_path: Path):
 
     graph = build_graph(root)
 
-    internal = {n for n, d in graph.nodes(data=True) if not d.get("external")}
-    assert internal == {"pkg", "pkg.core", "tests.test_core"}
+    assert _internal(graph) == {"pkg", "pkg.core", "tests.test_core"}
 
 
 def test_a_loose_file_directly_under_src_is_named_from_src(tmp_path: Path):
     root = _src_layout(tmp_path)
     (root / "src" / "foo.py").write_text("")
 
-    internal = {n for n, d in build_graph(root).nodes(data=True) if not d.get("external")}
+    internal = _internal(build_graph(root))
 
     assert "foo" in internal
     assert "src.foo" not in internal
@@ -105,7 +110,7 @@ def test_a_directory_that_cannot_be_imported_is_not_named(tmp_path: Path):
     (root / "my-tests").mkdir()
     (root / "my-tests" / "test_x.py").write_text("")
 
-    internal = {n for n, d in build_graph(root).nodes(data=True) if not d.get("external")}
+    internal = _internal(build_graph(root))
 
     assert not any("my-tests" in n for n in internal)
 
@@ -114,12 +119,9 @@ def test_a_declared_root_still_names_its_own_files(tmp_path: Path):
     root = _src_layout(tmp_path)
     (root / "archy.yaml").write_text("layers: {}\nforbid: []\nroots: [tests]\n")
 
-    from archy.layers import load_config
-    from archy.scan_config import scan_kwargs
-
     graph = build_graph(root, **scan_kwargs(load_config(root / "archy.yaml")))
 
-    assert {n for n, d in graph.nodes(data=True) if not d.get("external")} == {
+    assert _internal(graph) == {
         "pkg",
         "pkg.core",
         "tests.test_core",
