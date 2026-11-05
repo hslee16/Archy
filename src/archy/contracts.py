@@ -45,9 +45,17 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.layers import LayerConfig, LayerConfigError, is_floating_pattern, load_config
+from archy.graph import DEFAULT_IGNORED_DIRS, build_graph
+from archy.layers import (
+    LayerConfig,
+    LayerConfigError,
+    check_external_patterns,
+    is_floating_pattern,
+    load_config,
+)
 
 if TYPE_CHECKING:
+    import networkx as nx
     from grimp import ImportGraph
     from importlinter.application.user_options import UserOptions
 
@@ -353,14 +361,32 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
                 "import-linter contracts cannot be derived from it. Use `archy check` "
                 "(it enforces floating patterns), or write a `.importlinter` file."
             )
-    roots = sorted(
-        {
-            pattern.split(".", 1)[0]
-            for layer in config.layers
-            for pattern in layer.patterns
-            if not is_floating_pattern(pattern)
-        }
-    )
+    pattern_roots = {
+        pattern.split(".", 1)[0]
+        for layer in config.layers
+        for pattern in layer.patterns
+        if not is_floating_pattern(pattern)
+    }
+    internal_roots, external_graph = _scanned_roots(archy_yaml_path.parent, config)
+    # An external root is one the SCANNED TREE does not contain, decided against
+    # the tree and not guessed from the pattern's spelling (#527). import-linter
+    # cannot take a package it cannot import as a root, which is what turned
+    # `sqlalchemy.**` into "Could not find package 'sqlalchemy'".
+    check_external_patterns(external_graph, config)
+    external_roots = pattern_roots - internal_roots
+    roots = sorted(pattern_roots & internal_roots)
+    for rule in config.forbid:
+        source = next(layer for layer in config.layers if layer.name == rule.from_layer)
+        named = sorted(
+            {p.split(".", 1)[0] for p in source.patterns if not is_floating_pattern(p)}
+            & external_roots
+        )
+        if named:
+            raise LayerConfigError(
+                f"layer {rule.from_layer!r} is the source of a forbid rule but names the "
+                f"external package {named[0]!r}; import-linter reads imports made by the "
+                "project's own modules, so an external package cannot be a source."
+            )
     if not roots:
         raise LayerConfigError(
             f"could not infer root_package from {archy_yaml_path}: no layer patterns"
@@ -371,6 +397,19 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
     # path when building UserOptions directly, so `create_report` would
     # KeyError on the missing list. Plural-list works in both shapes.
     session_options: dict[str, object] = {"root_packages": roots}
+    forbidden_external = any(
+        p.split(".", 1)[0] in external_roots
+        for rule in config.forbid
+        for layer in config.layers
+        if layer.name == rule.to_layer
+        for p in layer.patterns
+        if not is_floating_pattern(p)
+    )
+    if forbidden_external:
+        # The STRING "True": import-linter compares the option against "True" /
+        # "true", so a real bool is read as false and the contract then raises
+        # "must have include_external_packages=True".
+        session_options["include_external_packages"] = "True"
 
     contracts_options: list[dict[str, object]] = []
     for rule in config.forbid:
@@ -390,6 +429,21 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
         )
 
     return UserOptions(session_options=session_options, contracts_options=contracts_options)
+
+
+def _scanned_roots(project_dir: Path, config: LayerConfig) -> tuple[set[str], nx.DiGraph]:
+    """Top-level packages of the scanned tree's own modules, and the graph read.
+
+    Scoped by the config's `exclude:` and `roots:` exactly as `archy check` scopes
+    its scan, and without the module-count guard: import-linter walks the tree
+    itself, so the guard would only refuse a contracts run it does not protect.
+    """
+    graph = build_graph(
+        project_dir,
+        ignored_dirs=DEFAULT_IGNORED_DIRS | frozenset(config.exclude),
+        extra_roots=config.roots,
+    )
+    return {n.split(".", 1)[0] for n, d in graph.nodes(data=True) if not d.get("external")}, graph
 
 
 def _to_import_linter_expressions(patterns: Iterable[str]) -> list[str]:

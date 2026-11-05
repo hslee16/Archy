@@ -261,6 +261,7 @@ def _coverage_to_json(coverage: LayerCoverage) -> dict:
         "edges_total": coverage.edges_total,
         "edges_governed": coverage.edges_governed,
         "edge_ratio": round(coverage.edge_ratio, 4),
+        "external_edges_governed": coverage.external_edges_governed,
         "unlayered_modules": list(coverage.unlayered_modules),
         "modules_outside_declared_roots": coverage.modules_outside_declared_roots,
         # Presence, in the payload as well as the text output. Without these a
@@ -325,6 +326,11 @@ def _coverage_to_text(coverage: LayerCoverage) -> str:
         f"({coverage.module_ratio:.0%}), {coverage.edges_governed} of {coverage.edges_total} "
         f"internal edges ({coverage.edge_ratio:.0%})"
     )
+    if coverage.external_edges_governed:
+        line += (
+            f"; {coverage.external_edges_governed} internal-to-external edge(s) governed "
+            "(counted apart from the internal ratio)"
+        )
     unlayered = len(coverage.unlayered_modules)
     if unlayered:
         line += f"; {unlayered} module(s) match no layer (`archy check --show-unlayered`)"
