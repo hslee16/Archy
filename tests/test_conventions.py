@@ -1057,6 +1057,34 @@ def test_lookup_resolves_each_import_shape_to_a_distinct_module(tmp_path: Path):
     assert {t for t in g.successors("app.sub.uses") if t in internal} == resolved
 
 
+@pytest.mark.parametrize(
+    "x_init",
+    [
+        pytest.param("", id="y-is-the-submodule"),
+        pytest.param("def y():\n    return 2\n", id="y-is-a-symbol-shadowing-the-submodule"),
+    ],
+)
+def test_lookup_stops_at_the_reexporting_submodule_when_the_name_is_also_a_module(
+    tmp_path: Path, x_init: str
+):
+    """#436: `from .x import y` where `x/y.py` exists. Python prefers the attribute,
+    so with a symbol `y` in `x` the file `y.py` is never imported; the syntax
+    cannot say which shape this is, so both resolve to `app.x`, the one edge
+    true in both. `app.x.y` would be an invented import in the second case."""
+    pkg = tmp_path / "app"
+    (pkg / "x").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("from .x import y\n")
+    (pkg / "x" / "__init__.py").write_text(x_init)
+    (pkg / "x" / "y.py").write_text("VALUE = 1\n")
+    (pkg / "consumer.py").write_text("from app import y\n")
+
+    resolved = set(compute_module_view(tmp_path, "app.consumer").imports_internal)
+
+    assert resolved == {"app.x"}
+    g = build_graph(tmp_path)
+    assert set(g.successors("app.consumer")) == {"app.x"}
+
+
 def test_module_view_drops_complete_claim_when_an_importer_is_unparsed(tmp_path: Path):
     # #666: an unparsable importer must not leave ModuleView claiming COMPLETE
     # with a truncated imported_by list. A SyntaxError fixture (always invalid)

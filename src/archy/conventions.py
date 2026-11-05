@@ -733,11 +733,13 @@ def _reexport_maps(
             # package by construction, so this one check covers both forms.
             if base != qualname and not base.startswith(qualname + "."):
                 continue
-            for name, local in names:
-                # `from .x import Foo` re-exports Foo from the submodule `x`;
-                # `from .x import y` where `x.y` is itself a module is a
-                # module import, not a symbol re-export.
-                source = f"{base}.{name}" if f"{base}.{name}" in known else base
+            for _name, local in names:
+                # `from .x import y` re-exports `y` from the submodule `x`, always.
+                # Whether `x.y` is a module or a symbol `x` defines is not in the
+                # syntax: Python prefers the attribute, so a symbol `y` shadows a
+                # sibling `x/y.py`, and mapping to `x.y` would invent an import
+                # the program never makes (#436). `x` is an edge in both cases.
+                source = base
                 if source in known and source != qualname:
                     pkg_map[local] = source
         if pkg_map:
