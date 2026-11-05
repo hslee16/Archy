@@ -3,7 +3,8 @@
 opencode does not use the `mcpServers` shape; its schema keys MCP servers under
 ``mcp.<name> = {type, command: [...], enabled}``. Config is JSON:
 
-- global: ``~/.config/opencode/opencode.json`` (``%APPDATA%\\opencode\\opencode.json`` on Windows)
+- global: ``~/.config/opencode/opencode.json`` (``%APPDATA%\\opencode\\opencode.json`` on Windows;
+  under ``$XDG_CONFIG_HOME`` instead of ``~/.config`` when it is set)
 - local:  ``<project>/opencode.json``
 - instructions: ``AGENTS.md`` alongside the config
 

@@ -146,8 +146,8 @@ project-scoped files under the current directory (or `--project-root`).
 
 On Windows the homedir-anchored paths resolve under `%USERPROFILE%`, and
 opencode's global config lives under `%APPDATA%\opencode\`. Set `CODEX_HOME` and
-Codex's global files move there; set `XDG_CONFIG_HOME` to an absolute path (not on
-Windows) and opencode's move to `$XDG_CONFIG_HOME/opencode/`. Install, uninstall,
+Codex's global files go there; set `XDG_CONFIG_HOME` to an absolute path (not on
+Windows) and opencode's go to `$XDG_CONFIG_HOME/opencode/`. Install, uninstall,
 `--print-config` and detection all follow them. "owned" marks files archy creates
 exclusively; everything else is a shared file archy merges into.
 

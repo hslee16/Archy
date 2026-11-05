@@ -94,6 +94,9 @@ Install, global (paths relative to your home directory):
                                    .continue/rules/archy.md
 ```
 
+`CODEX_HOME` and `XDG_CONFIG_HOME`, when set, decide where the `.codex` and
+`.config` files go instead.
+
 Install, local (paths relative to the project):
 
 ```

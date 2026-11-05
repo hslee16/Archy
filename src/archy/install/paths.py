@@ -1,8 +1,8 @@
 """Single source of truth for platform detection and OS-specific path roots.
 
 Every `os.environ` lookup (`APPDATA`, `LOCALAPPDATA`, `USERPROFILE`, `CODEX_HOME`,
-`XDG_CONFIG_HOME`) and every
-`Path.home()` / `sys.platform` read in the installer flows through this module.
+`XDG_CONFIG_HOME`) and every `Path.home()` / `sys.platform` read in the installer
+flows through this module.
 That is deliberate: the install path is the kind of code that silently breaks on
 the OS the maintainer does not develop on, so unit tests simulate Linux, macOS,
 and Windows from a single CI runner by monkeypatching *only the functions here*

@@ -3,6 +3,7 @@
 Codex is the only TOML client. MCP servers live under the `mcp_servers` table:
 
 - global config:  ``~/.codex/config.toml``  + instructions ``~/.codex/AGENTS.md``
+  (under ``$CODEX_HOME`` instead of ``~/.codex`` when it is set)
 - local config:   ``<project>/.codex/config.toml`` + instructions ``<project>/AGENTS.md``
 
 Codex loads project-scoped ``.codex/config.toml`` only for *trusted* projects,
