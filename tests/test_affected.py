@@ -11,7 +11,7 @@ from archy.graph import build_graph
 
 _FILTER_MISS = (
     "matches no file in the graph "
-    "(paths are project-relative; tests/ with no __init__.py beside a src/ layout is not scanned)"
+    "(paths are project-relative; only files inside a package, and test files, are scanned)"
 )
 
 # Setup pattern inlines `_make_project` + `build_graph` per test, matching
@@ -420,17 +420,17 @@ def test_near_misses_for_an_unmatched_filter_include_directories_holding_only_di
 
 
 def test_filter_naming_files_the_graph_does_not_hold_is_refused_and_says_so(tmp_path: Path):
-    """A real `tests/` beside a `src/` layout has no node to match; the message must explain."""
+    """A script beside a `src/` layout has no node to match; the message must explain."""
     (tmp_path / "src" / "app").mkdir(parents=True)
     (tmp_path / "src" / "app" / "__init__.py").write_text("")
     (tmp_path / "src" / "app" / "core.py").write_text("")
-    (tmp_path / "tests").mkdir()
-    (tmp_path / "tests" / "test_core.py").write_text("from app.core import x\n")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "check_core.py").write_text("from app.core import x\n")
     graph = build_graph(tmp_path)
-    assert "tests.test_core" not in graph  # on disk, but not a module
-    message = f"^test filter 'tests/\\*\\*' {re.escape(_FILTER_MISS)}$"
+    assert "scripts.check_core" not in graph  # on disk, but not a module
+    message = f"^test filter 'scripts/\\*\\*' {re.escape(_FILTER_MISS)}$"
     with pytest.raises(ValueError, match=message):
-        find_affected(graph, [], project_root=tmp_path, test_filter="tests/**")
+        find_affected(graph, [], project_root=tmp_path, test_filter="scripts/**")
 
 
 def test_filter_that_matches_a_file_but_no_impacted_test_stays_an_empty_answer(tmp_path: Path):
