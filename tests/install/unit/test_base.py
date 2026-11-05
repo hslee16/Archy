@@ -19,7 +19,7 @@ from archy.install.base import (
     remove_instructions,
     upsert_instructions,
 )
-from archy.install.writer import DryRunWriteSystem
+from archy.install.writer import DryRunWriteSystem, InstallError
 
 
 def test_upsert_into_empty_file():
@@ -50,12 +50,16 @@ def test_upsert_replaces_existing_block_in_place():
     assert out.rstrip().endswith("bottom")
 
 
-def test_upsert_recovers_from_truncated_block():
+def test_upsert_refuses_a_begin_marker_with_no_end_marker():
     existing = f"top\n{INSTRUCTIONS_BEGIN}\nhalf written"  # no END marker
-    out = upsert_instructions(existing)
-    assert out.count(INSTRUCTIONS_BEGIN) == 1
-    assert out.count(INSTRUCTIONS_END) == 1
-    assert out.startswith("top")
+    with pytest.raises(InstallError, match=r"line 2 has no matching"):
+        upsert_instructions(existing)
+
+
+def test_upsert_refuses_an_end_marker_that_only_comes_before_the_begin_marker():
+    existing = f"{INSTRUCTIONS_END}\n{INSTRUCTIONS_BEGIN}\nmine\n"
+    with pytest.raises(InstallError, match=r"line 2 has no matching"):
+        upsert_instructions(existing)
 
 
 def test_apply_plan_routes_renders_through_write_system():
@@ -92,18 +96,12 @@ def test_remove_instructions_idempotent_on_clean_file():
     assert remove_instructions("# just mine\n") == "# just mine\n"
 
 
-def test_remove_recovers_from_truncated_block():
-    # No END marker: treat EOF as the block boundary.
-    # With no user content before the marker, nothing remains → delete signal.
-    existing = f"{INSTRUCTIONS_BEGIN}\nhalf written"
-    assert remove_instructions(existing) is None
+def test_remove_refuses_a_begin_marker_with_no_end_marker():
+    with pytest.raises(InstallError, match=r"line 1 has no matching"):
+        remove_instructions(f"{INSTRUCTIONS_BEGIN}\nhalf written")
 
-    # Preceding user content must be preserved.
-    existing_with_prefix = f"# mine\n{INSTRUCTIONS_BEGIN}\nhalf written"
-    out = remove_instructions(existing_with_prefix)
-    assert out is not None
-    assert INSTRUCTIONS_BEGIN not in out
-    assert "mine" in out
+    with pytest.raises(InstallError, match=r"line 2 has no matching"):
+        remove_instructions(f"# mine\n{INSTRUCTIONS_BEGIN}\nhalf written")
 
 
 def test_apply_uninstall_strips_existing_and_deletes_owned(tmp_path):
