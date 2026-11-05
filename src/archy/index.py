@@ -34,7 +34,7 @@ from archy.graph import (
     assemble_graph,
     discover_modules,
 )
-from archy.parser import ParseResult, parse_file
+from archy.parser import ParseResult, parse_file_tolerant
 
 # Bump whenever the persisted `ParseResult` shape changes so stale rows are
 # dropped rather than silently deserialized with defaults. v2 added
@@ -151,10 +151,14 @@ def sync(
         try:
             stat = module.path.stat()
         except OSError:
-            # The file vanished between discovery and sync (a branch switch, a
-            # concurrent edit, or the `archy mcp` watcher rebuilding mid-flight).
-            # Skip it; any stale cache row is pruned below since `path` never
-            # enters current_paths.
+            # Vanished -> skip (stale row pruned below). Still present but
+            # unstatable/unreadable -> has_errors sentinel, keep the path so a
+            # prior cache row is not pruned out from under a later readable
+            # rebuild (#800).
+            result = parse_file_tolerant(module.path)
+            if result is not None:
+                current_paths.add(path)
+                results[module.qualname] = result
             continue
         current_paths.add(path)
         mtime, size = stat.st_mtime, stat.st_size
@@ -172,7 +176,12 @@ def sync(
         try:
             sha = _sha256(module.path)
         except OSError:
-            continue  # vanished after stat; skip this build, re-parsed next time
+            # Vanished after stat -> skip. Persistently unreadable (mode 000) ->
+            # record the read failure; do not cache the sentinel (#800).
+            result = parse_file_tolerant(module.path)
+            if result is not None:
+                results[module.qualname] = result
+            continue
         if row is not None and row["sha256"] == sha:
             cached = _load_cached_parse(row["parse_json"])
             if cached is not None:
@@ -185,10 +194,13 @@ def sync(
                 unchanged += 1
                 continue
 
-        try:
-            result = parse_file(module.path)
-        except OSError:
+        result = parse_file_tolerant(module.path)
+        if result is None:
             continue  # vanished after hashing; skip this build
+        if result.error is not None:
+            # Persistently unreadable: surface in this build, do not cache (#800).
+            results[module.qualname] = result
+            continue
         conn.execute(
             "INSERT INTO files (path, mtime, size, sha256, parse_json, last_parsed_at) "
             "VALUES (?, ?, ?, ?, ?, ?) "
@@ -232,5 +244,6 @@ def build_graph_cached(
         if own_conn:
             conn.close()
     # A module whose file vanished mid-sync is absent from parse_results;
-    # assemble_graph drops such modules, so passing the full list is safe.
+    # a persistently unreadable one is present as a has_errors sentinel (#800).
+    # assemble_graph drops only the absent ones, so passing the full list is safe.
     return assemble_graph(root, modules, parse_results)

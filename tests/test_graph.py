@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+import os
 from pathlib import Path
 
 import networkx as nx
@@ -20,6 +21,7 @@ from archy.graph import (
     resolve_modules,
     suggest_modules,
 )
+from archy.impact import find_impact
 from archy.reach import package_init_edges, with_package_init_edges
 
 
@@ -772,14 +774,14 @@ def test_build_graph_skips_file_that_vanishes_mid_build(project: Path, monkeypat
     mid-flight). build_graph must drop that module, not crash the whole build."""
     import archy.graph as graph_mod
 
-    real_parse_file = graph_mod.parse_file
+    real = graph_mod.parse_file_tolerant
 
-    def flaky_parse_file(path: Path):
+    def flaky(path: Path):
         if path.name == "utils.py":
-            raise FileNotFoundError(path)
-        return real_parse_file(path)
+            return None  # vanished; silent skip (distinct from unreadable, #800)
+        return real(path)
 
-    monkeypatch.setattr(graph_mod, "parse_file", flaky_parse_file)
+    monkeypatch.setattr(graph_mod, "parse_file_tolerant", flaky)
 
     g = build_graph(project)
 
@@ -1169,3 +1171,75 @@ def test_relative_import_past_project_root_creates_no_alias_or_call_edge(tmp_pat
     g = build_graph(tmp_path)
     assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
     assert "pkg.a" in g
+
+
+def _unreadable_fixture(tmp_path: Path) -> tuple[Path, Path]:
+    """Package with one mode-000 module. Caller must chmod it back when done."""
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from app import b\n")
+    (pkg / "b.py").write_text("X = 1\n")
+    d = pkg / "d.py"
+    d.write_text("from app import a\n")
+    d.chmod(0o000)
+    return tmp_path, d
+
+
+def _parse_error_for(qualname: str, parse_errors) -> str:
+    for entry in parse_errors:
+        if entry == qualname or entry.startswith(f"{qualname}:"):
+            return entry
+    raise AssertionError(f"{qualname!r} not in {parse_errors!r}")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="mode 000 is not unreadable on Windows")
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses mode 000")
+def test_persistently_unreadable_py_lands_in_parse_errors(tmp_path: Path):
+    """A still-present but unreadable `.py` must not vanish from the graph (#800).
+
+    Before: OSError -> continue dropped it from nodes and from parse_errors, so
+    graph/score looked clean and impact treated the path as "not a module" with
+    did-you-mean suggestions. After: it is a has_errors node whose parse_errors
+    entry names the PermissionError, matching a readable-but-broken file.
+    """
+    root, d = _unreadable_fixture(tmp_path)
+    assert os.access(d, os.R_OK) is False
+    try:
+        g = build_graph(root)
+        assert "app.d" in g.nodes
+        entry = _parse_error_for("app.d", g.graph["parse_errors"])
+        assert "PermissionError" in entry
+
+        impact = find_impact(g, [d])
+        assert impact.changed == ("app.d",)
+        assert impact.unresolved == ()
+        assert impact.unresolved_hints == ()
+        assert impact.nothing_resolved is False
+    finally:
+        d.chmod(0o644)
+
+
+def test_vanished_file_between_discovery_and_parse_is_still_skipped(
+    tmp_path: Path, pkg: Path, monkeypatch
+):
+    """Control for #800: a file that is truly gone stays a silent skip."""
+    (pkg / "good.py").write_text("import os\n")
+    gone = pkg / "gone.py"
+    gone.write_text("import os\n")
+
+    import archy.graph as graph_mod
+
+    real = graph_mod.parse_file_tolerant
+
+    def flaky(path: Path):
+        if path.name == "gone.py":
+            path.unlink(missing_ok=True)
+            return None
+        return real(path)
+
+    monkeypatch.setattr(graph_mod, "parse_file_tolerant", flaky)
+    g = build_graph(tmp_path)
+    assert "pkg.good" in g.nodes
+    assert "pkg.gone" not in g.nodes
+    assert not any(str(e).startswith("pkg.gone") for e in g.graph["parse_errors"])
