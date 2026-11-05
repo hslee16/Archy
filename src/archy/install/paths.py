@@ -1,6 +1,7 @@
 """Single source of truth for platform detection and OS-specific path roots.
 
-Every `os.environ` lookup (`APPDATA`, `LOCALAPPDATA`, `USERPROFILE`) and every
+Every `os.environ` lookup (`APPDATA`, `LOCALAPPDATA`, `USERPROFILE`, `CODEX_HOME`,
+`XDG_CONFIG_HOME`) and every
 `Path.home()` / `sys.platform` read in the installer flows through this module.
 That is deliberate: the install path is the kind of code that silently breaks on
 the OS the maintainer does not develop on, so unit tests simulate Linux, macOS,
@@ -14,8 +15,8 @@ Homedir-anchored paths (`~/.claude.json`, `~/.cursor/mcp.json`, ...) use
 is just `home() / ".claude.json"`. Only the roaming/local AppData roots and the
 Windows install-dir fallbacks need explicit branching.
 
-archy:owns        appdata, current_platform, home, is_macos, is_windows, local_appdata,
-                  user_profile
+archy:owns        appdata, codex_home, current_platform, home, is_macos, is_windows,
+                  local_appdata, user_profile, xdg_config_home
 """
 
 from __future__ import annotations
@@ -67,3 +68,17 @@ def local_appdata() -> Path | None:
 def user_profile() -> Path:
     """``%USERPROFILE%`` on Windows, falling back to :func:`home` everywhere."""
     return _env_path("USERPROFILE") or home()
+
+
+def codex_home() -> Path:
+    """Codex CLI's global directory: ``$CODEX_HOME``, else ``~/.codex``."""
+    return _env_path("CODEX_HOME") or home() / ".codex"
+
+
+def xdg_config_home() -> Path:
+    """``$XDG_CONFIG_HOME``, else ``~/.config``.
+
+    The XDG spec says a relative value is invalid and is to be ignored.
+    """
+    configured = _env_path("XDG_CONFIG_HOME")
+    return configured if configured and configured.is_absolute() else home() / ".config"

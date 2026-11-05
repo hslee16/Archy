@@ -37,7 +37,7 @@ class OpencodeAdapter(AgentAdapter):
         if paths.is_windows():
             base = paths.appdata() or (paths.home() / "AppData" / "Roaming")
             return base / "opencode"
-        return paths.home() / ".config" / "opencode"
+        return paths.xdg_config_home() / "opencode"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         if scope is Scope.LOCAL:

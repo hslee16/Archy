@@ -145,8 +145,11 @@ project-scoped files under the current directory (or `--project-root`).
 | Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` (owned) | `.continue/rules/archy.md` (owned) | n/a |
 
 On Windows the homedir-anchored paths resolve under `%USERPROFILE%`, and
-opencode's global config lives under `%APPDATA%\opencode\`. "owned" marks files
-archy creates exclusively; everything else is a shared file archy merges into.
+opencode's global config lives under `%APPDATA%\opencode\`. Set `CODEX_HOME` and
+Codex's global files move there; set `XDG_CONFIG_HOME` to an absolute path (not on
+Windows) and opencode's move to `$XDG_CONFIG_HOME/opencode/`. Install, uninstall,
+`--print-config` and detection all follow them. "owned" marks files archy creates
+exclusively; everything else is a shared file archy merges into.
 
 ## Uninstalling
 

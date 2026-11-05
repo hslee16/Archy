@@ -42,8 +42,10 @@ def test_install_and_uninstall_use_the_variables_dirs(relocated):
     result = CliRunner().invoke(main, ["uninstall", "--target", "codex,opencode", "-y"])
 
     assert result.exit_code == 0, result.output
-    assert _files(codex_home) == []
-    assert _files(xdg) == []
+    assert not (codex_home / "AGENTS.md").exists()
+    assert "archy" not in (codex_home / "config.toml").read_text(encoding="utf-8")
+    assert not (xdg / "opencode" / "AGENTS.md").exists()
+    assert "archy" not in (xdg / "opencode" / "opencode.json").read_text(encoding="utf-8")
 
 
 def test_print_config_names_the_variables_dirs(relocated):
