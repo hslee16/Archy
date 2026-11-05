@@ -142,7 +142,7 @@ def _marker_block_range(text: str) -> tuple[int, int] | None:
             line = text.count("\n", 0, begin) + 1
             raise InstallError(
                 f"{INSTRUCTIONS_BEGIN} at line {line} has no matching {INSTRUCTIONS_END}; "
-                "delete that line, or add the end marker right after archy's text and "
+                "delete that marker, or add the end marker right after archy's text and "
                 "before anything of yours, then re-run"
             )
         begin = next_begin
