@@ -1182,7 +1182,9 @@ def test_run_cycles_payload_shape(tmp_path: Path):
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("from pkg.b import thing\n")
     (pkg / "b.py").write_text("from pkg.a import other\n")
-    [cycle] = run_cycles(tmp_path, min_size=2, internal_only=True)
+    result = run_cycles(tmp_path, min_size=2, internal_only=True)
+    assert isinstance(result, list)  # exclusion is off, so the bare-list shape
+    [cycle] = result
     assert sorted(cycle.modules) == ["pkg.a", "pkg.b"]
     edge = cycle.edges[0]
     assert edge.source and edge.target
@@ -3255,3 +3257,48 @@ def test_what_to_refactor_next_fresh_repo_note_mentions_commit_history(tmp_path:
     assert payload.note is not None
     assert "no commit history" in payload.note
     assert "not inside a git repository" not in payload.note
+
+
+def _guarded_cycle_project(root: Path) -> Path:
+    pkg = root / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg import b\n")
+    (pkg / "b.py").write_text(
+        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
+    )
+    return root
+
+
+def test_archy_cycles_exclude_type_checking_reports_the_excluded_edge(tmp_path: Path):
+    """Asserted on the wire form: the object shape appears only with the flag on (#520)."""
+    project = _guarded_cycle_project(tmp_path)
+    server = create_server()
+
+    _content, plain = _call_tool(server, "archy_cycles", {"path": str(project)})
+    assert plain is not None
+    [cycle] = plain["result"]  # the bare list, as before the flag existed
+    assert cycle["type_checking_edges"] == 1
+
+    _content, excluded = _call_tool(
+        server, "archy_cycles", {"path": str(project), "exclude_type_checking": True}
+    )
+    assert excluded is not None
+    payload = excluded.get("result", excluded)
+    assert payload == {"cycles": [], "excluded_type_checking_edges": 1}
+
+
+def test_archy_cycles_follows_the_archy_yaml_key_and_the_argument_overrides_it(tmp_path: Path):
+    project = _guarded_cycle_project(tmp_path)
+    (project / "archy.yaml").write_text("exclude_type_checking_imports: true\n")
+    server = create_server()
+
+    _content, by_config = _call_tool(server, "archy_cycles", {"path": str(project)})
+    assert by_config is not None
+    assert by_config.get("result", by_config)["excluded_type_checking_edges"] == 1
+
+    _content, overridden = _call_tool(
+        server, "archy_cycles", {"path": str(project), "exclude_type_checking": False}
+    )
+    assert overridden is not None
+    assert len(overridden["result"]) == 1

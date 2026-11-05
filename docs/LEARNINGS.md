@@ -254,7 +254,7 @@ The only tools sharing **all** of {Python-native, import-graph, layer rules, tre
 | YAML rules (no code) | ✅ | partial | ✅ | ✅ (INI/TOML) | ❌ | n/a |
 | OSS | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 
-Archy's defensible positioning is **Python depth**: transitive contracts via import-linter, SDP-violation rule, NCCD/propagation cost, `if TYPE_CHECKING:` awareness, type-hint coverage, decorator/descriptor-aware call resolution - the things a 52-language tool structurally cannot fold in without privileging Python. Sentrux's defensible positioning is **language breadth**. That division is settled; the two tools are not on a collision course and the roadmap does not need to defend against multi-language pressure.
+Archy's defensible positioning is **Python depth**: transitive contracts via import-linter, SDP-violation rule, NCCD/propagation cost, `if TYPE_CHECKING:` awareness (cycles only, opt-in, #520), type-hint coverage, decorator/descriptor-aware call resolution - the things a 52-language tool structurally cannot fold in without privileging Python. Sentrux's defensible positioning is **language breadth**. That division is settled; the two tools are not on a collision course and the roadmap does not need to defend against multi-language pressure.
 
 The realistic threats on archy's wedge come from inside its own bucket:
 - **tach** adding a trended score + MCP server (technically small additions on its existing Rust foundation).

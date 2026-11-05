@@ -3101,3 +3101,93 @@ def test_simulate_reports_a_match_time_layer_error_without_a_traceback(tmp_path:
     result = CliRunner().invoke(main, ["simulate", str(project), "--add", "pkg.core.x:pkg.a"])
 
     _assert_one_line_overlap_error(result)
+
+
+_GUARDED_B = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
+
+
+def _make_guarded_project(tmp_path: Path, b_source: str = _GUARDED_B) -> Path:
+    """`pkg.a` imports `pkg.b`; `pkg.b` imports `pkg.a` however `b_source` says."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg import b\n")
+    (pkg / "b.py").write_text(b_source)
+    return tmp_path
+
+
+def test_cycles_type_checking_back_import_still_fails_by_default(tmp_path: Path):
+    """The flag is opt-in: with it absent the guarded cycle is still a cycle (#520)."""
+    project = _make_guarded_project(tmp_path)
+    result = CliRunner().invoke(main, ["cycles", str(project), "--strict"])
+    assert result.exit_code == 1
+    assert "1 of 2 edge(s) exist only under `if TYPE_CHECKING:`" in result.output
+    assert "--exclude-type-checking" in result.output
+
+
+def test_cycles_exclude_type_checking_passes_and_reports_the_excluded_edge(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    args = ["cycles", str(project), "--strict", "--exclude-type-checking"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0
+    assert "No cycles found" in result.output
+    assert "1 TYPE_CHECKING-only edge(s) excluded" in result.output
+
+
+def test_cycles_exclude_type_checking_json_is_an_object_with_the_count(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    args = ["cycles", str(project), "--format", "json", "--exclude-type-checking"]
+    payload = json.loads(CliRunner().invoke(main, args).output)
+    assert payload == {"cycles": [], "excluded_type_checking_edges": 1}
+
+
+def test_cycles_default_json_stays_a_list_and_carries_the_per_cycle_count(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    payload = json.loads(
+        CliRunner().invoke(main, ["cycles", str(project), "--format", "json"]).output
+    )
+    assert isinstance(payload, list)
+    assert [c["type_checking_edges"] for c in payload] == [1]
+
+
+def test_cycles_exclude_type_checking_accepts_the_qualified_spelling(tmp_path: Path):
+    project = _make_guarded_project(
+        tmp_path, "import typing\nif typing.TYPE_CHECKING:\n    from pkg import a\n"
+    )
+    args = ["cycles", str(project), "--strict", "--exclude-type-checking"]
+    assert CliRunner().invoke(main, args).exit_code == 0
+
+
+@pytest.mark.parametrize(
+    "b_source",
+    [
+        # The `else:` branch runs at runtime, so it is a plain import.
+        "if TYPE_CHECKING:\n    pass\nelse:\n    from pkg import a\n",
+        # One unguarded import makes the edge a runtime dependency (mixed edge).
+        "from pkg import a\nif TYPE_CHECKING:\n    from pkg import a as a2\n",
+        # A function-local import runs on call.
+        "if TYPE_CHECKING:\n    def f():\n        from pkg import a\n",
+    ],
+)
+def test_cycles_exclude_type_checking_keeps_runtime_cycles(tmp_path: Path, b_source: str):
+    project = _make_guarded_project(tmp_path, b_source)
+    args = ["cycles", str(project), "--strict", "--exclude-type-checking"]
+    assert CliRunner().invoke(main, args).exit_code == 1
+
+
+def test_cycles_archy_yaml_key_turns_exclusion_on_and_the_flag_overrides_it(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    (project / "archy.yaml").write_text("exclude_type_checking_imports: true\n")
+    on = CliRunner().invoke(main, ["cycles", str(project), "--strict"])
+    assert on.exit_code == 0
+    off = CliRunner().invoke(main, ["cycles", str(project), "--strict", "--include-type-checking"])
+    assert off.exit_code == 1
+
+
+def test_cycles_archy_yaml_key_rejects_a_non_boolean(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    (project / "archy.yaml").write_text("exclude_type_checking_imports: yes please\n")
+    result = CliRunner().invoke(main, ["cycles", str(project)])
+    assert result.exit_code != 0
+    assert "exclude_type_checking_imports" in result.output
+    assert "Traceback" not in result.output

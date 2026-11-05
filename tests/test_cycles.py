@@ -5,7 +5,7 @@ from pathlib import Path
 import networkx as nx
 import pytest
 
-from archy.cycles import find_cycles
+from archy.cycles import find_cycles, scan_cycles
 from archy.graph import build_graph
 from archy.mcp_runs import run_cycles
 
@@ -242,7 +242,9 @@ def test_extension_module_with_pyi_is_not_a_false_cycle(tmp_path: Path, pkg: Pat
     assert ("pkg.api", "pkg._speedups") in g.edges
     assert find_cycles(g) == []
 
-    assert [c.model_dump() for c in run_cycles(tmp_path, min_size=2, internal_only=True)] == []
+    result = run_cycles(tmp_path, min_size=2, internal_only=True)
+    assert isinstance(result, list)  # exclusion is off, so the bare-list shape
+    assert [c.model_dump() for c in result] == []
 
 
 def test_pyi_only_stub_without_extension_is_an_internal_leaf(tmp_path: Path, pkg: Path):
@@ -256,3 +258,47 @@ def test_pyi_only_stub_without_extension_is_an_internal_leaf(tmp_path: Path, pkg
     assert "pkg._types" in g
     assert ("pkg.api", "pkg._types") in g.edges
     assert find_cycles(g) == []
+
+
+def _guarded_pair(tmp_path: Path, b_source: str) -> nx.DiGraph:
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg import b\n")
+    (pkg / "b.py").write_text(b_source)
+    return build_graph(tmp_path)
+
+
+def test_scan_cycles_leaves_out_a_type_checking_only_edge_and_counts_it(tmp_path: Path):
+    g = _guarded_pair(
+        tmp_path, "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
+    )
+    assert g["pkg.b"]["pkg.a"]["type_checking_only"] is True
+    assert g["pkg.a"]["pkg.b"]["type_checking_only"] is False
+
+    off = scan_cycles(g)
+    assert [(c.modules, c.type_checking_edges) for c in off.cycles] == [(("pkg.a", "pkg.b"), 1)]
+    assert off.excluded_type_checking_edges == 0
+
+    on = scan_cycles(g, exclude_type_checking=True)
+    assert on.cycles == ()
+    assert on.excluded_type_checking_edges == 1
+
+
+def test_a_call_across_a_guarded_import_makes_the_edge_a_runtime_dependency(tmp_path: Path):
+    """A resolved call is a runtime reference, so the edge is not TYPE_CHECKING-only."""
+    g = _guarded_pair(
+        tmp_path,
+        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
+        "def f():\n    return a.go()\n",
+    )
+    assert "call" in g["pkg.b"]["pkg.a"]["kinds"], "fixture must reach the call edge"
+    assert g["pkg.b"]["pkg.a"]["type_checking_only"] is False
+    assert len(scan_cycles(g, exclude_type_checking=True).cycles) == 1
+
+
+def test_find_cycles_is_unchanged_by_type_checking_edges(tmp_path: Path):
+    g = _guarded_pair(
+        tmp_path, "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
+    )
+    assert [c.modules for c in find_cycles(g)] == [("pkg.a", "pkg.b")]
