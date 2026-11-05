@@ -36,6 +36,7 @@ archy:mirrored-by ContractsConfigError -> archy.cli, archy.mcp_runs,
 from __future__ import annotations
 
 import contextlib
+import importlib.util
 import os
 import sys
 import warnings
@@ -91,6 +92,13 @@ class ContractsResult(BaseModel):
     module_count: int
     import_count: int
     contracts: tuple[ContractCheck, ...] = ()
+    # Directories inside a root package that import-linter's engine (grimp) does
+    # not read, because they hold `.py` files but no `__init__.py` (#528). Any
+    # path through them is invisible, so a "kept" verdict says nothing about
+    # those modules. A NOTE on the verdict, deliberately not part of `verified`:
+    # a stray scripts or fixtures directory would otherwise fail every existing
+    # `archy contracts` gate with no way to silence it.
+    unscanned_dirs: tuple[str, ...] = ()
 
     @property
     def all_kept(self) -> bool:
@@ -256,12 +264,61 @@ def _drive_import_linter(
             )
         )
     return ContractsResult(
+        unscanned_dirs=_unscanned_dirs(_root_packages(user_options)),
         kept=int(report.kept_count),
         broken=int(report.broken_count),
         module_count=int(report.module_count),
         import_count=int(report.import_count),
         contracts=tuple(contracts),
     )
+
+
+def _root_packages(user_options: UserOptions) -> tuple[str, ...]:
+    """The root package names the run was configured with, plural or singular."""
+    options = user_options.session_options
+    names = options.get("root_packages") or options.get("root_package") or ()
+    return (names,) if isinstance(names, str) else tuple(str(n) for n in names)
+
+
+def _unscanned_dirs(root_packages: Iterable[str]) -> tuple[str, ...]:
+    """Dotted names of directories grimp skips inside each regular root package.
+
+    Mirrors grimp's own rule (`adaptors/modulefinder.py`: "we won't include
+    'orphans'"): once inside a regular package, a directory with no
+    `__init__.py` is pruned together with everything below it. Reimplemented as
+    a filesystem walk because comparing against archy's graph would flag
+    tests, examples and `roots:` layouts that import-linter was never asked to
+    cover, and standalone `archy contracts` never builds that graph.
+
+    Only a directory whose subtree holds a `.py` file is reported, so a data or
+    docs directory stays quiet. A root with no `__init__.py` is a namespace
+    package and is left to import-linter. Must run while the project is on
+    `sys.path`, since the root is located the way import-linter locates it.
+    """
+    found: list[str] = []
+    for root in root_packages:
+        try:
+            spec = importlib.util.find_spec(root)
+        except (ImportError, ValueError):
+            continue
+        if spec is None or spec.origin is None or not spec.submodule_search_locations:
+            continue
+        top = Path(spec.origin).parent
+        found.extend(_orphan_dirs(top, root))
+    return tuple(found)
+
+
+def _orphan_dirs(directory: Path, dotted: str) -> list[str]:
+    found: list[str] = []
+    for child in sorted(p for p in directory.iterdir() if p.is_dir()):
+        if child.name.startswith(".") or child.name == "__pycache__":
+            continue
+        name = f"{dotted}.{child.name}"
+        if (child / "__init__.py").exists():
+            found.extend(_orphan_dirs(child, name))
+        elif any(child.rglob("*.py")):
+            found.append(name)
+    return found
 
 
 def _expression_coverage(contract: object, graph: ImportGraph) -> tuple[tuple[str, ...], bool]:

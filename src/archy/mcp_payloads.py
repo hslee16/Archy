@@ -92,6 +92,9 @@ class ContractsPayload(BaseModel):
     module_count: int | None = None
     import_count: int | None = None
     contracts: tuple[ContractCheck, ...] = ()
+    # Directories inside a root package the contracts engine does not read (no
+    # `__init__.py`); a pass says nothing about the modules in them (#528).
+    unscanned_dirs: tuple[str, ...] = ()
 
 
 class CheckPayload(BaseModel):
