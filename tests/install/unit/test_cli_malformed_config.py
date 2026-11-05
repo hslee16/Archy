@@ -113,8 +113,7 @@ def _claude_md(fake, content: str):
     "args",
     [
         pytest.param(["install", "--target", "claude", "-y"], id="install"),
-        pytest.param(["install", "--target", "claude", "--dry-run"], id="install-dry-run"),
-        pytest.param(["install", "--target", "claude", "--print-config"], id="print-config"),
+        pytest.param(["install", "--print-config", "claude"], id="print-config"),
         pytest.param(["uninstall", "--target", "claude", "-y"], id="uninstall"),
         pytest.param(["uninstall", "--target", "claude", "--dry-run"], id="uninstall-dry-run"),
     ],

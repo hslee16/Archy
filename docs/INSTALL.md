@@ -43,7 +43,10 @@ There are three ways to wire archy in, plus the optional CLI install.
 ### 1. `archy install` (recommended, all clients)
 
 Auto-detects which clients are present and configures each one. Idempotent, and
-unrelated config in shared files is preserved.
+unrelated config in shared files is preserved. A rules file with an
+`<!-- archy:begin -->` line but no `<!-- archy:end -->` after it is refused and
+left as it is: `archy install` and `archy uninstall` name the file and the line,
+so you can delete the stray line or add the end marker, then re-run.
 
 ```bash
 uvx archy install                              # detect, confirm, wire all

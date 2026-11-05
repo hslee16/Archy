@@ -125,18 +125,20 @@ def _marker_block_range(text: str) -> tuple[int, int] | None:
     Returns:
         (start, end) where end is exclusive.
 
-    Recovery behavior:
-    If the opening marker exists but the closing marker is missing, treat EOF
-    as the end of the block, so a hand-corrupted file still re-installs cleanly
-    and uninstall stays idempotent on a corrupted file.
+    Raises:
+        InstallError: the opening marker has no closing marker after it, so
+            nothing says where archy's text stops and the user's begins.
     """
     start = text.find(INSTRUCTIONS_BEGIN)
     if start == -1:
         return None
     end = text.find(INSTRUCTIONS_END, start)
     if end == -1:
-        # No closing marker: recover by treating EOF as the block boundary.
-        return (start, len(text))
+        line = text.count("\n", 0, start) + 1
+        raise InstallError(
+            f"{INSTRUCTIONS_BEGIN} at line {line} has no matching {INSTRUCTIONS_END}; "
+            "delete the stray line or add the end marker, then re-run."
+        )
     return (start, end + len(INSTRUCTIONS_END))
 
 
