@@ -995,7 +995,8 @@ def run_duplicates(
         raise ValueError(f"min_nodes must be >= 1; got {min_nodes}")
     if top_n < 1:
         raise ValueError(f"top_n must be >= 1; got {top_n}")
-    # members < 2 is validated by compute_duplicates (raises ValueError).
+    if members < 2:
+        raise ValueError(f"members must be >= 2; got {members}")
     modules, results = _parse_project(
         path, max_modules=resolve_max_modules(path), **graph_kwargs(path)
     )
