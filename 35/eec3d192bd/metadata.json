@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "35eec3d192bd",
+  "strategy": "manual-commit",
+  "branch": "alee/520-exclude-type-checking",
+  "checkpoints_count": 11,
+  "files_touched": [
+    "README.md",
+    "docs/FUTURE.md",
+    "docs/LEARNINGS.md",
+    "plugins/claude/skills/archy/SKILL.md",
+    "skills/archy/SKILL.md",
+    "src/archy/cli.py",
+    "src/archy/cli_render.py",
+    "src/archy/cycles.py",
+    "src/archy/graph.py",
+    "src/archy/index.py",
+    "src/archy/layers.py",
+    "src/archy/mcp.py",
+    "src/archy/mcp_runs.py",
+    "src/archy/parser.py",
+    "src/archy/scan_config.py",
+    "tests/test_cli.py",
+    "tests/test_cycles.py",
+    "tests/test_layers.py",
+    "tests/test_mcp.py",
+    "tests/test_parser.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/35/eec3d192bd/0/metadata.json",
+      "transcript": "/35/eec3d192bd/0/full.jsonl",
+      "content_hash": "/35/eec3d192bd/0/content_hash.txt",
+      "prompt": "/35/eec3d192bd/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 174,
+    "cache_creation_tokens": 114511,
+    "cache_read_tokens": 12890115,
+    "output_tokens": 49827,
+    "api_call_count": 75
+  }
+}

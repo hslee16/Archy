@@ -1,0 +1,532 @@
+monitor CI and merge when green. Release after
+
+---
+
+<task-notification>
+<task-id>boi113eqv</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/boi113eqv.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for all CI checks to complete" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+github is having some issues with actions
+
+---
+
+[Image #1] looks a bit strange. Why is the overlay there?
+
+---
+
+wait, ignore that
+
+---
+
+<task-notification>
+<task-id>bqksuarqv</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/bqksuarqv.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for re-run checks to complete" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bhox3osk3</task-id>
+<tool-use-id>toolu_01AT1hzeMuC3JnKD8QAuhDxJ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/bhox3osk3.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for publish run to reach the pypi gate" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bcsoj4wux</task-id>
+<tool-use-id>toolu_015k3FwBjEyx3Dddokj7EoWE</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/bcsoj4wux.output</output-file>
+<status>completed</status>
+<summary>Background command "Wait for publish run to finish" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+lets work on tickets. Leave the "good n issue" alone. Oldest tickets first
+
+---
+
+<task-notification>
+<task-id>ab075de98b0c0cbec</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/ab075de98b0c0cbec.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code cycles.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with no findings for `/Users/hosanglee/archy/src/archy/cycles.py`, and I marked it as passed.
+
+- `from __future__ import annotations` is present, and the type syntax is PEP 604 throughout.
+- All three value objects (`CycleEdge`, `Cycle`, `CycleScan`) are frozen pydantic models with tuple sequence fields.
+- No line exceeds 100 characters (checked with `awk`).
+- Imports are correctly grouped, and the file uses no `os.path`.
+- The comments explain why rather than what, and there are no duplicated blocks.</result>
+<usage><subagent_tokens>22138</subagent_tokens><tool_uses>3</tool_uses><duration_ms>14716</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7501ae25d3f78a12</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a7501ae25d3f78a12.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code mcp_runs.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/src/archy/mcp_runs.py` passed with no violations, and I marked it passed.
+
+- **Checked with a command:** no line exceeds 100 characters.
+- **Checked by reading the file:** the other criteria, including `from __future__ import annotations`, PEP 604 types, naming, imports, DRY and comment accuracy.
+- **Not checked:** I did not open `.deepwork/review/python_conventions.md`. I worked from the criteria listed in the instruction file.</result>
+<usage><subagent_tokens>41447</subagent_tokens><tool_uses>3</tool_uses><duration_ms>11573</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a24c325da045e71a5</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a24c325da045e71a5.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code scan_config.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with zero violations in `/Users/hosanglee/archy/src/archy/scan_config.py`, and I marked it as passed.
+
+- **Line length:** no line exceeds 100 characters (checked with `awk`).
+- **Other criteria:** `from __future__ import annotations` is present, the type syntax is PEP 604, and names follow the snake_case and underscore-prefix conventions. The module uses `pathlib.Path` and has no `os.path`. Imports are grouped correctly, and the comments explain why rather than what.
+- **Value objects:** the module defines none, so that criterion doesn't apply.
+- **DRY (not a violation):** three functions repeat the `discover_config` then `load_config` pattern. Each pulls a different field, so I didn't treat it as a copy-pasted block that needs a shared helper.</result>
+<usage><subagent_tokens>20669</subagent_tokens><tool_uses>3</tool_uses><duration_ms>11980</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a41db8dd5aaa349bb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a41db8dd5aaa349bb.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code layers.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/src/archy/layers.py` found no violations, and I marked it as passed.
+
+- **Imports and syntax:** `from __future__ import annotations` is present. Types use PEP 604 syntax, with no `typing.List` or `Optional`. Imports are grouped stdlib, third-party, then local.
+- **Value objects:** All of them are `BaseModel` with `ConfigDict(frozen=True)`, and their sequence fields are tuples.
+- **Paths:** The file uses `pathlib.Path` throughout and never `os.path`.
+- **Line length:** A scan found no line over 100 characters.
+- **Duplication:** I found no copy-pasted block that needs a shared helper.
+- **Comments:** They explain why, not what. The function-local `archy.reach` import is a deliberate exception and its comment gives the reason.
+
+The comment block at the top of `_translate_pattern` describes the glob grammar more than it explains a decision. I judged it acceptable because it documents the quirk of the trailing `**` expansion.</result>
+<usage><subagent_tokens>38869</subagent_tokens><tool_uses>3</tool_uses><duration_ms>16436</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0c11275500a87423</task-id>
+<tool-use-id>toolu_01SZ654JjQuh3MkvJhKKejZY</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a0c11275500a87423.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code mcp.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review fails with 2 violations. I did not call `mark_review_as_passed`. Line length (none over 100), `from __future__ import annotations`, PEP 604 syntax, naming, `pathlib` use and pydantic value objects all conform.
+
+1. **Line 379** — criterion: "Imports grouped stdlib / third-party / local with single blank line between groups."
+   - Offending construct: `from functools import wraps` sits inside `_with_expected_refusal_as_tool_error`, after the docstring and a blank line.
+   - Why it fails: a stdlib import belongs in the module-level stdlib group. The only stdlib import there is `from pathlib import Path` at line 145.
+   - Fix: add `from functools import wraps` above `from pathlib import Path` in the stdlib group, and delete the local import and the stray blank line at 378.
+
+2. **Lines 521 and 527** — criterion: "DRY: no copy-pasted blocks that should be a shared helper."
+   - Offending construct: `archy_check` repeats the same expression twice. One is `resolve_against(root, [Path(config_path)])[0] if config_path else None`. The other is `resolve_against(root, [Path(contracts_config_path)])[0] if contracts_config_path else None`.
+   - Fix: add a small private helper such as `_resolve_optional(root: Path, value: str | None) -&gt; Path | None`. Both call sites then become `_resolve_optional(root, config_path)` and `_resolve_optional(root, contracts_config_path)`.</result>
+<usage><subagent_tokens>38564</subagent_tokens><tool_uses>2</tool_uses><duration_ms>15967</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>affeb45ed7d590c22</task-id>
+<tool-use-id>toolu_013vPxYpoy1uKBcBaxuJ697H</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/affeb45ed7d590c22.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed: none of the 20 changed files contains an em dash (U+2014). I scanned each file line by line for the character and found zero occurrences. I then marked review `no_em_dashes--20_files--7fd5dcd1b14a` as passed.</result>
+<usage><subagent_tokens>19117</subagent_tokens><tool_uses>4</tool_uses><duration_ms>22308</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a79a489962d9d040c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a79a489962d9d040c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code index.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>`src/archy/index.py` passes the review with zero violations, and I marked review `python_code_review--src-archy-index.py--bf9205409f69` as passed.
+
+I read the file against each criterion and ran an `awk` check for lines over 100 characters, which found none. The `from __future__ import annotations`, PEP 604 type syntax, `SyncStats` frozen pydantic model, `Path` usage and import grouping all conform. The comments explain why rather than what.
+
+One thing I noticed but did not count as a violation: the module docstring says "pytorch-scale repo (2,910-module Django…)", which reads as inconsistent. It is a factual wording issue rather than one of the listed criteria.</result>
+<usage><subagent_tokens>23235</subagent_tokens><tool_uses>3</tool_uses><duration_ms>19685</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a062035a32e549d6d</task-id>
+<tool-use-id>toolu_01WR6XAoKhwjEVXZzYY6CfwJ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a062035a32e549d6d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code cli_render.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** Two DRY violations. The other criteria pass.
+
+**Passing criteria**
+- `from __future__ import annotations` is present at line 54.
+- PEP 604 syntax is used, with no `Optional` or `typing.List`.
+- Naming follows the conventions.
+- The one value object, `ContractsOutcome`, is a frozen `BaseModel`.
+- There is no `os.path`.
+- Imports are grouped correctly.
+- No line exceeds 100 characters (checked with awk).
+- I found no comments that only restate the code.
+
+**Findings**
+
+1. Lines 429-432 and 1597-1606: this breaks "DRY: no copy-pasted blocks that should be a shared helper".
+   - `_brief_to_text` and `_conventions_to_text` each render the base-class table separately.
+   - Each computes the "name is NOT the rule" note with the same `suffix_agreement &gt;= 0.8` test.
+   - Each formats the row as `{b.base:&lt;N} {b.count:&gt;3} @ {b.home_module}{note}`.
+   - Each builds the shared-constant line as `dist = ", ".join(f"{v}x{n}" ...)` followed by `"{name} = {dist}  ({setters} of {count} ...)"`.
+   - The constant-distribution join also appears a third time, at lines 1605 and 1622, for registry keyword defaults.
+   - The two threshold literals can drift apart.
+   - Fix: add a helper such as `_distribution(c) -&gt; str` and a `_base_row(b, *, width, agree_label) -&gt; str` that both renderers call.
+
+2. Lines 675 and 771-773: this also breaks the DRY criterion.
+   - `_diff_to_text` and `_simulate_to_text` each hand-format a layer violation as `+ {v.source} -&gt; {v.target}  ({v.rule.from_layer} -&gt; {v.rule.to_layer})`.
+   - The same pair also appears as `rule = f"{v.rule.from_layer} -&gt; {v.rule.to_layer}"` at line 677 and in `_violations_to_text` at line 294.
+   - Fix: add a `_rule_arrow(v: Violation) -&gt; str` or `_added_violation_line(v) -&gt; str` helper and use it at all four sites.
+
+**Non-blocking note.** In `_duplicates_to_text`, the name `near` is bound at line 1194 to the non-exact duplicates. It is rebound at line 1223 to the `near_miss` category. This is not in the listed criteria, but renaming the second to `near_miss` would prevent misreading.
+
+I did not call `mark_review_as_passed`, because there are open findings.</result>
+<usage><subagent_tokens>49600</subagent_tokens><tool_uses>3</tool_uses><duration_ms>21874</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>abbb6ae261feb0a86</task-id>
+<tool-use-id>toolu_01QdX1CuePTeNTEJTyxGkqPf</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/abbb6ae261feb0a86.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code graph.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/src/archy/graph.py` passed with no violations, and I marked it as passed.
+
+- **Line length:** no line exceeds 100 characters (checked with a script).
+- **Other criteria:** the file has `from __future__ import annotations`, PEP 604 types, and no `typing.List` or `Optional`. Its value objects (`Module`, `UnresolvedHint`) are frozen pydantic models with tuple fields, it uses `pathlib` throughout, and its imports are grouped correctly.
+- **Comments:** I left two borderline comments unflagged:
+  - The comment at lines 707-709 mentions a branch that used to exist, which is history, not a current constraint.
+  - The comment at line 807 restates what the code does.
+
+  Neither is a clear WHAT-over-WHY violation.</result>
+<usage><subagent_tokens>40447</subagent_tokens><tool_uses>3</tool_uses><duration_ms>20922</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad87a153210fc9684</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/ad87a153210fc9684.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code parser.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/src/archy/parser.py` found no violations, so I marked it as passed.
+
+Against each criterion:
+- **Future import:** `from __future__ import annotations` is at the top of the module.
+- **Type syntax:** the file uses PEP 604 style (`str | None`, `tuple[str, ...]`) and has no `typing.List` or `Optional`.
+- **Naming:** functions and variables are snake_case, classes are PascalCase, and private helpers start with an underscore.
+- **Value objects:** `ImportRef`, `CallRef` and `ParseResult` are frozen pydantic models and use tuples for their sequence fields.
+- **Paths:** the file uses `pathlib.Path` and no `os.path`.
+- **Import grouping:** imports are grouped stdlib, then third-party, then local, with one blank line between groups.
+- **Line length:** an `awk` check found no line over 100 characters.
+- **DRY:** I saw no copy-pasted blocks that should be a shared helper.
+- **Comments:** the comments explain constraints or quirks rather than restating the code.
+
+The comment at lines 462-464, above the `attribute` loop in `_handle_call`, was the one borderline call. It leans toward describing what the loop does, but it also records the shape of the tree-sitter node, so I didn't count it as a violation.</result>
+<usage><subagent_tokens>26129</subagent_tokens><tool_uses>3</tool_uses><duration_ms>17120</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a4f0fb571f495d7d1</task-id>
+<tool-use-id>toolu_01SZJVkQ7sJxrm3zLjr6nnzJ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a4f0fb571f495d7d1.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code test_cycles.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review fails with one non-blocking finding. I did not call `mark_review_as_passed`, because the pass criterion is zero violations.
+
+**Finding 1 (non-blocking), lines 318 and 337**
+- **Criterion:** "Imports grouped stdlib / third-party / local" and the conventions file's rule "Prefer module-top imports; a function-local import needs a stated reason."
+- **Construct:** `test_scan_cycles_leaves_out_a_type_checking_only_edge_and_counts_it` and `test_a_call_across_a_guarded_import_makes_the_edge_a_runtime_dependency` each begin with `from archy.cycles import scan_cycles`. Line 53 already does `from archy.cycles import find_cycles` at module top, so there is no import cycle to break. No other reason is stated, and `scan_cycles` is not an expensive optional dependency.
+- **Fix:** Delete both local imports and change line 53 to `from archy.cycles import find_cycles, scan_cycles`.
+
+**Checks that passed**
+- `from __future__ import annotations` is present.
+- PEP 604 syntax is used and there is no `typing.List` or `Optional`.
+- Naming is correct.
+- The file uses `pathlib` and has no `os.path`.
+- No line exceeds 100 characters (checked with awk).
+- Nothing in the file needs a frozen pydantic model.
+- I found no real duplication. The `_guarded_pair` helper already factors out the repeated fixture setup.
+- The comments I checked explain why, not what.
+- The block comment at lines 239-249 is rambling, but it explains why. I did not check whether it is pre-existing.
+
+The file is `/Users/hosanglee/archy/tests/test_cycles.py`.</result>
+<usage><subagent_tokens>27751</subagent_tokens><tool_uses>3</tool_uses><duration_ms>17121</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af877967c6f2aff76</task-id>
+<tool-use-id>toolu_012FEMvTFZwrbuuYSREnfJQR</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/af877967c6f2aff76.output</output-file>
+<status>completed</status>
+<summary>Agent "Review doc sync" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked review `update_documents_relating_to_archy_package--15_files--76797f6f66c1` as passed.
+
+The source changes add `--exclude-type-checking` to `archy cycles`, a `type_checking_edges` field on each cycle, and the `exclude_type_checking_imports` setting in `archy.yaml`. Each doc claim I checked against the code matches:
+- **README cycles section** (`/Users/hosanglee/archy/README.md`): the flags, the JSON shape `{"cycles", "excluded_type_checking_edges"}`, the opt-in default and the rules for which edges count all match `cli.py`, `cycles.py`, `parser.py` and `graph.py`.
+- **README MCP tool table:** the `archy_cycles` row matches `mcp.py` and `mcp_runs.py`.
+- **`/Users/hosanglee/archy/docs/FUTURE.md` and `/Users/hosanglee/archy/docs/LEARNINGS.md`:** the new wording says the exclusion applies to cycles only and is opt-in. That matches the code, where `check` layer rules and the score are unchanged.
+- **SKILL.md files** (`/Users/hosanglee/archy/skills/archy/SKILL.md` and `/Users/hosanglee/archy/plugins/claude/skills/archy/SKILL.md`): they are byte-identical, and the `archy_cycles` signature and description match `mcp.py`.
+- **Cache schema version:** no doc mentions the version, which moved from 3 to 4, so nothing needed updating.
+
+One minor point, not a finding: `docs/research/RESEARCH_METRICS.md` line 201 still says "If archy ever distinguishes runtime from type-checking-only edges". That is speculative design text, and it stays accurate because the score does not use the new tagging.</result>
+<usage><subagent_tokens>42524</subagent_tokens><tool_uses>6</tool_uses><duration_ms>30433</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a13fdbaa0d89a4dfa</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a13fdbaa0d89a4dfa.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code cli.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** I did not call `mark_review_as_passed`. The only criterion violated is DRY. I checked line length with `awk` over `/Users/hosanglee/archy/src/archy/cli.py` and found no line over 100 characters.
+
+**Criteria that pass**
+- `from __future__ import annotations` is present at line 57.
+- Type syntax is PEP 604 throughout, with no `typing.List` or `Optional`.
+- Naming follows the conventions, including underscore-prefixed private helpers.
+- Imports are grouped stdlib / third-party / local.
+- The module uses `pathlib` only.
+- There are no value objects, so the pydantic/frozen rule does not apply.
+- The comments I checked explain why, not what.
+
+**DRY violations**
+
+1. **Lines 342-345 and 434-447 (`cycles` and `check`).**
+   - Criterion: "DRY: no copy-pasted blocks that should be a shared helper".
+   - Construct: the idiom `except LayerConfigError as exc: raise click.ClickException(str(exc)) from exc` is written inline in `cycles` (342-345) and three times in `check` (434-437, 439-442, 443-447).
+   - Why it matters: `check` is already wrapped in `@_layer_config_errors` (line 406), so the `LayerConfigError` catches at 436-437 and 446-447 duplicate the decorator.
+   - Why it is easy to miss: `cycles` has no decorator and repeats the inline try/except, so the same job is done three different ways in one file.
+   - Fix: apply `@_layer_config_errors` to `cycles` and delete the inline `LayerConfigError` try/excepts in both commands. If a narrower catch is wanted, extract a small helper or context manager that converts an exception to `ClickException`.
+
+2. **Lines 868-881 and 1167-1173 (`hotspots` and `what_to_refactor_next`).**
+   - Criterion: same DRY bullet.
+   - Construct: both commands run `git_churn(path, since=since)` and copy the same `except InvalidSinceError as exc: raise click.ClickException(str(exc)) from exc`. `coupling` (lines 974-977) does the same around `git_cochange`.
+   - Fix: add a helper such as `_churn_or_exit(path, since)` that handles `InvalidSinceError`, so each command only handles its own `NoCommitsError` behaviour.
+
+3. **Lines 839-847, 905-913 and 1128-1136 (the `--since` option).**
+   - Criterion: same DRY bullet.
+   - Construct: the 8-line `--since` `click.option` with identical help text ("Restrict churn to commits after this date (e.g. 2024-01-01, 2 weeks ago) or git ref (tag/branch/SHA); invalid values are refused.") is copy-pasted into three commands. The `coupling` version differs only by one word ("history" instead of "churn").
+   - Related repetition: the `click.argument("path", ...)` block appears about 20 times, and the `--format` text/json option about 15 times.
+   - Fix: define shared decorators, e.g. `_path_argument`, `_format_option(choices)` and `_since_option`, and apply them to the commands. This also stops the help text drifting between commands.
+
+4. **Lines 1469-1482 versus 1569-1575 and 1697-1714 (`_dsm_from_path` callers).**
+   - This one is minor and the helper partly fixes it. The `dsm` and `render` commands still repeat the same `_require(focus_depth &gt;= 0, ...)` and `_require(max_nodes &gt;= 1, ...)` pair, at lines 1566-1567 and 1700-1701.
+   - Fix: move both checks into `_dsm_from_path`, or into a small `_require_dsm_bounds` helper.
+
+If you treat items 2 and 3 as accepted Click idiom or pre-existing code outside this change, the only actionable item is #1, which touches the `cycles` code now being edited.</result>
+<usage><subagent_tokens>60513</subagent_tokens><tool_uses>3</tool_uses><duration_ms>29784</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a283fc68ad941ba62</task-id>
+<tool-use-id>toolu_01NF2uA8Lxj31daKxXXTyv2x</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a283fc68ad941ba62.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code test_layers.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/tests/test_layers.py` found no violations, and I marked it as passed.
+
+- **Line length:** no line exceeds 100 characters.
+- **Imports and types:** `from __future__ import annotations` is present, imports are grouped correctly, and there is no `typing.List`, `Optional` or `Any`.
+- **Paths:** the file uses `pathlib.Path`, with no `os.path`.
+- **Value objects:** there are no new dataclasses or other value types to check against the frozen-pydantic rule.
+- **Newly added tests:** the `exclude_type_checking_imports` parsing tests at the end of the file follow the conventions, and the existing comments and docstrings explain why rather than what.</result>
+<usage><subagent_tokens>40102</subagent_tokens><tool_uses>3</tool_uses><duration_ms>18479</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0c78cd4472d709da</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a0c78cd4472d709da.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code test_cli.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>`tests/test_cli.py` passes the review with zero violations, and I marked it passed (`python_code_review--tests-test_cli.py--c7f1dd39c4f3`).
+
+I checked the criteria like this:
+- **Mechanical checks:** `from __future__ import annotations` is on line 1. A scan found no line over 100 characters, no `typing.List`, `Optional` or `os.path`, and no `@dataclass`. The only `typing` hits are `TYPE_CHECKING` text inside test fixture strings. The imports are grouped stdlib, third-party, local.
+- **Judgement checks:** I read the changed lines, which are the new TYPE_CHECKING cycle tests and the `_make_guarded_project` helper near the end of the file. I read the first 1,288 lines of the file as embedded in the instruction file (the rest was not read, except for an unchanged region in a few lines beyond). I judged the comments to be explaining why, and the helpers shared rather than copy-pasted.
+
+Two small observations, neither a violation:
+- **Single-entry parametrize:** `test_cycles_exclude_type_checking_accepts_the_qualified_spelling` parametrizes over a one-item list. A plain inline string would be simpler.
+- **Borderline comment:** the comment "`typing.TYPE_CHECKING` spelling is excluded too." sits close to describing what the code does rather than why.</result>
+<usage><subagent_tokens>66095</subagent_tokens><tool_uses>5</tool_uses><duration_ms>21985</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a38ed8bfc9b212717</task-id>
+<tool-use-id>toolu_01JUY2CoRRiEVxBP9o9ovt1z</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a38ed8bfc9b212717.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code test_parser.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `tests/test_parser.py` passed with zero violations, and I marked it as passed.
+
+- **Line length:** no line is over 100 characters (checked with `awk`).
+- **Module conventions:** `from __future__ import annotations` is present, and the imports are grouped stdlib, third-party, local. There are no `typing.List` or `Optional` uses and no `os.path` uses. The file has no value objects or classes, so the pydantic criterion doesn't apply.
+- **Comments:** the comments I checked explain why, such as the Shift-JIS `0x5C` byte, the fixture check that must exercise the bug, and the fail-safe note on unrecognised guard spellings.
+
+I read the instruction file but not `.deepwork/review/python_conventions.md`, so the verdict rests on the criteria listed in the instructions.</result>
+<usage><subagent_tokens>23718</subagent_tokens><tool_uses>3</tool_uses><duration_ms>21647</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a26488d147df49f51</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a26488d147df49f51.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring_accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings, and I marked `docstring_accuracy--10_files--da1a2276d060` as passed.
+
+I read the diff for the 10 files against the merge base and traced the changed prose and the docstrings of changed function bodies. Everything I traced matched the code:
+
+- **`scan_cycles`, `CycleScan` and `Cycle.type_checking_edges`:** the "never excluded" and "zero when nothing was excluded" claims hold. The only two edge-creation sites in `src/archy/graph.py` (the import and call passes) both set `type_checking_only` correctly.
+- **`_under_type_checking_guard` and `ImportRef.type_checking`:** the `else`/`elif`, function/lambda and exact-spelling claims match the walk in `src/archy/parser.py`.
+- **`resolve_exclude_type_checking`, `LayerConfig.exclude_type_checking_imports` and `_parse_optional_bool`:** the override, default and strict-boolean claims match the code.
+- **The CLI help, the `archy_cycles` tool description and the `run_cycles` docstring:** the claim that JSON becomes an object only when exclusion is on holds.
+- **The `SCHEMA_VERSION = 4` comment:** it matches the new `ImportRef.type_checking` field.
+
+One loose claim, not a finding: the `_cycle_scan_to_dict` docstring says the default output "stays a list so existing consumers see no change". `_cycles_to_json` now adds a `type_checking_edges` key to each cycle, so the list shape is unchanged but each entry has one extra field. That change is additive, so I left it alone.</result>
+<usage><subagent_tokens>31219</subagent_tokens><tool_uses>6</tool_uses><duration_ms>26428</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aed06680e1b01f17c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/aed06680e1b01f17c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review code test_mcp.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review fails, with 3 violations. I did not call `mark_review_as_passed`, because it is only for a pass.
+
+The instruction file's embedded copy of the file ran past one page, so I checked the on-disk `/Users/hosanglee/archy/tests/test_mcp.py` (3304 lines) directly. Line numbers below are the on-disk ones. The instruction snapshot's numbers are 45 higher.
+
+Every other criterion passed:
+- `from __future__ import annotations` is present at line 12.
+- No line exceeds 100 characters.
+- There is no `typing.List`, `Optional` or `os.path`. The only `os` use is `os.environ`, which is fine.
+- There are no dataclass value types.
+- Imports are grouped correctly.
+- `ruff check` passes on the file.
+
+**1. Lines 1014-1027 and 1033-1043: DRY**
+- Criterion: "DRY: no copy-pasted blocks that should be a shared helper".
+- Offending construct: `test_archy_dsm_rejects_negative_focus_depth` calls `run_dsm(...)` twice, spelling out all 8 keyword arguments each time.
+  - The arguments are `response_format="summary"`, `group_by="community"`, `weight="imports"`, `focus=None`, `focus_depth=...`, `package=None` and `baseline_path=None`.
+  - The module already has a `_dsm(path, response_format, *, group_by, weight, focus, focus_depth, package, baseline_path)` helper at line 543 with exactly these defaults.
+  - `test_response_format_rejects_unknown_value` (around line 625) repeats the same argument set again.
+- Fix: replace the calls with `_dsm(acyclic_project, focus_depth=-1)` and `_dsm(acyclic_project, focus_depth=0)`.
+  - For the unknown-format test, build the kwargs from a shared constant or use `_dsm(..., response_format="xml")`.
+  - Keep a direct `run_dsm` call only where the test needs it, such as `test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning`.
+
+**2. Module-wide: DRY**
+- Criterion: "DRY: no copy-pasted blocks that should be a shared helper".
+- Offending construct: `from archy.mcp_compat import ToolError` is repeated as a function-local import in 17 test bodies.
+  - Examples are `test_error_model_tier2_raises_tier3_returns_in_band`, `test_mcp_tool_rejects_a_nonexistent_project_path`, `test_score_history_view_rejects_a_nonexistent_project_path`, `test_score_rejects_a_file_as_the_project_path`, `test_archy_cycles_rejects_min_size_below_one`, and the `test_archy_dsm_*` tests.
+  - The module imports from `archy.mcp` at the top and no cycle justifies deferring this one. The imports also sit outside the stdlib / third-party / local grouping.
+- Fix: add `from archy.mcp_compat import ToolError` once in the local import block and delete the 17 local imports.
+
+**3. Lines 2080-2082: comment accuracy**
+- Criterion: "every comment must explain WHY (a constraint, decision, or quirk), not WHAT".
+- Offending construct: `# The old comment claimed this covered mode='blast' routing, but run_impact has no mode parameter...`
+  - This is a changelog note about a previous comment, not a constraint on the current code. It will be stale once the history is forgotten.
+- Fix: state the current reason only, for example `# Route through the tool: run_impact has no mode parameter, so only the tool path exercises mode='blast'.`</result>
+<usage><subagent_tokens>47802</subagent_tokens><tool_uses>4</tool_uses><duration_ms>28701</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a765999be65be66f1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a765999be65be66f1.output</output-file>
+<status>completed</status>
+<summary>Agent "Review cli_mcp_surface_parity" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings, and I marked it as passed.
+
+The diff adds `exclude_type_checking` to `cycles` and a per-cycle `type_checking_edges` count. Both are consistent across the CLI text output, the CLI JSON payload and the MCP tool's return model.
+
+- **Input flag:** the CLI option `--exclude-type-checking/--include-type-checking` maps to the `exclude_type_checking` argument on `archy_cycles`. Both go through `resolve_exclude_type_checking`, so an explicit value overrides the `exclude_type_checking_imports` key in `archy.yaml`.
+- **Per-cycle count:** `type_checking_edges` is a real field on the `Cycle` model, so MCP serializes it. `_cycles_to_json` emits it, and the text output shows it as a hint line when exclusion is off.
+- **Excluded-edge count:** `excluded_type_checking_edges` appears in the CLI JSON (`_cycle_scan_to_dict`), the CLI text note, and the MCP `CycleScan` model. The CLI JSON and MCP return the same object shape when exclusion is on and a bare list when it is off.
+- **Reason carried:** the count is a real pydantic field, not a plain `@property`. A clean result caused by the exclusion still reports how many edges were left out, so it can't pass silently. `tests/test_mcp.py` pins the serialized payload at line 3288.
+- **`TOOL_NAMES`:** no new MCP tool was registered, so the pinned tuple in `src/archy/install/base.py` needs no change.
+- **Malformed `archy.yaml`:** the CLI turns `LayerConfigError` into a `ClickException`. MCP lets it propagate, which matches the policy in the `mcp.py` docstring (a malformed `archy.yaml` raises and becomes an `isError:true` result).
+
+Files reviewed:
+- `/Users/hosanglee/archy/src/archy/cli.py`
+- `/Users/hosanglee/archy/src/archy/mcp.py`
+
+I also read the supporting changes in `cli_render.py`, `mcp_runs.py`, `cycles.py` and `scan_config.py` to check the three renderings.</result>
+<usage><subagent_tokens>31201</subagent_tokens><tool_uses>7</tool_uses><duration_ms>29511</duration_ms></usage>
+</task-notification>
