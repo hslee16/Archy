@@ -414,6 +414,7 @@ def run_contracts(path: Path, *, config_filename: Path | None) -> ContractsPaylo
         module_count=result.module_count,
         import_count=result.import_count,
         contracts=result.contracts,
+        unscanned_dirs=result.unscanned_dirs,
     )
 
 

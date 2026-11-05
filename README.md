@@ -336,6 +336,8 @@ archy contracts path/to/project --format json
 
 **A kept contract is not automatically protection.** A contract whose module expressions match nothing in the graph holds no matter what the code does, so `all_kept` calls it kept while nothing was ever checked. `archy contracts` exits non-zero on `verified` (evaluated *and* held), not on `all_kept`, and `archy check --contracts` reports `transitive_checked: false` for the same reason: a rule that could not have failed was not evaluated. The text output marks such a contract `??` rather than `OK` and names the expressions that matched no module; `--format json` adds top-level `verified` and `unverifiable` alongside `kept`/`broken`, and per-contract `matched_nothing` and `unmatched_expressions`. A `.importlinter` `type = layers` contract needs no such flag: import-linter itself refuses to run when a required layer's module is absent, which archy reports as a config error, and an optional layer (written `(name)`) is absent by design.
 
+**Directories the engine does not read.** import-linter's engine (grimp) skips a directory with no `__init__.py` once it is inside a regular package, so a path through it is invisible and the contract is reported as kept. `archy contracts` and `check --contracts` list those directories (`unscanned_dirs` in JSON and the MCP payload; one `# N directory not visible to the contracts engine` line in text). It is a note on the verdict and does not change `verified` or the exit code, since a stray scripts or fixtures directory would otherwise fail every existing gate. Add the `__init__.py` to bring the modules under the contract.
+
 **Config resolution.** `archy contracts` reads, in order:
 
 1. The `--config` argument if passed.

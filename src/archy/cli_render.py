@@ -758,6 +758,8 @@ def _contracts_to_dict(result: ContractsResult) -> dict:
         # have failed" (#435).
         "verified": result.verified,
         "unverifiable": result.unverifiable,
+        # Directories the engine does not read; a pass says nothing about them.
+        "unscanned_dirs": list(result.unscanned_dirs),
         "contracts": [
             {
                 "name": c.name,
@@ -794,6 +796,13 @@ def _contracts_to_text(result: ContractsResult) -> str:
     if result.unverifiable:
         summary += f", {result.unverifiable} unverifiable"
     lines = [summary]
+    if result.unscanned_dirs:
+        n = len(result.unscanned_dirs)
+        noun, pronoun = ("directory", "it") if n == 1 else ("directories", "them")
+        lines.append(
+            f"# {n} {noun} not visible to the contracts engine (no __init__.py), so a pass "
+            f"says nothing about the modules in {pronoun}: " + ", ".join(result.unscanned_dirs)
+        )
     for c in result.contracts:
         # A contract that could not have failed gets its own marker. Rendering
         # it as `OK` is the whole of #435: it reads as protection that is not
