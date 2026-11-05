@@ -6,10 +6,10 @@ graph and returns every edge that crosses a forbidden boundary.
 
 archy:owns        ExactPatternHint, ForbidRule, LayerConfig, LayerConfigError,
                   LayerCoverage, LayerSpec, ReachViolation, RequiredRule, SdpConfig,
-                  SdpViolation, Violation, compute_coverage, contracts_unverified,
-                  discover_config, find_reach_violations, find_sdp_violations,
-                  find_violations, governed_roots, is_floating_pattern, load_config,
-                  match_layer
+                  SdpViolation, Violation, check_external_patterns, compute_coverage,
+                  contracts_unverified, discover_config, find_reach_violations,
+                  find_sdp_violations, find_violations, governed_roots,
+                  is_floating_pattern, load_config, match_layer
 archy:mirrored-by LayerConfigError -> archy.cli, archy.contracts, archy.mcp_runs,
                   LayerCoverage -> archy.cli, archy.cli_render, archy.mcp_payloads,
                   archy.mcp_runs, ReachViolation -> archy.cli_render, archy.diff,
@@ -292,6 +292,12 @@ class LayerCoverage(BaseModel):
     # with scripts beside its package look uncovered, which is a fact about the
     # scan path and not about the config. Reported so the exclusion is visible.
     modules_outside_declared_roots: int = 0
+    # Import edges from a layered internal module to a layered EXTERNAL package
+    # (`orm: {modules: ["sqlalchemy.**"]}`). Counted apart from `edges_total` /
+    # `edges_governed` on purpose: those are the internal-edge ratio #362 and #355
+    # protect, and folding third-party edges in would move it for a reason that
+    # says nothing about how much of the user's own code is governed (#527).
+    external_edges_governed: int = 0
     # Bare-qualname patterns with unlayered descendants. See `ExactPatternHint`:
     # this names the CAUSE of a degenerate `edge_ratio`, where the ratios only
     # report the symptom. Defaulted so every existing construction site keeps
@@ -324,7 +330,9 @@ class LayerCoverage(BaseModel):
         """No import edge in the tree can be subject to any `forbid` rule.
 
         True both when internal edges exist and none has two layered endpoints,
-        and when there are no internal edges at all. Either way every `forbid`
+        and when there are no internal edges at all. An edge into a layered
+        external package counts as governed (`external_edges_governed`): a rule
+        naming `sqlalchemy.**` can fire on it. Either way every `forbid`
         rule is unfireable, so a clean verdict carries no information -- which
         is precisely what the verdict must say out loud.
 
@@ -336,7 +344,7 @@ class LayerCoverage(BaseModel):
         `computed_field`, not a property: `model_dump()` drops properties, and
         the MCP surface returns this object through `model_dump()`.
         """
-        return self.edges_governed == 0
+        return self.edges_governed == 0 and self.external_edges_governed == 0
 
     @computed_field
     @property
@@ -385,17 +393,24 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
     you were governing, how much do the rules reach", and modules outside those
     roots are counted separately rather than silently dropped.
 
-    External nodes are excluded: they are not the user's code and no layer rule
-    is expected to name them.
+    External nodes are not the user's code, so they stay out of the module and
+    internal-edge counts. A layer that NAMES an external package
+    (`sqlalchemy.**`) is still a layer that exists: the external nodes it
+    matches count toward `layer_sizes` (so presence is true), and the edges into
+    them are reported apart as `external_edges_governed` (#527).
     """
     ruled_layers = {rule.from_layer for rule in config.forbid} | {
         rule.to_layer for rule in config.forbid
     }
     roots = governed_roots(config)
     layer_of: dict[str, str | None] = {}
+    external_layer_of: dict[str, str] = {}
     outside = 0
     for node, data in graph.nodes(data=True):
         if data.get("external"):
+            external_layer = match_layer(node, config.layers)
+            if external_layer is not None:
+                external_layer_of[node] = external_layer
             continue
         if roots and node.split(".")[0] not in roots:
             outside += 1
@@ -403,7 +418,7 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         layer_of[node] = match_layer(node, config.layers)
 
     sizes = {layer.name: 0 for layer in config.layers}
-    for layer in layer_of.values():
+    for layer in (*layer_of.values(), *external_layer_of.values()):
         if layer is not None:
             sizes[layer] = sizes.get(layer, 0) + 1
 
@@ -418,8 +433,13 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         if layer_of[src] is not None and layer_of[dst] is not None
     ]
 
+    external_governed = sum(
+        1 for src, dst in graph.edges if layer_of.get(src) is not None and dst in external_layer_of
+    )
+
     return LayerCoverage(
         exact_pattern_hints=_exact_pattern_hints(config, unlayered),
+        external_edges_governed=external_governed,
         modules_total=len(layer_of),
         modules_matched=len(matched),
         modules_in_ruled_layer=len(in_ruled),
@@ -616,7 +636,48 @@ def match_layer(qualname: str, layers: tuple[LayerSpec, ...]) -> str | None:
     return matches[0] if matches else None
 
 
+def check_external_patterns(graph: nx.DiGraph, config: LayerConfig) -> None:
+    """Refuse a pattern that reaches below an external package's top-level name.
+
+    The graph collapses every external import to its top-level package, so
+    `from sqlalchemy.orm import Session` is an edge to the node `sqlalchemy` and
+    there is never a node `sqlalchemy.orm`. A pattern such as `sqlalchemy.orm.**`
+    can therefore never match, and `check` exited 0 on a real import it was
+    written to catch (#527). Decided against the graph, not at YAML load: only
+    a scanned tree says which first segments are external packages and which are
+    the project's own.
+
+    Raises:
+        LayerConfigError: naming the pattern and the form that works.
+    """
+    external = {n for n, d in graph.nodes(data=True) if d.get("external")}
+    if not external:
+        return
+    named: list[tuple[str, str]] = []
+    for layer in config.layers:
+        named.extend((f"layer {layer.name!r}", pattern) for pattern in layer.patterns)
+    for rule in config.required:
+        for field, pattern in (
+            ("source", rule.source),
+            ("must_reach", rule.must_reach),
+            ("within", rule.within),
+        ):
+            if pattern and pattern != ENTRYPOINTS_SOURCE:
+                named.append((f"required rule {field}", pattern))
+    for where, pattern in named:
+        if is_floating_pattern(pattern):
+            continue
+        root = pattern.split(".", 1)[0]
+        if root in external and pattern not in (root, f"{root}.**"):
+            raise LayerConfigError(
+                f"{where} pattern {pattern!r} names a submodule of the external package "
+                f"{root!r}, but the graph keeps only the top-level name, so it can never "
+                f"match. Use {root + '.**'!r}."
+            )
+
+
 def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
+    check_external_patterns(graph, config)
     forbid_index = {(rule.from_layer, rule.to_layer): rule for rule in config.forbid}
     violations: list[Violation] = []
     for source, target, data in graph.edges(data=True):
@@ -659,6 +720,7 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
     """
     if not config.required:
         return []
+    check_external_patterns(graph, config)
 
     # `archy.reach`, NOT `archy.graph`, which is where this helper first lived.
     # graph pulls in parser/complexity/risk behind it, so importing it here put
