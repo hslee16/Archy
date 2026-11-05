@@ -125,19 +125,28 @@ def _marker_block_range(text: str) -> tuple[int, int] | None:
     Returns:
         (start, end) where end is exclusive.
 
-    Recovery behavior:
-    If the opening marker exists but the closing marker is missing, treat EOF
-    as the end of the block, so a hand-corrupted file still re-installs cleanly
-    and uninstall stays idempotent on a corrupted file.
+    Raises:
+        InstallError: an opening marker has no closing marker before the next
+            opening marker or end of file, so nothing says where archy's text
+            stops and the user's begins.
     """
     start = text.find(INSTRUCTIONS_BEGIN)
     if start == -1:
         return None
-    end = text.find(INSTRUCTIONS_END, start)
-    if end == -1:
-        # No closing marker: recover by treating EOF as the block boundary.
-        return (start, len(text))
-    return (start, end + len(INSTRUCTIONS_END))
+    first_end = text.find(INSTRUCTIONS_END, start)
+    begin = start
+    while begin != -1:
+        end = text.find(INSTRUCTIONS_END, begin)
+        next_begin = text.find(INSTRUCTIONS_BEGIN, begin + 1)
+        if end == -1 or -1 < next_begin < end:
+            line = text.count("\n", 0, begin) + 1
+            raise InstallError(
+                f"{INSTRUCTIONS_BEGIN} at line {line} has no matching {INSTRUCTIONS_END}; "
+                "delete that marker, or add the end marker right after archy's text and "
+                "before anything of yours, then re-run"
+            )
+        begin = next_begin
+    return (start, first_end + len(INSTRUCTIONS_END))
 
 
 def upsert_instructions(existing: str | None) -> str:
@@ -145,7 +154,8 @@ def upsert_instructions(existing: str | None) -> str:
 
     Idempotent: a second call with the first call's output is a no-op. Other
     content in the file (the user's own CLAUDE.md, an existing AGENTS.md) is
-    preserved; only the text between the archy markers is rewritten.
+    preserved; only the text between the archy markers is rewritten. A block
+    :func:`_marker_block_range` refuses raises :class:`InstallError`.
     """
     block = instructions_block()
     if not existing:
@@ -164,7 +174,8 @@ def remove_instructions(existing: str | None) -> str | None:
     Returns the file content with the marker-fenced block removed, preserving
     everything the user wrote around it. Returns ``None`` (signalling "delete the
     file") when nothing but the archy block remains, since in that case archy is
-    the only reason the file exists. Idempotent and a no-op if no block present.
+    the only reason the file exists. Idempotent and a no-op if no block present. A block
+    :func:`_marker_block_range` refuses raises :class:`InstallError`.
     """
     if not existing:
         return None
