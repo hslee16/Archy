@@ -62,6 +62,39 @@ def test_upsert_refuses_an_end_marker_that_only_comes_before_the_begin_marker():
         upsert_instructions(existing)
 
 
+@pytest.mark.parametrize(
+    ("existing", "line"),
+    [
+        pytest.param(
+            f"# top\n{INSTRUCTIONS_BEGIN}\n## My notes\n\n{instructions_block()}",
+            2,
+            id="stray-begin-above-a-whole-block",
+        ),
+        pytest.param(
+            f"{instructions_block()}\n{INSTRUCTIONS_BEGIN}\n## My notes\n",
+            len(instructions_block().splitlines()) + 2,
+            id="stray-begin-below-a-whole-block",
+        ),
+    ],
+)
+def test_every_begin_marker_needs_its_own_end_marker(existing, line):
+    assert existing.count(INSTRUCTIONS_END) == 1
+    with pytest.raises(InstallError, match=rf"line {line} has no matching"):
+        upsert_instructions(existing)
+    with pytest.raises(InstallError, match=rf"line {line} has no matching"):
+        remove_instructions(existing)
+
+
+def test_two_whole_blocks_are_not_refused():
+    block = instructions_block()
+    assert upsert_instructions(f"{block}\nmine\n\n{block}").count(INSTRUCTIONS_BEGIN) == 2
+
+
+def test_the_refusal_says_where_the_end_marker_goes():
+    with pytest.raises(InstallError, match="before anything of yours"):
+        upsert_instructions(f"{INSTRUCTIONS_BEGIN}\nnotes\n")
+
+
 def test_apply_plan_routes_renders_through_write_system():
     ws = DryRunWriteSystem()
     plan = [
