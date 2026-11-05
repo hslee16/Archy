@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "3f6dcfbc4b6d",
+  "strategy": "manual-commit",
+  "branch": "alee/529-src-layout-tests",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "tests/test_src_layout_tests.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3f/6dcfbc4b6d/0/metadata.json",
+      "transcript": "/3f/6dcfbc4b6d/0/full.jsonl",
+      "content_hash": "/3f/6dcfbc4b6d/0/content_hash.txt",
+      "prompt": "/3f/6dcfbc4b6d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 646,
+    "cache_creation_tokens": 509226,
+    "cache_read_tokens": 47262916,
+    "output_tokens": 175570,
+    "api_call_count": 278
+  }
+}
