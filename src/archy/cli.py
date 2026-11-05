@@ -2413,10 +2413,6 @@ def _graph_to_dot(g: nx.DiGraph) -> str:
     return "\n".join(lines)
 
 
-if __name__ == "__main__":  # pragma: no cover
-    sys.exit(main())
-
-
 def _require_headers_flags(
     emit_headers: bool, write: bool, check: bool, module: str | None
 ) -> None:
@@ -2507,3 +2503,7 @@ def _emit_headers(
 
     if check and stale:
         sys.exit(1)
+
+
+if __name__ == "__main__":  # pragma: no cover
+    sys.exit(main())

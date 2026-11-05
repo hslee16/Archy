@@ -77,6 +77,25 @@ def test_graph_commands_default_to_current_directory(
     assert "pkg.b" in result.output
 
 
+def test_python_m_entry_point_reaches_the_header_helpers(tmp_path: Path):
+    """`python -m archy.cli` must run main() after the header helpers are defined.
+
+    The `__main__` guard used to sit above `_require_headers_flags`, so this
+    command died with a NameError instead of printing the usage error the
+    console script prints (#782).
+    """
+    project = _make_empty_package_project(tmp_path)
+    (project / "pkg" / "a.py").write_text("X = 1\n")
+    r = subprocess.run(
+        [sys.executable, "-m", "archy.cli", "conventions", str(project), "--write"],
+        capture_output=True,
+        text=True,
+    )
+    combined = r.stdout + r.stderr
+    assert "NameError" not in combined
+    assert "require --emit-headers" in combined
+
+
 def test_cycles_text_output_lists_cycle(tmp_path: Path):
     project = _make_cyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["cycles", str(project)])
