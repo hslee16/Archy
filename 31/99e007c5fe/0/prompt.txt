@@ -1,0 +1,630 @@
+i'm going to merge 817. Lets create new tickcets from the revie findings. Read the review comments in the PR
+
+---
+
+revie PR 819. Leave comments
+
+---
+
+<task-notification>
+<task-id>a2d51764a197fe129</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a2d51764a197fe129.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings. I searched all seven changed files for U+2014 and found no em dashes. I then marked `no_em_dashes--7_files--8d384dd5053e` as passed.
+
+The files checked, all under `/Users/hosanglee/archy`:
+- `src/archy/cli.py`
+- `src/archy/cli_render.py`
+- `src/archy/contracts.py`
+- `src/archy/mcp_runs.py`
+- `tests/test_cli.py`
+- `tests/test_contracts.py`
+- `tests/test_mcp.py`</result>
+<usage><subagent_tokens>18597</subagent_tokens><tool_uses>3</tool_uses><duration_ms>10751</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2c68069c42785eb0</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a2c68069c42785eb0.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review contracts.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I did not call `mark_review_as_passed`. The review fails on one finding.
+
+**Finding 1: DRY (lines 286-298 of `/Users/hosanglee/archy/src/archy/contracts.py`)**
+- **Criterion:** "DRY: no copy-pasted blocks that should be a shared helper".
+- **Offending construct:** `_drive_import_linter` has two `except NoSuchContractType` handlers that are copy-pasted. One wraps `_register_contract_types(user_options)` and the other wraps `create_report(...)`. Each builds the same `ContractsConfigError`, with the same f-string `unknown contract type in {_config_source(config_path)}: {exc}. Valid types: forbidden, layers, independence, protected, acyclic_siblings.`
+- **Suggested fix:** Add a helper such as `_unknown_contract_type_error(exc, config_path) -&gt; ContractsConfigError` and use it at both sites: `raise _unknown_contract_type_error(exc, config_path) from exc`. Alternatively, fold both calls into one `try` block (`_register_contract_types` followed by `create_report`) with a single `except NoSuchContractType` handler. The comment at lines 291-294 says the two paths must agree, and a shared helper enforces that. As written, the "Same message as above" comment can drift out of date.
+
+I checked the other criteria and found no violations:
+- `from __future__ import annotations` is at the top of the module.
+- Type syntax is PEP 604 throughout, with no `typing.List` or `Optional`.
+- Naming follows the conventions.
+- The value objects use `BaseModel` with `ConfigDict(frozen=True)` and tuple fields.
+- `pathlib` is used. `os` appears only for `os.chdir`, not `os.path`.
+- Imports are grouped correctly.
+- No line exceeds 100 characters (checked with awk).
+- The comments explain why rather than what.</result>
+<usage><subagent_tokens>27661</subagent_tokens><tool_uses>2</tool_uses><duration_ms>16374</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2f5c6113850cddae</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a2f5c6113850cddae.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I marked review `suggest_new_reviews--7_files--8d384dd5053e` as passed.
+
+I judged this from the instruction file alone and did not open any of the seven changed files. The default verdict in the instructions is pass, and I had no evidence in hand that would meet all four conditions for a new rule.</result>
+<usage><subagent_tokens>18412</subagent_tokens><tool_uses>2</tool_uses><duration_ms>12559</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a357395713e10969b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a357395713e10969b.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review cli.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** There is one non-blocking finding. I did not call `mark_review_as_passed`.
+
+**Finding 1 (non-blocking): incomplete docstring after this changeset**
+- **Line:** about 2406-2431, the docstring of `_transitive_unverified_reason`.
+- **Criterion:** "Comment accuracy: every comment must explain WHY (a constraint, decision, or quirk)". The conventions file adds "when a changeset edits code, check that the comments above it are still true."
+- **Construct:** the changeset adds an `empty_contracts: bool = False` parameter and a new first branch, `if empty_contracts: return "contracts ran but the config defined 0 contracts..."`. The docstring was not updated.
+  - It still says `no_verdict_error` "distinguishes the ways this run can fail to verify".
+  - It calls `unverifiable` "the third way", which is no longer the last case.
+  - It says `unverifiable` "is checked before the coverage stem", but `empty_contracts` is now checked before `unverifiable`.
+  - The ordering reason for the new branch is not recorded. Zero contracts is a different cause from "some contracts could not have failed", and it must come first or it would return `None`/the coverage stem and give no reason.
+- **Fix:** add a short paragraph to the docstring. For example: "`empty_contracts` is the fourth way and is checked first: a run that evaluated zero contracts checked nothing regardless of coverage, and #775 closed the case where it looked verified. `unverifiable` then covers contracts that ran but could not fail." Also reword "the third way" so the count is not stale.
+
+**Checked and clean**
+- `from __future__ import annotations` is present.
+- Type syntax is PEP 604 with no `typing.List` or `Optional`. `Callable` and `functools` were removed by the changeset, and no unused leftovers remain.
+- Naming is correct.
+- There are no value-object violations; the file defines no dataclasses or models.
+- The file uses `pathlib` only.
+- Import grouping is correct. The function-local imports are deliberate and have stated reasons.
+- No line exceeds 100 characters; I checked with `awk`.
+- No DRY violation was introduced. `_empty_contracts` follows the existing `_transitive_checked` / `_unverifiable_contracts` helper pattern. That is intentional, so I did not flag it as duplication.
+- The new comments and docstrings for `_empty_contracts` and `_transitive_checked` are accurate and explain why.
+
+**Pre-existing, not this changeset (aside only):** the duplicated `--top` / `--since` / `--format` option blocks across commands, and the repeated `try: ... except X: raise click.ClickException`. These are tracked in #335 and #318.</result>
+<usage><subagent_tokens>64568</subagent_tokens><tool_uses>4</tool_uses><duration_ms>21600</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a4182701f383aa3eb</task-id>
+<tool-use-id>toolu_01XyWzyyjE8B2uR2JDScS5r8</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a4182701f383aa3eb.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review cli_render.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no violations, and I marked it passed.
+
+The changeset adds one block to `_contracts_to_text` in `/Users/hosanglee/archy/src/archy/cli_render.py`. It prints a "no contracts defined: nothing was verified" line when the result has no contracts. Per the repo's scope rule, I judged the change rather than the whole file.
+
+- **Future import:** `from __future__ import annotations` is present at module top.
+- **Type syntax:** it uses PEP 604 throughout; the only `typing` import is `cast`.
+- **Value objects:** `ContractsOutcome` is a frozen pydantic `BaseModel`.
+- **Paths and line length:** there is no `os.path` use, and no line exceeds 100 characters.
+- **DRY:** the new block duplicates nothing.
+- **Comments:** the existing comment above the contract loop, which cites #435, is still true after the change.</result>
+<usage><subagent_tokens>50326</subagent_tokens><tool_uses>5</tool_uses><duration_ms>22481</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a686bcee765ae0778</task-id>
+<tool-use-id>toolu_01XiFeXfoU1TtqkNpAnuTab4</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a686bcee765ae0778.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review test_contracts.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** The file has 3 violations, all under DRY or comment accuracy. The other criteria are met: `from __future__ import annotations` is present, there is no `typing.List` or `Optional`, naming is correct, `pathlib` is used throughout, and imports are grouped correctly. No line exceeds 100 characters; I checked this with `awk`. There are no value objects, so the pydantic criterion does not apply.
+
+1. **Lines 611-614, 628-630, 643-645, 659-661** (DRY: "no copy-pasted blocks that should be a shared helper")
+   - Four tests repeat the same setup: `pkg = tmp_path / "pkg"; pkg.mkdir(); (pkg / "__init__.py").write_text("")`. The test at line 606 also repeats `a.py` with `"X = 1\n"`, which `_write_empty_contracts_project` (line 577) already writes.
+   - Fix: add a `_write_bare_pkg(root: Path) -&gt; Path` helper that creates `pkg/__init__.py`. Have `_write_empty_contracts_project` call it, and have the four tests use it.
+
+2. **Lines 102-107 and 586-589** (DRY)
+   - `_purge_top` and `_purge_pkg` are identical except for the package name.
+   - Fix: write one `_purge_package(monkeypatch, name)` helper, or make `_purge_top` and `_purge_pkg` thin wrappers around it.
+
+3. **Lines 475-480** (Comment accuracy: "every comment must explain WHY… not WHAT")
+   - Line 480 (`# Add an archy.yaml that would generate a different contract if used.`) restates what the code below it does.
+   - It also repeats the point already made at lines 476-478 and in the docstring.
+   - Fix: delete the line 480 comment. Trim the lines 476-478 comment to the one WHY: the differently named contract is what makes the assertion prove precedence.
+   - Lines 476-477 also refer to "the resolution order's #2 branch", which no code or docstring in the file defines.
+
+I did not call `mark_review_as_passed`, because the review did not pass.
+
+File reviewed: `/Users/hosanglee/archy/tests/test_contracts.py`</result>
+<usage><subagent_tokens>30383</subagent_tokens><tool_uses>2</tool_uses><duration_ms>21660</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a9f8098e77d6a247b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a9f8098e77d6a247b.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Documentation drift detected. I did not call `mark_review_as_passed`, because the review fails.
+
+The changes make a contracts run with zero contracts unverified: `ContractsResult.verified` is now false, `transitive_checked` is false, and a new reason is emitted. The docs still describe only the "matched nothing" case.
+
+**Finding 1: `README.md`, the "A kept contract is not automatically protection." paragraph (about lines 334-336)**
+- Quoted claim: "`archy contracts` exits non-zero on `verified` (evaluated *and* held)… and `archy check --contracts` reports `transitive_checked: false` for the same reason: a rule that could not have failed was not evaluated."
+- Why it is outdated: `ContractsResult.verified` in `src/archy/contracts.py` now also requires `len(contracts) &gt; 0`. `_transitive_checked` and `_empty_contracts` in `src/archy/cli.py` and `contracts_verdict` in `src/archy/mcp_runs.py` do the same. `_contracts_to_text` in `src/archy/cli_render.py` prints a "no contracts defined: nothing was verified" line for an empty run.
+- Suggested rewrite: add this after the `??` sentence: "A run that defines zero contracts (an `.importlinter` with no contract sections, or an `archy.yaml` with layers but no `forbid:` rules) is not verified either: `verified` is false, `transitive_checked` is false, the text output says 'no contracts defined: nothing was verified', and `transitive_unverified_reason` says the config defined 0 contracts."
+- Also add: "A malformed `.importlinter`, a `pyproject.toml` without `[tool.importlinter]`, or an unknown `type =` is reported as a config error naming the real file (#801), not a traceback."
+
+**Finding 2: `skills/archy/SKILL.md`, line 161 (the `contracts` paragraph)**
+- Quoted claim: "check `contracts.verified`, which is false when any contract could not have failed because its patterns matched no module."
+- Why it is outdated: `verified` is now also false when zero contracts were defined (`ContractsResult.verified` in `src/archy/contracts.py`).
+- Suggested rewrite: "...which is false when any contract could not have failed because its patterns matched no module, or when the config defined no contracts at all."
+- `plugins/claude/skills/archy/SKILL.md` must get the same edit, since the two files must stay byte-identical. They are identical now.
+
+**Finding 3: the `archy_check` row in `skills/archy/SKILL.md` (line 198), its twin in `plugins/claude/skills/archy/SKILL.md`, and the `archy_check` row in `README.md` (line 477)**
+- Quoted claim: "`transitive_checked`… is false when contracts were never requested, when they produced no verdict, and when any contract could not have failed, since none of the three evaluated the rules… and how many contracts matched nothing if that is what happened."
+- Why it is outdated: `transitive_checked` is now also false when the run evaluated zero contracts. The `contracts_verdict` function in `src/archy/mcp_runs.py` and `_transitive_unverified_reason` in `src/archy/cli.py` give the reason "contracts ran but the config defined 0 contracts…".
+- Suggested rewrite: change "none of the three" to "none of the four", and change the clause to "...and when the config defined zero contracts, since none of these evaluated the rules." Add "or that the config defined 0 contracts" after "how many contracts matched nothing".
+
+I found no drift in `docs/*`, `CONTRIBUTING.md` or `bench/*.md`. I only searched `README.md`, the SKILL files, `CONTRIBUTING.md`, `docs/ROADMAP.md`, `docs/FUTURE.md`, `docs/LEARNINGS.md` and `docs/CASE_STUDIES.md` for contract wording.</result>
+<usage><subagent_tokens>31033</subagent_tokens><tool_uses>5</tool_uses><duration_ms>27529</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a90a7f7370659748b</task-id>
+<tool-use-id>toolu_01Cbz8VCebVWuNvXp9fpevnm</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a90a7f7370659748b.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review mcp_runs.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with no findings, and I marked `python_code_review--src-archy-mcp_runs.py--1957878efe81` as passed.
+
+I checked `/Users/hosanglee/archy/src/archy/mcp_runs.py` against each criterion:
+
+- **Line length:** no line exceeds 100 characters (checked with `awk`).
+- **Type syntax:** `from __future__ import annotations` is present, the file uses PEP 604 syntax, and there is no `Optional`, `typing.List` or `os.path`.
+- **Naming and imports:** names follow the snake_case, PascalCase and underscore-prefix rules, and imports are grouped correctly.
+- **Value objects:** the file defines none; they come from `archy.mcp_payloads`.
+- **DRY and comments:** I found no copy-pasted block that needs a shared helper, and the comments explain why rather than what.
+
+I did not check whether the current changeset introduced anything. Findings in untouched code would be pre-existing by the repo's own rule and not grounds for failing this review.</result>
+<usage><subagent_tokens>42518</subagent_tokens><tool_uses>3</tool_uses><duration_ms>24706</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a740da0f020f86141</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a740da0f020f86141.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review test_cli.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `tests/test_cli.py` passed with zero violations, and I marked it as passed.
+
+The branch changes only this file's `_write_zero_contracts_project` helper and two tests (`test_contracts_exits_one_when_config_defines_zero_contracts` and `test_check_contracts_does_not_claim_checked_with_zero_contracts`). I judged those against the criteria. I did not judge the rest of the file, following the "review the change, not the file" rule in `python_conventions.md`. I read the file only as far as line 2298 of the instruction file, and the rest was covered by the diff and mechanical checks.
+
+- **Type syntax and imports:** `from __future__ import annotations` is at the top. The added code uses PEP 604 style and has no `typing.List` or `Optional`. The file has no `os.path` and no `@dataclass`.
+- **Line length:** no line in the file exceeds 100 characters.
+- **Naming:** the new helper and tests use snake_case with a private-helper underscore prefix.
+- **DRY:** the new helper is shared by both new tests. The repeated `CliRunner().invoke` calls are separate invocations with different arguments, not duplicated logic.
+- **Comments:** the new docstrings explain why, citing #775 and the false-protection concern, rather than restating the code.
+
+The file under review is `/Users/hosanglee/archy/tests/test_cli.py`.</result>
+<usage><subagent_tokens>67279</subagent_tokens><tool_uses>5</tool_uses><duration_ms>24681</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0413f6056d41efdf</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a0413f6056d41efdf.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review test_mcp.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** I found one violation. I reviewed all 3218 lines of `/Users/hosanglee/archy/tests/test_mcp.py`, using grep and awk checks for most criteria.
+
+**Criteria with no violations:**
+- `from __future__ import annotations` is present at line 12.
+- No `typing.List`, `Dict` or `Optional`. PEP 604 syntax is used (`dict | None`, `set[type[BaseModel]]`).
+- No line exceeds 100 characters.
+- `pathlib` is used throughout. `os` is imported only for `os.environ` (line 2554), not `os.path`.
+- There are no dataclasses.
+- The top-level imports are grouped stdlib, third-party, then local.
+
+**Finding 1**
+- **Line:** module-wide. `from archy.mcp_compat import ToolError` is repeated 16 times, at function-local scope. Line 405 is the first one that is more than a docstring mention, and the rest are in later test bodies.
+- **Criterion violated:** "DRY: no copy-pasted blocks that should be a shared helper". Related: "Imports grouped stdlib / third-party / local with single blank line between groups".
+- **Construct:** The same inline import sits in the test bodies, for example in `test_error_model_tier2_raises_tier3_returns_in_band`, `test_mcp_tool_rejects_a_nonexistent_project_path`, `test_score_history_view_rejects_a_nonexistent_project_path`, `test_score_rejects_a_file_as_the_project_path`, `test_archy_cycles_rejects_min_size_below_one`, the `test_archy_dsm_*` tests and `test_archy_score_rejects_strict_tolerance_outside_unit_interval`.
+- **Suggested fix:** Import `ToolError` once in the module-level local-imports block, next to the other `from archy.mcp import ...` lines. Remove the 16 inline copies. If the lazy import is deliberate, for example to defer an mcp-version-specific import, replace it with one comment saying why, and use a single module-level helper or fixture. No such comment exists today.
+
+Some other local imports are also repeated, each twice:
+- `from archy.mcp_runs import _load_graph`
+- `from archy.mcp_runs import _pagerank`
+- `import networkx as nx`
+- `from archy.graph import ScanTooLargeError`
+- `from archy.affected import Affected`
+
+These could be hoisted to the top of the file as well.
+
+I did not call `mark_review_as_passed`, because the review has a finding.</result>
+<usage><subagent_tokens>42352</subagent_tokens><tool_uses>3</tool_uses><duration_ms>29077</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a12e0fea310e4442f</task-id>
+<tool-use-id>toolu_01CXCgrt5nXtAAuaH3KSDM4L</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a12e0fea310e4442f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring_accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review found one stale docstring, so I did not call `mark_review_as_passed`.
+
+**Finding: `/Users/hosanglee/archy/src/archy/mcp_runs.py`, `contracts_verdict` docstring, about line 406**
+
+The docstring says: "The reason is set exactly when some contract could not have failed, whatever the direct edges govern."
+
+The diff adds a second case. At about lines 422-427, `reason` is also set when `empty and contracts.available and contracts.error is None`. That is the "contracts ran but the config defined 0 contracts" message. So the reason is no longer set exactly when `unverifiable &gt; 0`. The sentence above it, "Only a verdict counts as 'checked': ... (#457)", also leaves out the new empty-run case (#775).
+
+Suggested rewrite:
+
+&gt; Only a verdict counts as "checked": a missing import-linter leaves the rules as unverified as not asking (#343), and so does a contract that could not have failed (#457) or a run that defined no contracts at all (#775). The reason is set when some contract could not have failed, or when the run defined zero contracts; it is `None` otherwise, whatever the direct edges govern.
+
+**Verified true**
+
+- **`_transitive_checked` and `_empty_contracts` docstrings:** both match their code. `len(contracts) &gt; 0 and unverifiable == 0` also matches `ContractsResult.verified`.
+- **`ContractsResult.verified` docstring:** matches `contracts.py`.
+- **`_transitive_unverified_reason` docstring:** it was not updated for the new `empty_contracts` branch, but it describes `no_verdict_error` and `unverifiable` and doesn't claim to list all the cases, so I left it alone.
+- **`_drive_import_linter` comments:**
+  - `read_user_options` raises `FileNotFoundError("Could not read any configuration.")`, which matches the "pyproject.toml without [tool.importlinter]" claim.
+  - The `_register_contract_types` comment ("Built-in types register unconditionally, so in practice this surfaces from create_report") matches the installed import-linter source. That function only registers built-ins plus plugin types.
+  - The valid-types list matches the installed `contracts/` directory. It has forbidden, layers, independence, protected and acyclic_siblings.
+- **`archy contracts`:** the CLI command exists.</result>
+<usage><subagent_tokens>26401</subagent_tokens><tool_uses>4</tool_uses><duration_ms>28004</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>abd12b20293028ddc</task-id>
+<tool-use-id>toolu_01XSDXb75kAh5c1RvAyAPNvn</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/abd12b20293028ddc.output</output-file>
+<status>completed</status>
+<summary>Agent "Review cli_mcp_surface_parity" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings, and I marked it as passed. The diff adds one gate: a contracts run that evaluates zero contracts is no longer reported as checked. I checked it against the CLI text, the CLI JSON and the MCP surfaces.
+
+- **Verdict rule:** `_transitive_checked` in `src/archy/cli.py` and `contracts_verdict` in `src/archy/mcp_runs.py` both now treat zero contracts as unchecked. `ContractsResult.verified` also requires at least one contract, and the MCP payload copies that value.
+- **Reason text:** the CLI (`_transitive_unverified_reason` with the new `empty_contracts` argument) and the MCP surface give the same reason, "config defined 0 contracts". The CLI wording adds a pointer to `archy contracts`.
+- **Where it applies:** `check` and `brief` in the CLI both pass `empty_contracts`. The MCP `archy_brief` and `archy_check` tools get the same behaviour through `contracts_verdict`.
+- **Failing gate carries its reason:** the empty case now sets `transitive_unverified_reason` on the CLI JSON and on MCP. The `archy contracts` text output also prints "no contracts defined" in `_contracts_to_text`.
+- **Serialized form:** `verified` is a stored pydantic field, not a plain `@property`, so FastMCP's `model_dump()` does not drop it.
+- **New tool:** none was added, so `TOOL_NAMES` in `src/archy/install/base.py` needs no change.
+
+I did not run any tests or mutate any code. This was a read-only comparison of the diff across surfaces.</result>
+<usage><subagent_tokens>26708</subagent_tokens><tool_uses>6</tool_uses><duration_ms>28571</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2e9202c6f194de97</task-id>
+<tool-use-id>toolu_01RM7MCtnXgPaVa4MEcsdVK6</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a2e9202c6f194de97.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy_grounded_structural_review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+**Blast radius** (from `uv run archy impact . --file &lt;path&gt;`):
+
+| Changed module | Transitive dependents | Notable dependents |
+|---|---|---|
+| `contracts.py` | 21 | `archy.cli`, `archy.cli_render`, `archy.mcp`, `archy.mcp_payloads`, `archy.mcp_runs`, plus tests |
+| `cli_render.py` | 15 | `archy.cli`, plus tests |
+| `mcp_runs.py` | 16 | `archy.cli`, `archy.mcp`, plus tests |
+| `cli.py` | 13 | tests only |
+
+I did not run `archy affected` or `what-to-refactor-next`.
+
+**Structural checks:**
+- `uv run archy cycles .` found no cycles.
+- `uv run archy check .` found no layer violations.
+
+**Surface coverage:** The "zero contracts is not verified" change reaches every surface.
+- **CLI text output:** `cli_render.py` now prints "no contracts defined: nothing was verified".
+- **CLI JSON:** the payload carries `verified`, which now requires at least one contract.
+- **CLI exit code:** `cli.py:1344` exits on `result.verified`, so an empty run exits 1.
+- **MCP:** `mcp_runs.contracts_verdict` and the payload's `verified` agree with the CLI.
+- **`check` and `brief`:** both pass `empty_contracts` through to `_transitive_unverified_reason`.
+
+**Minor observation, not a finding:** `_register_contract_types` catches `NoSuchContractType`, but the code's own comment says that site is unlikely to raise it in practice. The `create_report` catch is the live path. The extra catch is harmless.</result>
+<usage><subagent_tokens>26038</subagent_tokens><tool_uses>5</tool_uses><duration_ms>96087</duration_ms></usage>
+</task-notification>
+
+---
+
+lets review PR 820. Again, leave comments
+
+---
+
+lets cut a new release after
+
+---
+
+<task-notification>
+<task-id>ad89609e48066849e</task-id>
+<tool-use-id>toolu_01P481SWVn1hd7BTYh9TEw9r</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/ad89609e48066849e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings. I found no U+2014 characters in any of the five files. I searched `src/archy/graph.py`, `src/archy/index.py`, `src/archy/parser.py`, `tests/test_graph.py` and `tests/test_index.py`. I then marked `no_em_dashes--5_files--bcb70d618cca` as passed.</result>
+<usage><subagent_tokens>18245</subagent_tokens><tool_uses>3</tool_uses><duration_ms>14099</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a35eabb2b0005e0f1</task-id>
+<tool-use-id>toolu_01WB6RSXTuWmUM2yX6v1yo2L</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a35eabb2b0005e0f1.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I did not open the five files. I passed this on the default verdict, so none of the four conditions was checked against the changeset or the existing `.deepreview` rules. I marked review `suggest_new_reviews--5_files--bcb70d618cca` as passed.</result>
+<usage><subagent_tokens>18387</subagent_tokens><tool_uses>2</tool_uses><duration_ms>10430</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad175f57efccb0f7d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/ad175f57efccb0f7d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review graph.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** There are two comment-accuracy violations, both minor. Every other criterion passes.
+
+**Findings**
+
+1. **Line 814** (`_qualname_for`)
+   - Criterion violated: "Comment accuracy: every comment must explain WHY (a constraint, decision, or quirk), not WHAT (the code already says what)".
+   - Offending construct: `# __init__.py names the package (empty leaf); other files contribute stem.` This only restates the conditional expression on the next line, `[] if py_file.name == "__init__.py" else [py_file.stem]`.
+   - Suggested fix: delete the comment, or replace it with the reason. For example: an `__init__.py` contributes no leaf segment, because the package directory is already the last component of `rel_parent` in `_qualname_under_roots`.
+
+2. **Lines 714-716** (`_qualname_under_roots`)
+   - Criterion violated: the same comment-accuracy bullet.
+   - Offending construct: `# leaf_parts already carries the module stem ... so a bare ".".join is enough; the old else pkg_root.name branch was dead when a stem was present.` The second half narrates a removed branch, which is change history rather than a current constraint.
+   - Suggested fix: drop the "old ... branch was dead" clause and keep only the current reason. For example: `leaf_parts` is empty only for a package `__init__.py`, which is why the `pkg_root.name` fallback exists.
+
+**Criteria that pass**
+- `from __future__ import annotations` is present at the top.
+- Types use PEP 604 syntax, with no `typing.List` or `Optional`. `cast` is the only `typing` import.
+- Naming follows the conventions.
+- `Module` and `UnresolvedHint` are frozen pydantic models with tuple sequence fields.
+- Paths use `pathlib`, with no `os.path`.
+- Imports are grouped stdlib / third-party / local.
+- No line exceeds 100 characters (checked with awk).
+- I found no copy-pasted block that clearly needs a shared helper. The two `Module(...)` constructions at lines 617-623 and 630-636 differ enough to leave alone.
+
+Because findings remain, I did not call `mark_review_as_passed`.</result>
+<usage><subagent_tokens>40358</subagent_tokens><tool_uses>2</tool_uses><duration_ms>16052</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7cbe728212212963</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a7cbe728212212963.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review index.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with zero violations, and I marked it as passed (`python_code_review--src-archy-index.py--4a538955a2c5`).
+
+I checked `/Users/hosanglee/archy/src/archy/index.py` against each listed criterion:
+
+- **Type syntax:** `from __future__ import annotations` is at the top. The file uses PEP 604 types and no `typing.List` or `Optional`.
+- **Value objects:** `SyncStats` is a pydantic `BaseModel` with `ConfigDict(frozen=True)`.
+- **Paths, naming and imports:** The file uses `pathlib.Path` and follows the naming convention. Imports are grouped correctly.
+- **Line length:** No line exceeds 100 characters. I checked with `awk`.
+- **Comments:** They explain why rather than what.
+- **DRY:** The two cache-hit branches in `sync` look alike but differ enough that I did not count them as a violation.</result>
+<usage><subagent_tokens>24620</subagent_tokens><tool_uses>3</tool_uses><duration_ms>16482</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a72bf8f671f51985f</task-id>
+<tool-use-id>toolu_01KWpJthcGSPqLCPKrJzompk</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a72bf8f671f51985f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review test_graph.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found no violations in `/Users/hosanglee/archy/tests/test_graph.py`, so I marked the review as passed.
+
+- **Line length:** no line exceeds 100 characters, checked with `awk`.
+- **Imports and types:** `from __future__ import annotations` is at the top. I found no `typing.List` or `Optional`, and no `os.path` use. Imports are grouped stdlib, third-party, local.
+- **Value objects:** the file defines no value-object classes, so the pydantic criterion doesn't apply.
+- **Comments:** they explain why, not what.
+
+Two minor points I did not count as violations:
+- The new `test_vanished_file_between_discovery_and_parse_is_still_skipped` repeats the monkeypatch setup from `test_build_graph_skips_file_that_vanishes_mid_build`. The two differ in behavior (one unlinks the file), so it isn't a clear DRY failure.
+- Some older tests build `{n for n, d in g.nodes(data=True) if not d.get("external")}` inline instead of calling `_internal_nodes`. That predates this changeset, so I did not report it.</result>
+<usage><subagent_tokens>45669</subagent_tokens><tool_uses>3</tool_uses><duration_ms>17214</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>acb521760e3202732</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/acb521760e3202732.output</output-file>
+<status>completed</status>
+<summary>Agent "Review doc sync" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Documentation drift detected. The review fails on one finding, so I did not call `mark_review_as_passed`.
+
+**Finding 1**
+1. **Doc:** `/Users/hosanglee/archy/docs/SPEC_GRAPH_MCP.md`
+2. **Section:** the `archy_graph_summary` payload sketch, line 60. The `GraphPayload` and summary model sketches at lines 97 and 124 declare `parse_errors: tuple[str, ...]`, which is still accurate.
+3. **Offending claim:** `"parse_errors": [qualname, ...],`
+4. **Source that invalidates it:** `/Users/hosanglee/archy/src/archy/graph.py`, `assemble_graph`. For a persistently unreadable file, `parse_errors` now gets `f"{m.qualname}: {result.error}"` instead of the bare qualname (#800). The new `ParseResult.error` field and `parse_file_tolerant` in `/Users/hosanglee/archy/src/archy/parser.py` produce that reason string. Tree-sitter syntax-error modules still appear as a bare qualname. The same list is exposed as `parse_errors` through `graph.graph["parse_errors"]` (graph.py line 297) and the MCP payloads, so entries are no longer always pure qualnames.
+5. **Suggested rewrite:** `"parse_errors": [str, ...],  # "qualname" for tree-sitter syntax recovery; "qualname: OSError-reason" for files that could not be read at all (#800)`
+
+No other doc is invalidated. Searches of the README, the other docs, `SKILL.md`, `CONTRIBUTING.md` and the bench write-ups found no other claim about `parse_errors` format, `parse_file` or the vanished-file handling. The `ParseResult` mention in `docs/LEARNINGS.md` line 30 is about syntax-error recovery, which is unchanged.</result>
+<usage><subagent_tokens>30764</subagent_tokens><tool_uses>5</tool_uses><duration_ms>20342</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae27c523bfab3879f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/ae27c523bfab3879f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review parser.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `src/archy/parser.py` found no violations, and I marked it as passed.
+
+I checked it against each criterion:
+- **Future import:** `from __future__ import annotations` is at the top.
+- **Type syntax:** Types use PEP 604 syntax, with no `typing.List` or `Optional`.
+- **Value objects:** `ImportRef`, `CallRef` and `ParseResult` are frozen pydantic models with tuple fields.
+- **Paths:** The module uses `pathlib.Path` and never `os.path`.
+- **Imports:** They are grouped stdlib, third-party, local.
+- **Line length:** An `awk` check found no line over 100 characters.
+- **Comments:** They explain why, not what.
+- **DRY:** I found no copy-pasted blocks.
+
+I did not run `ruff` or the tests.</result>
+<usage><subagent_tokens>26557</subagent_tokens><tool_uses>3</tool_uses><duration_ms>18798</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa9fcb546eacf2595</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/aa9fcb546eacf2595.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review test_index.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** There are 7 findings, all under the "Comment accuracy" criterion. The other criteria have no violations: the future import, PEP 604 syntax, naming, `pathlib` use, import grouping, the 100-character limit and DRY. I did not call `mark_review_as_passed`.
+
+The criterion for every finding is: "Comment accuracy: every comment must explain WHY (a constraint, decision, or quirk), not WHAT (the code already says what)".
+
+1. **Line 110, inaccurate docstring text.**
+   - The docstring says "renamed expectations live in `test_warm_cache_reads_what_it_wrote`". "Renamed expectations" is stale wording: nothing was renamed and no expectation moved.
+   - Fix: write "the cache-specific expectations live in `test_warm_cache_reads_what_it_wrote`".
+
+2. **Line 260, WHAT comment.**
+   - `b.write_text(content, encoding="utf-8")  # same content` restates the code.
+   - Fix: delete it. The comment on line 255 already gives the reason.
+
+3. **Lines 357-358, WHAT comments.**
+   - `# vanished module skipped` and `# the rest still parsed` restate the assertions next to them.
+   - Fix: delete both.
+
+4. **Line 327, WHAT comment.**
+   - `# cold build populates the cache` restates the call.
+   - Fix: delete it, or give the reason: the corruption below needs an existing row to overwrite.
+
+5. **Line 345, WHAT comment.**
+   - `# round-trips cleanly now` restates `model_validate_json`.
+   - Fix: delete it, or state the reason: validation raises if the healed row is still unusable.
+
+6. **Lines 170 and 191, WHAT comments.**
+   - `# Rename b.py -&gt; renamed.py and repoint the importer.` describes the next two lines.
+   - `# Move sub.c's target: edit a.py to import a different module.` is also WHAT, and it is inaccurate: the edit is to `a.py`'s import of `b`, not to anything in `sub.c`.
+   - Fix: delete line 170's comment. Delete line 191's comment or reword it to the invariant being tested, for example that a new import target must be re-resolved globally.
+
+7. **Line 269, misleading section header.**
+   - `# --- schema versioning ---` heads a block that begins with `test_warm_cache_keeps_the_main_guard`, `test_default_db_path` and `test_parse_json_is_valid_json`. Only `test_schema_bump_rebuilds` is about schema versioning.
+   - Fix: move the header down to sit above `test_schema_bump_rebuilds`, or rename it to something accurate such as "cache contents and robustness".
+
+Reviewed file: `/Users/hosanglee/archy/tests/test_index.py`</result>
+<usage><subagent_tokens>26395</subagent_tokens><tool_uses>1</tool_uses><duration_ms>17400</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a65e3f0d2754361a4</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a65e3f0d2754361a4.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring_accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The docstring accuracy review passed with no findings, and I marked it as passed.
+
+I traced each docstring and comment the diff adds or changes in `graph.py`, `index.py` and `parser.py` against the code. The claims I checked:
+- **`parse_project`:** an unreadable file comes back as a `has_errors` result, and a vanished file is omitted.
+- **`assemble_graph`:** a result with `error` set is added to `parse_errors` as `"&lt;qualname&gt;: &lt;reason&gt;"`, and a module with no result is dropped.
+- **`sync` in `index.py`:** the unstatable-file branch keeps the path in `current_paths` so a prior cache row isn't pruned. The unreadable cases don't cache the sentinel.
+- **`ParseResult.error`:** the docstring says syntax errors recovered by tree-sitter leave it `None`, which matches the code.
+- **`parse_file_tolerant`:** it returns a normal result, a `has_errors` sentinel, or `None` when the path is gone, as its docstring says.
+
+I didn't edit any files.</result>
+<usage><subagent_tokens>24310</subagent_tokens><tool_uses>4</tool_uses><duration_ms>39689</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a071d539b155405fe</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/12669ec9-5059-4e6c-9061-d72a1729df5c/tasks/a071d539b155405fe.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy structural" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+- **Blast radius:**
+  - `uv run archy impact . --file src/archy/graph.py` reported 60 dependent modules.
+  - The same command on `index.py` reported 20 (including `cli`, `mcp`, `mcp_runs` and `watcher`).
+  - On `parser.py` it reported 62.
+  - `uv run archy affected . src/archy/graph.py src/archy/index.py src/archy/parser.py` selected 27 tests across 33 affected modules.
+- **Cycles and layers:** `uv run archy cycles .` found no cycles. `uv run archy check .` showed no layer violations in its output tail.
+- **Headers:** `uv run archy conventions . --emit-headers --check` reported all 87 headers match the tree. The new `parse_file_tolerant` symbol is already in the `parser.py` header.
+- **Edit risk:** `uv run archy what-to-refactor-next . --top 10` ranks `archy.graph` second, flagged as both a hotspot and high edit-risk (risk=0.22, cc_sum=227, churn=38). It is central and fragile, so the existing tests are the net for this change. Nothing in the diff adds new risk beyond that.
+- **`parse_errors` format:** entries for unreadable files now read `"qualname: reason"` instead of a bare qualname. I checked every consumer in `cli.py`, `mcp_runs.py` and `mcp_payloads.py`. They only count the entries or pass them through as strings, so nothing breaks.
+- **Cache:** the unreadable-file placeholder result is never written to the index cache, so the cache schema is unaffected.
+
+One edge case, not a defect: `parse_file_tolerant` returns `None` when `path.exists()` raises `OSError` (a parent directory with no access). Such a file is dropped silently, as before this change.</result>
+<usage><subagent_tokens>26572</subagent_tokens><tool_uses>7</tool_uses><duration_ms>118303</duration_ms></usage>
+</task-notification>
+
+---
+
+leave the PRs alone fro the OPs to respond. Let's cut a release now
