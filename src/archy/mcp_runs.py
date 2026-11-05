@@ -35,7 +35,7 @@ from archy.coupling import (
     git_cochange,
     internal_module_paths,
 )
-from archy.cycles import Cycle, find_cycles
+from archy.cycles import Cycle, CycleScan, scan_cycles
 from archy.diff import (
     DiffReport,
     compute_diff,
@@ -135,7 +135,12 @@ from archy.mcp_payloads import (
 from archy.reach import compute_propagation_cost
 from archy.refactor import compute_refactor_priorities
 from archy.risk import compute_edit_risk
-from archy.scan_config import graph_kwargs, resolve_max_modules, scan_kwargs
+from archy.scan_config import (
+    graph_kwargs,
+    resolve_exclude_type_checking,
+    resolve_max_modules,
+    scan_kwargs,
+)
 from archy.score import Score, compute_score
 from archy.simulate import EdgeSpec, SimulateReport, find_simulate
 from archy.watcher import IndexManager
@@ -308,11 +313,25 @@ def run_score(
     )
 
 
-def run_cycles(path: Path, *, min_size: int, internal_only: bool) -> list[Cycle]:
+def run_cycles(
+    path: Path,
+    *,
+    min_size: int,
+    internal_only: bool,
+    exclude_type_checking: bool | None = None,
+) -> list[Cycle] | CycleScan:
+    """Cycles in `path`: a bare list, or a `CycleScan` when TYPE_CHECKING exclusion is on.
+
+    The list shape is what every caller saw before #520, so it stays the default.
+    Exclusion returns the object because an exclusion that empties the list
+    would otherwise leave no trace of itself.
+    """
     if min_size < 1:
         raise ValueError(f"min_size must be >= 1; got {min_size}")
     graph = _load_graph(path, internal_only=internal_only)
-    return list(find_cycles(graph, min_size=min_size))
+    exclude = resolve_exclude_type_checking(path, exclude_type_checking)
+    scan = scan_cycles(graph, min_size=min_size, exclude_type_checking=exclude)
+    return scan if exclude else list(scan.cycles)
 
 
 def run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckErrorPayload:

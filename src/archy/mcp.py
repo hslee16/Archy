@@ -108,7 +108,7 @@ from archy.conventions import (
     ConventionsReport,
     ModuleView,
 )
-from archy.cycles import Cycle
+from archy.cycles import Cycle, CycleScan
 from archy.diff import (
     DiffReport,
 )
@@ -405,15 +405,27 @@ def _register_tools(server: Server) -> None:
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Find import cycles (Tarjan SCCs of size >= min_size, plus self-loops) "
-            "in a Python project. Returns cycles sorted largest-first."
+            "in a Python project. Returns cycles sorted largest-first. Each cycle's "
+            "`type_checking_edges` counts edges that exist only under "
+            "`if TYPE_CHECKING:` (they never run); when it is non-zero, pass "
+            "`exclude_type_checking=true` to leave them out. With it on the result "
+            "is an object, `{cycles, excluded_type_checking_edges}`, so a clean "
+            "result that is clean only because of the exclusion says so. Unset, it "
+            "follows archy.yaml's `exclude_type_checking_imports`, else off."
         ),
     )
     def archy_cycles(
         path: str,
         min_size: int = 2,
         internal_only: bool = True,
-    ) -> list[Cycle]:
-        return run_cycles(_project_dir(path), min_size=min_size, internal_only=internal_only)
+        exclude_type_checking: bool | None = None,
+    ) -> list[Cycle] | CycleScan:
+        return run_cycles(
+            _project_dir(path),
+            min_size=min_size,
+            internal_only=internal_only,
+            exclude_type_checking=exclude_type_checking,
+        )
 
     @server.tool(
         name="archy_check",

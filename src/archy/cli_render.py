@@ -27,7 +27,7 @@ from archy.conventions import (
 from archy.coupling import (
     CouplingPair,
 )
-from archy.cycles import Cycle
+from archy.cycles import Cycle, CycleScan
 from archy.diff import (
     CapturedSnapshot,
     DiffReport,
@@ -566,9 +566,23 @@ def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
             "edges": [
                 {"source": e.source, "target": e.target, "lines": list(e.lines)} for e in c.edges
             ],
+            "type_checking_edges": c.type_checking_edges,
         }
         for c in cycles
     ]
+
+
+def _cycle_scan_to_dict(scan: CycleScan) -> dict:
+    """The `cycles --exclude-type-checking` payload: the list plus what it left out.
+
+    An object, not the bare list, because an exclusion that empties the list
+    would otherwise leave no trace of itself (#520). The default output stays a
+    list so existing consumers see no change.
+    """
+    return {
+        "cycles": _cycles_to_json(list(scan.cycles)),
+        "excluded_type_checking_edges": scan.excluded_type_checking_edges,
+    }
 
 
 def _snapshot_to_text(snap: CapturedSnapshot) -> str:
@@ -1334,10 +1348,16 @@ def _impact_to_text(result: Impact) -> str:
     return "\n".join(lines)
 
 
-def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:
+def _cycles_to_text(cycles: list[Cycle], min_size: int, *, excluded: int | None = None) -> str:
+    """`excluded` is None when TYPE_CHECKING exclusion was off, else the edge count left out."""
+    note = (
+        ""
+        if excluded is None
+        else f"; {excluded} TYPE_CHECKING-only edge(s) excluded (--exclude-type-checking)"
+    )
     if not cycles:
-        return f"# No cycles found (min_size={min_size})."
-    lines = [f"# {len(cycles)} cycle(s) found"]
+        return f"# No cycles found (min_size={min_size}){note}."
+    lines = [f"# {len(cycles)} cycle(s) found{note}"]
     for c in cycles:
         lines.append(f"\nCycle of {len(c.modules)} module(s):")
         for m in c.modules:
@@ -1345,6 +1365,12 @@ def _cycles_to_text(cycles: list[Cycle], min_size: int) -> str:
         lines.append("Edges:")
         for e in c.edges:
             lines.append(f"  {e.source} -> {e.target}  {_format_lines(e.lines)}")
+        if excluded is None and c.type_checking_edges:
+            lines.append(
+                f"  # {c.type_checking_edges} of {len(c.edges)} edge(s) exist only under "
+                "`if TYPE_CHECKING:`; --exclude-type-checking (or archy.yaml "
+                "`exclude_type_checking_imports: true`) leaves them out."
+            )
     return "\n".join(lines)
 
 

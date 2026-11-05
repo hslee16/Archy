@@ -1010,6 +1010,11 @@ def _add_or_extend_edge(
         # of the two came first is not something a caller can predict. This
         # aggregates the way `lines` does (#450).
         data["is_relative"] = bool(data.get("is_relative", False)) or ref.is_relative
+        # `and`, the opposite aggregate: one unguarded import makes the edge a
+        # runtime dependency whatever else sits under TYPE_CHECKING (#520).
+        data["type_checking_only"] = bool(data.get("type_checking_only", False)) and (
+            ref.type_checking
+        )
         _add_kind(data, "import")
     else:
         graph.add_edge(
@@ -1018,6 +1023,7 @@ def _add_or_extend_edge(
             is_relative=ref.is_relative,
             lines=(ref.line,),
             kinds=("import",),
+            type_checking_only=ref.type_checking,
         )
 
 
@@ -1037,6 +1043,9 @@ def _add_or_extend_call_edge(
         data = graph[src][dst]
         data["call_lines"] = (*data.get("call_lines", ()), call.line)
         data["call_count"] = data.get("call_count", 0) + 1
+        # A resolved call is a runtime reference, so it ends any
+        # TYPE_CHECKING-only claim the import pass made for this edge (#520).
+        data["type_checking_only"] = False
         _add_kind(data, "call")
     else:
         graph.add_edge(
@@ -1047,6 +1056,7 @@ def _add_or_extend_call_edge(
             kinds=("call",),
             call_lines=(call.line,),
             call_count=1,
+            type_checking_only=False,
         )
 
 

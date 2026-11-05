@@ -187,6 +187,11 @@ class LayerConfig(BaseModel):
     # dependency direction with a presence floor of "at least 3 of 4 layers", so
     # this is that floor, generalised.
     min_layers_present: int | None = None
+    # `archy cycles` default for leaving out edges that exist only under
+    # `if TYPE_CHECKING:` (#520). None = unset, which means off, so a config that
+    # never asked keeps its old exit codes. The CLI flag and the MCP argument
+    # override it in either direction. Named after import-linter's key.
+    exclude_type_checking_imports: bool | None = None
 
 
 class Violation(BaseModel):
@@ -511,6 +516,9 @@ def load_config(path: Path) -> LayerConfig:
     sdp = _parse_sdp(raw.get("sdp"), path)
     max_modules = _parse_max_modules(raw.get("max_modules"), path)
     min_layers_present = _parse_min_layers_present(raw.get("min_layers_present"), len(layers), path)
+    exclude_type_checking = _parse_optional_bool(
+        raw.get("exclude_type_checking_imports"), "exclude_type_checking_imports", path
+    )
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
@@ -520,7 +528,21 @@ def load_config(path: Path) -> LayerConfig:
         sdp=sdp,
         max_modules=max_modules,
         min_layers_present=min_layers_present,
+        exclude_type_checking_imports=exclude_type_checking,
     )
+
+
+def _parse_optional_bool(value: object, field: str, path: Path) -> bool | None:
+    """Validate a boolean config knob. None when the key is absent.
+
+    Only a real YAML boolean passes: `"yes"` and `1` are rejected rather than
+    guessed at, so a typo cannot silently turn a gate on or off.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise LayerConfigError(f"`{field}` must be true or false in {path}, got {value!r}")
+    return value
 
 
 def _parse_non_negative_int(value: object, field: str, path: Path) -> int | None:

@@ -12,8 +12,10 @@ It lives in its own module, beside the two boundaries, rather than in
 policy layer import the graph layer lengthened archy's longest import chain
 from 7 to 9 for the sake of two small functions.
 
-archy:owns        graph_kwargs, resolve_max_modules, scan_kwargs
+archy:owns        graph_kwargs, resolve_exclude_type_checking, resolve_max_modules,
+                  scan_kwargs
 archy:mirrored-by graph_kwargs -> archy.cli, archy.mcp_runs,
+                  resolve_exclude_type_checking -> archy.cli, archy.mcp_runs,
                   resolve_max_modules -> archy.cli, archy.mcp_runs,
                   scan_kwargs -> archy.cli, archy.mcp_runs
 """
@@ -60,3 +62,18 @@ def resolve_max_modules(path: Path) -> int | None:
     config_path = discover_config(path)
     configured = load_config(config_path).max_modules if config_path is not None else None
     return effective_max_modules(configured)
+
+
+def resolve_exclude_type_checking(path: Path, override: bool | None) -> bool:
+    """Whether `cycles` leaves out TYPE_CHECKING-only edges for `path`.
+
+    An explicit `override` (the CLI flag or the MCP argument) wins in either
+    direction; otherwise archy.yaml's `exclude_type_checking_imports`, else off.
+    """
+    if override is not None:
+        return override
+    config_path = discover_config(path)
+    configured = (
+        load_config(config_path).exclude_type_checking_imports if config_path is not None else None
+    )
+    return bool(configured)

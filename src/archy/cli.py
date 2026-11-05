@@ -40,6 +40,7 @@ from archy.cli_render import (
     _coupling_to_text,
     _coverage_to_json,
     _coverage_to_text,
+    _cycle_scan_to_dict,
     _cycles_to_json,
     _cycles_to_text,
     _deleted_lines,
@@ -87,7 +88,7 @@ from archy.coupling import (
     git_cochange,
     internal_module_paths,
 )
-from archy.cycles import find_cycles
+from archy.cycles import scan_cycles
 from archy.diff import (
     compute_diff,
     create_baseline_command,
@@ -142,7 +143,12 @@ from archy.refactor import (
 )
 from archy.render import DEFAULT_MAX_NODES as RENDER_MAX_NODES
 from archy.render import render_dsm_html, render_trend_html
-from archy.scan_config import graph_kwargs, resolve_max_modules, scan_kwargs
+from archy.scan_config import (
+    graph_kwargs,
+    resolve_exclude_type_checking,
+    resolve_max_modules,
+    scan_kwargs,
+)
 from archy.score import Score, compute_score
 from archy.simulate import find_simulate
 from archy.trend import render_text as render_trend
@@ -266,18 +272,43 @@ def graph(path: Path, fmt: str, internal_only: bool) -> None:
     is_flag=True,
     help="Exit non-zero if any cycles are found.",
 )
-def cycles(path: Path, fmt: str, internal_only: bool, min_size: int, strict: bool) -> None:
+@click.option(
+    "--exclude-type-checking/--include-type-checking",
+    "exclude_type_checking",
+    default=None,
+    help=(
+        "Leave out imports that sit under `if TYPE_CHECKING:`, which never run. "
+        "Default: archy.yaml's `exclude_type_checking_imports`, else off. "
+        "With it on, JSON output becomes an object carrying the excluded-edge count."
+    ),
+)
+@_layer_config_errors
+def cycles(
+    path: Path,
+    fmt: str,
+    internal_only: bool,
+    min_size: int,
+    strict: bool,
+    exclude_type_checking: bool | None,
+) -> None:
     """Find import cycles in a Python project rooted at PATH."""
     _require(min_size >= 1, "min-size", ">= 1", min_size)
 
     g = _load_graph(path, internal_only=internal_only)
+    exclude = resolve_exclude_type_checking(path, exclude_type_checking)
 
-    found = find_cycles(g, min_size=min_size)
+    scan = scan_cycles(g, min_size=min_size, exclude_type_checking=exclude)
+    found = list(scan.cycles)
 
     if fmt == "json":
-        click.echo(json.dumps(_cycles_to_json(found), indent=2, sort_keys=True))
+        payload = _cycle_scan_to_dict(scan) if exclude else _cycles_to_json(found)
+        click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        click.echo(_cycles_to_text(found, min_size))
+        click.echo(
+            _cycles_to_text(
+                found, min_size, excluded=scan.excluded_type_checking_edges if exclude else None
+            )
+        )
 
     if strict and found:
         sys.exit(1)

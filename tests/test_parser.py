@@ -211,3 +211,44 @@ def test_parse_file_survives_a_cookie_naming_an_unknown_codec(tmp_path: Path):
     path.write_bytes(b"# -*- coding: no-such-codec -*-\nimport os\n")
     result = parse_file(path)
     assert [(r.module, r.is_relative) for r in result.imports] == [("os", False)]
+
+
+@pytest.mark.parametrize(
+    ("source", "expected"),
+    [
+        # The two spellings of the guard, and only the `if` body counts.
+        ("from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    import x\n", True),
+        ("import typing\nif typing.TYPE_CHECKING:\n    import x\n", True),
+        ("if TYPE_CHECKING:\n    from x import y\n", True),
+        # `else:` runs when the guard is false, so it is a plain import.
+        ("if TYPE_CHECKING:\n    pass\nelse:\n    import x\n", False),
+        ("if TYPE_CHECKING:\n    pass\nelif other:\n    import x\n", False),
+        # Nested guards and try blocks still sit under the guard.
+        (
+            "if TYPE_CHECKING:\n    try:\n        import x\n    except OSError:\n        pass\n",
+            True,
+        ),
+        # A function-local import runs on call, so it is a real coupling.
+        ("if TYPE_CHECKING:\n    def f():\n        import x\n", False),
+        ("def f():\n    if TYPE_CHECKING:\n        import x\n", True),
+        ("def f():\n    import x\n", False),
+        # Other spellings are not recognised: fail safe toward a plain import.
+        ("if not TYPE_CHECKING:\n    import x\n", False),
+        ("if TYPE_CHECKING or other:\n    import x\n", False),
+        ("import x\n", False),
+    ],
+)
+def test_import_type_checking_flag(source: str, expected: bool):
+    """`ImportRef.type_checking` is True only for the body of a bare TYPE_CHECKING `if`.
+
+    The `def f(): if TYPE_CHECKING: import x` row is True on purpose: the guard is
+    inside the function, so the import never runs either; only a guard that is
+    OUTSIDE the function stops applying at the function boundary.
+    """
+    [ref] = [r for r in parse_source(source.encode()).imports if r.module == "x"]
+    assert ref.type_checking is expected
+
+
+def test_type_checking_flag_marks_every_name_of_a_guarded_from_import():
+    refs = parse_source(b"if TYPE_CHECKING:\n    import a, b\n").imports
+    assert [(r.module, r.type_checking) for r in refs] == [("a", True), ("b", True)]
