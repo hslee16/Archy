@@ -161,6 +161,10 @@ def denied_archy_permission_patterns(existing: str | None) -> list[str]:
     Used by :func:`render_claude_permissions` to keep those tools out of
     ``allow``, and by the installer to surface a note when a tool was skipped
     because of an existing deny (#542).
+
+    Exact per-tool patterns match as before. Claude also accepts a server-wide
+    deny (``mcp__archy`` or the wildcard ``mcp__archy__*``); those cover every
+    archy tool (#798).
     """
     obj = _load_json_obj(existing)
     permissions = obj.get("permissions")
@@ -170,7 +174,11 @@ def denied_archy_permission_patterns(existing: str | None) -> list[str]:
     if not isinstance(deny, list):
         return []
     deny_set = {p for p in deny if isinstance(p, str)}
-    return [p for p in permission_patterns() if p in deny_set]
+    patterns = permission_patterns()
+    server_wide = {f"mcp__{SERVER_KEY}", f"mcp__{SERVER_KEY}__*"}
+    if deny_set & server_wide:
+        return list(patterns)
+    return [p for p in patterns if p in deny_set]
 
 
 def render_claude_permissions(existing: str | None) -> str:
