@@ -35,6 +35,7 @@ archy:mirrored-by ContractsConfigError -> archy.cli, archy.mcp_runs,
 
 from __future__ import annotations
 
+import configparser
 import contextlib
 import os
 import sys
@@ -104,9 +105,11 @@ class ContractsResult(BaseModel):
         """Every contract was both evaluated and held.
 
         The verdict callers actually want. `all_kept` cannot answer it: a
-        contract that matched no module is trivially "kept" (#435).
+        contract that matched no module is trivially "kept" (#435), and a
+        config that defined no contracts at all checked nothing, so an
+        empty run is not verified either (#775).
         """
-        return self.broken == 0 and self.unverifiable == 0
+        return self.broken == 0 and self.unverifiable == 0 and len(self.contracts) > 0
 
 
 class ContractsNotAvailable(RuntimeError):
@@ -205,6 +208,7 @@ def _drive_import_linter(
         create_report,
         read_user_options,
     )
+    from importlinter.domain.contract import NoSuchContractType
 
     configuration.configure()
     prior_cwd = Path.cwd()
@@ -215,10 +219,38 @@ def _drive_import_linter(
             # cwd; chdir into the config's directory for the duration of
             # read+report, then restore.
             os.chdir(config_path.parent)
-            user_options = read_user_options(config_filename=config_path.name)
-        _register_contract_types(user_options)
+            try:
+                user_options = read_user_options(config_filename=config_path.name)
+            except (configparser.Error, FileNotFoundError, ValueError) as exc:
+                # All three are config problems, not archy bugs: a malformed
+                # .importlinter (MissingSectionHeaderError names file
+                # '<string>', not the config), a pyproject.toml without
+                # [tool.importlinter] or with invalid TOML (TOMLDecodeError
+                # is a ValueError), or nothing readable at all. Name the
+                # real file so the fix lands in the config (#801).
+                raise ContractsConfigError(
+                    f"could not read contracts config {config_path}: {exc}"
+                ) from exc
+        try:
+            _register_contract_types(user_options)
+        except NoSuchContractType as exc:
+            # An unknown `type =` in the config. The registry names the
+            # missing type; anchor it to the file the author edits (#801).
+            # (Built-in types register unconditionally, so in practice this
+            # surfaces from create_report below; both sites say the same.)
+            raise ContractsConfigError(
+                f"unknown contract type in {_config_source(config_path)}: {exc}. "
+                "Valid types: forbidden, layers, independence, protected, acyclic_siblings."
+            ) from exc
         try:
             report = create_report(user_options, cache_dir=None)
+        except NoSuchContractType as exc:
+            # Unknown `type =`: the lookup happens at report-build time, not
+            # at registration. Same message as above so both paths agree (#801).
+            raise ContractsConfigError(
+                f"unknown contract type in {_config_source(config_path)}: {exc}. "
+                "Valid types: forbidden, layers, independence, protected, acyclic_siblings."
+            ) from exc
         except ValueError as exc:
             # import-linter aborts the whole run when a contract names a module
             # that is not in the graph, and the message is just "Module 'x'
@@ -254,6 +286,11 @@ def _drive_import_linter(
         import_count=int(report.import_count),
         contracts=tuple(contracts),
     )
+
+
+def _config_source(config_path: Path | None) -> str:
+    """Name the config the author edits: the file, or the derived fallback."""
+    return f"{config_path}" if config_path is not None else "derived archy.yaml contracts"
 
 
 def _expression_coverage(contract: object, graph: ImportGraph) -> tuple[tuple[str, ...], bool]:

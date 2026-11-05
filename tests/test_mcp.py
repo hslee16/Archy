@@ -40,7 +40,7 @@ from archy.mcp import (
     _advertise_serialization_output_schemas,
     create_server,
 )
-from archy.mcp_payloads import ContractsPayload, ForbiddenEdge
+from archy.mcp_payloads import ContractCheck, ContractsPayload, ForbiddenEdge
 from archy.mcp_runs import (
     run_affected,
     run_brief,
@@ -3093,8 +3093,30 @@ def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
     ("contracts", "checked", "reason_has"),
     [
         (ContractsPayload(available=True, error="boom"), False, "boom"),
-        (ContractsPayload(available=True, verified=True, unverifiable=0), True, None),
+        (
+            ContractsPayload(
+                available=True,
+                verified=True,
+                unverifiable=0,
+                contracts=(
+                    ContractCheck(
+                        name="x",
+                        contract_type="ForbiddenContract",
+                        kept=True,
+                        metadata={},
+                        warnings=(),
+                    ),
+                ),
+            ),
+            True,
+            None,
+        ),
         (ContractsPayload(available=True, verified=False, unverifiable=2), False, "2 contract(s)"),
+        (
+            ContractsPayload(available=True, verified=False, unverifiable=0),
+            False,
+            "0 contracts",
+        ),
     ],
 )
 def test_brief_reads_the_contracts_verdict(
