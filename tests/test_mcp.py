@@ -2697,6 +2697,71 @@ def test_mcp_check_trips_scan_size_guard(tmp_path: Path):
         run_check(tmp_path, config_path=None)
 
 
+def _cold_fallback_callers():
+    """The three call sites that hand `max_modules` to the cache-backed scan (#502).
+
+    Each one passes the limit itself, so a mutation at any of them (or at
+    `_warm_or_cold`'s cold call) must turn the test red, not only the one in
+    `_warm_or_cold`.
+    """
+    from archy.mcp_runs import _load_graph, run_duplicates
+
+    return {
+        "load_graph": lambda p: _load_graph(p, internal_only=True),
+        "check": lambda p: run_check(p, config_path=None),
+        "duplicates": lambda p: run_duplicates(
+            p, response_format="summary", min_nodes=5, top_n=5, members=2
+        ),
+    }
+
+
+@pytest.mark.parametrize("caller", ["load_graph", "check", "duplicates"])
+def test_cold_fallback_keeps_the_scan_size_guard(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caller: str
+):
+    """A cache that fails must not turn the scan-size guard off.
+
+    The guard in `_manager_for` runs only when a manager is first created. If the
+    cache then fails (`sqlite3.Error` / `OSError`) on a project that has grown
+    past `max_modules`, the cold fallback is the only thing between the server and
+    an unbounded scan of a vendored tree, the #216 failure mode. Dropping
+    `max_modules` from the cold call passed the whole suite before this test.
+    """
+    import archy.mcp_runs as mcp_module
+    from archy.graph import ScanTooLargeError
+
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    for i in range(5):
+        (pkg / f"mod{i}.py").write_text("x = 1\n")
+    config = tmp_path / "archy.yaml"
+    call = _cold_fallback_callers()[caller]
+
+    manager_attempts: list[Path] = []
+
+    def broken(path: Path, **kwargs):
+        manager_attempts.append(path)
+        raise sqlite3.OperationalError("locked")
+
+    monkeypatch.setattr(mcp_module, "_manager_for", broken)
+
+    # Control: the same broken cache and the same project, with room under the
+    # limit, answers. This shows the cold path is the one running, and that the
+    # raise below comes from the guard rather than from the broken cache.
+    config.write_text("layers: {}\nforbid: []\nmax_modules: 1000\n")
+    call(tmp_path)
+    assert manager_attempts, "the cache was never tried, so the cold path was not exercised"
+
+    manager_attempts.clear()
+    config.write_text("layers: {}\nforbid: []\nmax_modules: 2\n")
+    with pytest.raises(ScanTooLargeError) as caught:
+        call(tmp_path)
+    assert manager_attempts, "the cache was never tried, so the cold path was not exercised"
+    assert caught.value.limit == 2
+    assert caught.value.count > 2
+
+
 def test_mcp_check_applies_config_roots(tmp_path: Path):
     """`roots: [app]` is what makes the `app.*` patterns match, on the MCP path too.
 
