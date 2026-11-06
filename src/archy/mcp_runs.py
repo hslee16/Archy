@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TypeVar, cast
 
@@ -455,6 +455,17 @@ def contracts_verdict(contracts: ContractsPayload) -> tuple[bool, str | None]:
 _BRIEF_LOAD_BEARING_N = 5
 
 
+def _rank_desc(pairs: Iterable[tuple[str, float]]) -> list[tuple[str, float]]:
+    """`(name, value)` pairs ranked by value descending, ties by name ascending.
+
+    The tie-break is part of the wire contract: summary lists must be stable
+    across runs, and every ranked list in this module has to order ties the same
+    way. One definition, so a change cannot land at one site and miss the others
+    (#500).
+    """
+    return sorted(pairs, key=lambda t: (-t[1], t[0]))
+
+
 def _build_invariant_brief(
     graph, config_path: Path | None, score: Score, cycles: tuple[Cycle, ...]
 ) -> InvariantBrief:
@@ -487,7 +498,7 @@ def _build_invariant_brief(
             for rule in config.required
         )
 
-    ranked = sorted(compute_edit_risk(graph).items(), key=lambda t: (-t[1], t[0]))
+    ranked = _rank_desc(compute_edit_risk(graph).items())
     load_bearing = tuple(
         LoadBearingModule(module=name, edit_risk=risk)
         for name, risk in ranked[:_BRIEF_LOAD_BEARING_N]
@@ -758,25 +769,19 @@ def run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:
         1 for u, v in graph.edges() if u in internal_set and v not in internal_set
     )
 
-    fan_in = sorted(
-        ((n, internal_view.in_degree(n)) for n in internal),
-        key=lambda t: (-t[1], t[0]),
-    )
-    fan_out = sorted(
-        ((n, internal_view.out_degree(n)) for n in internal),
-        key=lambda t: (-t[1], t[0]),
-    )
+    fan_in = _rank_desc((n, internal_view.in_degree(n)) for n in internal)
+    fan_out = _rank_desc((n, internal_view.out_degree(n)) for n in internal)
 
     pagerank = _pagerank(internal_view)
-    pr_sorted = sorted(pagerank.items(), key=lambda t: (-t[1], t[0]))
+    pr_sorted = _rank_desc(pagerank.items())
 
-    risk_sorted = sorted(edit_risk.items(), key=lambda t: (-t[1], t[0]))
+    risk_sorted = _rank_desc(edit_risk.items())
 
     external_counts: dict[str, int] = {}
     for _, v in graph.edges():
         if v not in internal_set and graph.nodes[v].get("external"):
             external_counts[v] = external_counts.get(v, 0) + 1
-    ext_sorted = sorted(external_counts.items(), key=lambda t: (-t[1], t[0]))
+    ext_sorted = _rank_desc(external_counts.items())
 
     def _entries(
         pairs: list[tuple[str, float | int]],
