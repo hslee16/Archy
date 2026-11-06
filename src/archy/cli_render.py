@@ -51,7 +51,7 @@ from archy.layers import (
 from archy.refactor import (
     RefactorPriority,
 )
-from archy.score import Score
+from archy.score import VACUOUS_SCORE_NOTE, Score
 from archy.simulate import SimulateReport
 
 
@@ -107,6 +107,8 @@ def _call_weighted_modularity_prose(s: Score) -> str:
 def _score_to_dict(s: Score) -> dict:
     return {
         "overall": s.overall,
+        "modules_scanned": s.inputs.module_count,
+        "note": VACUOUS_SCORE_NOTE if s.inputs.module_count == 0 else None,
         "components": {
             "modularity": s.modularity,
             "acyclicity": s.acyclicity,
@@ -138,8 +140,9 @@ def _score_to_dict(s: Score) -> dict:
 
 
 def _score_to_text(s: Score) -> str:
+    vacuous = f" (vacuous: {VACUOUS_SCORE_NOTE})" if s.inputs.module_count == 0 else ""
     lines = [
-        f"# archy score: {s.overall:.3f}",
+        f"# archy score: {s.overall:.3f}{vacuous}",
         f"modularity:  {s.modularity:.3f}  "
         f"({s.inputs.community_count} communities, raw Q={s.inputs.raw_modularity:.3f})",
         f"  call-weighted Q={s.inputs.raw_modularity_weighted:.3f}  "
@@ -1363,8 +1366,20 @@ def _impact_to_text(result: Impact) -> str:
     return "\n".join(lines)
 
 
-def _cycles_to_text(cycles: list[Cycle], min_size: int, *, excluded: int | None = None) -> str:
-    """`excluded` is None when TYPE_CHECKING exclusion was off, else the edge count left out."""
+def _cycles_to_text(
+    cycles: list[Cycle],
+    min_size: int,
+    *,
+    excluded: int | None = None,
+    no_modules: str | None = None,
+) -> str:
+    """`excluded` is None when TYPE_CHECKING exclusion was off, else the edge count left out.
+
+    `no_modules` is the reason a scan found nothing to check (#523); it replaces
+    "No cycles found", which would read as a clean pass over nothing.
+    """
+    if no_modules is not None:
+        return f"# {no_modules}."
     note = (
         ""
         if excluded is None

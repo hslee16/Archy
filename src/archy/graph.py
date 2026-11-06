@@ -6,9 +6,10 @@ root. External imports (stdlib, third-party) appear as nodes with
 
 archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
                   build_graph, discover_modules, effective_max_modules, graph_to_dict,
-                  hint_unresolved, internal_subgraph, is_ignored_path, parse_project,
-                  resolve_from_import, resolve_modules, resolve_relative_import,
-                  suggest_files, suggest_modules
+                  hint_unresolved, internal_module_count, internal_subgraph,
+                  is_ignored_path, parse_project, resolve_from_import, resolve_modules,
+                  resolve_relative_import, suggest_files, suggest_modules,
+                  zero_modules_reason
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp_runs,
                   UnresolvedHint -> archy.impact, archy.mcp_payloads, archy.mcp_runs,
@@ -17,12 +18,14 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.conventions, archy.index, archy.mcp_runs, archy.watcher,
                   graph_to_dict -> archy.cli, archy.mcp_runs,
                   hint_unresolved -> archy.mcp_runs, archy.simulate,
+                  internal_module_count -> archy.cli, archy.mcp_runs,
                   internal_subgraph -> archy.cli, archy.mcp_runs,
                   parse_project -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
                   bench.pattern_detection, resolve_modules -> archy.mcp_runs,
                   archy.simulate, suggest_modules -> archy.affected, archy.cli,
-                  archy.conventions, archy.mcp_runs
+                  archy.conventions, archy.mcp_runs, zero_modules_reason -> archy.cli,
+                  archy.mcp_runs
 """
 
 from __future__ import annotations
@@ -490,6 +493,21 @@ def internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:
     internal = graph.copy()
     internal.remove_nodes_from([n for n, d in graph.nodes(data=True) if d.get("external")])
     return internal
+
+
+def internal_module_count(graph: nx.DiGraph) -> int:
+    """How many nodes of `graph` are internal modules, by the same rule as `internal_subgraph`."""
+    return sum(1 for _, d in graph.nodes(data=True) if not d.get("external"))
+
+
+def zero_modules_reason(path: Path, verdict: str) -> str:
+    """Why a scan that found no internal modules cannot support a verdict (#523).
+
+    A pass over nothing reads exactly like a pass over a clean codebase, so every
+    surface that would say "no cycles" or score 1.000 says this instead. `verdict`
+    completes "nothing was ...", for example "checked" or "scored".
+    """
+    return f"0 internal modules scanned under {path}; nothing was {verdict}"
 
 
 def resolve_modules(

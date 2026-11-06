@@ -56,6 +56,15 @@ from pydantic import BaseModel, ConfigDict
 from archy.cycles import find_cycles
 from archy.reach import compute_propagation_cost
 
+VACUOUS_SCORE_NOTE = (
+    "0 internal modules scanned; the overall of 1.000 is vacuous and nothing was scored"
+)
+"""Said wherever a score over zero modules is shown (#523).
+
+`overall` stays numeric so existing consumers and history rows keep parsing; this
+note is how the reason travels with it on every surface.
+"""
+
 
 class ScoreInputs(BaseModel):
     model_config = ConfigDict(frozen=True)
