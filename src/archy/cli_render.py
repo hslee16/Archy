@@ -61,6 +61,18 @@ def _format_lines(lines: tuple[int, ...]) -> str:
     return f"({label}: {text})"
 
 
+def _location(path: str, lines: tuple[int, ...]) -> str:
+    """`path:line: ` for a finding's first import line (#522), or "" when unknown.
+
+    The `path:line:` shape is what editors, vim quickfix, reviewdog and GitHub
+    problem matchers already read, so a finding can be clicked through to the
+    offending import. Only a prefix: the module names and `(line: N)` stay, so
+    anything grepping today's output keeps working. An old snapshot has no path,
+    and an edge with no recorded line has nothing to point at; both print as before.
+    """
+    return f"{path}:{lines[0]}: " if path and lines else ""
+
+
 def _gate_to_dict(gate: dict, tolerance: float) -> dict:
     delta = gate["delta"]
     return {
@@ -170,6 +182,7 @@ def _violations_to_json(violations: list[Violation]) -> list[dict]:
             "source": v.source,
             "target": v.target,
             "lines": list(v.lines),
+            "path": v.path,
         }
         for v in violations
     ]
@@ -251,7 +264,9 @@ def _violations_to_text(
         if rule_pair != current_rule:
             lines.append(f"\n{v.rule.from_layer} -> {v.rule.to_layer} (forbidden):")
             current_rule = rule_pair
-        lines.append(f"  {v.source} -> {v.target}  {_format_lines(v.lines)}")
+        lines.append(
+            f"  {_location(v.path, v.lines)}{v.source} -> {v.target}  {_format_lines(v.lines)}"
+        )
     return "\n".join(lines)
 
 
@@ -549,6 +564,7 @@ def _sdp_violations_to_json(violations: list[SdpViolation]) -> list[dict]:
             "source_instability": v.source_instability,
             "target_instability": v.target_instability,
             "lines": list(v.lines),
+            "path": v.path,
         }
         for v in violations
     ]
@@ -561,7 +577,7 @@ def _sdp_violations_to_text(violations: list[SdpViolation], tolerance: float) ->
     for v in violations:
         gap = v.target_instability - v.source_instability
         lines.append(
-            f"  {v.source} (I={v.source_instability:.2f}) -> "
+            f"  {_location(v.path, v.lines)}{v.source} (I={v.source_instability:.2f}) -> "
             f"{v.target} (I={v.target_instability:.2f}, gap={gap:+.2f})  "
             f"{_format_lines(v.lines)}"
         )
@@ -573,7 +589,8 @@ def _cycles_to_json(cycles: list[Cycle]) -> list[dict]:
         {
             "modules": list(c.modules),
             "edges": [
-                {"source": e.source, "target": e.target, "lines": list(e.lines)} for e in c.edges
+                {"source": e.source, "target": e.target, "lines": list(e.lines), "path": e.path}
+                for e in c.edges
             ],
             "type_checking_edges": c.type_checking_edges,
         }
@@ -636,7 +653,10 @@ def _diff_to_text(result: DiffReport) -> str:
         f"# violations: +{len(violations.added)} added, -{len(violations.resolved)} resolved"
     )
     for v in violations.added:
-        lines.append(f"  + {v.source} -> {v.target}  ({v.rule.from_layer} -> {v.rule.to_layer})")
+        lines.append(
+            f"  + {_location(v.path, v.lines)}{v.source} -> {v.target}  "
+            f"({v.rule.from_layer} -> {v.rule.to_layer})"
+        )
     for v in violations.resolved:
         rule = f"{v.rule.from_layer} -> {v.rule.to_layer}"
         lines.append(f"  - {v.source} -> {v.target}  resolved ({rule})")
@@ -1394,7 +1414,9 @@ def _cycles_to_text(
             lines.append(f"  - {m}")
         lines.append("Edges:")
         for e in c.edges:
-            lines.append(f"  {e.source} -> {e.target}  {_format_lines(e.lines)}")
+            lines.append(
+                f"  {_location(e.path, e.lines)}{e.source} -> {e.target}  {_format_lines(e.lines)}"
+            )
         if excluded is None and c.type_checking_edges:
             lines.append(
                 f"  # {c.type_checking_edges} of {len(c.edges)} edge(s) exist only under "

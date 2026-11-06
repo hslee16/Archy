@@ -8,7 +8,7 @@ archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
                   build_graph, discover_modules, effective_max_modules, graph_to_dict,
                   hint_unresolved, internal_module_count, internal_subgraph,
                   is_ignored_path, parse_project, resolve_from_import, resolve_modules,
-                  resolve_relative_import, suggest_files, suggest_modules,
+                  resolve_relative_import, source_path, suggest_files, suggest_modules,
                   zero_modules_reason
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp_runs,
@@ -23,9 +23,9 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   parse_project -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
                   bench.pattern_detection, resolve_modules -> archy.mcp_runs,
-                  archy.simulate, suggest_modules -> archy.affected, archy.cli,
-                  archy.conventions, archy.mcp_runs, zero_modules_reason -> archy.cli,
-                  archy.mcp_runs
+                  archy.simulate, source_path -> archy.cycles, archy.layers,
+                  suggest_modules -> archy.affected, archy.cli, archy.conventions,
+                  archy.mcp_runs, zero_modules_reason -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations
@@ -513,6 +513,26 @@ def zero_modules_reason(path: Path, verdict: str) -> str:
     completes "nothing was ...", for example "checked" or "scored".
     """
     return f"0 internal modules scanned under {path}; nothing was {verdict}"
+
+
+def source_path(graph: nx.DiGraph, module: str) -> str:
+    """Repo-relative POSIX path of `module`'s file, or "" when the graph cannot say (#522).
+
+    An import edge's `lines` are line numbers in the IMPORTING module's file, so
+    this is the file those lines belong to. Relative to the scan root recorded on
+    the graph (a src layout therefore yields `src/pkg/b.py`), and a package's own
+    module is its `__init__.py`. "" rather than an error for a node without a
+    path (a graph rebuilt from a snapshot) or one outside the root, so a finding
+    degrades to the old output instead of failing.
+    """
+    raw = graph.nodes[module].get("path") if module in graph else None
+    root = graph.graph.get("root")
+    if not raw or not root:
+        return ""
+    try:
+        return Path(raw).relative_to(Path(root).resolve()).as_posix()
+    except ValueError:
+        return ""
 
 
 def resolve_modules(
