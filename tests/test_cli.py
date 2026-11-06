@@ -3103,6 +3103,28 @@ def test_simulate_reports_a_match_time_layer_error_without_a_traceback(tmp_path:
     _assert_one_line_overlap_error(result)
 
 
+@pytest.mark.parametrize("extra", [(), ("--strict",)], ids=["diff", "diff-strict"])
+def test_diff_reports_a_match_time_layer_error_without_a_traceback(
+    tmp_path: Path, extra: tuple[str, ...]
+) -> None:
+    # #821: the baseline comes from a clean config, then the overlap arrives,
+    # so `diff` itself is the first command to meet it.
+    project = _make_overlapping_layers_project(tmp_path, with_edge=True)
+    overlapping = (project / "archy.yaml").read_text()
+    (project / "archy.yaml").write_text('layers:\n  core:\n    modules: ["pkg.core.**"]\n')
+    baseline = tmp_path / "base.json"
+    written = CliRunner().invoke(main, ["snapshot", str(project), "--out", str(baseline)])
+    assert written.exit_code == 0, written.output
+    (project / "archy.yaml").write_text(overlapping)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+
+    result = CliRunner().invoke(main, ["diff", str(project), "--baseline", str(baseline), *extra])
+
+    _assert_one_line_overlap_error(result)
+
+
 _GUARDED_B = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
 
 
