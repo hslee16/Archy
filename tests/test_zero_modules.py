@@ -20,7 +20,7 @@ from archy.mcp import create_server
 from archy.mcp_compat import ToolError
 from archy.mcp_runs import run_cycles, run_score
 from archy.score import VACUOUS_SCORE_NOTE
-from tests.test_mcp import _call_tool
+from tests.mcp_helpers import call_tool
 
 
 def _empty_dir(root: Path) -> Path:
@@ -152,7 +152,7 @@ def test_run_cycles_refuses_rather_than_return_an_empty_list(empty_project: Path
         run_cycles(empty_project, min_size=2, internal_only=True)
     assert str(caught.value) == message
     with pytest.raises(ToolError) as tool_caught:
-        _call_tool(create_server(), "archy_cycles", {"path": str(empty_project)})
+        call_tool(create_server(), "archy_cycles", {"path": str(empty_project)})
     assert message in str(tool_caught.value)
 
 

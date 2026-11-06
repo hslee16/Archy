@@ -23,7 +23,7 @@ from archy.layers import LayerConfigError, load_config
 from archy.mcp import create_server
 from archy.mcp_compat import ToolError
 from archy.mcp_runs import run_check
-from tests.test_mcp import _call_tool
+from tests.mcp_helpers import call_tool
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -184,5 +184,5 @@ def test_mcp_check_raises_a_tool_error_carrying_the_reason(typo_project: Path):
     with pytest.raises(LayerConfigError, match="did you mean `forbid`"):
         run_check(typo_project, config_path=None)
     with pytest.raises(ToolError) as caught:
-        _call_tool(create_server(), "archy_check", {"path": str(typo_project)})
+        call_tool(create_server(), "archy_check", {"path": str(typo_project)})
     assert "did you mean `forbid`?" in str(caught.value)
