@@ -120,7 +120,9 @@ from archy.dsm import (
 from archy.duplicates import (
     DEFAULT_MIN_SIZE,
 )
+from archy.graph import ScanTooLargeError
 from archy.impact import DEFAULT_MAX_CHAINS, Impact
+from archy.layers import LayerConfigError
 from archy.mcp_compat import Server, ToolError, make_server
 from archy.mcp_payloads import (
     BriefPayload,
@@ -326,9 +328,15 @@ def _project_dir(path: str) -> Path:
 def _with_expected_refusal_as_tool_error(fn):
     """Re-raise expected refusals as ToolError so mcp 2.x keeps the reason (#636).
 
-    mcp 2.x drops the message of a tool's ``ValueError``, surfacing only
+    mcp 2.x drops the message of any exception a tool raises, surfacing only
     ``Error executing tool <name>``. Raising ``ToolError`` directly keeps the
     text on both majors. Unexpected exceptions stay generic.
+
+    `LayerConfigError` and `ScanTooLargeError` are expected refusals too, and the
+    two an agent is most likely to hit on a real repository (a malformed
+    `archy.yaml`, a tree over `max_modules`). They subclass bare `Exception`, not
+    `ValueError`, so they are named here rather than caught by accident; making
+    them `ValueError`s would also change every `except ValueError` elsewhere (#793).
     """
 
     from functools import wraps
@@ -337,7 +345,7 @@ def _with_expected_refusal_as_tool_error(fn):
     def wrapped(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
-        except (ValueError, LookupError) as exc:
+        except (ValueError, LookupError, LayerConfigError, ScanTooLargeError) as exc:
             raise ToolError(str(exc)) from exc
 
     return wrapped

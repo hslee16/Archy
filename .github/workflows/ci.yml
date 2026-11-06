@@ -99,4 +99,4 @@ jobs:
           "
 
       - name: MCP suites (in-process + real stdio protocol)
-        run: .venv-mcp2/bin/python -m pytest tests/test_mcp.py tests/test_mcp_protocol.py -q
+        run: .venv-mcp2/bin/python -m pytest tests/test_mcp.py tests/test_mcp_protocol.py tests/test_mcp_config_errors.py tests/test_config_unknown_keys.py -q
