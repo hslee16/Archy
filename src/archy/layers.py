@@ -28,8 +28,10 @@ archy:mirrored-by LayerConfigError -> archy.cli, archy.contracts, archy.mcp_runs
 
 from __future__ import annotations
 
+import difflib
 import keyword
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
@@ -522,6 +524,69 @@ class LayerConfigError(Exception):
     """Raised when an archy.yaml file is missing, malformed, or self-inconsistent."""
 
 
+# The keys `load_config` reads at each level, spelled out so a key it does NOT read
+# is an error rather than a silent no-op (#525). `forbidden:` for `forbid:` used to
+# print "No layer violations" and exit 0: a rule that cannot fire looks exactly like
+# a clean codebase. Keep these in step with the readers below; a test loads every
+# tracked archy.yaml, so a key added to a reader but not here fails there.
+_TOP_LEVEL_KEYS = (
+    "layers",
+    "forbid",
+    "required",
+    "exclude",
+    "roots",
+    "sdp",
+    "max_modules",
+    "min_layers_present",
+    "exclude_type_checking_imports",
+)
+_LAYER_KEYS = ("modules",)
+_FORBID_KEYS = ("from", "to")
+_REQUIRED_KEYS = ("source", "must_reach", "reason", "within")
+_SDP_KEYS = ("enabled", "tolerance", "mode")
+
+# `exclude:` entries are compared as whole directory names, so an entry with any of
+# these can never match a directory and would read as a rule that silently does nothing.
+_EXCLUDE_NOT_A_NAME = ("/", "\\", "*", "?", "[")
+
+
+def _reject_unknown_keys(
+    keys: Iterable[object], allowed: tuple[str, ...], where: str, path: Path
+) -> None:
+    """Raise when `keys` (a mapping's keys) holds one the reader never looks at (#525).
+
+    Every unknown key is named, each with its closest allowed spelling when there
+    is one, because the usual cause is a typo (`forbidden`, `module`, `enable`).
+    A key with no close match (`reason` on a forbid entry) gets the allowed list
+    instead, since that is a misunderstanding of the format rather than a slip.
+    """
+    unknown = [key for key in keys if key not in allowed]
+    if not unknown:
+        return
+    described = []
+    for key in unknown:
+        close = difflib.get_close_matches(str(key), allowed, n=1)
+        hint = f" (did you mean `{close[0]}`?)" if close else ""
+        described.append(f"`{key}`{hint}")
+    allowed_text = ", ".join(f"`{a}`" for a in allowed)
+    noun = "key" if len(unknown) == 1 else "keys"
+    raise LayerConfigError(
+        f"unknown {noun} in {where} of {path}: {'; '.join(described)}. "
+        f"Allowed keys: {allowed_text}."
+    )
+
+
+def _reject_path_like_excludes(exclude: list[str], path: Path) -> None:
+    for entry in exclude:
+        bad = next((ch for ch in _EXCLUDE_NOT_A_NAME if ch in entry), None)
+        if bad is not None:
+            raise LayerConfigError(
+                f"`exclude` entry {entry!r} in {path} contains {bad!r}, but `exclude` "
+                "matches whole directory names only (for example `generated`), never "
+                "paths or globs, so this entry could never match."
+            )
+
+
 def load_config(path: Path) -> LayerConfig:
     if not path.exists():
         raise LayerConfigError(f"config file not found: {path}")
@@ -531,11 +596,13 @@ def load_config(path: Path) -> LayerConfig:
         raise LayerConfigError(f"could not parse YAML at {path}: {exc}") from exc
     if not isinstance(raw, dict):
         raise LayerConfigError(f"config root must be a mapping in {path}")
+    _reject_unknown_keys(raw, _TOP_LEVEL_KEYS, "the top level", path)
 
     layers = _parse_layers(raw.get("layers", {}), path)
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
     required = _parse_required(raw.get("required", []), path)
     exclude = _parse_str_list(raw.get("exclude", []), "exclude", path)
+    _reject_path_like_excludes(exclude, path)
     roots = _parse_str_list(raw.get("roots", []), "roots", path)
     sdp = _parse_sdp(raw.get("sdp"), path)
     max_modules = _parse_max_modules(raw.get("max_modules"), path)
@@ -875,6 +942,7 @@ def _parse_layers(raw: object, path: Path) -> list[LayerSpec]:
         if not name:
             raise LayerConfigError(f"layer names must be non-empty strings in {path}")
         body = _as_str_dict(body_raw, f"layer {name!r} body", path)
+        _reject_unknown_keys(body, _LAYER_KEYS, f"layer {name!r}", path)
         modules_raw = body.get("modules", [])
         if not isinstance(modules_raw, list) or not all(
             isinstance(m, str) and m for m in modules_raw
@@ -987,8 +1055,9 @@ def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[Forbi
     if not isinstance(raw, list):
         raise LayerConfigError(f"`forbid` must be a list in {path}")
     out: list[ForbidRule] = []
-    for entry_raw in raw:
+    for index, entry_raw in enumerate(raw):
         entry = _as_str_dict(entry_raw, "forbid entry", path)
+        _reject_unknown_keys(entry, _FORBID_KEYS, f"forbid entry {index}", path)
         src_raw, tgt_raw = _require_str_keys(entry, ("from", "to"), "forbid", path)
         _check_known_layer(src_raw, "from", known_layers, path)
         _check_known_layer(tgt_raw, "to", known_layers, path)
@@ -1010,8 +1079,9 @@ def _parse_required(raw: object, path: Path) -> list[RequiredRule]:
     if not isinstance(raw, list):
         raise LayerConfigError(f"`required` must be a list in {path}")
     out: list[RequiredRule] = []
-    for entry_raw in raw:
+    for index, entry_raw in enumerate(raw):
         entry = _as_str_dict(entry_raw, "required entry", path)
+        _reject_unknown_keys(entry, _REQUIRED_KEYS, f"required entry {index}", path)
         source, must_reach = _require_str_keys(entry, ("source", "must_reach"), "required", path)
         reason = entry.get("reason", "")
         if not isinstance(reason, str):
@@ -1049,6 +1119,7 @@ def _parse_sdp(raw: object, path: Path) -> SdpConfig:
     if raw is None:
         return SdpConfig()
     body = _as_str_dict(raw, "`sdp`", path)
+    _reject_unknown_keys(body, _SDP_KEYS, "`sdp`", path)
     enabled = body.get("enabled", False)
     tolerance = body.get("tolerance", 0.0)
     mode = body.get("mode", "error")
