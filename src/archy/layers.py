@@ -37,7 +37,6 @@ import networkx as nx
 import yaml
 from pydantic import BaseModel, ConfigDict, computed_field
 
-from archy.graph import source_path
 from archy.instability import compute_instability
 
 
@@ -699,7 +698,7 @@ def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
                 source=source,
                 target=target,
                 lines=tuple(data.get("lines", ())),
-                path=source_path(graph, source),
+                path=graph.graph.get("relative_paths", {}).get(source, ""),
             )
         )
     violations.sort(key=lambda v: (v.rule.from_layer, v.rule.to_layer, v.source, v.target))
@@ -859,7 +858,7 @@ def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[Sd
                     source_instability=i_src,
                     target_instability=i_tgt,
                     lines=tuple(data.get("lines", ())),
-                    path=source_path(graph, source),
+                    path=graph.graph.get("relative_paths", {}).get(source, ""),
                 )
             )
     violations.sort(key=lambda v: (v.source, v.target))

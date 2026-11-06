@@ -8,7 +8,7 @@ archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
                   build_graph, discover_modules, effective_max_modules, graph_to_dict,
                   hint_unresolved, internal_module_count, internal_subgraph,
                   is_ignored_path, parse_project, resolve_from_import, resolve_modules,
-                  resolve_relative_import, source_path, suggest_files, suggest_modules,
+                  resolve_relative_import, suggest_files, suggest_modules,
                   zero_modules_reason
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp_runs,
@@ -23,9 +23,9 @@ archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   parse_project -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
                   bench.pattern_detection, resolve_modules -> archy.mcp_runs,
-                  archy.simulate, source_path -> archy.cycles, archy.layers,
-                  suggest_modules -> archy.affected, archy.cli, archy.conventions,
-                  archy.mcp_runs, zero_modules_reason -> archy.cli, archy.mcp_runs
+                  archy.simulate, suggest_modules -> archy.affected, archy.cli,
+                  archy.conventions, archy.mcp_runs, zero_modules_reason -> archy.cli,
+                  archy.mcp_runs
 """
 
 from __future__ import annotations
@@ -225,6 +225,32 @@ def discover_modules(
     return _discover_modules(root, frozenset(ignored_dirs), tuple(extra_roots))
 
 
+def _relative_paths(root: Path, modules: list[Module]) -> dict[str, str]:
+    """`{qualname: repo-relative POSIX path}` for every module under `root` (#522).
+
+    An import edge's `lines` are line numbers in the IMPORTING module's file, so a
+    finding looks its source module up here to say which file those lines are in.
+    Relative to the scan root, so a src layout yields `src/pkg/b.py` and a
+    package's own module is its `__init__.py`. The root is resolved because module
+    paths are, and a relative root (`archy check .`) or a symlinked checkout would
+    otherwise never match. A module outside the root is left out, and a finding
+    for it prints as before.
+
+    Graph-level, not a per-node attribute, for the reason the `entrypoints` block
+    below gives: a node attribute would reach every node of `archy graph --format
+    json`. It also keeps `cycles` and `layers` free of an import of this module,
+    which would deepen every chain through them.
+    """
+    resolved_root = root.resolve()
+    paths: dict[str, str] = {}
+    for m in modules:
+        try:
+            paths[m.qualname] = m.path.relative_to(resolved_root).as_posix()
+        except ValueError:
+            continue
+    return paths
+
+
 def assemble_graph(
     root: Path,
     modules: list[Module],
@@ -295,6 +321,7 @@ def assemble_graph(
             data["call_lines"] = tuple(data["call_lines"])
 
     graph.graph["root"] = str(root)
+    graph.graph["relative_paths"] = _relative_paths(root, modules)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
     # Graph-level, not per-node: a node attribute would reach every node of
     # `archy graph --format json` for the benefit of one `required:` source.
@@ -513,26 +540,6 @@ def zero_modules_reason(path: Path, verdict: str) -> str:
     completes "nothing was ...", for example "checked" or "scored".
     """
     return f"0 internal modules scanned under {path}; nothing was {verdict}"
-
-
-def source_path(graph: nx.DiGraph, module: str) -> str:
-    """Repo-relative POSIX path of `module`'s file, or "" when the graph cannot say (#522).
-
-    An import edge's `lines` are line numbers in the IMPORTING module's file, so
-    this is the file those lines belong to. Relative to the scan root recorded on
-    the graph (a src layout therefore yields `src/pkg/b.py`), and a package's own
-    module is its `__init__.py`. "" rather than an error for a node without a
-    path (a graph rebuilt from a snapshot) or one outside the root, so a finding
-    degrades to the old output instead of failing.
-    """
-    raw = graph.nodes[module].get("path") if module in graph else None
-    root = graph.graph.get("root")
-    if not raw or not root:
-        return ""
-    try:
-        return Path(raw).relative_to(Path(root).resolve()).as_posix()
-    except ValueError:
-        return ""
 
 
 def resolve_modules(

@@ -21,7 +21,8 @@ from click.testing import CliRunner
 
 from archy.cli import main
 from archy.cli_render import _location
-from archy.graph import source_path
+from archy.cycles import find_cycles
+from archy.graph import Module, _relative_paths, build_graph
 from archy.mcp_runs import run_check, run_cycles
 
 
@@ -238,15 +239,27 @@ def test_location_is_empty_when_there_is_nothing_to_point_at():
     assert _location("src/pkg/b.py", ()) == ""  # an edge with no recorded line
 
 
-def test_source_path_degrades_to_empty_rather_than_failing(tmp_path: Path):
+def test_the_graph_records_repo_relative_paths_for_every_module(project: Path):
+    graph = build_graph(project)
+    paths = graph.graph["relative_paths"]
+    assert paths["pkg.core.api"] == "src/pkg/core/api.py"
+    assert paths["pkg.p"] == "src/pkg/p/__init__.py"  # a package is its __init__.py
+    assert paths["pkg.p.q"] == "src/pkg/p/q.py"
+
+
+def test_a_module_outside_the_root_is_left_out_of_the_map(tmp_path: Path):
+    inside = Module(qualname="inside", path=tmp_path.resolve() / "pkg" / "m.py", is_package=False)
+    outside = Module(qualname="outside", path=Path("/somewhere/else/m.py"), is_package=False)
+    assert _relative_paths(tmp_path, [inside, outside]) == {"inside": "pkg/m.py"}
+
+
+def test_a_finding_without_a_recorded_path_degrades_to_the_old_output():
+    """A graph with no map (or no entry) yields path "" rather than failing."""
     graph: nx.DiGraph = nx.DiGraph()
-    graph.graph["root"] = str(tmp_path)
-    graph.add_node("inside", path=str(tmp_path / "pkg" / "m.py"))
-    graph.add_node("outside", path="/somewhere/else/m.py")
-    graph.add_node("pathless")
-    assert source_path(graph, "inside") == "pkg/m.py"
-    assert source_path(graph, "outside") == ""
-    assert source_path(graph, "pathless") == ""
-    assert source_path(graph, "not-in-graph") == ""
-    graph.graph.pop("root")
-    assert source_path(graph, "inside") == ""
+    graph.add_edge("a", "b", lines=(1,))
+    graph.add_edge("b", "a", lines=(2,))
+    [bare] = find_cycles(graph)
+    assert {e.path for e in bare.edges} == {""}
+    graph.graph["relative_paths"] = {"a": "src/a.py"}  # `b` has no entry
+    [partial] = find_cycles(graph)
+    assert {(e.source, e.path) for e in partial.edges} == {("a", "src/a.py"), ("b", "")}

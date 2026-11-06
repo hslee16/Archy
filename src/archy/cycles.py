@@ -11,8 +11,6 @@ from __future__ import annotations
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
-from archy.graph import source_path
-
 
 class CycleEdge(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -105,7 +103,7 @@ def find_cycles(graph: nx.DiGraph, *, min_size: int = 2) -> list[Cycle]:
                             source=u,
                             target=v,
                             lines=tuple(data.get("lines", ())),
-                            path=source_path(graph, u),
+                            path=graph.graph.get("relative_paths", {}).get(u, ""),
                         )
                     )
         edges.sort(key=lambda e: (e.source, e.target))
