@@ -479,7 +479,8 @@ def _cycle_to_dict(cycle: Cycle) -> dict[str, object]:
     return {
         "modules": list(cycle.modules),
         "edges": [
-            {"source": e.source, "target": e.target, "lines": list(e.lines)} for e in cycle.edges
+            {"source": e.source, "target": e.target, "lines": list(e.lines), "path": e.path}
+            for e in cycle.edges
         ],
     }
 
@@ -490,6 +491,7 @@ def _violation_to_dict(v: Violation) -> dict[str, object]:
         "source": v.source,
         "target": v.target,
         "lines": list(v.lines),
+        "path": v.path,
     }
 
 
@@ -513,6 +515,7 @@ def _sdp_violation_to_dict(v: SdpViolation) -> dict[str, object]:
         "source_instability": v.source_instability,
         "target_instability": v.target_instability,
         "lines": list(v.lines),
+        "path": v.path,
     }
 
 
@@ -577,9 +580,14 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
 
 
 def _findings_only(payload: dict[str, object]) -> dict[str, object]:
+    # `lines` and `path` are where a finding sits, not what it is: both are left
+    # out so a committed baseline does not churn when code moves or when a file
+    # written before `path` existed is compared with one written after (#522).
+    location_keys = ("lines", "path")
+
     def strip(item: object) -> object:
         if isinstance(item, dict):
-            return {k: strip(v) for k, v in item.items() if k != "lines"}
+            return {k: strip(v) for k, v in item.items() if k not in location_keys}
         if isinstance(item, list):
             return [strip(v) for v in item]
         return item
@@ -724,6 +732,7 @@ def _cycle_from_dict(d: dict[str, object]) -> Cycle:
             source=str(_expect_dict(e)["source"]),
             target=str(_expect_dict(e)["target"]),
             lines=tuple(_expect_int(x) for x in _expect_list(_expect_dict(e).get("lines", []))),
+            path=str(_expect_dict(e).get("path", "")),
         )
         for e in _expect_list(d["edges"])
     )
@@ -737,6 +746,7 @@ def _violation_from_dict(d: dict[str, object]) -> Violation:
         source=str(d["source"]),
         target=str(d["target"]),
         lines=tuple(_expect_int(x) for x in _expect_list(d.get("lines", []))),
+        path=str(d.get("path", "")),
     )
 
 
@@ -762,6 +772,7 @@ def _sdp_violation_from_dict(d: dict[str, object]) -> SdpViolation:
         source_instability=_expect_float(d["source_instability"]),
         target_instability=_expect_float(d["target_instability"]),
         lines=tuple(_expect_int(x) for x in _expect_list(d.get("lines", []))),
+        path=str(d.get("path", "")),
     )
 
 

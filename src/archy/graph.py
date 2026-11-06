@@ -225,6 +225,32 @@ def discover_modules(
     return _discover_modules(root, frozenset(ignored_dirs), tuple(extra_roots))
 
 
+def _relative_paths(root: Path, modules: list[Module]) -> dict[str, str]:
+    """`{qualname: repo-relative POSIX path}` for every module under `root` (#522).
+
+    An import edge's `lines` are line numbers in the IMPORTING module's file, so a
+    finding looks its source module up here to say which file those lines are in.
+    Relative to the scan root, so a src layout yields `src/pkg/b.py` and a
+    package's own module is its `__init__.py`. The root is resolved because module
+    paths are, and a relative root (`archy check .`) or a symlinked checkout would
+    otherwise never match. A module outside the root is left out, and a finding
+    for it prints as before.
+
+    Graph-level, not a per-node attribute, for the reason the `entrypoints` block
+    below gives: a node attribute would reach every node of `archy graph --format
+    json`. It also keeps `cycles` and `layers` free of an import of this module,
+    which would deepen every chain through them.
+    """
+    resolved_root = root.resolve()
+    paths: dict[str, str] = {}
+    for m in modules:
+        try:
+            paths[m.qualname] = m.path.relative_to(resolved_root).as_posix()
+        except ValueError:
+            continue
+    return paths
+
+
 def assemble_graph(
     root: Path,
     modules: list[Module],
@@ -295,6 +321,7 @@ def assemble_graph(
             data["call_lines"] = tuple(data["call_lines"])
 
     graph.graph["root"] = str(root)
+    graph.graph["relative_paths"] = _relative_paths(root, modules)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
     # Graph-level, not per-node: a node attribute would reach every node of
     # `archy graph --format json` for the benefit of one `required:` source.

@@ -18,6 +18,9 @@ class CycleEdge(BaseModel):
     source: str
     target: str
     lines: tuple[int, ...]
+    # Repo-relative path of `source`'s file, where `lines` are (#522). "" when the
+    # graph cannot say; the default keeps an old snapshot loading.
+    path: str = ""
 
 
 class Cycle(BaseModel):
@@ -100,6 +103,7 @@ def find_cycles(graph: nx.DiGraph, *, min_size: int = 2) -> list[Cycle]:
                             source=u,
                             target=v,
                             lines=tuple(data.get("lines", ())),
+                            path=graph.graph.get("relative_paths", {}).get(u, ""),
                         )
                     )
         edges.sort(key=lambda e: (e.source, e.target))

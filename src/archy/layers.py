@@ -201,6 +201,8 @@ class Violation(BaseModel):
     source: str
     target: str
     lines: tuple[int, ...]
+    # Repo-relative path of `source`'s file, where `lines` are (#522).
+    path: str = ""
 
 
 class SdpViolation(BaseModel):
@@ -217,6 +219,8 @@ class SdpViolation(BaseModel):
     source_instability: float
     target_instability: float
     lines: tuple[int, ...]
+    # Repo-relative path of `source`'s file, where `lines` are (#522).
+    path: str = ""
 
 
 class ExactPatternHint(BaseModel):
@@ -694,6 +698,7 @@ def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
                 source=source,
                 target=target,
                 lines=tuple(data.get("lines", ())),
+                path=graph.graph.get("relative_paths", {}).get(source, ""),
             )
         )
     violations.sort(key=lambda v: (v.rule.from_layer, v.rule.to_layer, v.source, v.target))
@@ -853,6 +858,7 @@ def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[Sd
                     source_instability=i_src,
                     target_instability=i_tgt,
                     lines=tuple(data.get("lines", ())),
+                    path=graph.graph.get("relative_paths", {}).get(source, ""),
                 )
             )
     violations.sort(key=lambda v: (v.source, v.target))
