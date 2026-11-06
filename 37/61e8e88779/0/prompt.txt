@@ -1,0 +1,287 @@
+<task-notification>
+<task-id>aea411515b4daa2b0</task-id>
+<tool-use-id>toolu_01RtZEhVDkY6vhyJuAoD4NHv</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/aea411515b4daa2b0.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings. I scanned all seven changed files for U+2014 with a Python check and found none. I then marked review `no_em_dashes--7_files--4f4604de23af` as passed.
+
+The files scanned, all under `/Users/hosanglee/archy`:
+- `src/archy/cli.py`
+- `src/archy/cli_render.py`
+- `src/archy/graph.py`
+- `src/archy/mcp_payloads.py`
+- `src/archy/mcp_runs.py`
+- `src/archy/score.py`
+- `tests/test_zero_modules.py`</result>
+<usage><subagent_tokens>18562</subagent_tokens><tool_uses>4</tool_uses><duration_ms>10089</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a451625c1b8cb6817</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/a451625c1b8cb6817.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code cli.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with zero violations, and I marked it as passed (`python_code_review--src-archy-cli.py--99897846bcd3`). The file is `/Users/hosanglee/archy/src/archy/cli.py`.
+
+- **Line length:** an `awk` scan found no line over 100 characters.
+- **Changeset (#523):** the `cycles` and `score` edits use `zero_modules_reason` and `internal_module_count`. Their comments explain why (a scan of nothing is not a clean pass), and there is no new duplication.
+- **Module-wide criteria:** `from __future__ import annotations` is present, type syntax is PEP 604, and naming follows the conventions. I found no `os.path` and no `typing.Any`, and the imports are grouped correctly. The function-local imports have stated reasons.
+
+I ran no linter. The scope rule in `.deepwork/review/python_conventions.md` excludes untouched parts of the file, so I did not flag any pre-existing duplication.</result>
+<usage><subagent_tokens>61284</subagent_tokens><tool_uses>4</tool_uses><duration_ms>12586</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2ba8595069b14d7e</task-id>
+<tool-use-id>toolu_01Hop1WUXBZ21svHa3jMrjKR</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/a2ba8595069b14d7e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code cli_render.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with zero violations in `/Users/hosanglee/archy/src/archy/cli_render.py`. I called `mark_review_as_passed` for `python_code_review--src-archy-cli_render.py--17ba632d4e0d`.
+
+The conventions file limits findings to what the changeset touched. Here that is the #523 changes: the vacuous-score note in `_score_to_dict` and `_score_to_text`, and the `no_modules` branch in `_cycles_to_text`.
+
+- **Imports and types:** `from __future__ import annotations` is present, the type syntax is PEP 604, and the imports are grouped correctly.
+- **Value objects:** `ContractsOutcome` is a frozen pydantic model.
+- **Line length:** no line exceeds 100 characters (checked with `awk`).
+- **Comments:** the new and changed comments and docstrings explain why, not what.
+- **Duplication:** the changeset introduced no copy-pasted blocks.</result>
+<usage><subagent_tokens>50444</subagent_tokens><tool_uses>4</tool_uses><duration_ms>11883</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>acded745b0907fa9a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/acded745b0907fa9a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code score.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed with zero violations in `/Users/hosanglee/archy/src/archy/score.py`, and I marked it as passed.
+
+I checked each listed criterion:
+- **Future import:** `from __future__ import annotations` is at the top.
+- **Types:** PEP 604 syntax is used throughout, with no `typing.List` or `Optional`.
+- **Value objects:** `ScoreInputs` and `Score` are frozen pydantic models. Neither has a list field.
+- **Naming and paths:** Naming follows the conventions, and the file doesn't use `os.path`.
+- **Imports:** They are grouped stdlib / third-party / local.
+- **Line length:** No line exceeds 100 characters.
+- **DRY:** I found no copy-pasted blocks that need a shared helper.
+- **Comments:** The comments explain why, and the new `VACUOUS_SCORE_NOTE` docstring cites #523.</result>
+<usage><subagent_tokens>26780</subagent_tokens><tool_uses>3</tool_uses><duration_ms>9299</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aab6572d646529972</task-id>
+<tool-use-id>toolu_011gzvwNJrz773e5eNfxtEGp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/aab6572d646529972.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code mcp_runs.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>`src/archy/mcp_runs.py` passes the review with zero violations, and I marked review `python_code_review--src-archy-mcp_runs.py--9a20150652da` as passed.
+
+- **Line length:** no line exceeds 100 characters (checked with `awk` on the file).
+- **Type syntax:** `from __future__ import annotations` is present, and the file uses PEP 604 syntax with no `typing.List` or `Optional`.
+- **Value objects:** the file defines none, so the frozen-pydantic criterion does not apply.
+- **Comments:** the comments in the `run_cycles` and `run_score` code for #523 explain why, not what.
+
+I did not report older issues outside this change, following the scope rule in `.deepwork/review/python_conventions.md`.</result>
+<usage><subagent_tokens>42617</subagent_tokens><tool_uses>3</tool_uses><duration_ms>10198</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a33306e455f524174</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/a33306e455f524174.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest new reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I marked the review as passed.
+
+I didn't open the seven changed files. I judged from the instruction file alone, which sets the default to no new rule. Nothing in it showed a recurring mistake that meets all four conditions.</result>
+<usage><subagent_tokens>18318</subagent_tokens><tool_uses>2</tool_uses><duration_ms>6498</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a38718ef824a8d1a6</task-id>
+<tool-use-id>toolu_01Q7HmdJhhmv9rYJ9vKPCm2A</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/a38718ef824a8d1a6.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docs relating to archy package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+The changes add a refusal for scans that find 0 internal modules (#523):
+- `archy cycles` refuses under `--strict`.
+- `archy score --record` and `--strict` refuse.
+- The score payload gains `modules_scanned` and `note` fields.
+
+I grepped the README, `skills/archy/SKILL.md` and `plugins/claude/skills/archy/SKILL.md` for claims these changes contradict and found none. The two SKILL files are still byte-identical. The tool table, tool counts and defaults are unchanged.
+
+The docs also don't mention the new zero-module behaviour, `modules_scanned` or `note`. That is an omission, not a stale claim, so it doesn't fail this review. You could optionally add one line to the `archy_cycles` and `archy_score` rows in `skills/archy/SKILL.md` (mirrored in `plugins/claude/skills/archy/SKILL.md`) and to `README.md` lines 481 and 304.</result>
+<usage><subagent_tokens>30241</subagent_tokens><tool_uses>5</tool_uses><duration_ms>15050</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adb7d803777fe9722</task-id>
+<tool-use-id>toolu_01Ri7oJNC2FrXatcgHaHcHeB</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/adb7d803777fe9722.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code test file" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `tests/test_zero_modules.py` found no violations, and I marked it as passed.
+
+- **Line length:** no line is over 100 characters (checked with `awk`).
+- **Type syntax:** `from __future__ import annotations` is present at module top. The file uses PEP 604 and builtin generics, with no `typing.List` or `Optional`.
+- **Naming and paths:** names follow convention and private helpers carry the underscore prefix. The file uses `pathlib` throughout.
+- **Imports:** they are grouped stdlib, third-party, then local.
+- **Value objects:** there are none in the file, so that criterion doesn't apply.
+- **Comments:** the comments explain why, not what.
+- **DRY:** the repeated `CliRunner().invoke` calls are one-liners and don't need a shared helper.</result>
+<usage><subagent_tokens>23680</subagent_tokens><tool_uses>3</tool_uses><duration_ms>10619</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ace82f732fb4e1fc7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/ace82f732fb4e1fc7.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code mcp_payloads.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/src/archy/mcp_payloads.py` found no violations, and I marked it as passed.
+
+- **Line length:** No line exceeds 100 characters (checked with `awk`).
+- **Frozen models:** `BriefConventions` doesn't set `model_config` itself. It inherits `ConfigDict(frozen=True)` from `ConventionsReport` in `src/archy/conventions.py`, so it meets the frozen-model rule.
+- **Other criteria:** I checked these by reading the file. It has `from __future__ import annotations`, uses PEP 604 types and tuple sequence fields, and has correctly grouped imports. It has no `os.path` use or copy-pasted blocks. The comments explain why rather than what.</result>
+<usage><subagent_tokens>27194</subagent_tokens><tool_uses>4</tool_uses><duration_ms>13170</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ad296b9deba98ebc4</task-id>
+<tool-use-id>toolu_01RN63VUqhiAg2tq5WU1tm73</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/ad296b9deba98ebc4.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python code graph.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** I did not call `mark_review_as_passed`. Two comment-accuracy violations, both minor. The other criteria pass.
+
+I checked the file with `awk` for lines over 100 characters and found none. `from __future__ import annotations` is present, there are no `typing.List` or `Optional` uses, no `os.path`, and imports are grouped correctly. The value objects (`Module`, `UnresolvedHint`) are frozen pydantic models with tuple sequence fields. I found no DRY problems.
+
+1. **Line 868**, in `_qualname_for`.
+   - Criterion: "Comment accuracy: every comment must explain WHY (a constraint, decision, or quirk), not WHAT (the code already says what)".
+   - Offending comment: `# __init__.py names the package (empty leaf); other files contribute stem.` The next line, `leaf = [] if py_file.name == "__init__.py" else [py_file.stem]`, already says exactly this.
+   - Fix: delete the comment, or state the reason. For example: an empty leaf makes `_qualname_under_roots` return the package's own dotted name, since `pkg/__init__.py` is the module `pkg`, not `pkg.__init__`.
+
+2. **Lines 740-742**, in `_qualname_under_roots`.
+   - Criterion: the same comment-accuracy bullet.
+   - Offending comment: `...the old \`else pkg_root.name\` branch was dead when a stem was present.` This is changelog narration about removed code, which is not a WHY. It also sits directly above `return ".".join(parts) if parts else pkg_root.name`, which still has an `else pkg_root.name` branch. A reader will take the comment to describe that line.
+   - Fix: drop the history. State the invariant instead. For example: `leaf_parts` already holds the module stem, so `parts` is empty only for a package's own `__init__.py`, and then the name is `pkg_root.name`.
+
+File reviewed: `/Users/hosanglee/archy/src/archy/graph.py`</result>
+<usage><subagent_tokens>41754</subagent_tokens><tool_uses>2</tool_uses><duration_ms>15933</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a026b2bc00743eeb9</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/a026b2bc00743eeb9.output</output-file>
+<status>completed</status>
+<summary>Agent "Review CLI MCP surface parity" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review passed, and I marked it as passed. The changeset adds `modules_scanned` and `note` to the score output and a zero-module refusal to both commands, and they match across all three surfaces.
+
+- **`score` fields:** `modules_scanned` and `note` appear on all three surfaces.
+  - CLI text adds a "(vacuous: ...)" suffix to the header.
+  - CLI JSON (`_score_to_dict` in `src/archy/cli_render.py`) has `modules_scanned` and `note`.
+  - The MCP `ScorePayload` in `src/archy/mcp_payloads.py` has both as `@computed_field`, not a plain `@property`, so `model_dump()` carries them.
+- **`score` gate:** `--record` and `--strict` on a scan with zero modules now refuse, with the reason in the message. The CLI raises `ClickException` and MCP `run_score` raises `ValueError`, and the wording is the same on both.
+- **`cycles` gate:** the CLI text output replaces "No cycles found" with the reason, and `--strict` raises `ClickException`. Non-strict JSON keeps `[]` on stdout and prints the reason as a warning on stderr. MCP `run_cycles` raises `ValueError` with the reason.
+  - Non-strict `cycles` on zero modules warns on the CLI but refuses on MCP. The comments in the diff state this on purpose, so I treated it as intentional.
+- **`TOOL_NAMES`:** no new MCP tool is registered, so `src/archy/install/base.py` needs no change.
+
+I didn't check whether `tests/test_zero_modules.py` asserts the gate against `model_dump()`, since the criteria cover only the three surfaces.</result>
+<usage><subagent_tokens>24561</subagent_tokens><tool_uses>5</tool_uses><duration_ms>15128</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a9d46051eb9f07ae3</task-id>
+<tool-use-id>toolu_01HdLLCZ7hFjFfqq11hcs4Y1</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/a9d46051eb9f07ae3.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings, and I marked it as passed.
+
+I checked every comment and docstring the diff adds or changes, plus the docstrings of functions whose bodies changed. The claims I traced:
+- **`internal_module_count`:** the docstring says it uses the same rule as `internal_subgraph`. Both test `d.get("external")` on each node (`/Users/hosanglee/archy/src/archy/graph.py`).
+- **`VACUOUS_SCORE_NOTE`:** it says a zero-module score is 1.000. `compute_score(nx.DiGraph()).overall` returns `1.0`.
+- **`ScorePayload` comment:** the claim that a plain `@property` is dropped from `model_dump()` matches the `@computed_field` fix in `/Users/hosanglee/archy/src/archy/mcp_payloads.py`.
+- **`_cycles_to_text` docstring:** `no_modules` replaces "No cycles found" when set, as the new early return shows.
+- **Cycles comment:** the list stays `[]` on stdout, the reason goes to stderr, and `--strict` refuses. This matches `/Users/hosanglee/archy/src/archy/cli.py`.
+- **`run_cycles` and `run_score` comments:** both refuse with the zero-modules reason, as claimed.
+
+One gap that is not a prose error. `score --all` sets `module_count` to `graph.number_of_nodes()` (`/Users/hosanglee/archy/src/archy/score.py:141`), which includes external nodes. A scan with zero internal modules but some external imports would therefore not trigger the vacuous note or the refusal. No docstring or comment claims otherwise.</result>
+<usage><subagent_tokens>26750</subagent_tokens><tool_uses>8</tool_uses><duration_ms>22898</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aabbbebe2a36a000a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/778fdb05-ea4b-4822-9a2e-a952ca58617c/tasks/aabbbebe2a36a000a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy grounded structural" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+**Blast radius** (`uv run archy impact . --file &lt;path&gt;`, transitive dependents):
+
+| Module | Dependents |
+|---|---|
+| `archy.graph` | 66 |
+| `archy.score` | 44 |
+| `archy.mcp_payloads` | 21 |
+| `archy.mcp_runs` | 20 |
+| `archy.cli_render` | 19 |
+| `archy.cli` | 17 |
+
+`uv run archy affected . src/archy/score.py` reports 26 tests across 18 affected modules at depth 5. They include `tests.test_cli`, `tests.test_cycles` and `tests.test_conventions`.
+
+**Structural gates** (all clean):
+- **Cycles:** `archy cycles . --strict` reports no cycles.
+- **Layer rules:** `archy check .` reports OK. It did note that 122 scanned modules sit outside every declared root package.
+- **Contracts:** `archy contracts .` reports OK on the contract lines I read (the last three).
+- **Headers:** `archy conventions . --emit-headers --check` reports that all 87 headers match the tree.
+
+**Edit-risk:** `what-to-refactor-next . --top 10` flags `archy.cli` (risk 0.19) and `archy.graph` (0.23) as both hotspot and high edit-risk. `archy.mcp_runs` (0.17) is flagged the same way. The change to each is small and additive, and tests/test_zero_modules.py covers it.
+
+**Surfaces:** the zero-module guard reaches the CLI text output, the CLI JSON output and the MCP payload. The MCP payload uses `computed_field`, so it survives `model_dump()`.</result>
+<usage><subagent_tokens>27213</subagent_tokens><tool_uses>5</tool_uses><duration_ms>132695</duration_ms></usage>
+</task-notification>
