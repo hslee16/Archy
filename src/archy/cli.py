@@ -190,9 +190,10 @@ def _layer_config_errors(command: Callable[..., None]) -> Callable[..., None]:
 
     `match_layer` raises while the graph is being read, not while the config is
     parsed, so the parse-time guards from #524 never see it: `check` reaches it
-    through `compute_coverage`, `snapshot` and `simulate` through their snapshot
-    helpers. Wrapping the command keeps a new match-time call site from
-    reintroducing the traceback.
+    through `compute_coverage`, `snapshot`, `simulate` and `diff` through their
+    snapshot helpers. Wrapping a command keeps a new match-time call site inside
+    it from reintroducing the traceback; a command that can reach `match_layer`
+    has to carry this decorator or catch `LayerConfigError` itself, as `brief` does.
     """
 
     @functools.wraps(command)
@@ -1223,6 +1224,7 @@ def snapshot(path: Path, out_path: Path | None, findings_only: bool) -> None:
         ".archy/baseline.json."
     ),
 )
+@_layer_config_errors
 def diff(path: Path, baseline_path: Path | None, fmt: str, top_n: int, strict: bool) -> None:
     """Compare current state against a baseline snapshot.
 
