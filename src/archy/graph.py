@@ -289,6 +289,11 @@ def assemble_graph(
                 graph.add_node(target, external=True)
             _add_or_extend_call_edge(graph, m.qualname, target, call)
 
+    # Freeze once per edge to preserve the public tuple without copying it per call.
+    for _, _, data in graph.edges(data=True):
+        if "call_lines" in data:
+            data["call_lines"] = tuple(data["call_lines"])
+
     graph.graph["root"] = str(root)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
     # Graph-level, not per-node: a node attribute would reach every node of
@@ -1102,7 +1107,7 @@ def _add_or_extend_call_edge(
     """
     if graph.has_edge(src, dst):
         data = graph[src][dst]
-        data["call_lines"] = (*data.get("call_lines", ()), call.line)
+        data.setdefault("call_lines", []).append(call.line)
         data["call_count"] = data.get("call_count", 0) + 1
         # A resolved call is a runtime reference, so it ends any
         # TYPE_CHECKING-only claim the import pass made for this edge (#520).
@@ -1115,7 +1120,7 @@ def _add_or_extend_call_edge(
             is_relative=False,
             lines=(),
             kinds=("call",),
-            call_lines=(call.line,),
+            call_lines=[call.line],
             call_count=1,
             type_checking_only=False,
         )
