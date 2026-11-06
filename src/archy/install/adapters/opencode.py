@@ -3,7 +3,8 @@
 opencode does not use the `mcpServers` shape; its schema keys MCP servers under
 ``mcp.<name> = {type, command: [...], enabled}``. Config is JSON:
 
-- global: ``~/.config/opencode/opencode.json`` (``%APPDATA%\\opencode\\opencode.json`` on Windows)
+- global: ``~/.config/opencode/opencode.json`` (``%APPDATA%\\opencode\\opencode.json`` on Windows;
+  under ``$XDG_CONFIG_HOME`` instead of ``~/.config`` when it is set)
 - local:  ``<project>/opencode.json``
 - instructions: ``AGENTS.md`` alongside the config
 
@@ -37,7 +38,7 @@ class OpencodeAdapter(AgentAdapter):
         if paths.is_windows():
             base = paths.appdata() or (paths.home() / "AppData" / "Roaming")
             return base / "opencode"
-        return paths.home() / ".config" / "opencode"
+        return paths.xdg_config_home() / "opencode"
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         if scope is Scope.LOCAL:

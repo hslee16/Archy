@@ -26,7 +26,7 @@ Ordered cheapest to most expensive. Each layer catches a class of failure the la
 
 - **Dry-run is non-negotiable.** The install spec already requires `--print-config <id>`. The implementation should follow chezmoi: a `WriteSystem` Protocol with `RealWriteSystem` and `DryRunWriteSystem` impls. Every test in layers 1 and 2 uses `DryRunWriteSystem`; layers 3 through 5 use `RealWriteSystem`. This keeps the slow tests rare.
 - **Idempotency as a CI assertion.** For each adapter, run `install` twice on a tmp dir and assert the second run produces no file diffs and no exceptions. One property per adapter, asserted in layer 3.
-- **Single path-resolution helper.** All `os.environ` lookups (`APPDATA`, `LOCALAPPDATA`, `USERPROFILE`) and `Path.home()` calls go through one module that is the only place unit tests monkeypatch for cross-OS simulation. Prevents per-adapter resolution drift.
+- **Single path-resolution helper.** All `os.environ` lookups (`APPDATA`, `LOCALAPPDATA`, `USERPROFILE`, `CODEX_HOME`, `XDG_CONFIG_HOME`) and `Path.home()` calls go through one module that is the only place unit tests monkeypatch for cross-OS simulation. Prevents per-adapter resolution drift.
 - **No hand-coded JSON or TOML strings in tests.** Always parse-roundtrip. Strings drift; structures do not.
 - **Per-adapter test files.** `tests/install/test_claude.py`, `test_cursor.py`, `test_codex.py`, `test_opencode.py`, `test_continue.py`. Adapter registry pattern in the source, mirror in the tests.
 

@@ -99,6 +99,8 @@ def sandbox(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     proj = tmp_path / "proj"
     (proj / "pkg").mkdir(parents=True)
     (proj / "pkg" / "__init__.py").write_text("")
