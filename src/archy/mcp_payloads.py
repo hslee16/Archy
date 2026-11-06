@@ -29,7 +29,7 @@ archy:mirrored-by BriefPayload -> archy.mcp, archy.mcp_runs,
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from archy.contracts import ContractCheck
 from archy.conventions import ConventionsReport
@@ -42,7 +42,7 @@ from archy.layers import (
     SdpViolation,
     Violation,
 )
-from archy.score import Score, ScoreInputs
+from archy.score import VACUOUS_SCORE_NOTE, Score, ScoreInputs
 
 
 class ScoreComponents(BaseModel):
@@ -74,6 +74,18 @@ class ScorePayload(BaseModel):
     components: ScoreComponents
     inputs: ScoreInputs
     gate: ScoreGate | None = None
+
+    # computed_field, not @property: FastMCP sends model_dump(), which drops a
+    # plain property, so a consumer would never see the reason (#523).
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def modules_scanned(self) -> int:
+        return self.inputs.module_count
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def note(self) -> str | None:
+        return VACUOUS_SCORE_NOTE if self.inputs.module_count == 0 else None
 
 
 class ContractsPayload(BaseModel):

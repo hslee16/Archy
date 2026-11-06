@@ -77,10 +77,12 @@ from archy.graph import (
     discover_modules,
     graph_to_dict,
     hint_unresolved,
+    internal_module_count,
     internal_subgraph,
     parse_project,
     resolve_modules,
     suggest_modules,
+    zero_modules_reason,
 )
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
@@ -275,6 +277,11 @@ def run_score(
 
     graph = _load_graph(path, internal_only=internal_only)
     score = compute_score(graph)
+    if score.inputs.module_count == 0 and (record or strict):
+        raise ValueError(
+            f"{zero_modules_reason(path, 'scored')}; refusing to "
+            f"{'record' if record else 'gate against history'}"
+        )
     history_path = path / ".archy" / "history.jsonl"
 
     gate: ScoreGate | None = None
@@ -329,6 +336,10 @@ def run_cycles(
     if min_size < 1:
         raise ValueError(f"min_size must be >= 1; got {min_size}")
     graph = _load_graph(path, internal_only=internal_only)
+    if internal_module_count(graph) == 0:
+        # A bare `[]` here would read as "no cycles"; an agent cannot tell it from
+        # a clean project, so refuse with the reason (#523).
+        raise ValueError(zero_modules_reason(path, "checked"))
     exclude = resolve_exclude_type_checking(path, exclude_type_checking)
     scan = scan_cycles(graph, min_size=min_size, exclude_type_checking=exclude)
     return scan if exclude else list(scan.cycles)

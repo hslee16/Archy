@@ -114,9 +114,11 @@ from archy.graph import (
     build_graph,
     discover_modules,
     graph_to_dict,
+    internal_module_count,
     internal_subgraph,
     parse_project,
     suggest_modules,
+    zero_modules_reason,
 )
 from archy.headers import apply_header, compute_headers, existing_block, render_header
 from archy.history import append as append_history
@@ -300,17 +302,28 @@ def cycles(
 
     scan = scan_cycles(g, min_size=min_size, exclude_type_checking=exclude)
     found = list(scan.cycles)
+    # A scan that found no internal module checked nothing (#523). The list stays
+    # `[]` on stdout so JSON consumers see no shape change; the reason goes to
+    # stderr, and `--strict` refuses rather than pass over nothing.
+    no_modules = zero_modules_reason(path, "checked") if internal_module_count(g) == 0 else None
 
     if fmt == "json":
         payload = _cycle_scan_to_dict(scan) if exclude else _cycles_to_json(found)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
+        if no_modules is not None and not strict:
+            click.echo(f"warning: {no_modules}", err=True)
     else:
         click.echo(
             _cycles_to_text(
-                found, min_size, excluded=scan.excluded_type_checking_edges if exclude else None
+                found,
+                min_size,
+                excluded=scan.excluded_type_checking_edges if exclude else None,
+                no_modules=no_modules,
             )
         )
 
+    if strict and no_modules is not None:
+        raise click.ClickException(no_modules)
     if strict and found:
         sys.exit(1)
 
@@ -538,6 +551,13 @@ def score(
 
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
+    if s.inputs.module_count == 0 and (record or strict):
+        # A vacuous 1.000 recorded to history reads as an improvement to every
+        # later `--strict` run, and `--strict` over it passes by construction (#523).
+        raise click.ClickException(
+            f"{zero_modules_reason(path, 'scored')}; refusing to "
+            f"{'record' if record else 'gate against history'}"
+        )
 
     history_path = path / ".archy" / "history.jsonl"
     # Strict reads BEFORE recording so the comparison is against the truly
