@@ -3,9 +3,10 @@
 Robust to syntax errors: tree-sitter produces a partial tree with ERROR nodes,
 and we still recover whatever imports parsed cleanly.
 
-archy:owns        CallRef, ImportRef, ParseResult, parse_file, parse_source
+archy:owns        CallRef, ImportRef, ParseResult, parse_file, parse_file_tolerant,
+                  parse_source
 archy:mirrored-by ParseResult -> archy.duplicates, archy.graph, archy.index,
-                  parse_file -> archy.graph, archy.index
+                  parse_file_tolerant -> archy.graph, archy.index
 """
 
 from __future__ import annotations
@@ -157,6 +158,11 @@ class ParseResult(BaseModel):
     written to be run directly. It is one of the facts `required:` rules use to
     derive the `@entrypoints` set, so a script added outside every declared
     glob is still governed.
+
+    `error` carries a one-line reason when `has_errors` is True because the
+    file could not be read at all (PermissionError, broken mount, ...). Syntax
+    errors recovered by tree-sitter leave it None: the imports that did parse
+    still stand, and the qualname alone is enough for `parse_errors`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -166,6 +172,7 @@ class ParseResult(BaseModel):
     calls: tuple[CallRef, ...] = ()
     functions: tuple[FunctionComplexity, ...] = ()
     has_main_guard: bool = False
+    error: str | None = None
 
 
 def parse_file(path: Path) -> ParseResult:
@@ -186,6 +193,37 @@ def parse_file(path: Path) -> ParseResult:
         # Bytes that do not match their own cookie are parsed raw rather than
         # crashing the scan (#649).
         return parse_source(source)
+
+
+def parse_file_tolerant(path: Path) -> ParseResult | None:
+    """Parse `path`, distinguishing a vanished file from a persistently unreadable one.
+
+    `parse_file` raises `OSError` for both a file that disappeared between
+    discovery and parse (branch switch, concurrent edit, watcher rebuild) and a
+    file that is still on disk but cannot be read (mode 000, broken mount,
+    permissions mix-up). Callers that used a bare `except OSError: continue`
+    dropped both from the graph and from `parse_errors`, so a persistently
+    unreadable module vanished silently (#800).
+
+    Returns:
+    - a normal `ParseResult` when the file is readable;
+    - a `has_errors` sentinel naming the `OSError` when the path still exists;
+    - `None` when the path is gone, so the caller can skip it the way it always has.
+    """
+    try:
+        return parse_file(path)
+    except OSError as exc:
+        try:
+            still_there = path.exists()
+        except OSError:
+            still_there = False
+        if not still_there:
+            return None
+        return ParseResult(
+            imports=(),
+            has_errors=True,
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
 
 def parse_source(source: bytes) -> ParseResult:

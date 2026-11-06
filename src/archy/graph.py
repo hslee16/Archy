@@ -39,7 +39,7 @@ from pydantic import BaseModel, ConfigDict
 from archy.complexity import FunctionComplexity
 from archy.entrypoints import derive_entrypoints
 from archy.instability import compute_instability
-from archy.parser import CallRef, ImportRef, ParseResult, parse_file
+from archy.parser import CallRef, ImportRef, ParseResult, parse_file_tolerant
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
 
@@ -179,7 +179,8 @@ def parse_project(
     so function-grained diagnostics (e.g. `archy.duplicates`) can read the
     individual `ParseResult.functions` rows that `assemble_graph` rolls up into
     per-module aggregates and discards. `parse_results` is keyed by module
-    qualname; modules whose file vanished between discovery and parse are absent.
+    qualname; modules whose file vanished between discovery and parse are absent,
+    while a persistently unreadable file is present as a `has_errors` result (#800).
     """
     ignored = frozenset(ignored_dirs)
     modules = _discover_modules(root, ignored, tuple(extra_roots))
@@ -197,14 +198,13 @@ def parse_project(
             # recorded so imports resolve, with no import graph of their own (#665).
             parse_results[m.qualname] = _EMPTY_PARSE
             continue
-        try:
-            parse_results[m.qualname] = parse_file(m.path)
-        except OSError:
-            # The file vanished or became unreadable between discovery and parse
-            # (a branch switch, a concurrent edit, or the `archy mcp` watcher
-            # rebuilding mid-flight). Skip it; assemble_graph drops modules with
-            # no parse result, and the next build picks it up once disk settles.
+        # Persistently unreadable (mode 000, broken mount) becomes a has_errors
+        # sentinel so the module stays in parse_errors; a file that really
+        # vanished is omitted and dropped by assemble_graph (#800).
+        result = parse_file_tolerant(m.path)
+        if result is None:
             continue
+        parse_results[m.qualname] = result
     return modules, parse_results
 
 
@@ -237,7 +237,9 @@ def assemble_graph(
     to a cold build. `parse_results` is keyed by module qualname; a module with
     no entry (its file vanished between discovery and parse) is dropped here, so
     every caller -- build_graph, build_graph_cached, the mcp watcher -- is safe
-    without repeating the guard.
+    without repeating the guard. A persistently unreadable file is present as a
+    `has_errors` result with `error` set, and lands in `parse_errors` with the
+    reason (#800).
     """
     modules = [m for m in modules if m.qualname in parse_results]
     qualname_set = {m.qualname for m in modules}
@@ -258,7 +260,12 @@ def assemble_graph(
     for m in modules:
         result = parse_results[m.qualname]
         if result.has_errors:
-            parse_errors.append(m.qualname)
+            # Unreadable files carry `error` so the reason reaches graph/score/MCP
+            # the way a bare qualname does for tree-sitter syntax recovery (#800).
+            if result.error:
+                parse_errors.append(f"{m.qualname}: {result.error}")
+            else:
+                parse_errors.append(m.qualname)
         for ref in result.imports:
             for target in _resolve_targets(ref, m, qualname_set, reexport_maps):
                 if target not in graph:

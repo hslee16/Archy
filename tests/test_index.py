@@ -319,17 +319,41 @@ def test_build_graph_cached_survives_vanished_file(project: Path, tmp_path: Path
     results so it does not KeyError on the dropped module."""
     import archy.index as index_mod
 
-    real_parse_file = index_mod.parse_file
+    real = index_mod.parse_file_tolerant
 
-    def flaky_parse_file(path: Path):
+    def flaky(path: Path):
         if path.name == "b.py":
-            raise FileNotFoundError(path)
-        return real_parse_file(path)
+            return None  # vanished after hashing (#800 keeps this silent skip)
+        return real(path)
 
-    monkeypatch.setattr(index_mod, "parse_file", flaky_parse_file)
+    monkeypatch.setattr(index_mod, "parse_file_tolerant", flaky)
 
     g = build_graph_cached(project, db_path=tmp_path / "index.db")  # must not raise
 
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
     assert "pkg.b" not in internal
     assert "pkg.a" in internal
+
+
+@pytest.mark.skipif(os.name == "nt", reason="mode 000 is not unreadable on Windows")
+@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses mode 000")
+def test_persistently_unreadable_py_in_cached_build(tmp_path: Path):
+    """build_graph_cached must record a still-present unreadable file (#800)."""
+    pkg = tmp_path / "app"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("X = 1\n")
+    d = pkg / "d.py"
+    d.write_text("Y = 2\n")
+    d.chmod(0o000)
+    assert os.access(d, os.R_OK) is False
+    try:
+        g = build_graph_cached(tmp_path, db_path=tmp_path / "index.db")
+        assert "app.d" in {n for n, data in g.nodes(data=True) if not data.get("external")}
+        entries = list(g.graph["parse_errors"])
+        match = next(e for e in entries if e == "app.d" or e.startswith("app.d:"))
+        assert "PermissionError" in match
+        # Cold and cached must agree, including the enriched parse_errors entry.
+        assert graph_to_dict(g) == graph_to_dict(build_graph(tmp_path))
+    finally:
+        d.chmod(0o644)
