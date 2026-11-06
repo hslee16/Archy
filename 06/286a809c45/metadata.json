@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "06286a809c45",
+  "strategy": "manual-commit",
+  "branch": "alee/architecture-headroom",
+  "checkpoints_count": 6,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/06/286a809c45/0/metadata.json",
+      "transcript": "/06/286a809c45/0/full.jsonl",
+      "content_hash": "/06/286a809c45/0/content_hash.txt",
+      "prompt": "/06/286a809c45/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 618,
+    "cache_creation_tokens": 717143,
+    "cache_read_tokens": 82111029,
+    "output_tokens": 258870,
+    "api_call_count": 272
+  }
+}
