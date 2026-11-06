@@ -100,12 +100,16 @@ an existing ticket by the symptom ("empty", "exits 0"), not only the mechanism:
 #556 already described the dsm case and a mechanism-worded search missed it.
 
 **mcp 2.x used to drop a tool's `ValueError` text** (#636, fixed). Expected
-refusals (`ValueError` / `LookupError`) are re-raised as `ToolError` at the tool
-boundary so the reason reaches agents on both majors. Pin the exact message on
-the direct `mcp_runs.run_*` call and through `_call_tool`. Reproduce the
-`mcp 2.x compatibility` job locally with its own install (`uv venv`, then
+refusals (`ValueError` / `LookupError`, plus `LayerConfigError` and
+`ScanTooLargeError`, which subclass bare `Exception` and are named in the tuple,
+#793) are re-raised as `ToolError` at the tool boundary so the reason reaches
+agents on both majors. Pin the exact message on the direct `mcp_runs.run_*` call
+and through `_call_tool`. Reproduce the `mcp 2.x compatibility` job locally with
+its own install (`uv venv`, then
 `uv pip install -e ".[contracts]" "mcp>=2,<3" pytest pytest-snapshot`) before
-pushing a change to a tool's error path.
+pushing a change to a tool's error path. That job runs a fixed list of test files
+(`ci.yml`), so a new test file that asserts a tool error must be added to the list
+or it never runs on 2.x; #843's MCP test failed there unseen for exactly that reason.
 
 ## Tests that cannot fail
 
