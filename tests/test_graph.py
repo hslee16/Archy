@@ -656,13 +656,13 @@ def test_resolve_modules_accepts_absolute_path(tmp_path: Path, pkg: Path):
 def test_call_edge_attached_to_existing_import_edge(tmp_path: Path, pkg: Path):
     # Calls that flow along an existing import edge enrich it in place
     # rather than creating a parallel edge.
-    (pkg / "a.py").write_text("from pkg import b\nb.do()\nb.do()\n")
+    (pkg / "a.py").write_text("from pkg import b\nb.do(); b.do()\nb.do()\n")
     (pkg / "b.py").write_text("def do():\n    pass\n")
     g = build_graph(tmp_path)
     edge = g["pkg.a"]["pkg.b"]
     assert edge["kinds"] == ("import", "call")
-    assert edge["call_count"] == 2
-    assert edge["call_lines"] == (2, 3)
+    assert edge["call_count"] == 3
+    assert edge["call_lines"] == (2, 2, 3)
 
 
 def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
@@ -672,13 +672,15 @@ def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
     sub = pkg / "sub"
     sub.mkdir()
     (sub / "__init__.py").write_text("")
-    (pkg / "consumer.py").write_text("import pkg\npkg.sub.do()\n")
+    (pkg / "consumer.py").write_text("import pkg\npkg.sub.do()\npkg.sub.do()\n")
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.consumer", "pkg")
+    assert "call_lines" not in g["pkg.consumer"]["pkg"]
     assert g.has_edge("pkg.consumer", "pkg.sub")
     call_only = g["pkg.consumer"]["pkg.sub"]
     assert call_only["kinds"] == ("call",)
-    assert call_only["call_count"] == 1
+    assert call_only["call_count"] == 2
+    assert call_only["call_lines"] == (2, 3)
 
 
 def test_call_to_unimported_name_is_dropped(tmp_path: Path, pkg: Path):
