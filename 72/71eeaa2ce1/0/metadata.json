@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "7271eeaa2ce1",
+  "session_id": "778fdb05-ea4b-4822-9a2e-a952ca58617c",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-06T17:43:25.530174Z",
+  "branch": "alee/523-zero-modules-not-clean",
+  "checkpoints_count": 5,
+  "files_touched": [
+    "src/archy/cli.py",
+    "src/archy/cli_render.py",
+    "src/archy/graph.py",
+    "src/archy/mcp_payloads.py",
+    "src/archy/mcp_runs.py",
+    "src/archy/score.py",
+    "tests/test_zero_modules.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "f92e9e48b53b",
+  "token_usage": {
+    "input_tokens": 112,
+    "cache_creation_tokens": 120229,
+    "cache_read_tokens": 5063117,
+    "output_tokens": 37396,
+    "api_call_count": 47
+  },
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-06T17:43:25.493896Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 272,
+    "human_modified": 11,
+    "human_removed": 0,
+    "total_committed": 272,
+    "total_lines_changed": 283,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
