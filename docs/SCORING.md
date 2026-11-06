@@ -48,6 +48,55 @@ archy defers sentrux's redundancy axis; see
 3. **Computation must be static.** archy never runs the code under
    analysis. Every sub-metric is derivable from the import graph alone.
 
+## What the scores are for
+
+The score has two jobs and a short list of things it is not for. The rest of
+this document explains how it is computed; this section says what to do with it.
+
+**1. A ratchet on one project, against itself.** Record a baseline
+(`archy score --record`, or `archy snapshot` for the findings), then ask after
+a change whether the structure got worse: `archy score --strict`, `archy diff`,
+`archy trend`. When `overall` drops, do not read the composite. Read the axis
+that fell most (`archy diff` ranks them by risk), look at the module or edge
+behind it, and decide whether the change was intended. A drop is a prompt to
+look, not a verdict that the change was wrong.
+
+**2. A map of where to look.** Each axis answers one question, and a fall in it
+points at a different kind of place:
+
+| Axis | The question it answers | When it falls, look at |
+| --- | --- | --- |
+| Modularity | Do modules form cohesive groups with few edges between them? | New edges that cross a community boundary: `archy dsm --group community` |
+| Acyclicity | Are there import cycles? | The cycle and the edge that closes it: `archy cycles` |
+| Depth | How long is the longest dependency chain? | The chain itself, and whether the newest link is real or a pass-through: `archy graph`, `archy impact` |
+| Equality | Is fan-out concentrated in a few modules? | The modules with the most imports: `archy graph`, `archy what-to-refactor-next` |
+| Complexity | Is branching complexity low across functions? | The most complex, most-churned functions: `archy hotspots` |
+
+**What it is not for.**
+
+- **Ranking different projects.** A score depends on size and on what was
+  scanned, so two projects' numbers are not comparable. The benchmark bands
+  under [Interpreting a score](#interpreting-a-score) are context, not a league
+  table.
+- **A target.** Optimizing `overall` for its own sake stops measuring
+  architecture; see [The composite is a signal, not a
+  verdict](#the-composite-is-a-signal-not-a-verdict). A change that exists only
+  to move a number, such as splitting a module or moving code out of the scan
+  without a structural reason, is the failure mode this guards against.
+- **Evidence that an agent will work better or cheaper.** archy has not
+  measured that a higher score does either. Two controlled runs on agent
+  footprint came back null; see [`docs/WHAT_DIDNT_WORK.md`](WHAT_DIDNT_WORK.md).
+- **A certificate.** A clean score means these five properties did not move, not
+  that nothing is wrong.
+
+**The score covers what was scanned, tests included.** Every module in the
+scan counts, so the structure of test and bench modules moves the number as much
+as the structure of the product. At v0.55.0, 51 of archy's own 177 scanned
+modules were `archy.*`; the rest were tests, bench and scripts. In one case a
+test file importing a helper from another test file added a step to the longest
+chain and cost 0.007 of `overall`. `archy graph . --format json` lists exactly
+what was scanned.
+
 ## Sub-metrics
 
 Each sub-metric is normalized into `[0, 1]` so that 1.0 is best. The
