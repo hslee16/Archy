@@ -48,6 +48,7 @@ from archy.mcp_runs import (
     run_cycles,
     run_diff,
     run_dsm,
+    run_duplicates,
     run_graph,
     run_graph_dump,
     run_graph_focus,
@@ -913,6 +914,49 @@ def test_archy_cycles_rejects_min_size_below_one(acyclic_project: Path):
     assert run_cycles(acyclic_project, min_size=1, internal_only=True) == []
     _content, structured = _call_tool(server, "archy_cycles", {"path": path, "min_size": 1})
     assert structured == {"result": []}
+
+
+@pytest.mark.parametrize(
+    ("tool", "parameter", "bad", "message"),
+    [
+        ("archy_duplicates", "members", 1, "members must be >= 2; got 1"),
+        ("archy_duplicates", "members", -5, "members must be >= 2; got -5"),
+        ("archy_duplicates", "min_nodes", 0, "min_nodes must be >= 1; got 0"),
+        ("archy_duplicates", "top_n", 0, "top_n must be >= 1; got 0"),
+    ],
+)
+def test_mcp_refusal_names_the_parameter_the_caller_sent(
+    acyclic_project: Path, tool: str, parameter: str, bad: int, message: str
+):
+    """A refusal must name the tool's own parameter, so the caller can correct it (#780).
+
+    An agent acts on this text. `compute_duplicates` says `min_members`, which
+    `archy_duplicates` does not take. Add a row for any other tool's refusal.
+    """
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    listed = next(item for item in _list_tools(server) if item.name == tool)
+    assert parameter in listed.model_dump(by_alias=True)["inputSchema"]["properties"]
+
+    with pytest.raises(ToolError) as caught:
+        _call_tool(server, tool, {"path": str(acyclic_project), parameter: bad})
+
+    # \b: `min_members must be` holds `members must be`, and must not pass.
+    assert re.search(rf"\b{re.escape(message)}$", str(caught.value))
+
+
+def test_run_duplicates_refuses_below_two_and_takes_two(acyclic_project: Path):
+    """`members` is refused by its own name, and its boundary stays open (#780)."""
+
+    def run(members: int):
+        return run_duplicates(
+            acyclic_project, response_format="summary", min_nodes=20, top_n=20, members=members
+        )
+
+    with pytest.raises(ValueError, match=r"^members must be >= 2; got 1$"):
+        run(1)
+    assert run(2).duplicates == ()
 
 
 def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
