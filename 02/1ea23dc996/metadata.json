@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "021ea23dc996",
+  "strategy": "manual-commit",
+  "branch": "alee/531-qualname-collision",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/ci.yml",
+    "src/archy/cli.py",
+    "src/archy/graph.py",
+    "tests/test_qualname_collision.py",
+    "tests/test_src_layout_tests.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/02/1ea23dc996/0/metadata.json",
+      "transcript": "/02/1ea23dc996/0/full.jsonl",
+      "content_hash": "/02/1ea23dc996/0/content_hash.txt",
+      "prompt": "/02/1ea23dc996/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 49,
+    "cache_creation_tokens": 61788,
+    "cache_read_tokens": 1789060,
+    "output_tokens": 14119,
+    "api_call_count": 24
+  }
+}
