@@ -660,8 +660,8 @@ def _discover_modules(
     # them. Only test files: `docs/conf.py`, `noxfile.py` and `examples/` are
     # scripts nothing imports, and naming them would move module counts and
     # scores for a reason that has nothing to do with test selection. Last, so a
-    # fallback name that equals a real module is skipped rather than
-    # overwriting it (#529).
+    # fallback name that equals a real module is reported by
+    # `_raise_on_qualname_collision` below rather than replacing it (#529, #531).
     for py_file in outside:
         qualname = _scan_root_qualname(py_file, root)
         if qualname is None:

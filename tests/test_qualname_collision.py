@@ -13,6 +13,7 @@ meaningful where the SDK drops a bare exception's message.
 from __future__ import annotations
 
 import asyncio
+from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path
 
 import pytest
@@ -118,5 +119,5 @@ def test_a_compiled_twin_of_a_py_file_is_not_a_collision(tmp_path: Path):
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "foo.py").write_text("X = 1\n")
-    (pkg / "foo.cpython-310-darwin.so").write_bytes(b"")
+    (pkg / f"foo{EXTENSION_SUFFIXES[0]}").write_bytes(b"")  # host-tagged, so CI matches
     assert [m.qualname for m in discover_modules(tmp_path)] == ["pkg", "pkg.foo"]
