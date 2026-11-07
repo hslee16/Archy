@@ -4,12 +4,12 @@ A "module" is identified by its dotted path relative to a discovered package
 root. External imports (stdlib, third-party) appear as nodes with
 `external=True` so callers can filter them.
 
-archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
-                  build_graph, discover_modules, effective_max_modules, graph_to_dict,
-                  hint_unresolved, internal_module_count, internal_subgraph,
-                  is_ignored_path, parse_project, resolve_from_import, resolve_modules,
-                  resolve_relative_import, suggest_files, suggest_modules,
-                  zero_modules_reason
+archy:owns        Module, QualnameCollisionError, ScanTooLargeError, UnresolvedHint,
+                  assemble_graph, build_graph, discover_modules, effective_max_modules,
+                  graph_to_dict, hint_unresolved, internal_module_count,
+                  internal_subgraph, is_ignored_path, parse_project,
+                  resolve_from_import, resolve_modules, resolve_relative_import,
+                  suggest_files, suggest_modules, zero_modules_reason
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
                   archy.mcp_runs, UnresolvedHint -> archy.impact, archy.mcp_payloads,
@@ -96,6 +96,9 @@ _SUGGEST_MIN_SIMILARITY = 0.8
 # How far below the closest misspelling a candidate may fall and still be offered.
 _SUGGEST_MARGIN = 0.1
 
+# How many colliding qualnames the error message lists before summarising the rest.
+_MAX_COLLISIONS_SHOWN = 5
+
 
 class ScanTooLargeError(Exception):
     """Raised when a scan discovers more modules than the configured ceiling.
@@ -115,6 +118,36 @@ class ScanTooLargeError(Exception):
             f"generated directory is being scanned. Add it to `exclude:` in "
             f"archy.yaml, point archy at a narrower path, or raise/disable the limit "
             f"with `max_modules:` in archy.yaml (0 disables)."
+        )
+
+
+class QualnameCollisionError(ValueError):
+    """Raised when two distinct files map to the same module qualname (#531).
+
+    The graph keeps one node per qualname, so the second file would silently
+    replace the first and every answer about it (`affected` most of all, which
+    would report "0 tests" for tests that were dropped) would be quietly
+    incomplete. A `ValueError` so the MCP tool boundary already re-raises it
+    with its message intact. `collisions` maps each shared qualname to every
+    path that claims it, relative to the scan root where possible.
+    """
+
+    def __init__(self, collisions: dict[str, list[str]]) -> None:
+        self.collisions = collisions
+        shown = sorted(collisions)[:_MAX_COLLISIONS_SHOWN]
+        lines = [f"  {q}: {', '.join(collisions[q])}" for q in shown]
+        more = len(collisions) - len(shown)
+        if more > 0:
+            lines.append(f"  ... and {more} more")
+        head = (
+            "1 module name maps" if len(collisions) == 1 else f"{len(collisions)} module names map"
+        )
+        super().__init__(
+            f"{head} to more than one file, and archy "
+            f"keeps one node per name, so one file would silently replace the other:\n"
+            + "\n".join(lines)
+            + "\nRun archy on each member separately, add one of the trees to `exclude:` "
+            "in archy.yaml, or delete the file a same-named package shadows."
         )
 
 
@@ -631,10 +664,12 @@ def _discover_modules(
     # overwriting it (#529).
     for py_file in outside:
         qualname = _scan_root_qualname(py_file, root)
-        if qualname is None or qualname in seen:
+        if qualname is None:
             continue
         modules.append(Module(qualname=qualname, path=py_file.resolve(), is_package=False))
         seen.add(qualname)
+
+    _raise_on_qualname_collision(modules, root)
 
     for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored):
         qualname = _qualname_for_stem(leaf_path, stem, package_roots)
@@ -651,6 +686,33 @@ def _discover_modules(
 
     modules.sort(key=lambda m: m.qualname)
     return modules
+
+
+def _raise_on_qualname_collision(modules: list[Module], root: Path) -> None:
+    """Refuse a module set in which two distinct files share a qualname (#531).
+
+    Runs on the `.py` modules and the init-less test fallback, before the
+    extension/stub leaves are added: a compiled `foo.so` beside `foo.py` (a
+    mypyc build) is one module with two artefacts, not two modules, and the leaf
+    loop already skips it by design.
+    """
+    by_name: dict[str, list[Path]] = {}
+    for m in modules:
+        by_name.setdefault(m.qualname, []).append(m.path)
+    resolved_root = root.resolve()
+    collisions: dict[str, list[str]] = {}
+    for qualname, paths in by_name.items():
+        if len(set(paths)) < 2:
+            continue
+        shown: list[str] = []
+        for p in sorted(set(paths)):
+            try:
+                shown.append(p.relative_to(resolved_root).as_posix())
+            except ValueError:
+                shown.append(p.as_posix())
+        collisions[qualname] = shown
+    if collisions:
+        raise QualnameCollisionError(collisions)
 
 
 def _extension_module_stem(filename: str) -> str | None:

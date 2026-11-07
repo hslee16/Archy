@@ -110,6 +110,7 @@ from archy.duplicates import (
 )
 from archy.gitlog import InvalidSinceError, resolve_repo_root, since_window_empty
 from archy.graph import (
+    QualnameCollisionError,
     ScanTooLargeError,
     build_graph,
     discover_modules,
@@ -160,7 +161,21 @@ if TYPE_CHECKING:
     from archy.install import ConfigPreview
 
 
-@click.group()
+class _ArchyGroup(click.Group):
+    """Render a module-name collision as the usual one-line `Error:` (#531).
+
+    Every command that scans reaches `_discover_modules`, so catching the error
+    once here beats a handler at each of the ~10 call sites that would drift.
+    """
+
+    def invoke(self, ctx: click.Context) -> object:
+        try:
+            return super().invoke(ctx)
+        except QualnameCollisionError as exc:
+            raise click.ClickException(str(exc)) from exc
+
+
+@click.group(cls=_ArchyGroup)
 @click.version_option(__version__)
 def main() -> None:
     """archy - architectural sensor for Python codebases."""
