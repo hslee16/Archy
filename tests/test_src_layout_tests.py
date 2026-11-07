@@ -17,7 +17,7 @@ from click.testing import CliRunner
 
 from archy.affected import _test_classifier
 from archy.cli import main
-from archy.graph import _is_conventional_test_file, build_graph
+from archy.graph import QualnameCollisionError, _is_conventional_test_file, build_graph
 from archy.layers import load_config
 from archy.mcp_runs import run_affected
 from archy.scan_config import scan_kwargs
@@ -89,20 +89,22 @@ def test_a_loose_file_directly_under_src_is_named_from_src(tmp_path: Path):
     assert "src.foo" not in internal
 
 
-def test_a_fallback_name_that_equals_a_real_module_is_skipped_not_overwritten(tmp_path: Path):
+def test_a_fallback_name_that_equals_a_real_module_is_refused_not_dropped(tmp_path: Path):
     """`src/tests/` is a real package holding `tests.test_core`; the top-level
-    `tests/test_core.py` would get the same name and must lose."""
+    `tests/test_core.py` would get the same name. #529 skipped the fallback
+    silently; #531 refuses, naming both files, since either could be the one
+    the caller meant."""
     root = _src_layout(tmp_path)
     (root / "src" / "tests").mkdir()
     (root / "src" / "tests" / "__init__.py").write_text("")
     (root / "src" / "tests" / "test_core.py").write_text("REAL = 1\n")
 
-    graph = build_graph(root)
+    with pytest.raises(QualnameCollisionError) as caught:
+        build_graph(root)
 
-    assert (
-        Path(graph.nodes["tests.test_core"]["path"])
-        == (root / "src" / "tests" / "test_core.py").resolve()
-    )
+    assert caught.value.collisions == {
+        "tests.test_core": ["src/tests/test_core.py", "tests/test_core.py"]
+    }
 
 
 def test_a_directory_that_cannot_be_imported_is_not_named(tmp_path: Path):
