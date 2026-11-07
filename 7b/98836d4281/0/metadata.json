@@ -1,0 +1,91 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "7b98836d4281",
+  "session_id": "85a47453-1efd-4a79-88c0-62d6a50cf4f7",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-07T00:26:19.086153Z",
+  "branch": "alee/531-qualname-collision",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/archy/graph.py",
+    "tests/test_qualname_collision.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "d81af8a063ca",
+  "checkpoint_transcript_start": 222,
+  "transcript_lines_at_start": 222,
+  "token_usage": {
+    "input_tokens": 32,
+    "cache_creation_tokens": 20783,
+    "cache_read_tokens": 1309788,
+    "output_tokens": 4531,
+    "api_call_count": 13
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_011mnBgSc8CTRq5yJ2zrCzAj",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "d81af8a063ca",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 229,
+        "end": 230,
+        "entry_ids": [
+          "8ab40a4a-3ac5-4a79-b37a-683dd3002ee3"
+        ],
+        "tool_use_id": "toolu_011mnBgSc8CTRq5yJ2zrCzAj"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_011mnBgSc8CTRq5yJ2zrCzAj"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 2
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-07T00:26:19.048785Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 3,
+    "total_committed": 0,
+    "total_lines_changed": 3,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 4,
+      "user_lines_removed": 3,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/archy/graph.py": 2,
+        "tests/test_qualname_collision.py": 2
+      },
+      "user_removed_per_file": {
+        "src/archy/graph.py": 2,
+        "tests/test_qualname_collision.py": 1
+      }
+    }
+  ]
+}
