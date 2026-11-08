@@ -67,8 +67,9 @@ EXPLAINED = {
         "package in both graphs"
     ),
     "implicit_init": (
-        "archy adds an edge from a module to an ancestor package's `__init__.py` "
-        "because importing a submodule executes it; ruff does not model that"
+        "archy reports an edge from a module to an ancestor package's `__init__.py` "
+        "(for instance `from pkg import Name` inside `pkg`, where `Name` is a symbol "
+        "rather than a submodule); ruff reports no such edge"
     ),
     "script_sibling": (
         "a script in a directory with no `__init__.py` imports a sibling file by "
@@ -105,7 +106,7 @@ def classify(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> s
     source, target = edge
     package = _dir(target)
     if side == "archy" and _is_init(target) and _within(source, package):
-        # Importing `pkg.sub` runs `pkg/__init__.py`; the edge is to an ancestor.
+        # `from pkg import Name` inside pkg resolves to the package; the edge is to an ancestor.
         return "implicit_init"
     if _is_init(target):
         if any(s == source and _within(t, package) for s, t in other):
