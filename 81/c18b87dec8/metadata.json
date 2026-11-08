@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "81c18b87dec8",
+  "strategy": "manual-commit",
+  "branch": "alee/skill-cli-fallback-533",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "tests/test_skill_cli_fallback.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/81/c18b87dec8/0/metadata.json",
+      "transcript": "/81/c18b87dec8/0/full.jsonl",
+      "content_hash": "/81/c18b87dec8/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 28,
+    "cache_creation_tokens": 25731,
+    "cache_read_tokens": 2926213,
+    "output_tokens": 9366,
+    "api_call_count": 14
+  }
+}
