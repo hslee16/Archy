@@ -32,7 +32,7 @@ A repo that fails to build on either side is recorded and the loop continues.
 There is no checkpointing: a pass is minutes, not hours.
 
 archy:owns        ArchyRefused, classify, clone_corpus, compare, load_corpus, main,
-                  run_archy, run_repo, run_ruff
+                  nested_in_repo, run_archy, run_repo, run_ruff
 """
 
 from __future__ import annotations
@@ -41,13 +41,16 @@ import argparse
 import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORPUS = REPO_ROOT / "bench/contract_repos.json"
-# Its own directory: `contract_prevalence.py` reuses any existing clone and needs
-# full history, so shallow clones here would silently corrupt that bench.
-CLONES = REPO_ROOT / "bench/cache/ruff_differential_clones"
+# Outside the repo on purpose (#856): ruff resolves imports against ancestor
+# directories, so a clone under archy's own tree resolved `tests.conftest` to
+# archy's `tests/`. Its own directory too: `contract_prevalence.py` reuses any
+# existing clone and needs full history, so shallow clones there would corrupt it.
+CLONES = Path(tempfile.gettempdir()) / "archy_ruff_differential_clones"
 MAX_KB = 100_000
 
 # A one-sided gap above this ratio must be allow-listed or filed (#532).
@@ -199,14 +202,13 @@ def run_ruff(tree: Path) -> tuple[set[Edge], str]:
         check=True,
     ).stdout
     data = json.loads(out)
-    # ruff resolves some targets (pytest `conftest`) to an ABSOLUTE path outside the
-    # tree, here archy's own checkout, because the clones live under it. That is
-    # a property of where the clone sits, not of either resolver: drop it.
+    # An ABSOLUTE target means ruff resolved outside the tree. It is kept, so it
+    # shows up as a ruff-only edge instead of being hidden (#856: dropping it
+    # turned archy's correct edges into false "archy-only" ones).
     edges = {
         (PurePosixPath(src).as_posix(), PurePosixPath(dst).as_posix())
         for src, dsts in data.items()
         for dst in dsts
-        if not PurePosixPath(dst).is_absolute()
     }
     return {e for e in edges if e[0] != e[1]}, version
 
@@ -253,11 +255,11 @@ def run_repo(tree: Path) -> dict:
     return row
 
 
-def clone_corpus() -> None:
+def clone_corpus(clones: Path) -> None:
     """Depth-1 clone of every corpus repo under MAX_KB; existing trees are kept."""
-    CLONES.mkdir(parents=True, exist_ok=True)
+    clones.mkdir(parents=True, exist_ok=True)
     for entry in json.loads(CORPUS.read_text())["repos"]:
-        target = CLONES / entry["repo"].replace("/", "__")
+        target = clones / entry["repo"].replace("/", "__")
         if target.exists() or entry["size_kb"] > MAX_KB:
             continue
         subprocess.run(
@@ -274,10 +276,16 @@ def clone_corpus() -> None:
         )
 
 
-def load_corpus() -> list[Path]:
+def load_corpus(clones: Path) -> list[Path]:
     """Corpus clones already on disk; fetching is `--clone`."""
     names = [r["repo"].replace("/", "__") for r in json.loads(CORPUS.read_text())["repos"]]
-    return [CLONES / n for n in names if (CLONES / n).is_dir()]
+    return [clones / n for n in names if (clones / n).is_dir()]
+
+
+def nested_in_repo(tree: Path) -> bool:
+    """Whether `tree` is strictly inside archy's own checkout (archy itself is fine)."""
+    resolved = tree.resolve()
+    return resolved != REPO_ROOT and resolved.is_relative_to(REPO_ROOT)
 
 
 def _row_for(tree: Path) -> dict:
@@ -296,12 +304,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", type=Path, action="append", help="tree to compare")
     parser.add_argument("--json", action="store_true", help="emit rows as JSON lines")
     parser.add_argument("--clone", action="store_true", help="fetch the corpus first")
+    parser.add_argument("--clones", type=Path, default=CLONES, help="where corpus clones live")
     args = parser.parse_args(argv)
     if args.clone:
-        clone_corpus()
-    trees = args.repo or load_corpus()
+        clone_corpus(args.clones)
+    trees = args.repo or load_corpus(args.clones)
     if not trees:
-        print(f"no trees: pass --repo, or clone the corpus into {CLONES}", file=sys.stderr)
+        print(f"no trees: pass --repo, or clone the corpus into {args.clones}", file=sys.stderr)
+        return 2
+    nested = [t for t in trees if nested_in_repo(t)]
+    if nested:
+        print(f"refusing trees inside archy's checkout (#856): {nested[0]}", file=sys.stderr)
         return 2
     failed = 0
     for tree in trees:
