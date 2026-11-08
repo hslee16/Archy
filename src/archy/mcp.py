@@ -97,10 +97,11 @@ archy:owns        create_server
 
 from __future__ import annotations
 
+import types
 from pathlib import Path
 
 from mcp.types import ToolAnnotations
-from pydantic import TypeAdapter
+from pydantic import ConfigDict, TypeAdapter, create_model
 
 from archy import __version__
 from archy.affected import DEFAULT_DEPTH, Affected
@@ -242,6 +243,73 @@ just introduced.
 """
 
 
+def _unknown_arguments_message(unknown: list[str]) -> str:
+    """One-line refusal naming every unexpected tool argument (#662)."""
+    if len(unknown) == 1:
+        return f"Unknown argument {unknown[0]!r}"
+    return "Unknown arguments: " + ", ".join(repr(name) for name in unknown)
+
+
+def _forbid_unknown_tool_arguments(server: Server) -> None:
+    """Reject unknown tool kwargs and advertise ``additionalProperties: false`` (#662).
+
+    FastMCP's generated argument models ignore extras, so a misspelled parameter
+    was answered as if it had never been sent. Rebuild each tool's arg model with
+    ``extra='forbid'``, rewrite the advertised ``inputSchema``, and refuse unknown
+    keys with a one-line ``ValueError`` that ``Tool.run`` surfaces as ``ToolError``
+    on both mcp majors.
+    """
+
+    for tool in server._tool_manager.list_tools():
+        meta = tool.fn_metadata
+        old_model = meta.arg_model
+        strict_model = create_model(
+            old_model.__name__,
+            __base__=old_model,
+            __config__=ConfigDict(arbitrary_types_allowed=True, extra="forbid"),
+        )
+        meta.arg_model = strict_model
+
+        schema = strict_model.model_json_schema(by_alias=True)
+        schema["additionalProperties"] = False
+        tool.parameters.clear()
+        tool.parameters.update(schema)
+
+        allowed = set(strict_model.model_fields)
+        for info in strict_model.model_fields.values():
+            if info.alias:
+                allowed.add(info.alias)
+
+        original = type(meta).call_fn_with_arg_validation
+
+        async def call_fn_with_arg_validation(
+            self,
+            fn,
+            fn_is_async,
+            arguments_to_validate,
+            arguments_to_pass_directly,
+            *,
+            _allowed=allowed,
+            _original=original,
+        ):
+            unknown = sorted(name for name in arguments_to_validate if name not in _allowed)
+            if unknown:
+                raise ValueError(_unknown_arguments_message(unknown))
+            return await _original(
+                self,
+                fn,
+                fn_is_async,
+                arguments_to_validate,
+                arguments_to_pass_directly,
+            )
+
+        object.__setattr__(
+            meta,
+            "call_fn_with_arg_validation",
+            types.MethodType(call_fn_with_arg_validation, meta),
+        )
+
+
 def _advertise_serialization_output_schemas(server: Server) -> None:
     """The SDK builds that schema with no `mode`, which is validation mode and
     omits `@computed_field`. The payload a client receives is `model_dump()`,
@@ -265,6 +333,7 @@ def create_server() -> Server:
     _register_tools(server)
     _register_prompts(server)
     _advertise_serialization_output_schemas(server)
+    _forbid_unknown_tool_arguments(server)
     return server
 
 
