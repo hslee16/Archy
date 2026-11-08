@@ -211,14 +211,19 @@ def run_ruff(tree: Path) -> tuple[set[Edge], str]:
     return {e for e in edges if e[0] != e[1]}, version
 
 
-def _tally(row: dict, side: str, edges: set[Edge], other: set[Edge], files: set[str]) -> None:
-    """Sort one engine's one-sided edges into explained counts or unexplained rows."""
+def _tally(
+    side: str, edges: set[Edge], other: set[Edge], files: set[str]
+) -> tuple[dict[str, int], list[list[str]]]:
+    """Sort one engine's one-sided edges into explained counts and unexplained rows."""
+    explained: dict[str, int] = {}
+    unexplained: list[list[str]] = []
     for edge in sorted(edges):
         reason = classify(edge, side, other, files)
         if reason:
-            row["explained"][reason] = row["explained"].get(reason, 0) + 1
+            explained[reason] = explained.get(reason, 0) + 1
         else:
-            row[f"unexplained_{side}_only"].append(list(edge))
+            unexplained.append(list(edge))
+    return explained, unexplained
 
 
 def run_repo(tree: Path) -> dict:
@@ -238,7 +243,10 @@ def run_repo(tree: Path) -> dict:
     }
     files = {p for e in archy | ruff for p in e}
     for side, edges, other in (("ruff", only_ruff, archy), ("archy", only_archy, ruff)):
-        _tally(row, side, edges, other, files)
+        explained, unexplained = _tally(side, edges, other, files)
+        for reason, count in explained.items():
+            row["explained"][reason] = row["explained"].get(reason, 0) + count
+        row[f"unexplained_{side}_only"] = unexplained
     ratio = max(len(ruff), 1) / max(len(archy), 1)
     row["ruff_over_archy"] = round(ratio, 2)
     row["flagged"] = ratio > GAP_RATIO or ratio < 1 / GAP_RATIO
