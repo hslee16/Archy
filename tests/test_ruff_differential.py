@@ -72,3 +72,20 @@ def test_trees_inside_the_archy_checkout_are_refused_but_archy_itself_is_not(tmp
     assert rd.nested_in_repo(tmp_path) is False
     # the default clone location must itself be safe, or the guard refuses the corpus.
     assert rd.nested_in_repo(rd.CLONES) is False
+
+
+def test_reexport_resolution_needs_ruff_to_stop_at_an_init_above_the_target():
+    # ruff reports app -> pkg/__init__.py; archy follows the re-export to pkg/sub/core.py.
+    ruff = {("app.py", "pkg/__init__.py")}
+    edge = ("app.py", "pkg/sub/core.py")
+    assert rd.classify(edge, "archy", ruff, set()) == "reexport_resolution"
+    # the init ruff stopped at must be an ancestor of the target, not a stranger.
+    assert rd.classify(edge, "archy", {("app.py", "other/__init__.py")}, set()) is None
+    # a prefix of the directory name is not an ancestor (`pk` vs `pkg`).
+    assert (
+        rd.classify(("app.py", "pkg/core.py"), "archy", {("app.py", "pk/__init__.py")}, set())
+        is None
+    )
+    # it must be the same source, and it is archy's by-design behaviour only.
+    assert rd.classify(edge, "archy", {("x.py", "pkg/__init__.py")}, set()) is None
+    assert rd.classify(edge, "ruff", ruff, set()) is None

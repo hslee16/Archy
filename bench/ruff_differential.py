@@ -74,6 +74,11 @@ EXPLAINED = {
         "(for instance `from pkg import Name` inside `pkg`, where `Name` is a symbol "
         "rather than a submodule); ruff reports no such edge"
     ),
+    "reexport_resolution": (
+        "`from pkg import Name` where `pkg/__init__.py` re-exports `Name`: archy "
+        "follows the re-export to the file that defines it (by design, so the edge "
+        "is not to the package node); ruff stops at `pkg/__init__.py`"
+    ),
     "script_sibling": (
         "a script in a directory with no `__init__.py` imports a sibling file by "
         "bare name (`from _common import x`); archy skips top-level siblings"
@@ -126,10 +131,19 @@ def _is_script_sibling(edge: Edge, side: str, other: set[Edge], tree_files: set[
     return side == "ruff" and _dir(source) == _dir(target) and not _is_init(target) and in_plain_dir
 
 
+def _is_reexport_resolution(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> bool:
+    """archy-only edge to a module that sits under a package `__init__` ruff stopped at."""
+    source, target = edge
+    return side == "archy" and any(
+        s == source and _is_init(t) and _within(target, _dir(t)) for s, t in other
+    )
+
+
 # Order matters: the first rule that fires names the reason.
 RULES = (
     ("implicit_init", _is_implicit_init),
     ("init_targeting", _is_init_targeting),
+    ("reexport_resolution", _is_reexport_resolution),
     ("script_sibling", _is_script_sibling),
 )
 
