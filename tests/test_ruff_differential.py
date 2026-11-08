@@ -63,3 +63,12 @@ def test_script_sibling_only_in_a_directory_without_init():
     assert rd.classify(("bench/a.py", "bench/_common.py"), "ruff", set(), packaged) is None
     # archy reporting it is never a script sibling: archy is the engine that skips them.
     assert rd.classify(("bench/a.py", "bench/_common.py"), "archy", set(), plain) is None
+
+
+def test_trees_inside_the_archy_checkout_are_refused_but_archy_itself_is_not(tmp_path: Path):
+    """#856: ruff resolves against ancestor directories, so a nested clone gets archy's `tests/`."""
+    assert rd.nested_in_repo(rd.REPO_ROOT / "bench/cache/anything") is True
+    assert rd.nested_in_repo(rd.REPO_ROOT) is False
+    assert rd.nested_in_repo(tmp_path) is False
+    # the default clone location must itself be safe, or the guard refuses the corpus.
+    assert rd.nested_in_repo(rd.CLONES) is False
