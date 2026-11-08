@@ -942,7 +942,10 @@ def _resolve_targets(
         )
 
     return _expand_with_imported_names(
-        ref.module, ref.imported_names, internal_qualnames, reexport_maps
+        _src_layout_base(ref.module, internal_qualnames),
+        ref.imported_names,
+        internal_qualnames,
+        reexport_maps,
     )
 
 
@@ -1239,7 +1242,7 @@ def _build_alias_table(
             if base is None:
                 continue
         else:
-            base = ref.module
+            base = _src_layout_base(ref.module, internal_qualnames)
         if ref.imported_names:
             base_internal = base in internal_qualnames
             pkg_map = reexport_maps.get(base, {}) if base_internal else {}
@@ -1261,10 +1264,12 @@ def _build_alias_table(
             else:
                 # `import X.Y` binds only the top-level name `X` per Python's
                 # actual import semantics (X.Y is accessed via attribute on X).
-                top = base.split(".")[0]
+                top = ref.module.split(".")[0]
                 if not top:
                     continue
-                table[top] = _external_target(top, internal_qualnames)
+                table[top] = _external_target(
+                    _src_layout_base(top, internal_qualnames), internal_qualnames
+                )
     return table
 
 
@@ -1278,6 +1283,23 @@ def _local_bindings(ref: ImportRef) -> Iterator[tuple[str, str]]:
     for i, name in enumerate(ref.imported_names):
         alias = ref.imported_aliases[i] if i < len(ref.imported_aliases) else None
         yield name, alias or name
+
+
+def _src_layout_base(module: str, internal_qualnames: set[str]) -> str:
+    """Resolve `infra.x` to `src.infra.x` when `src/` is a package used as the import root.
+
+    A `src/__init__.py` makes archy name every module `src.*`, while a src-layout
+    project imports them as `infra.*`, so each such import used to resolve external
+    and the graph lost its edges (#853: definit-dsa 0 internal edges, ruff 2563).
+    `ruff analyze graph` puts `src` on its import path by default, so this matches it.
+
+    Only an import whose top-level name is NOT itself internal is rewritten, so a real
+    top-level package of the same name still wins, and `from src.x import y` is untouched.
+    """
+    top = module.split(".", 1)[0]
+    if top in internal_qualnames or f"src.{top}" not in internal_qualnames:
+        return module
+    return f"src.{module}"
 
 
 def _external_target(base: str, internal_qualnames: set[str]) -> str:

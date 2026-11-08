@@ -1171,3 +1171,45 @@ def test_relative_import_past_project_root_creates_no_alias_or_call_edge(tmp_pat
     g = build_graph(tmp_path)
     assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
     assert "pkg.a" in g
+
+
+def _src_layout(tmp_path: Path) -> Path:
+    """`src/` is a package (has __init__.py) but the code imports `infra.*`, not `src.infra.*`."""
+    (tmp_path / "src" / "infra").mkdir(parents=True)
+    (tmp_path / "src" / "__init__.py").write_text("")
+    (tmp_path / "src" / "infra" / "__init__.py").write_text("")
+    (tmp_path / "src" / "infra" / "cfg.py").write_text("def helper() -> int:\n    return 1\n")
+    return tmp_path
+
+
+def test_src_package_import_root_resolves_infra_imports_internal(tmp_path: Path):
+    """#853: `from infra.cfg import helper` reaches `src.infra.cfg`, not an external `infra`.
+
+    Before the fix this graph had no internal edge at all (definit-dsa: 0 edges where
+    `ruff analyze graph` found 2563), and nothing said the imports had gone unresolved.
+    """
+    root = _src_layout(tmp_path)
+    (root / "main.py").write_text("from infra.cfg import helper\nhelper()\n")
+    (root / "src" / "app.py").write_text("import infra.cfg\nprint(infra.cfg.helper())\n")
+    graph = build_graph(root)
+    assert "infra" not in graph and "infra.cfg" not in graph, "must not be external nodes"
+    assert graph.has_edge("main", "src.infra.cfg")
+    assert graph.has_edge("src.app", "src.infra.cfg")
+    # the call edge goes through the same alias table, so it resolves too.
+    assert "call" in graph.edges["main", "src.infra.cfg"]["kinds"]
+
+
+def test_src_package_import_root_leaves_explicit_src_and_real_packages_alone(tmp_path: Path):
+    root = _src_layout(tmp_path)
+    # a real top-level package named `infra` must win over the `src.infra` alias.
+    (root / "infra").mkdir()
+    (root / "infra" / "__init__.py").write_text("")
+    (root / "infra" / "cfg.py").write_text("")
+    (root / "main.py").write_text("from infra.cfg import x\n")
+    (root / "explicit.py").write_text("from src.infra.cfg import helper\n")
+    (root / "ext.py").write_text("import requests\n")
+    graph = build_graph(root)
+    assert graph.has_edge("main", "infra.cfg")
+    assert not graph.has_edge("main", "src.infra.cfg")
+    assert graph.has_edge("explicit", "src.infra.cfg")
+    assert graph.nodes["requests"]["external"] is True
