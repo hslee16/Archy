@@ -17,6 +17,8 @@ Then restart your agent client(s). To remove everything later:
 uvx archy uninstall
 ```
 
+`npx skills add hslee16/archy` installs just the skill, for agents `archy install` does not cover. It works with the CLI alone: without the MCP tools the skill tells the agent to run `archy <command>` (or `uvx archy <command>`) instead.
+
 ## What gets installed (and what does not)
 
 `archy install` edits configuration files in the agent clients you already

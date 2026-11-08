@@ -19,7 +19,7 @@ Archy keeps a persistent parse cache (`.archy/index.db`), kept warm by a backgro
 
 ## Prerequisites
 
-The agent must have access to the `archy` MCP server. The user wires it up once in their MCP client config:
+Prefer the `archy_*` MCP tools below. The user wires the server up once in their MCP client config:
 
 ```json
 {
@@ -29,7 +29,26 @@ The agent must have access to the `archy` MCP server. The user wires it up once 
 }
 ```
 
-If the `archy_*` tools below are not visible, stop and ask the user to install archy (`pip install archy`) and add the stanza above. Do not fall back to running `archy` via Bash; the MCP server is the supported integration.
+If the `archy_*` tools are not visible (a directory install such as `npx skills add hslee16/archy` installs this skill without wiring the server), run the CLI instead of stopping: `archy <command>` if it is on PATH, otherwise `uvx archy <command>` (uv is not required; do not install it just for this). If neither runs, ask the user to `pip install archy`. Every command in the table below takes the project path as its first argument and `--format json` (or `--json`) where the table says so; read the JSON the same way you would read the MCP payload.
+
+### CLI equivalents
+
+| MCP tool | CLI form | Note |
+|---|---|---|
+| `archy_snapshot` | `archy snapshot .` | `--out FILE`; this one has no format option |
+| `archy_diff` | `archy diff . --format json` | `--baseline FILE`, `--strict` |
+| `archy_impact` | `archy impact . --file F --format json` | `mode="affected"`: `archy affected . F --json` |
+| `archy_simulate` | `archy simulate . --add SRC:DST --format json` | `--remove SRC:DST` |
+| `archy_graph` | `archy graph . --format json` | no `focus`; for a neighborhood use `archy dsm . --focus M --format json` |
+| `archy_what_to_refactor_next` | `archy what-to-refactor-next . --format json` | `lens="behavioral"`: `archy hotspots . --format json` |
+| `archy_check` | `archy check . --format json` | `contracts=True`: add `--contracts` |
+| `archy_cycles` | `archy cycles . --format json` | `--min-size N`, `--strict` |
+| `archy_score` | `archy score . --format json` | `view="history"`: `archy trend . --format json` |
+| `archy_dsm` | `archy dsm . --format json` | `--group`, `--focus`, `--package`, `--diff FILE` |
+| `archy_duplicates` | `archy duplicates . --format json` | `--near-miss` |
+| `archy_conventions` | `archy conventions . --format json` | |
+| `archy_module_view` | `archy conventions . --module X --format json` | |
+| `archy_brief` | `archy brief . --format json` | `--contracts` |
 
 ## When to activate
 
