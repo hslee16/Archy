@@ -23,7 +23,7 @@ and are a finding about those trees rather than a divergence.
 | BernardUriza/free-intelligence | 314 | 1494 | `apps/aire-server/server/` is the real root (hyphenated dir, no `__init__.py` chain), imports are `from aire...`; a `roots:` case |
 | Codfor/openpilot2 | 696 | 325 | 278 archy-only edges to `openpilot/__init__.py`, and `third_party`/`panda` init edges; not yet triaged |
 
-The first two are filed as #853. free-intelligence needs `roots:` and is
+The first two were filed as #853 and fixed by resolving `infra.x` against a `src` package (definit-dsa 0 to 2558 archy edges vs ruff 2563; finances-api 3 to 247 vs 247). free-intelligence needs `roots:` and is
 allow-listed as such. openpilot2 is untriaged.
 
 ## Smaller unexplained edges
