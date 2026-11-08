@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f065cd9fb090",
+  "strategy": "manual-commit",
+  "branch": "alee/ruff-differential-532",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/f0/65cd9fb090/0/metadata.json",
+      "transcript": "/f0/65cd9fb090/0/full.jsonl",
+      "content_hash": "/f0/65cd9fb090/0/content_hash.txt",
+      "prompt": "/f0/65cd9fb090/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 110,
+    "cache_creation_tokens": 95373,
+    "cache_read_tokens": 4284476,
+    "output_tokens": 31456,
+    "api_call_count": 50
+  }
+}

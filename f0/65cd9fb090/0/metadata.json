@@ -1,0 +1,67 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f065cd9fb090",
+  "session_id": "ab1abf9b-32d2-48f0-86b7-1b42e3374343",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-08T22:30:34.256361Z",
+  "branch": "alee/ruff-differential-532",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "873b21b14e58",
+  "token_usage": {
+    "input_tokens": 110,
+    "cache_creation_tokens": 95373,
+    "cache_read_tokens": 4284476,
+    "output_tokens": 31456,
+    "api_call_count": 50
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01WqwYYt5awFqbYe5i43HRyb",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "873b21b14e58",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 303,
+        "end": 304,
+        "entry_ids": [
+          "bed36a77-d67b-4d09-adc0-9a9b63158094"
+        ],
+        "tool_use_id": "toolu_01WqwYYt5awFqbYe5i43HRyb"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01WqwYYt5awFqbYe5i43HRyb"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
