@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 import pytest
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 
 from archy.affected import DELETED_OR_RENAMED_REASON
 from archy.cli import (
@@ -31,8 +31,9 @@ from archy.diff import (
     ViolationSetDiff,
 )
 from archy.duplicates import DuplicateGroup, DuplicateMember
+from archy.graph import build_graph
 from archy.hotspots import Hotspot
-from archy.layers import ReachViolation, RequiredRule
+from archy.layers import LayerConfigError, ReachViolation, RequiredRule, load_config, match_layer
 from archy.simulate import AppliedDelta, PropagationDelta, SimulateReport
 
 
@@ -75,6 +76,25 @@ def test_graph_commands_default_to_current_directory(
     assert result.exit_code == 0, result.output
     assert "pkg.a" in result.output
     assert "pkg.b" in result.output
+
+
+def test_python_m_entry_point_reaches_the_header_helpers(tmp_path: Path):
+    """`python -m archy.cli` must run main() after the header helpers are defined.
+
+    The `__main__` guard used to sit above `_require_headers_flags`, so this
+    command died with a NameError instead of printing the usage error the
+    console script prints (#782).
+    """
+    project = _make_empty_package_project(tmp_path)
+    (project / "pkg" / "a.py").write_text("X = 1\n")
+    r = subprocess.run(
+        [sys.executable, "-m", "archy.cli", "conventions", str(project), "--write"],
+        capture_output=True,
+        text=True,
+    )
+    combined = r.stdout + r.stderr
+    assert "NameError" not in combined
+    assert "require --emit-headers" in combined
 
 
 def test_cycles_text_output_lists_cycle(tmp_path: Path):
@@ -1323,11 +1343,54 @@ def test_affected_filter_with_regex_metachars_does_not_crash(tmp_path: Path):
     _make_app_with_test_module(tmp_path)
     args = ["affected", str(tmp_path), "app/core.py", "--filter", "[", "--json"]
     result = CliRunner().invoke(main, args)
+    # `[` matches nothing here, so it is refused (#660); the refusal is the clean
+    # exit a ClickException gives, where a `re.error` would surface as itself.
+    assert isinstance(result.exception, SystemExit), result.exception
+    assert result.exit_code == 1
+
+
+_FILTER_MISS = (
+    "matches no file in the graph "
+    "(paths are project-relative; only files inside a package, and test files, are scanned)"
+)
+
+
+@pytest.mark.parametrize("output_flags", [(), ("--json",), ("--quiet",)])
+@pytest.mark.parametrize(
+    ("test_filter", "message"),
+    [
+        ("test/**", f"test filter 'test/**' {_FILTER_MISS}; did you mean tests/**?"),
+        ("[", f"test filter '[' {_FILTER_MISS}"),
+    ],
+)
+def test_affected_refuses_a_filter_that_matches_no_file(
+    tmp_path: Path, output_flags: tuple[str, ...], test_filter: str, message: str
+):
+    """#660: text and JSON blamed static edges, and `-q` printed nothing and exited 0."""
+    _make_app_with_test_module(tmp_path)
+    args = ["affected", str(tmp_path), "app/core.py", *output_flags, "--filter"]
+    # The fixture's edge is real: the correct filter selects the test on this same surface.
+    assert build_graph(tmp_path).has_edge("tests.test_core", "app.core")
+    sound = CliRunner().invoke(main, [*args, "tests/**"])
+    assert sound.exit_code == 0, sound.output
+    assert "test_core" in sound.stdout
+
+    refused = CliRunner().invoke(main, [*args, test_filter])
+    assert refused.exit_code == 1
+    assert refused.stderr == f"Error: {message}\n"
+    assert refused.stdout == ""
+
+
+def test_affected_filter_reads_paths_against_a_relative_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """`archy affected .` is the documented shape, and must not refuse a sound filter."""
+    _make_app_with_test_module(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    args = ["affected", ".", "app/core.py", "--filter", "tests/**", "--quiet"]
+    result = CliRunner().invoke(main, args)
     assert result.exit_code == 0, result.output
-    assert result.exception is None
-    payload = json.loads(result.output)
-    # `[` matches nothing here, so the test module is classified as a module.
-    assert payload["impacted_tests"] == []
+    assert result.output.strip().endswith("tests/test_core.py")
 
 
 def test_affected_merges_stdin_and_positional_files(tmp_path: Path):
@@ -1671,6 +1734,37 @@ def test_dsm_refuses_a_name_that_matches_nothing(
     assert f"Error: {message}" in result.output
 
 
+@pytest.mark.parametrize(
+    ("flag", "value", "message"),
+    [
+        (
+            "--focus",
+            "myapp.cor",
+            "focus 'myapp.cor' is not an internal module; did you mean myapp.core?",
+        ),
+        (
+            "--package",
+            "myap.",
+            "package 'myap.' matches no internal module; "
+            "did you mean myapp, myapp.core, myapp.util?",
+        ),
+        ("--focus", "zzz", "focus 'zzz' is not an internal module"),
+    ],
+)
+def test_dsm_refusal_names_the_near_misses(tmp_path: Path, flag: str, value: str, message: str):
+    """A typo is answered with the name it was meant to be, not just "wrong" (#643)."""
+    pkg = tmp_path / "myapp"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "core.py").write_text("")
+    (pkg / "util.py").write_text("from myapp.core import thing\n")
+    result = CliRunner().invoke(main, ["dsm", str(tmp_path), flag, value, "--format", "json"])
+    assert result.exit_code == 1
+    assert result.output == f"Error: {message}\n"
+    exact = CliRunner().invoke(main, ["dsm", str(tmp_path), "--focus", "myapp.core"])
+    assert exact.exit_code == 0, exact.output
+
+
 def test_dsm_rejects_negative_focus_depth(tmp_path: Path):
     project = _make_three_module_project(tmp_path)
     result = CliRunner().invoke(main, ["dsm", str(project), "--focus-depth", "-1"])
@@ -1737,11 +1831,12 @@ def test_simulate_cli_json_is_valid(tmp_path: Path):
     assert "applied" in payload and "cycles" in payload and "propagation_cost" in payload
 
 
-def test_simulate_cli_empty_delta_renders(tmp_path: Path):
+def test_simulate_cli_empty_delta_is_refused(tmp_path: Path):
+    """No --add/--remove must UsageError instead of coverage complete (#661)."""
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(main, ["simulate", str(project)])
-    assert result.exit_code == 0
-    assert "+0 / -0 edge(s)" in result.output
+    assert result.exit_code == 2
+    assert "pass at least one --add or --remove" in result.output
 
 
 def test_simulate_cli_with_nothing_resolved_does_not_print_a_clean_zero(tmp_path: Path):
@@ -2210,7 +2305,7 @@ def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: P
 
 def test_brief_contracts_says_why_it_has_no_verdict(tmp_path: Path, monkeypatch):
     """An unreadable contracts config is `available=True` with a reason, the way
-    `mcp._run_contracts` distinguishes it from a missing dependency."""
+    `mcp_runs.run_contracts` distinguishes it from a missing dependency."""
     _stub_run_contracts_raising(monkeypatch, ContractsConfigError("no contracts config found"))
     root = _make_uncovered_forbid_project(tmp_path)
 
@@ -2940,3 +3035,181 @@ def test_what_to_refactor_next_names_missing_commit_history(tmp_path: Path):
     assert result.exit_code == 0, result.output
     assert "not a git repo" not in result.output.lower()
     assert "commits" in result.output
+
+
+# --- match-time layer config errors (#750) -----------------------------------
+
+
+def _make_overlapping_layers_project(tmp_path: Path, *, with_edge: bool) -> Path:
+    """`pkg.core.x` matches both `core` and `special`; `with_edge` puts it on an edge.
+
+    Two shapes are needed because they reach different call sites: with an edge
+    the overlap surfaces inside `find_violations`, without one only through
+    `compute_coverage`.
+    """
+    pkg = tmp_path / "pkg"
+    core = pkg / "core"
+    core.mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (core / "__init__.py").write_text("")
+    (core / "x.py").write_text("import os\n" if with_edge else "X = 1\n")
+    (pkg / "a.py").write_text("from pkg.core import x\n" if with_edge else "X = 1\n")
+    (tmp_path / "archy.yaml").write_text(
+        'layers:\n  core:\n    modules: ["pkg.core.**"]\n  special:\n    modules: ["pkg.core.x"]\n'
+    )
+    return tmp_path
+
+
+def _assert_one_line_overlap_error(result: Result) -> None:
+    assert result.exit_code == 1, result.output
+    assert "Traceback" not in result.output
+    assert "matches multiple layers" in result.output
+    assert "pkg.core.x" in result.output
+    assert "core, special" in result.output
+
+
+def test_check_reports_a_match_time_layer_error_without_a_traceback(tmp_path: Path) -> None:
+    project = _make_overlapping_layers_project(tmp_path, with_edge=False)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+
+    result = CliRunner().invoke(main, ["check", str(project)])
+
+    _assert_one_line_overlap_error(result)
+
+
+def test_snapshot_reports_a_match_time_layer_error_without_a_traceback(tmp_path: Path) -> None:
+    project = _make_overlapping_layers_project(tmp_path, with_edge=True)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+    out = tmp_path / "snap.json"
+
+    result = CliRunner().invoke(main, ["snapshot", str(project), "--out", str(out)])
+
+    _assert_one_line_overlap_error(result)
+    assert not out.exists()
+
+
+def test_simulate_reports_a_match_time_layer_error_without_a_traceback(tmp_path: Path) -> None:
+    project = _make_overlapping_layers_project(tmp_path, with_edge=True)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+
+    result = CliRunner().invoke(main, ["simulate", str(project), "--add", "pkg.core.x:pkg.a"])
+
+    _assert_one_line_overlap_error(result)
+
+
+@pytest.mark.parametrize("extra", [(), ("--strict",)], ids=["diff", "diff-strict"])
+def test_diff_reports_a_match_time_layer_error_without_a_traceback(
+    tmp_path: Path, extra: tuple[str, ...]
+) -> None:
+    # #821: the baseline comes from a clean config, then the overlap arrives,
+    # so `diff` itself is the first command to meet it.
+    project = _make_overlapping_layers_project(tmp_path, with_edge=True)
+    overlapping = (project / "archy.yaml").read_text()
+    (project / "archy.yaml").write_text('layers:\n  core:\n    modules: ["pkg.core.**"]\n')
+    baseline = tmp_path / "base.json"
+    written = CliRunner().invoke(main, ["snapshot", str(project), "--out", str(baseline)])
+    assert written.exit_code == 0, written.output
+    (project / "archy.yaml").write_text(overlapping)
+    config = load_config(project / "archy.yaml")
+    with pytest.raises(LayerConfigError, match="matches multiple layers"):
+        match_layer("pkg.core.x", config.layers)
+
+    result = CliRunner().invoke(main, ["diff", str(project), "--baseline", str(baseline), *extra])
+
+    _assert_one_line_overlap_error(result)
+
+
+_GUARDED_B = "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n    from pkg import a\n"
+
+
+def _make_guarded_project(tmp_path: Path, b_source: str = _GUARDED_B) -> Path:
+    """`pkg.a` imports `pkg.b`; `pkg.b` imports `pkg.a` however `b_source` says."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("from pkg import b\n")
+    (pkg / "b.py").write_text(b_source)
+    return tmp_path
+
+
+def test_cycles_type_checking_back_import_still_fails_by_default(tmp_path: Path):
+    """The flag is opt-in: with it absent the guarded cycle is still a cycle (#520)."""
+    project = _make_guarded_project(tmp_path)
+    result = CliRunner().invoke(main, ["cycles", str(project), "--strict"])
+    assert result.exit_code == 1
+    assert "1 of 2 edge(s) exist only under `if TYPE_CHECKING:`" in result.output
+    assert "--exclude-type-checking" in result.output
+
+
+def test_cycles_exclude_type_checking_passes_and_reports_the_excluded_edge(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    args = ["cycles", str(project), "--strict", "--exclude-type-checking"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0
+    assert "No cycles found" in result.output
+    assert "1 TYPE_CHECKING-only edge(s) excluded" in result.output
+
+
+def test_cycles_exclude_type_checking_json_is_an_object_with_the_count(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    args = ["cycles", str(project), "--format", "json", "--exclude-type-checking"]
+    payload = json.loads(CliRunner().invoke(main, args).output)
+    assert payload == {"cycles": [], "excluded_type_checking_edges": 1}
+
+
+def test_cycles_default_json_stays_a_list_and_carries_the_per_cycle_count(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    payload = json.loads(
+        CliRunner().invoke(main, ["cycles", str(project), "--format", "json"]).output
+    )
+    assert isinstance(payload, list)
+    assert [c["type_checking_edges"] for c in payload] == [1]
+
+
+def test_cycles_exclude_type_checking_accepts_the_qualified_spelling(tmp_path: Path):
+    project = _make_guarded_project(
+        tmp_path, "import typing\nif typing.TYPE_CHECKING:\n    from pkg import a\n"
+    )
+    args = ["cycles", str(project), "--strict", "--exclude-type-checking"]
+    assert CliRunner().invoke(main, args).exit_code == 0
+
+
+@pytest.mark.parametrize(
+    "b_source",
+    [
+        # The `else:` branch runs at runtime, so it is a plain import.
+        "if TYPE_CHECKING:\n    pass\nelse:\n    from pkg import a\n",
+        # One unguarded import makes the edge a runtime dependency (mixed edge).
+        "from pkg import a\nif TYPE_CHECKING:\n    from pkg import a as a2\n",
+        # A function-local import runs on call.
+        "if TYPE_CHECKING:\n    def f():\n        from pkg import a\n",
+    ],
+)
+def test_cycles_exclude_type_checking_keeps_runtime_cycles(tmp_path: Path, b_source: str):
+    project = _make_guarded_project(tmp_path, b_source)
+    args = ["cycles", str(project), "--strict", "--exclude-type-checking"]
+    assert CliRunner().invoke(main, args).exit_code == 1
+
+
+def test_cycles_archy_yaml_key_turns_exclusion_on_and_the_flag_overrides_it(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    (project / "archy.yaml").write_text("exclude_type_checking_imports: true\n")
+    on = CliRunner().invoke(main, ["cycles", str(project), "--strict"])
+    assert on.exit_code == 0
+    off = CliRunner().invoke(main, ["cycles", str(project), "--strict", "--include-type-checking"])
+    assert off.exit_code == 1
+
+
+def test_cycles_archy_yaml_key_rejects_a_non_boolean(tmp_path: Path):
+    project = _make_guarded_project(tmp_path)
+    (project / "archy.yaml").write_text("exclude_type_checking_imports: yes please\n")
+    result = CliRunner().invoke(main, ["cycles", str(project)])
+    assert result.exit_code != 0
+    assert "exclude_type_checking_imports" in result.output
+    assert "Traceback" not in result.output

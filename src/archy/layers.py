@@ -6,30 +6,33 @@ graph and returns every edge that crosses a forbidden boundary.
 
 archy:owns        ExactPatternHint, ForbidRule, LayerConfig, LayerConfigError,
                   LayerCoverage, LayerSpec, ReachViolation, RequiredRule, SdpConfig,
-                  SdpViolation, Violation, compute_coverage, contracts_unverified,
-                  discover_config, find_reach_violations, find_sdp_violations,
-                  find_violations, governed_roots, is_floating_pattern, load_config,
-                  match_layer
-archy:mirrored-by LayerConfig -> archy.cli, archy.contracts, archy.diff,
-                  archy.scan_config, bench.greenfield_eval,
-                  LayerConfigError -> archy.cli, archy.contracts, archy.mcp,
-                  LayerCoverage -> archy.cli, archy.mcp, ReachViolation -> archy.cli,
-                  archy.diff, archy.mcp, RequiredRule -> archy.cli, archy.diff,
-                  SdpViolation -> archy.cli, archy.diff, archy.mcp,
-                  Violation -> archy.cli, archy.diff, archy.mcp, archy.ratchet,
-                  compute_coverage -> archy.cli, archy.mcp, bench.greenfield_eval,
-                  contracts_unverified -> archy.cli, archy.mcp,
-                  discover_config -> archy.cli, archy.mcp, archy.scan_config,
-                  find_reach_violations -> archy.cli, archy.diff, archy.mcp,
-                  find_sdp_violations -> archy.cli, archy.diff, archy.mcp,
-                  find_violations -> archy.cli, archy.diff, archy.mcp,
+                  SdpViolation, Violation, check_external_patterns, compute_coverage,
+                  contracts_unverified, discover_config, find_reach_violations,
+                  find_sdp_violations, find_violations, governed_roots,
+                  is_floating_pattern, load_config, match_layer
+archy:mirrored-by LayerConfigError -> archy.cli, archy.contracts, archy.mcp,
+                  archy.mcp_runs, LayerCoverage -> archy.cli, archy.cli_render,
+                  archy.mcp_payloads, archy.mcp_runs,
+                  ReachViolation -> archy.cli_render, archy.diff, archy.mcp_payloads,
+                  RequiredRule -> archy.cli_render, archy.diff,
+                  SdpViolation -> archy.cli, archy.cli_render, archy.diff,
+                  archy.mcp_payloads, archy.mcp_runs, Violation -> archy.cli,
+                  archy.cli_render, archy.diff, archy.mcp_payloads, archy.ratchet,
+                  compute_coverage -> archy.cli, archy.mcp_runs, bench.greenfield_eval,
+                  contracts_unverified -> archy.cli_render, archy.mcp_runs,
+                  discover_config -> archy.cli, archy.mcp_runs, archy.scan_config,
+                  find_reach_violations -> archy.cli, archy.diff, archy.mcp_runs,
+                  find_sdp_violations -> archy.cli, archy.diff, archy.mcp_runs,
+                  find_violations -> archy.cli, archy.diff, archy.mcp_runs,
                   bench.greenfield_eval, bench.q1b_run
 """
 
 from __future__ import annotations
 
+import difflib
 import keyword
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
@@ -187,6 +190,11 @@ class LayerConfig(BaseModel):
     # dependency direction with a presence floor of "at least 3 of 4 layers", so
     # this is that floor, generalised.
     min_layers_present: int | None = None
+    # `archy cycles` default for leaving out edges that exist only under
+    # `if TYPE_CHECKING:` (#520). None = unset, which means off, so a config that
+    # never asked keeps its old exit codes. The CLI flag and the MCP argument
+    # override it in either direction. Named after import-linter's key.
+    exclude_type_checking_imports: bool | None = None
 
 
 class Violation(BaseModel):
@@ -196,6 +204,8 @@ class Violation(BaseModel):
     source: str
     target: str
     lines: tuple[int, ...]
+    # Repo-relative path of `source`'s file, where `lines` are (#522).
+    path: str = ""
 
 
 class SdpViolation(BaseModel):
@@ -212,6 +222,8 @@ class SdpViolation(BaseModel):
     source_instability: float
     target_instability: float
     lines: tuple[int, ...]
+    # Repo-relative path of `source`'s file, where `lines` are (#522).
+    path: str = ""
 
 
 class ExactPatternHint(BaseModel):
@@ -287,6 +299,12 @@ class LayerCoverage(BaseModel):
     # with scripts beside its package look uncovered, which is a fact about the
     # scan path and not about the config. Reported so the exclusion is visible.
     modules_outside_declared_roots: int = 0
+    # Import edges from a layered internal module to a layered EXTERNAL package
+    # (`orm: {modules: ["sqlalchemy.**"]}`). Counted apart from `edges_total` /
+    # `edges_governed` on purpose: those are the internal-edge ratio #362 and #355
+    # protect, and folding third-party edges in would move it for a reason that
+    # says nothing about how much of the user's own code is governed (#527).
+    external_edges_governed: int = 0
     # Bare-qualname patterns with unlayered descendants. See `ExactPatternHint`:
     # this names the CAUSE of a degenerate `edge_ratio`, where the ratios only
     # report the symptom. Defaulted so every existing construction site keeps
@@ -319,7 +337,9 @@ class LayerCoverage(BaseModel):
         """No import edge in the tree can be subject to any `forbid` rule.
 
         True both when internal edges exist and none has two layered endpoints,
-        and when there are no internal edges at all. Either way every `forbid`
+        and when there are no internal edges at all. An edge into a layered
+        external package counts as governed (`external_edges_governed`): a rule
+        naming `sqlalchemy.**` can fire on it. Either way every `forbid`
         rule is unfireable, so a clean verdict carries no information -- which
         is precisely what the verdict must say out loud.
 
@@ -331,7 +351,7 @@ class LayerCoverage(BaseModel):
         `computed_field`, not a property: `model_dump()` drops properties, and
         the MCP surface returns this object through `model_dump()`.
         """
-        return self.edges_governed == 0
+        return self.edges_governed == 0 and self.external_edges_governed == 0
 
     @computed_field
     @property
@@ -380,17 +400,24 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
     you were governing, how much do the rules reach", and modules outside those
     roots are counted separately rather than silently dropped.
 
-    External nodes are excluded: they are not the user's code and no layer rule
-    is expected to name them.
+    External nodes are not the user's code, so they stay out of the module and
+    internal-edge counts. A layer that NAMES an external package
+    (`sqlalchemy.**`) is still a layer that exists: the external nodes it
+    matches count toward `layer_sizes` (so presence is true), and the edges into
+    them are reported apart as `external_edges_governed` (#527).
     """
     ruled_layers = {rule.from_layer for rule in config.forbid} | {
         rule.to_layer for rule in config.forbid
     }
     roots = governed_roots(config)
     layer_of: dict[str, str | None] = {}
+    external_layer_of: dict[str, str] = {}
     outside = 0
     for node, data in graph.nodes(data=True):
         if data.get("external"):
+            external_layer = match_layer(node, config.layers)
+            if external_layer is not None:
+                external_layer_of[node] = external_layer
             continue
         if roots and node.split(".")[0] not in roots:
             outside += 1
@@ -398,7 +425,7 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         layer_of[node] = match_layer(node, config.layers)
 
     sizes = {layer.name: 0 for layer in config.layers}
-    for layer in layer_of.values():
+    for layer in (*layer_of.values(), *external_layer_of.values()):
         if layer is not None:
             sizes[layer] = sizes.get(layer, 0) + 1
 
@@ -413,8 +440,13 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         if layer_of[src] is not None and layer_of[dst] is not None
     ]
 
+    external_governed = sum(
+        1 for src, dst in graph.edges if layer_of.get(src) is not None and dst in external_layer_of
+    )
+
     return LayerCoverage(
         exact_pattern_hints=_exact_pattern_hints(config, unlayered),
+        external_edges_governed=external_governed,
         modules_total=len(layer_of),
         modules_matched=len(matched),
         modules_in_ruled_layer=len(in_ruled),
@@ -493,6 +525,69 @@ class LayerConfigError(Exception):
     """Raised when an archy.yaml file is missing, malformed, or self-inconsistent."""
 
 
+# The keys `load_config` reads at each level, spelled out so a key it does NOT read
+# is an error rather than a silent no-op (#525). `forbidden:` for `forbid:` used to
+# print "No layer violations" and exit 0: a rule that cannot fire looks exactly like
+# a clean codebase. Keep these in step with the readers below; a test loads every
+# tracked archy.yaml, so a key added to a reader but not here fails there.
+_TOP_LEVEL_KEYS = (
+    "layers",
+    "forbid",
+    "required",
+    "exclude",
+    "roots",
+    "sdp",
+    "max_modules",
+    "min_layers_present",
+    "exclude_type_checking_imports",
+)
+_LAYER_KEYS = ("modules",)
+_FORBID_KEYS = ("from", "to")
+_REQUIRED_KEYS = ("source", "must_reach", "reason", "within")
+_SDP_KEYS = ("enabled", "tolerance", "mode")
+
+# `exclude:` entries are compared as whole directory names, so an entry with any of
+# these can never match a directory and would read as a rule that silently does nothing.
+_EXCLUDE_NOT_A_NAME = ("/", "\\", "*", "?", "[")
+
+
+def _reject_unknown_keys(
+    keys: Iterable[object], allowed: tuple[str, ...], where: str, path: Path
+) -> None:
+    """Raise when `keys` (a mapping's keys) holds one the reader never looks at (#525).
+
+    Every unknown key is named, each with its closest allowed spelling when there
+    is one, because the usual cause is a typo (`forbidden`, `module`, `enable`).
+    A key with no close match (`reason` on a forbid entry) gets the allowed list
+    instead, since that is a misunderstanding of the format rather than a slip.
+    """
+    unknown = [key for key in keys if key not in allowed]
+    if not unknown:
+        return
+    described = []
+    for key in unknown:
+        close = difflib.get_close_matches(str(key), allowed, n=1)
+        hint = f" (did you mean `{close[0]}`?)" if close else ""
+        described.append(f"`{key}`{hint}")
+    allowed_text = ", ".join(f"`{a}`" for a in allowed)
+    noun = "key" if len(unknown) == 1 else "keys"
+    raise LayerConfigError(
+        f"unknown {noun} in {where} of {path}: {'; '.join(described)}. "
+        f"Allowed keys: {allowed_text}."
+    )
+
+
+def _reject_path_like_excludes(exclude: list[str], path: Path) -> None:
+    for entry in exclude:
+        bad = next((ch for ch in _EXCLUDE_NOT_A_NAME if ch in entry), None)
+        if bad is not None:
+            raise LayerConfigError(
+                f"`exclude` entry {entry!r} in {path} contains {bad!r}, but `exclude` "
+                "matches whole directory names only (for example `generated`), never "
+                "paths or globs, so this entry could never match."
+            )
+
+
 def load_config(path: Path) -> LayerConfig:
     if not path.exists():
         raise LayerConfigError(f"config file not found: {path}")
@@ -502,15 +597,20 @@ def load_config(path: Path) -> LayerConfig:
         raise LayerConfigError(f"could not parse YAML at {path}: {exc}") from exc
     if not isinstance(raw, dict):
         raise LayerConfigError(f"config root must be a mapping in {path}")
+    _reject_unknown_keys(raw, _TOP_LEVEL_KEYS, "the top level", path)
 
     layers = _parse_layers(raw.get("layers", {}), path)
     forbid = _parse_forbid(raw.get("forbid", []), {layer.name for layer in layers}, path)
     required = _parse_required(raw.get("required", []), path)
     exclude = _parse_str_list(raw.get("exclude", []), "exclude", path)
+    _reject_path_like_excludes(exclude, path)
     roots = _parse_str_list(raw.get("roots", []), "roots", path)
     sdp = _parse_sdp(raw.get("sdp"), path)
     max_modules = _parse_max_modules(raw.get("max_modules"), path)
     min_layers_present = _parse_min_layers_present(raw.get("min_layers_present"), len(layers), path)
+    exclude_type_checking = _parse_optional_bool(
+        raw.get("exclude_type_checking_imports"), "exclude_type_checking_imports", path
+    )
     return LayerConfig(
         layers=tuple(layers),
         forbid=tuple(forbid),
@@ -520,7 +620,21 @@ def load_config(path: Path) -> LayerConfig:
         sdp=sdp,
         max_modules=max_modules,
         min_layers_present=min_layers_present,
+        exclude_type_checking_imports=exclude_type_checking,
     )
+
+
+def _parse_optional_bool(value: object, field: str, path: Path) -> bool | None:
+    """Validate a boolean config knob. None when the key is absent.
+
+    Only a real YAML boolean passes: `"yes"` and `1` are rejected rather than
+    guessed at, so a typo cannot silently turn a gate on or off.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        raise LayerConfigError(f"`{field}` must be true or false in {path}, got {value!r}")
+    return value
 
 
 def _parse_non_negative_int(value: object, field: str, path: Path) -> int | None:
@@ -594,7 +708,48 @@ def match_layer(qualname: str, layers: tuple[LayerSpec, ...]) -> str | None:
     return matches[0] if matches else None
 
 
+def check_external_patterns(graph: nx.DiGraph, config: LayerConfig) -> None:
+    """Refuse a pattern that reaches below an external package's top-level name.
+
+    The graph collapses every external import to its top-level package, so
+    `from sqlalchemy.orm import Session` is an edge to the node `sqlalchemy` and
+    there is never a node `sqlalchemy.orm`. A pattern such as `sqlalchemy.orm.**`
+    can therefore never match, and `check` exited 0 on a real import it was
+    written to catch (#527). Decided against the graph, not at YAML load: only
+    a scanned tree says which first segments are external packages and which are
+    the project's own.
+
+    Raises:
+        LayerConfigError: naming the pattern and the form that works.
+    """
+    external = {n for n, d in graph.nodes(data=True) if d.get("external")}
+    if not external:
+        return
+    named: list[tuple[str, str]] = []
+    for layer in config.layers:
+        named.extend((f"layer {layer.name!r}", pattern) for pattern in layer.patterns)
+    for rule in config.required:
+        for field, pattern in (
+            ("source", rule.source),
+            ("must_reach", rule.must_reach),
+            ("within", rule.within),
+        ):
+            if pattern and pattern != ENTRYPOINTS_SOURCE:
+                named.append((f"required rule {field}", pattern))
+    for where, pattern in named:
+        if is_floating_pattern(pattern):
+            continue
+        root = pattern.split(".", 1)[0]
+        if root in external and pattern not in (root, f"{root}.**"):
+            raise LayerConfigError(
+                f"{where} pattern {pattern!r} names a submodule of the external package "
+                f"{root!r}, but the graph keeps only the top-level name, so it can never "
+                f"match. Use {root + '.**'!r}."
+            )
+
+
 def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
+    check_external_patterns(graph, config)
     forbid_index = {(rule.from_layer, rule.to_layer): rule for rule in config.forbid}
     violations: list[Violation] = []
     for source, target, data in graph.edges(data=True):
@@ -611,6 +766,7 @@ def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
                 source=source,
                 target=target,
                 lines=tuple(data.get("lines", ())),
+                path=graph.graph.get("relative_paths", {}).get(source, ""),
             )
         )
     violations.sort(key=lambda v: (v.rule.from_layer, v.rule.to_layer, v.source, v.target))
@@ -637,6 +793,7 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
     """
     if not config.required:
         return []
+    check_external_patterns(graph, config)
 
     # `archy.reach`, NOT `archy.graph`, which is where this helper first lived.
     # graph pulls in parser/complexity/risk behind it, so importing it here put
@@ -769,6 +926,7 @@ def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[Sd
                     source_instability=i_src,
                     target_instability=i_tgt,
                     lines=tuple(data.get("lines", ())),
+                    path=graph.graph.get("relative_paths", {}).get(source, ""),
                 )
             )
     violations.sort(key=lambda v: (v.source, v.target))
@@ -785,6 +943,7 @@ def _parse_layers(raw: object, path: Path) -> list[LayerSpec]:
         if not name:
             raise LayerConfigError(f"layer names must be non-empty strings in {path}")
         body = _as_str_dict(body_raw, f"layer {name!r} body", path)
+        _reject_unknown_keys(body, _LAYER_KEYS, f"layer {name!r}", path)
         modules_raw = body.get("modules", [])
         if not isinstance(modules_raw, list) or not all(
             isinstance(m, str) and m for m in modules_raw
@@ -897,8 +1056,9 @@ def _parse_forbid(raw: object, known_layers: set[str], path: Path) -> list[Forbi
     if not isinstance(raw, list):
         raise LayerConfigError(f"`forbid` must be a list in {path}")
     out: list[ForbidRule] = []
-    for entry_raw in raw:
+    for index, entry_raw in enumerate(raw):
         entry = _as_str_dict(entry_raw, "forbid entry", path)
+        _reject_unknown_keys(entry, _FORBID_KEYS, f"forbid entry {index}", path)
         src_raw, tgt_raw = _require_str_keys(entry, ("from", "to"), "forbid", path)
         _check_known_layer(src_raw, "from", known_layers, path)
         _check_known_layer(tgt_raw, "to", known_layers, path)
@@ -920,8 +1080,9 @@ def _parse_required(raw: object, path: Path) -> list[RequiredRule]:
     if not isinstance(raw, list):
         raise LayerConfigError(f"`required` must be a list in {path}")
     out: list[RequiredRule] = []
-    for entry_raw in raw:
+    for index, entry_raw in enumerate(raw):
         entry = _as_str_dict(entry_raw, "required entry", path)
+        _reject_unknown_keys(entry, _REQUIRED_KEYS, f"required entry {index}", path)
         source, must_reach = _require_str_keys(entry, ("source", "must_reach"), "required", path)
         reason = entry.get("reason", "")
         if not isinstance(reason, str):
@@ -959,6 +1120,7 @@ def _parse_sdp(raw: object, path: Path) -> SdpConfig:
     if raw is None:
         return SdpConfig()
     body = _as_str_dict(raw, "`sdp`", path)
+    _reject_unknown_keys(body, _SDP_KEYS, "`sdp`", path)
     enabled = body.get("enabled", False)
     tolerance = body.get("tolerance", 0.0)
     mode = body.get("mode", "error")

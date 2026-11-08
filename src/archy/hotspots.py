@@ -31,14 +31,14 @@ in ``bench/hotspots_results.md`` (median Jaccard(full, 12mo) = 0.60,
 median stale-fraction = 0.25) shows full history carries about 25%
 recency contamination but is the only window that produces a stable
 top-K on low-activity projects, where a 12-month cap can collapse the
-result set to fewer than 20 items. Use ``--since`` (a CLI passthrough
-to ``git log --since``) when you want the "what should I refactor
-right now" lens instead of the historical view.
+result set to fewer than 20 items. Use ``--since`` (a date or git ref; see
+:func:`archy.gitlog.resolve_since_log_args`) when you want the "what
+should I refactor right now" lens instead of the historical view.
 
 archy:owns        Hotspot, NoCommitsError, compute_hotspots, git_churn
-archy:mirrored-by NoCommitsError -> archy.cli, archy.mcp,
+archy:mirrored-by NoCommitsError -> archy.cli, archy.mcp_runs,
                   compute_hotspots -> archy.cli, archy.refactor,
-                  git_churn -> archy.cli, archy.mcp
+                  git_churn -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations
@@ -50,7 +50,12 @@ from pathlib import Path
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
-from archy.gitlog import fold_rename, normalize_py_path, resolve_repo_root
+from archy.gitlog import (
+    fold_rename,
+    normalize_py_path,
+    resolve_repo_root,
+    resolve_since_log_args,
+)
 
 
 class Hotspot(BaseModel):
@@ -100,7 +105,7 @@ def git_churn(root: Path, *, since: str | None = None) -> dict[str, int] | None:
     # config so the `R` lines we rely on are always present.
     cmd = ["git", "-C", str(repo_root), "log", "-M", "--name-status", "--format="]
     if since:
-        cmd.append(f"--since={since}")
+        cmd.extend(resolve_since_log_args(repo_root, since))
     try:
         log_proc = subprocess.run(
             cmd, capture_output=True, text=True, errors="surrogateescape", check=True

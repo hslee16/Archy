@@ -14,8 +14,8 @@ behavior could be affected. Internal-only at launch (see
 of scope until real user demand surfaces.
 
 archy:owns        Affected, find_affected
-archy:mirrored-by Affected -> archy.cli, archy.mcp, find_affected -> archy.cli,
-                  archy.mcp
+archy:mirrored-by Affected -> archy.cli, archy.cli_render, archy.mcp, archy.mcp_runs,
+                  find_affected -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations
@@ -26,12 +26,18 @@ from pathlib import Path
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, computed_field
 
+from archy.graph import suggest_modules
 from archy.impact import STATIC_ONLY_CAVEAT, _index_by_path
 
 DEFAULT_DEPTH = 5
 
 DELETED_OR_RENAMED_REASON = (
     "deleted or renamed; archy scans the current tree, so its dependents are not selected"
+)
+
+_FILTER_MATCHED_NOTHING = (
+    "matches no file in the graph "
+    "(paths are project-relative; only files inside a package, and test files, are scanned)"
 )
 
 # Auto-detected test conventions. A node is treated as a test if its
@@ -92,7 +98,9 @@ def find_affected(
     provided, is a recursive glob (`**` matches any number of path
     segments) evaluated against project-relative POSIX paths; when
     omitted, the built-in pytest conventions in `_AUTO_TEST_GLOBS` plus
-    "any path segment named 'tests'" are used.
+    "any path segment named 'tests'" are used. Raises `ValueError` when
+    `test_filter` matches no file in the graph, because then every test
+    would be reported as a non-test (see `_refuse_unmatched_filter`).
 
     `impacted_tests` and `impacted_modules` are disjoint by construction:
     every impacted module is in exactly one of them. The changed set
@@ -122,6 +130,8 @@ def find_affected(
     impacted = {q for q in impacted if not graph.nodes[q].get("external")}
 
     is_test = _test_classifier(project_root, test_filter)
+    if test_filter is not None:
+        _refuse_unmatched_filter(graph, test_filter, project_root, is_test)
     tests: set[str] = set()
     modules: set[str] = set()
     for q in impacted:
@@ -142,6 +152,38 @@ def find_affected(
         depth=depth,
         test_filter=test_filter,
     )
+
+
+def _refuse_unmatched_filter(
+    graph: nx.DiGraph, test_filter: str, project_root: Path, is_test
+) -> None:
+    """Raise `ValueError` when no file in `graph` matches `test_filter`.
+
+    Every file the filter misses counts as a non-test, so a typo moved each test
+    into `impacted_modules` and the empty `impacted_tests` then read as "no
+    static edge reaches this" (#660). The check runs over the whole graph, not
+    the impacted set: a filter that matches a test but no impacted one is a
+    true empty answer. Refusing is a design choice following AGENTS.md, "A name
+    that matched nothing is a refusal"; no lint enforces that rule, and the
+    stdout of `--quiet` is the path list xargs reads, so a reason cannot go there.
+    Near misses are directories, written as filters, because that is the form
+    the caller has to type next.
+    """
+    paths = [Path(raw) for _, data in graph.nodes(data=True) if (raw := data.get("path"))]
+    if any(is_test(path) for path in paths):
+        return
+    root = project_root.resolve()
+    directories = {
+        parent.as_posix()
+        for path in paths
+        if (rel := _rel_to_root(path, root)) is not None
+        for parent in rel.parents
+        if parent != Path(".")
+    }
+    literal = re.split(r"[*?]", test_filter, maxsplit=1)[0].rstrip("/")
+    near = suggest_modules(directories, literal)
+    hint = f"; did you mean {', '.join(f'{d}/**' for d in near)}?" if near else ""
+    raise ValueError(f"test filter {test_filter!r} {_FILTER_MATCHED_NOTHING}{hint}")
 
 
 def _expand_impacted_conftests(

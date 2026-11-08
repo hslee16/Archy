@@ -3,6 +3,7 @@
 Codex is the only TOML client. MCP servers live under the `mcp_servers` table:
 
 - global config:  ``~/.codex/config.toml``  + instructions ``~/.codex/AGENTS.md``
+  (under ``$CODEX_HOME`` instead of ``~/.codex`` when it is set)
 - local config:   ``<project>/.codex/config.toml`` + instructions ``<project>/AGENTS.md``
 
 Codex loads project-scoped ``.codex/config.toml`` only for *trusted* projects,
@@ -35,7 +36,7 @@ class CodexAdapter(AgentAdapter):
     def _codex_dir(self, scope: Scope, project_root: Path | None) -> Path:
         if scope is Scope.LOCAL:
             return local_root(project_root) / ".codex"
-        return paths.home() / ".codex"
+        return paths.codex_home()
 
     def config_paths(self, scope: Scope, project_root: Path | None = None) -> list[Path]:
         return [self._codex_dir(scope, project_root) / "config.toml"]
@@ -44,10 +45,10 @@ class CodexAdapter(AgentAdapter):
         # Project AGENTS.md lives at the repo root, not under .codex/.
         if scope is Scope.LOCAL:
             return local_root(project_root) / "AGENTS.md"
-        return paths.home() / ".codex" / "AGENTS.md"
+        return paths.codex_home() / "AGENTS.md"
 
     def detection_paths(self) -> list[Path]:
-        return [paths.home() / ".codex"]
+        return [paths.codex_home()]
 
     def windows_install_dirs(self) -> list[Path]:
         local = paths.local_appdata()

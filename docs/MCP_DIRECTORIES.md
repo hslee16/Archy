@@ -115,6 +115,7 @@ When cutting a new version (Nx.y.z):
 - [ ] Glama: log in, navigate to https://glama.ai/mcp/servers/hslee16/archy, edit metadata to match the new tagline / short description if anything changed.
 - [ ] Smithery: same flow at https://smithery.ai/skills/alex-1c6e/archy.
 - [ ] mcp.so / PulseMCP / official registry / awesome-mcp-servers / awesome-claude-code-toolkit: only refresh when there is a substantive change (new MCP tool, new core feature). Patch releases skip these.
+- [ ] If the bundled skill gained a new MCP tool name, raise the Claude plugin floor (`EXPECTED_SPEC` / shim / README) and extend `TOOL_FIRST_VERSION` in `tests/test_plugin.py` (#668).
 - [ ] Update `Last refreshed` to today's date.
 
 ## Source

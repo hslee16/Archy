@@ -44,9 +44,9 @@ graph node - a pre-existing limitation shared with `hotspots.git_churn`.
 archy:owns        CoChangeData, CoChangeHint, CouplingPair, co_changed_with,
                   compute_coupling, git_cochange, internal_module_paths
 archy:mirrored-by compute_coupling -> archy.cli, bench.coupling_sweep,
-                  git_cochange -> archy.cli, archy.mcp, bench.coupling_sweep,
+                  git_cochange -> archy.cli, archy.mcp_runs, bench.coupling_sweep,
                   bench.duplicates_cochange_sweep, internal_module_paths -> archy.cli,
-                  archy.mcp, bench.coupling_sweep
+                  archy.mcp_runs, bench.coupling_sweep
 """
 
 from __future__ import annotations
@@ -60,7 +60,12 @@ from typing import NamedTuple
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
-from archy.gitlog import fold_rename, normalize_py_path, resolve_repo_root
+from archy.gitlog import (
+    fold_rename,
+    normalize_py_path,
+    resolve_repo_root,
+    resolve_since_log_args,
+)
 
 # Placeholder defaults; calibrated on the bench (bench/coupling_sweep.py ->
 # bench/coupling_results.md) before shipping, mirroring how the duplicate
@@ -168,7 +173,7 @@ def git_cochange(
     # so the `R` lines the rename-folding relies on are always present.
     cmd = ["git", "-C", str(repo_root), "log", "-M", "--name-status", "--format=%H"]
     if since:
-        cmd.append(f"--since={since}")
+        cmd.extend(resolve_since_log_args(repo_root, since))
     try:
         log_proc = subprocess.run(
             cmd, capture_output=True, text=True, errors="surrogateescape", check=True

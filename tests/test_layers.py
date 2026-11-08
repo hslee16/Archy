@@ -998,3 +998,22 @@ def test_forbid_and_required_report_the_same_shape_of_key_error(tmp_path: Path):
     bad_type.write_text(base + "forbid:\n  - {from: store, to: 3}\n")
     with pytest.raises(LayerConfigError, match=r"forbid `from`/`to` values must be strings"):
         load_config(bad_type)
+
+
+# --- exclude_type_checking_imports parsing (#520) ------------------------------
+
+
+@pytest.mark.parametrize(("raw", "expected"), [("true", True), ("false", False), (None, None)])
+def test_load_config_exclude_type_checking_imports(tmp_path: Path, raw: str | None, expected):
+    cfg = tmp_path / "archy.yaml"
+    extra = "" if raw is None else f"exclude_type_checking_imports: {raw}\n"
+    cfg.write_text("layers: {}\nforbid: []\n" + extra)
+    assert load_config(cfg).exclude_type_checking_imports is expected
+
+
+@pytest.mark.parametrize("bad", ["1", "'yes'", "[true]"])
+def test_load_config_exclude_type_checking_imports_rejects_a_non_boolean(tmp_path: Path, bad: str):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text(f"layers: {{}}\nforbid: []\nexclude_type_checking_imports: {bad}\n")
+    with pytest.raises(LayerConfigError, match="exclude_type_checking_imports"):
+        load_config(cfg)

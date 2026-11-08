@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -7,6 +8,11 @@ import pytest
 
 from archy.affected import DELETED_OR_RENAMED_REASON, _compile_glob, find_affected
 from archy.graph import build_graph
+
+_FILTER_MISS = (
+    "matches no file in the graph "
+    "(paths are project-relative; only files inside a package, and test files, are scanned)"
+)
 
 # Setup pattern inlines `_make_project` + `build_graph` per test, matching
 # the sibling `tests/test_impact.py` convention. Reconsider extracting a
@@ -305,6 +311,14 @@ def test_compile_glob_filename_pattern():
     assert not p.fullmatch("foo_test.py")
 
 
+def test_compile_glob_question_mark_does_not_cross_separators():
+    p = _compile_glob("tests?test_a.py")
+    assert p.fullmatch("tests_test_a.py")  # one ordinary character matches
+    assert not p.fullmatch("tests/test_a.py")  # but never a separator
+    assert not p.fullmatch("teststest_a.py")  # zero characters do not match
+    assert not p.fullmatch("tests__test_a.py")  # two characters do not match
+
+
 def test_compile_glob_escapes_regex_metachars():
     p = _compile_glob("file.with.dots.py")
     assert p.fullmatch("file.with.dots.py")
@@ -365,6 +379,70 @@ def test_affected_without_tests_carries_static_only_caveat(tmp_path: Path):
     none = find_affected(graph, [orphan], project_root=project)
     assert none.impacted_tests == ()
     assert "importlib.import_module" in none.model_dump()["empty_caveat"]
+
+
+@pytest.mark.parametrize(
+    ("test_filter", "message"),
+    [
+        (
+            "test/**",
+            f"test filter 'test/**' {_FILTER_MISS}; did you mean tests/**, tests/integration/**?",
+        ),
+        ("[", f"test filter '[' {_FILTER_MISS}"),
+    ],
+)
+def test_filter_matching_no_file_is_refused(tmp_path: Path, test_filter: str, message: str):
+    """#660: every test used to land in `impacted_modules` under a false static-edge caveat."""
+    project = _make_project(tmp_path)
+    graph = build_graph(project)
+    changed = project / "app" / "libs" / "db.py"
+    # The edge is real, so an empty `impacted_tests` here could only be the filter's doing.
+    assert graph.has_edge("tests.test_db", "app.libs.db")
+    assert "tests.test_db" in find_affected(graph, [changed], project_root=project).impacted_tests
+
+    exact = f"^{re.escape(message)}$"
+    with pytest.raises(ValueError, match=exact):
+        find_affected(graph, [changed], project_root=project, test_filter=test_filter)
+    # A bad filter is bad whatever was changed, so nothing resolving does not excuse it.
+    with pytest.raises(ValueError, match=exact):
+        find_affected(graph, [project / "nope.txt"], project_root=project, test_filter=test_filter)
+
+
+def test_near_misses_for_an_unmatched_filter_include_directories_holding_only_directories(
+    tmp_path: Path,
+):
+    """`src/` holds no module of its own, and is still what `sr/**` was aimed at."""
+    (tmp_path / "src" / "app").mkdir(parents=True)
+    (tmp_path / "src" / "app" / "__init__.py").write_text("")
+    graph = build_graph(tmp_path)
+    with pytest.raises(ValueError, match=r"did you mean src/\*\*, src/app/\*\*\?$"):
+        find_affected(graph, [], project_root=tmp_path, test_filter="sr/**")
+
+
+def test_filter_naming_files_the_graph_does_not_hold_is_refused_and_says_so(tmp_path: Path):
+    """A script beside a `src/` layout has no node to match; the message must explain."""
+    (tmp_path / "src" / "app").mkdir(parents=True)
+    (tmp_path / "src" / "app" / "__init__.py").write_text("")
+    (tmp_path / "src" / "app" / "core.py").write_text("")
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "check_core.py").write_text("from app.core import x\n")
+    graph = build_graph(tmp_path)
+    assert "scripts.check_core" not in graph  # on disk, but not a module
+    message = f"^test filter 'scripts/\\*\\*' {re.escape(_FILTER_MISS)}$"
+    with pytest.raises(ValueError, match=message):
+        find_affected(graph, [], project_root=tmp_path, test_filter="scripts/**")
+
+
+def test_filter_that_matches_a_file_but_no_impacted_test_stays_an_empty_answer(tmp_path: Path):
+    """The filter is sound, so the empty answer and its static-only caveat are both true."""
+    project = _make_project(tmp_path)
+    graph = build_graph(project)
+    orphan = project / "app" / "services" / "auth_test.py"
+    result = find_affected(
+        graph, [orphan], project_root=project, test_filter="tests/**"
+    ).model_dump()
+    assert result["impacted_tests"] == ()
+    assert "importlib.import_module" in result["empty_caveat"]
 
 
 def _conftest_fixture_project(tmp_path: Path) -> Path:

@@ -17,15 +17,17 @@ browsing a dashboard.
 archy:owns        DSM, DSMCell, DSMDiff, DSMGroup, DSMGroupSummary, DSMSummary,
                   build_dsm, diff_dsm, dsm_from_dict, read_dsm, render_ascii,
                   render_diff_text, render_json, summarize_dsm, write_dsm
-archy:mirrored-by DSM -> archy.mcp, archy.render, build_dsm -> archy.cli, archy.mcp,
-                  archy.simulate, bench.simulate_oracle, diff_dsm -> archy.cli,
-                  archy.mcp, archy.simulate, bench.simulate_oracle,
-                  read_dsm -> archy.cli, archy.mcp, summarize_dsm -> archy.mcp,
-                  archy.render
+archy:mirrored-by DSM -> archy.mcp, archy.mcp_runs, archy.render, DSMDiff -> archy.mcp,
+                  archy.mcp_runs, DSMSummary -> archy.mcp, archy.mcp_runs,
+                  build_dsm -> archy.cli, archy.mcp_runs, archy.simulate,
+                  bench.simulate_oracle, diff_dsm -> archy.cli, archy.mcp_runs,
+                  archy.simulate, bench.simulate_oracle, read_dsm -> archy.cli,
+                  archy.mcp_runs, summarize_dsm -> archy.mcp_runs, archy.render
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Literal, cast
 
@@ -188,6 +190,7 @@ def build_dsm(
     focus: str | None = None,
     focus_depth: int = 1,
     package: str | None = None,
+    suggest: Callable[[Iterable[str], str], list[str]] | None = None,
 ) -> DSM:
     """Build a DSM from an import graph.
 
@@ -199,16 +202,30 @@ def build_dsm(
     is not one (inside `package`, when both are given). An empty matrix reads
     as `back_edge_count=0`, which is also what a clean project reports, so a
     mistyped name must be refused rather than answered with a zero.
+
+    `suggest` (the front ends pass `archy.graph.suggest_modules`; it is injected
+    because `archy.yaml` puts this module in the `metrics` layer and forbids
+    `metrics -> graph`, which `archy check .` enforces) names the near misses in
+    that refusal (#643).
     """
     sub = _internal_subgraph(graph)
+
+    def did_you_mean(known: Iterable[str], ref: str) -> str:
+        near = suggest(known, ref) if suggest is not None else []
+        return f"; did you mean {', '.join(near)}?" if near else ""
+
     if package is not None:
+        everything = sub
         sub = _filter_by_package(sub, package)
         if not sub:
-            raise ValueError(f"package {package!r} matches no internal module")
+            # The filter matches on dot boundaries, so a trailing dot is not a near miss.
+            hint = did_you_mean(everything, package.rstrip("."))
+            raise ValueError(f"package {package!r} matches no internal module{hint}")
     if focus is not None:
         if focus not in sub:
             within = f" within package {package!r}" if package is not None else ""
-            raise ValueError(f"focus {focus!r} is not an internal module{within}")
+            hint = did_you_mean(sub, focus)
+            raise ValueError(f"focus {focus!r} is not an internal module{within}{hint}")
         sub = _filter_by_focus(sub, focus, focus_depth)
 
     if group_by == "community":

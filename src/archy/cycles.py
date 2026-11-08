@@ -1,7 +1,9 @@
 """Strongly-connected-component cycle detection over an import graph.
 
-archy:owns        Cycle, CycleEdge, find_cycles
-archy:mirrored-by Cycle -> archy.cli, archy.diff, archy.mcp, archy.ratchet
+archy:owns        Cycle, CycleEdge, CycleScan, find_cycles, scan_cycles
+archy:mirrored-by CycleScan -> archy.cli_render, archy.mcp, archy.mcp_runs,
+                  find_cycles -> archy.diff, archy.score, bench.acyclicity_dilution,
+                  bench.delta_direction, scan_cycles -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations
@@ -16,6 +18,9 @@ class CycleEdge(BaseModel):
     source: str
     target: str
     lines: tuple[int, ...]
+    # Repo-relative path of `source`'s file, where `lines` are (#522). "" when the
+    # graph cannot say; the default keeps an old snapshot loading.
+    path: str = ""
 
 
 class Cycle(BaseModel):
@@ -23,6 +28,48 @@ class Cycle(BaseModel):
 
     modules: tuple[str, ...]
     edges: tuple[CycleEdge, ...]
+    # How many of `edges` exist only through `if TYPE_CHECKING:` imports. A cycle
+    # whose count is not zero may be breakable by leaving those edges out, which
+    # is what `exclude_type_checking` does (#520).
+    type_checking_edges: int = 0
+
+
+class CycleScan(BaseModel):
+    """`find_cycles` plus what excluding TYPE_CHECKING-only edges removed.
+
+    `excluded_type_checking_edges` counts the TYPE_CHECKING-only edges that sat
+    inside a cycle of the full graph. It is 0 when nothing was excluded, and it
+    is the only trace of an exclusion that removed every cycle, so a clean
+    result that is clean because of the flag says so.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    cycles: tuple[Cycle, ...]
+    excluded_type_checking_edges: int = 0
+
+
+def scan_cycles(
+    graph: nx.DiGraph, *, min_size: int = 2, exclude_type_checking: bool = False
+) -> CycleScan:
+    """`find_cycles`, optionally leaving out edges that exist only under TYPE_CHECKING.
+
+    With the flag off this is `find_cycles` plus a zero. With it on, cycles are
+    found on a copy of the graph without the TYPE_CHECKING-only edges, and the
+    count of the ones that sat inside a cycle of the full graph is reported.
+    An edge any runtime import or call also supports is never excluded.
+    """
+    full = find_cycles(graph, min_size=min_size)
+    if not exclude_type_checking:
+        return CycleScan(cycles=tuple(full))
+    kept = graph.copy()
+    kept.remove_edges_from(
+        [(u, v) for u, v, only in graph.edges(data="type_checking_only", default=False) if only]
+    )
+    return CycleScan(
+        cycles=tuple(find_cycles(kept, min_size=min_size)),
+        excluded_type_checking_edges=sum(c.type_checking_edges for c in full),
+    )
 
 
 def find_cycles(graph: nx.DiGraph, *, min_size: int = 2) -> list[Cycle]:
@@ -56,9 +103,13 @@ def find_cycles(graph: nx.DiGraph, *, min_size: int = 2) -> list[Cycle]:
                             source=u,
                             target=v,
                             lines=tuple(data.get("lines", ())),
+                            path=graph.graph.get("relative_paths", {}).get(u, ""),
                         )
                     )
         edges.sort(key=lambda e: (e.source, e.target))
-        cycles.append(Cycle(modules=modules, edges=tuple(edges)))
+        guarded = sum(
+            1 for e in edges if graph[e.source][e.target].get("type_checking_only", False)
+        )
+        cycles.append(Cycle(modules=modules, edges=tuple(edges), type_checking_edges=guarded))
     cycles.sort(key=lambda c: (-len(c.modules), c.modules[0]))
     return cycles

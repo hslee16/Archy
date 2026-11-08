@@ -4,29 +4,37 @@ A "module" is identified by its dotted path relative to a discovered package
 root. External imports (stdlib, third-party) appear as nodes with
 `external=True` so callers can filter them.
 
-archy:owns        Module, ScanTooLargeError, UnresolvedHint, assemble_graph,
-                  build_graph, discover_modules, effective_max_modules, graph_to_dict,
-                  hint_unresolved, internal_subgraph, is_ignored_path, parse_project,
+archy:owns        Module, QualnameCollisionError, ScanTooLargeError, UnresolvedHint,
+                  assemble_graph, build_graph, discover_modules, effective_max_modules,
+                  graph_to_dict, hint_unresolved, internal_module_count,
+                  internal_subgraph, is_ignored_path, parse_project,
                   resolve_from_import, resolve_modules, resolve_relative_import,
-                  suggest_files, suggest_modules
+                  suggest_files, suggest_modules, zero_modules_reason
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
                   archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
-                  UnresolvedHint -> archy.impact, archy.mcp, archy.simulate,
-                  assemble_graph -> archy.index, archy.watcher,
-                  bench.pattern_detection, discover_modules -> archy.cli,
-                  archy.conventions, archy.index, archy.mcp, archy.watcher,
-                  graph_to_dict -> archy.cli, archy.mcp, hint_unresolved -> archy.mcp,
-                  archy.simulate, internal_subgraph -> archy.cli, archy.mcp,
-                  parse_project -> archy.cli, archy.mcp,
+                  archy.mcp_runs, UnresolvedHint -> archy.impact, archy.mcp_payloads,
+                  archy.mcp_runs, archy.simulate, assemble_graph -> archy.index,
+                  archy.watcher, bench.pattern_detection,
+                  discover_modules -> archy.cli, archy.conventions, archy.index,
+                  archy.mcp_runs, archy.watcher, graph_to_dict -> archy.cli,
+                  archy.mcp_runs, hint_unresolved -> archy.mcp_runs, archy.simulate,
+                  internal_module_count -> archy.cli, archy.mcp_runs,
+                  internal_subgraph -> archy.cli, archy.mcp_runs,
+                  parse_project -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
-                  bench.pattern_detection, resolve_modules -> archy.mcp, archy.simulate
+                  bench.pattern_detection, resolve_modules -> archy.mcp_runs,
+                  archy.simulate, suggest_modules -> archy.affected, archy.cli,
+                  archy.conventions, archy.mcp_runs, zero_modules_reason -> archy.cli,
+                  archy.mcp_runs
 """
 
 from __future__ import annotations
 
 import difflib
 from collections.abc import Iterable, Iterator
+from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
@@ -37,6 +45,13 @@ from archy.instability import compute_instability
 from archy.parser import CallRef, ImportRef, ParseResult, parse_file
 from archy.reach import compute_propagation_cost
 from archy.risk import compute_edit_risk
+
+# Longest first so `.cpython-312-….so` wins over bare `.so`.
+_EXTENSION_SUFFIXES_BY_LENGTH = cast(
+    tuple[str, ...],
+    tuple(sorted((str(suffix) for suffix in EXTENSION_SUFFIXES), key=len, reverse=True)),
+)
+_EMPTY_PARSE = ParseResult(imports=(), has_errors=False)
 
 # Names the scan never enters, whatever they hold: version-control and tool
 # bookkeeping that never carry first-party source.
@@ -81,6 +96,9 @@ _SUGGEST_MIN_SIMILARITY = 0.8
 # How far below the closest misspelling a candidate may fall and still be offered.
 _SUGGEST_MARGIN = 0.1
 
+# How many colliding qualnames the error message lists before summarising the rest.
+_MAX_COLLISIONS_SHOWN = 5
+
 
 class ScanTooLargeError(Exception):
     """Raised when a scan discovers more modules than the configured ceiling.
@@ -100,6 +118,36 @@ class ScanTooLargeError(Exception):
             f"generated directory is being scanned. Add it to `exclude:` in "
             f"archy.yaml, point archy at a narrower path, or raise/disable the limit "
             f"with `max_modules:` in archy.yaml (0 disables)."
+        )
+
+
+class QualnameCollisionError(ValueError):
+    """Raised when two distinct files map to the same module qualname (#531).
+
+    The graph keeps one node per qualname, so the second file would silently
+    replace the first and every answer about it (`affected` most of all, which
+    would report "0 tests" for tests that were dropped) would be quietly
+    incomplete. A `ValueError` so the MCP tool boundary already re-raises it
+    with its message intact. `collisions` maps each shared qualname to every
+    path that claims it, relative to the scan root where possible.
+    """
+
+    def __init__(self, collisions: dict[str, list[str]]) -> None:
+        self.collisions = collisions
+        shown = sorted(collisions)[:_MAX_COLLISIONS_SHOWN]
+        lines = [f"  {q}: {', '.join(collisions[q])}" for q in shown]
+        more = len(collisions) - len(shown)
+        if more > 0:
+            lines.append(f"  ... and {more} more")
+        head = (
+            "1 module name maps" if len(collisions) == 1 else f"{len(collisions)} module names map"
+        )
+        super().__init__(
+            f"{head} to more than one file, and archy "
+            f"keeps one node per name, so one file would silently replace the other:\n"
+            + "\n".join(lines)
+            + "\nRun archy on each member separately, add one of the trees to `exclude:` "
+            "in archy.yaml, or delete the file a same-named package shadows."
         )
 
 
@@ -180,6 +228,11 @@ def parse_project(
         raise ScanTooLargeError(len(modules), root, max_modules)
     parse_results: dict[str, ParseResult] = {}
     for m in modules:
+        if _is_extension_or_stub_leaf(m.path):
+            # Compiled extensions are not Python source; stub-only leaves are
+            # recorded so imports resolve, with no import graph of their own (#665).
+            parse_results[m.qualname] = _EMPTY_PARSE
+            continue
         try:
             parse_results[m.qualname] = parse_file(m.path)
         except OSError:
@@ -203,6 +256,32 @@ def discover_modules(
     and decide which files to (re)parse without committing to a parse up front.
     """
     return _discover_modules(root, frozenset(ignored_dirs), tuple(extra_roots))
+
+
+def _relative_paths(root: Path, modules: list[Module]) -> dict[str, str]:
+    """`{qualname: repo-relative POSIX path}` for every module under `root` (#522).
+
+    An import edge's `lines` are line numbers in the IMPORTING module's file, so a
+    finding looks its source module up here to say which file those lines are in.
+    Relative to the scan root, so a src layout yields `src/pkg/b.py` and a
+    package's own module is its `__init__.py`. The root is resolved because module
+    paths are, and a relative root (`archy check .`) or a symlinked checkout would
+    otherwise never match. A module outside the root is left out, and a finding
+    for it prints as before.
+
+    Graph-level, not a per-node attribute, for the reason the `entrypoints` block
+    below gives: a node attribute would reach every node of `archy graph --format
+    json`. It also keeps `cycles` and `layers` free of an import of this module,
+    which would deepen every chain through them.
+    """
+    resolved_root = root.resolve()
+    paths: dict[str, str] = {}
+    for m in modules:
+        try:
+            paths[m.qualname] = m.path.relative_to(resolved_root).as_posix()
+        except ValueError:
+            continue
+    return paths
 
 
 def assemble_graph(
@@ -269,7 +348,13 @@ def assemble_graph(
                 graph.add_node(target, external=True)
             _add_or_extend_call_edge(graph, m.qualname, target, call)
 
+    # Freeze once per edge to preserve the public tuple without copying it per call.
+    for _, _, data in graph.edges(data=True):
+        if "call_lines" in data:
+            data["call_lines"] = tuple(data["call_lines"])
+
     graph.graph["root"] = str(root)
+    graph.graph["relative_paths"] = _relative_paths(root, modules)
     graph.graph["parse_errors"] = tuple(sorted(parse_errors))
     # Graph-level, not per-node: a node attribute would reach every node of
     # `archy graph --format json` for the benefit of one `required:` source.
@@ -475,6 +560,21 @@ def internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:
     return internal
 
 
+def internal_module_count(graph: nx.DiGraph) -> int:
+    """How many nodes of `graph` are internal modules, by the same rule as `internal_subgraph`."""
+    return sum(1 for _, d in graph.nodes(data=True) if not d.get("external"))
+
+
+def zero_modules_reason(path: Path, verdict: str) -> str:
+    """Why a scan that found no internal modules cannot support a verdict (#523).
+
+    A pass over nothing reads exactly like a pass over a clean codebase, so every
+    surface that would say "no cycles" or score 1.000 says this instead. `verdict`
+    completes "nothing was ...", for example "checked" or "scored".
+    """
+    return f"0 internal modules scanned under {path}; nothing was {verdict}"
+
+
 def resolve_modules(
     graph: nx.DiGraph,
     refs: Iterable[str],
@@ -530,14 +630,21 @@ def _discover_modules(
     Package roots are directories containing __init__.py whose parent
     directory does NOT contain one. The conventional `src/<pkg>/__init__.py`
     layout is supported because `src` itself is not a package.
+
+    Compiled extension modules (``*.so`` / ``*.pyd`` via
+    ``importlib.machinery.EXTENSION_SUFFIXES``) and ``*.pyi`` stubs with no
+    ``.py`` twin are recorded as internal leaf modules so imports of them
+    resolve to the leaf rather than collapsing onto the package (#665).
     """
     package_roots = _find_package_roots(root, ignored, extra_roots)
     modules: list[Module] = []
+    seen: set[str] = set()
 
+    outside: list[Path] = []
     for py_file in _iter_python_files(root, ignored):
         qualname = _qualname_for(py_file, package_roots)
         if qualname is None:
-            # Top-level scripts not inside any package are skipped for v1.
+            outside.append(py_file)
             continue
         modules.append(
             Module(
@@ -546,9 +653,190 @@ def _discover_modules(
                 is_package=py_file.name == "__init__.py",
             )
         )
+        seen.add(qualname)
+
+    # Test files no package root names (an init-less `tests/` beside a `src/`
+    # layout) get their path from the scan root, as a flat layout already gives
+    # them. Only test files: `docs/conf.py`, `noxfile.py` and `examples/` are
+    # scripts nothing imports, and naming them would move module counts and
+    # scores for a reason that has nothing to do with test selection. Last, so a
+    # fallback name that equals a real module is reported by
+    # `_raise_on_qualname_collision` below rather than replacing it (#529, #531).
+    for py_file in outside:
+        qualname = _scan_root_qualname(py_file, root)
+        if qualname is None:
+            continue
+        modules.append(Module(qualname=qualname, path=py_file.resolve(), is_package=False))
+        seen.add(qualname)
+
+    _raise_on_qualname_collision(modules, root)
+
+    for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored):
+        qualname = _qualname_for_stem(leaf_path, stem, package_roots)
+        if qualname is None or qualname in seen:
+            continue
+        modules.append(
+            Module(
+                qualname=qualname,
+                path=leaf_path.resolve(),
+                is_package=False,
+            )
+        )
+        seen.add(qualname)
 
     modules.sort(key=lambda m: m.qualname)
     return modules
+
+
+def _raise_on_qualname_collision(modules: list[Module], root: Path) -> None:
+    """Refuse a module set in which two distinct files share a qualname (#531).
+
+    Runs on the `.py` modules and the init-less test fallback, before the
+    extension/stub leaves are added: a compiled `foo.so` beside `foo.py` (a
+    mypyc build) is one module with two artefacts, not two modules, and the leaf
+    loop already skips it by design.
+    """
+    by_name: dict[str, list[Path]] = {}
+    for m in modules:
+        by_name.setdefault(m.qualname, []).append(m.path)
+    resolved_root = root.resolve()
+    collisions: dict[str, list[str]] = {}
+    for qualname, paths in by_name.items():
+        if len(set(paths)) < 2:
+            continue
+        shown: list[str] = []
+        for p in sorted(set(paths)):
+            try:
+                shown.append(p.relative_to(resolved_root).as_posix())
+            except ValueError:
+                shown.append(p.as_posix())
+        collisions[qualname] = shown
+    if collisions:
+        raise QualnameCollisionError(collisions)
+
+
+def _extension_module_stem(filename: str) -> str | None:
+    """Return the importable module stem for a compiled-extension filename."""
+    for suffix in _EXTENSION_SUFFIXES_BY_LENGTH:
+        if filename.endswith(suffix):
+            return filename[: -len(suffix)]
+    # EXTENSION_SUFFIXES is host-local; bare .pyd covers a Windows-built tree
+    # scanned on POSIX (and vice versa for non-host tagged .so via the glob).
+    if filename.endswith(".pyd"):
+        return filename[:-4]
+    return None
+
+
+def _iter_extension_and_stub_leaves(
+    root: Path,
+    ignored: frozenset[str],
+) -> list[tuple[Path, str]]:
+    """Paths that define an internal leaf with no ``.py`` twin.
+
+    Extension binaries win over a sibling ``.pyi`` for the same stem so the
+    module is recorded once. A ``.pyi`` whose ``.py`` twin exists is skipped
+    here; discovery of the ``.py`` already owns that qualname.
+    """
+    chosen: dict[tuple[Path, str], Path] = {}
+    for path in sorted(root.rglob("*.pyi")):
+        if is_ignored_path(path, ignored, root):
+            continue
+        if path.with_suffix(".py").is_file():
+            continue
+        stem = path.name[:-4]
+        # Skip __init__.pyi: mapping it as a leaf would invent pkg.sub.__init__
+        # (unlike _qualname_for, which drops a trailing __init__). Package roots
+        # still need an __init__.py, so this edge case is rare but misleading.
+        if stem == "__init__":
+            continue
+        chosen.setdefault((path.parent.resolve(), stem), path)
+    # WHY: EXTENSION_SUFFIXES lists only this host's tags, so a Windows .pyd
+    # (or non-host .so) would be missed on POSIX without these broad globs.
+    for pattern in ("*.so", "*.pyd"):
+        for path in sorted(root.rglob(pattern)):
+            if is_ignored_path(path, ignored, root):
+                continue
+            stem = _extension_module_stem(path.name)
+            if stem is None:
+                continue
+            chosen[(path.parent.resolve(), stem)] = path
+    return sorted(
+        ((path, stem) for (_parent, stem), path in chosen.items()),
+        key=lambda item: (item[0].as_posix(), item[1]),
+    )
+
+
+def _qualname_under_roots(
+    path: Path,
+    leaf_parts: list[str],
+    package_roots: list[Path],
+) -> str | None:
+    """Owners-first dotted name for ``path`` with precomputed leaf parts.
+
+    A root that contains the file names it. Without this, a repo-root
+    package (benchmarks/, examples/) that sorts before src/mypkg captures
+    src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
+    (#516). Files under no root (init-less tests/, top-level scripts) still
+    fall back to the first root whose parent holds them.
+    """
+    abs_path = path.resolve()
+    owners = [r for r in package_roots if abs_path.is_relative_to(r)]
+    for pkg_root in owners or package_roots:
+        try:
+            rel_parent = abs_path.parent.relative_to(pkg_root.parent)
+        except ValueError:
+            continue
+        # leaf_parts already carries the module stem (or is empty for
+        # __init__.py → package), so a bare `".".join` is enough; the old
+        # `else pkg_root.name` branch was dead when a stem was present.
+        parts = [*rel_parent.parts, *leaf_parts]
+        return ".".join(parts) if parts else pkg_root.name
+    return None
+
+
+def _scan_root_qualname(py_file: Path, root: Path) -> str | None:
+    """Dotted name of a test file relative to the scan root, or None if it is not one.
+
+    Also None when any path part is not a valid identifier (`my-tests/test_a.py`),
+    because such a name could never be imported and would only add noise.
+    """
+    try:
+        rel = py_file.resolve().relative_to(root.resolve())
+    except ValueError:
+        return None
+    parts = rel.with_suffix("").parts
+    if not _is_conventional_test_file(rel) or not all(part.isidentifier() for part in parts):
+        return None
+    return ".".join(parts)
+
+
+def _is_conventional_test_file(rel: Path) -> bool:
+    """`test_*.py`, `*_test.py`, or anything under a `tests/` directory.
+
+    The same default `archy affected` uses to decide what is a test
+    (`affected._AUTO_TEST_GLOBS` / `_AUTO_TEST_DIR`); `affected` imports this
+    module, so the rule is restated here and a test pins that the two agree.
+    A `--filter` glob can call other files tests, but the graph has to decide
+    what to scan before any filter exists.
+    """
+    return rel.name.startswith("test_") or rel.name.endswith("_test.py") or "tests" in rel.parts
+
+
+def _qualname_for_stem(
+    path: Path,
+    stem: str,
+    package_roots: list[Path],
+) -> str | None:
+    """Dotted qualname for an extension/stub leaf using an explicit module stem."""
+    return _qualname_under_roots(path, [stem], package_roots)
+
+
+def _is_extension_or_stub_leaf(path: Path) -> bool:
+    """True when ``path`` is a discovered binary/stub leaf (empty parse)."""
+    name = path.name
+    if name.endswith(".pyi"):
+        return True
+    return _extension_module_stem(name) is not None
 
 
 def _find_package_roots(
@@ -625,23 +913,10 @@ def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
 
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
-    abs_path = py_file.resolve()
-    # A root that contains the file names it. Without this, a repo-root
-    # package (benchmarks/, examples/) that sorts before src/mypkg captures
-    # src/mypkg/a.py as `src.mypkg.a`, and its `mypkg.*` imports go external
-    # (#516). Files under no root (init-less tests/, top-level scripts) still
-    # fall back to the first root whose parent holds them.
-    owners = [r for r in package_roots if abs_path.is_relative_to(r)]
-    for pkg_root in owners or package_roots:
-        try:
-            rel = abs_path.relative_to(pkg_root.parent)
-        except ValueError:
-            continue
-        parts = list(rel.with_suffix("").parts)
-        if parts[-1] == "__init__":
-            parts.pop()
-        return ".".join(parts) if parts else pkg_root.name
-    return None
+    """Dotted qualname for a ``.py`` file; delegates to ``_qualname_under_roots``."""
+    # __init__.py names the package (empty leaf); other files contribute stem.
+    leaf: list[str] = [] if py_file.name == "__init__.py" else [py_file.stem]
+    return _qualname_under_roots(py_file, leaf, package_roots)
 
 
 def _resolve_targets(
@@ -890,6 +1165,11 @@ def _add_or_extend_edge(
         # of the two came first is not something a caller can predict. This
         # aggregates the way `lines` does (#450).
         data["is_relative"] = bool(data.get("is_relative", False)) or ref.is_relative
+        # `and`, the opposite aggregate: one unguarded import makes the edge a
+        # runtime dependency whatever else sits under TYPE_CHECKING (#520).
+        data["type_checking_only"] = bool(data.get("type_checking_only", False)) and (
+            ref.type_checking
+        )
         _add_kind(data, "import")
     else:
         graph.add_edge(
@@ -898,6 +1178,7 @@ def _add_or_extend_edge(
             is_relative=ref.is_relative,
             lines=(ref.line,),
             kinds=("import",),
+            type_checking_only=ref.type_checking,
         )
 
 
@@ -915,8 +1196,11 @@ def _add_or_extend_call_edge(
     """
     if graph.has_edge(src, dst):
         data = graph[src][dst]
-        data["call_lines"] = (*data.get("call_lines", ()), call.line)
+        data.setdefault("call_lines", []).append(call.line)
         data["call_count"] = data.get("call_count", 0) + 1
+        # A resolved call is a runtime reference, so it ends any
+        # TYPE_CHECKING-only claim the import pass made for this edge (#520).
+        data["type_checking_only"] = False
         _add_kind(data, "call")
     else:
         graph.add_edge(
@@ -925,8 +1209,9 @@ def _add_or_extend_call_edge(
             is_relative=False,
             lines=(),
             kinds=("call",),
-            call_lines=(call.line,),
+            call_lines=[call.line],
             call_count=1,
+            type_checking_only=False,
         )
 
 

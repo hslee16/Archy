@@ -58,14 +58,31 @@ NETWORK_MODULES = frozenset(
 # The only modules allowed to run a subprocess, and the only program they run.
 SUBPROCESS_MODULES = frozenset({"coupling.py", "gitlog.py", "hotspots.py", "history.py"})
 GIT_SUBCOMMANDS = frozenset({"rev-parse", "log"})
+# Flags/operands after the subcommand. A write flag such as --output= must not
+# survive: docs/SAFETY.md says rev-parse and log only read history.
+GIT_REV_PARSE_ARGS = frozenset(
+    {
+        "HEAD",
+        "--abbrev-ref",
+        "--show-toplevel",
+        "--verify",
+        "--quiet",
+    }
+)
+GIT_LOG_ARGS = frozenset({"-M", "--name-status", "--format=", "--format=%H", "-1"})
 
 
 def _snapshot(root: Path) -> dict[str, str]:
-    """Relative path to content hash for every file under `root`, `.git` excluded."""
+    """Relative path to content hash for every file under `root`, including `.git`.
+
+    Read-only commands may run `git rev-parse` / `git log`, which only read
+    history; neither writes under `.git`. Including the tree means a write such
+    as `.git/leak` turns a before/after assert red (issue #696).
+    """
     out: dict[str, str] = {}
     for p in sorted(root.rglob("*")):
         rel = p.relative_to(root)
-        if ".git" in rel.parts or not p.is_file():
+        if not p.is_file():
             continue
         out[rel.as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
     return out
@@ -82,6 +99,8 @@ def sandbox(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
     proj = tmp_path / "proj"
     (proj / "pkg").mkdir(parents=True)
     (proj / "pkg" / "__init__.py").write_text("")
@@ -276,6 +295,22 @@ def test_runtime_subprocesses_are_read_only_git(sandbox, monkeypatch):
         assert argv[0] == "git", argv
         assert argv[1] == "-C", argv
         assert argv[3] in GIT_SUBCOMMANDS, argv
+        rest = argv[4:]
+        if argv[3] == "rev-parse":
+            bad = [
+                a
+                for a in rest
+                if a not in GIT_REV_PARSE_ARGS
+                and not a.startswith("--since=")
+                and not a.endswith("^{commit}")
+            ]
+        else:
+            bad = [
+                a
+                for a in rest
+                if a not in GIT_LOG_ARGS and not a.startswith("--since=") and ".." not in a
+            ]
+        assert bad == [], argv
     assert {argv[3] for argv in recorded} == GIT_SUBCOMMANDS
 
 
@@ -360,6 +395,9 @@ def _mcp_args(tool, proj: Path) -> dict:
         args["files"] = ["pkg/b.py"]
     if tool.name == "archy_module_view":
         args["module"] = "pkg.a"
+    if tool.name == "archy_simulate":
+        # An empty delta is refused (#684), so propose a real one.
+        args["add"] = [{"from": "pkg.b", "to": "pkg.a"}]
     return args
 
 

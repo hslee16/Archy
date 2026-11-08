@@ -53,14 +53,14 @@ from `archy.graph.parse_project` instead.
 archy:owns        DuplicateGroup, DuplicateMember, classify_variants,
                   compute_duplicates, compute_near_duplicates, demote_independent,
                   is_test_path
-archy:mirrored-by DuplicateGroup -> archy.cli, archy.mcp,
-                  classify_variants -> archy.cli, archy.mcp,
+archy:mirrored-by DuplicateGroup -> archy.cli_render, archy.mcp_payloads,
+                  archy.mcp_runs, classify_variants -> archy.cli, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, compute_duplicates -> archy.cli,
-                  archy.mcp, bench.duplicates_cochange_sweep,
-                  compute_near_duplicates -> archy.cli, archy.mcp,
+                  archy.mcp_runs, bench.duplicates_cochange_sweep,
+                  compute_near_duplicates -> archy.cli, archy.mcp_runs,
                   bench.near_duplicates_sweep, demote_independent -> archy.cli,
-                  archy.mcp, bench.duplicates_cochange_sweep,
-                  is_test_path -> archy.cli, archy.mcp, bench.coupling_sweep,
+                  archy.mcp_runs, bench.duplicates_cochange_sweep,
+                  is_test_path -> archy.cli, archy.mcp_runs, bench.coupling_sweep,
                   bench.duplicates_cochange_sweep, bench.reach_asymmetry_precision
 """
 

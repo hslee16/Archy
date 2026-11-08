@@ -268,3 +268,7 @@ bench/q1b_transcripts/
 # bench/contract_prevalence.py --measure.
 bench/cache/contract_clones/
 bench/greenfield_transcripts/
+
+# Local research output (not curated docs)
+reports/
+research_notes/

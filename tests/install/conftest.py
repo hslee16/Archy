@@ -51,6 +51,8 @@ def simulate_os(monkeypatch, tmp_path):
     All four `paths` accessors are patched here and nowhere else, so adapters
     that resolve via `paths.*` behave as if running on the requested platform.
     `shutil.which` is forced to miss so detection exercises the config probes.
+    `CODEX_HOME` and `XDG_CONFIG_HOME` are cleared so a variable set on the machine
+    cannot move paths off the fake home.
     """
 
     def _simulate(platform: str) -> FakeOS:
@@ -68,6 +70,8 @@ def simulate_os(monkeypatch, tmp_path):
         monkeypatch.setattr(paths, "appdata", lambda: appdata)
         monkeypatch.setattr(paths, "local_appdata", lambda: local_appdata)
         monkeypatch.setattr(base.shutil, "which", lambda _name: None)
+        monkeypatch.delenv("CODEX_HOME", raising=False)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
         return FakeOS(platform=platform, home=home, appdata=appdata, local_appdata=local_appdata)
 
     return _simulate

@@ -38,14 +38,13 @@ docs/LEARNINGS.md for the comparison.
 archy:owns        Score, ScoreInputs, compute_acyclicity, compute_complexity,
                   compute_depth, compute_equality, compute_modularity,
                   compute_modularity_weighted, compute_score
-archy:mirrored-by Score -> archy.cli, archy.diff, archy.history, archy.mcp,
-                  ScoreInputs -> archy.diff, archy.mcp,
+archy:mirrored-by ScoreInputs -> archy.diff, archy.mcp_payloads,
                   compute_acyclicity -> bench.call_weighted_modularity, bench.dsm,
                   compute_complexity -> archy.diff, bench.call_weighted_modularity,
                   bench.dsm, compute_depth -> bench.call_weighted_modularity,
                   bench.dsm, compute_equality -> bench.call_weighted_modularity,
                   bench.dsm, compute_modularity -> bench.call_weighted_modularity,
-                  bench.dsm, compute_score -> archy.cli, archy.diff, archy.mcp,
+                  bench.dsm, compute_score -> archy.cli, archy.diff, archy.mcp_runs,
                   bench.inloop_prevalence, bench.q1b_score
 """
 
@@ -56,6 +55,15 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.cycles import find_cycles
 from archy.reach import compute_propagation_cost
+
+VACUOUS_SCORE_NOTE = (
+    "0 internal modules scanned; the overall of 1.000 is vacuous and nothing was scored"
+)
+"""Said wherever a score over zero modules is shown (#523).
+
+`overall` stays numeric so existing consumers and history rows keep parsing; this
+note is how the reason travels with it on every surface.
+"""
 
 
 class ScoreInputs(BaseModel):

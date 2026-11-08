@@ -10,6 +10,8 @@ archy:mirrored-by ParseResult -> archy.duplicates, archy.graph, archy.index,
 
 from __future__ import annotations
 
+import io
+import tokenize
 from pathlib import Path
 
 import tree_sitter_python as tsp
@@ -111,6 +113,12 @@ class ImportRef(BaseModel):
     set. For plain `import X` forms it is empty. `imported_aliases` runs
     parallel to `imported_names`: each entry is the local rebinding name
     from `as`, or None if the name was imported under its source spelling.
+
+    `type_checking` is True when the statement sits in the body of an
+    `if TYPE_CHECKING:` (or `if typing.TYPE_CHECKING:`) block: it never runs,
+    so it is not a runtime dependency, which is what lets `archy cycles` offer
+    to leave such edges out. An `else:` or `elif` branch, a function-local
+    import, and any other spelling of the guard are plain imports (#520).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -120,6 +128,7 @@ class ImportRef(BaseModel):
     is_relative: bool
     line: int  # 1-indexed
     imported_aliases: tuple[str | None, ...] = ()
+    type_checking: bool = False
 
 
 class CallRef(BaseModel):
@@ -160,7 +169,23 @@ class ParseResult(BaseModel):
 
 
 def parse_file(path: Path) -> ParseResult:
-    return parse_source(path.read_bytes())
+    source = path.read_bytes()
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(source).readline)
+    except (SyntaxError, ValueError):
+        # A broken or unknown cookie must not crash a whole-tree scan; parse
+        # the raw bytes as-is (#649).
+        return parse_source(source)
+    if encoding.lower().replace("_", "-") in ("utf-8", "utf-8-sig", "ascii"):
+        return parse_source(source)
+    try:
+        # PEP 263: the cookie names the codec, so hand tree-sitter UTF-8
+        # re-encoded from it; decode/encode preserves line numbers (#649).
+        return parse_source(source.decode(encoding).encode("utf-8"))
+    except UnicodeDecodeError:
+        # Bytes that do not match their own cookie are parsed raw rather than
+        # crashing the scan (#649).
+        return parse_source(source)
 
 
 def parse_source(source: bytes) -> ParseResult:
@@ -171,9 +196,9 @@ def parse_source(source: bytes) -> ParseResult:
 
     imports: list[ImportRef] = []
     for node in captures.get("import", []):
-        imports.extend(_handle_import(node, source))
+        imports.extend(_mark_guarded(_handle_import(node, source), node, source))
     for node in captures.get("from_import", []):
-        imports.extend(_handle_from_import(node, source))
+        imports.extend(_mark_guarded(_handle_from_import(node, source), node, source))
 
     imports.sort(key=lambda ref: (ref.line, ref.module))
 
@@ -195,6 +220,41 @@ def parse_source(source: bytes) -> ParseResult:
         functions=functions,
         has_main_guard=_has_main_guard(tree.root_node, source),
     )
+
+
+def _mark_guarded(refs: list[ImportRef], node, source: bytes) -> list[ImportRef]:
+    """Return `refs` flagged `type_checking` when `node` is under a TYPE_CHECKING guard."""
+    if not refs or not _under_type_checking_guard(node, source):
+        return refs
+    return [ref.model_copy(update={"type_checking": True}) for ref in refs]
+
+
+def _under_type_checking_guard(node, source: bytes) -> bool:
+    """True if `node` is in the body of an `if TYPE_CHECKING:` statement.
+
+    Walks the ancestors. Only the `if` body counts: reaching the guard through
+    its `else:` or an `elif:` means the import runs when the guard is false, so
+    it is a plain import. Crossing a function or lambda stops the walk and
+    answers False, because a function-local import runs on call and is a real
+    coupling (#520); the guard around the `def` says nothing about it. When
+    unsure the answer is False, so a doubtful import still counts as a cycle.
+    """
+    child = node
+    parent = node.parent
+    while parent is not None:
+        if parent.type in ("function_definition", "lambda"):
+            return False
+        if parent.type == "if_statement" and child == parent.child_by_field_name("consequence"):
+            condition = parent.child_by_field_name("condition")
+            if condition is not None and _is_type_checking_name(condition, source):
+                return True
+        child, parent = parent, parent.parent
+    return False
+
+
+def _is_type_checking_name(node, source: bytes) -> bool:
+    """True for exactly `TYPE_CHECKING` or `typing.TYPE_CHECKING`."""
+    return _node_text(node, source) in ("TYPE_CHECKING", "typing.TYPE_CHECKING")
 
 
 def _has_main_guard(root, source: bytes) -> bool:

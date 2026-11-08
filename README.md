@@ -107,7 +107,7 @@ $ uvx archy check .
 # 1 layer violation(s) (config: /path/to/archy/archy.yaml)
 
 graph -> cli (forbidden):
-  archy.graph -> archy.cli  (line: 40)
+  src/archy/graph.py:40: archy.graph -> archy.cli  (line: 40)
 #   layer coverage: 10 of 48 modules (21%), 21 of 137 internal edges (15%); 38 module(s) match no layer (`archy check --show-unlayered`)
 #   116 scanned module(s) sit outside every declared root package and are not counted above
 
@@ -131,36 +131,36 @@ Cycle of 12 module(s):
   - archy.simulate
   - archy.watcher
 Edges:
-  archy.affected -> archy.impact  (line: 29)
-  archy.cli -> archy.affected  (line: 27)
-  archy.cli -> archy.conventions  (line: 34)
-  archy.cli -> archy.duplicates  (line: 66)
-  archy.cli -> archy.graph  (line: 74)
-  archy.cli -> archy.headers  (line: 82)
-  archy.cli -> archy.impact  (line: 87)
-  archy.cli -> archy.index  (lines: 1537, 1538, 1566, 1591)
-  archy.cli -> archy.mcp  (line: 1511)
-  archy.cli -> archy.scan_config  (line: 111)
-  archy.cli -> archy.simulate  (line: 113)
-  archy.conventions -> archy.graph  (line: 72)
-  archy.duplicates -> archy.graph  (line: 84)
-  archy.graph -> archy.cli  (line: 40)
-  archy.headers -> archy.conventions  (line: 44)
-  archy.headers -> archy.graph  (line: 45)
-  archy.impact -> archy.graph  (line: 28)
-  archy.index -> archy.graph  (line: 31)
-  archy.mcp -> archy.affected  (line: 117)
-  archy.mcp -> archy.conventions  (line: 119)
-  archy.mcp -> archy.duplicates  (line: 157)
-  archy.mcp -> archy.graph  (line: 166)
-  archy.mcp -> archy.impact  (line: 182)
-  archy.mcp -> archy.scan_config  (line: 202)
-  archy.mcp -> archy.simulate  (line: 204)
-  archy.mcp -> archy.watcher  (line: 205)
-  archy.scan_config -> archy.graph  (line: 25)
-  archy.simulate -> archy.graph  (line: 46)
-  archy.watcher -> archy.graph  (line: 35)
-  archy.watcher -> archy.index  (line: 36)
+  src/archy/affected.py:29: archy.affected -> archy.impact  (line: 29)
+  src/archy/cli.py:27: archy.cli -> archy.affected  (line: 27)
+  src/archy/cli.py:34: archy.cli -> archy.conventions  (line: 34)
+  src/archy/cli.py:66: archy.cli -> archy.duplicates  (line: 66)
+  src/archy/cli.py:74: archy.cli -> archy.graph  (line: 74)
+  src/archy/cli.py:82: archy.cli -> archy.headers  (line: 82)
+  src/archy/cli.py:87: archy.cli -> archy.impact  (line: 87)
+  src/archy/cli.py:1537: archy.cli -> archy.index  (lines: 1537, 1538, 1566, 1591)
+  src/archy/cli.py:1511: archy.cli -> archy.mcp  (line: 1511)
+  src/archy/cli.py:111: archy.cli -> archy.scan_config  (line: 111)
+  src/archy/cli.py:113: archy.cli -> archy.simulate  (line: 113)
+  src/archy/conventions.py:72: archy.conventions -> archy.graph  (line: 72)
+  src/archy/duplicates.py:84: archy.duplicates -> archy.graph  (line: 84)
+  src/archy/graph.py:40: archy.graph -> archy.cli  (line: 40)
+  src/archy/headers.py:44: archy.headers -> archy.conventions  (line: 44)
+  src/archy/headers.py:45: archy.headers -> archy.graph  (line: 45)
+  src/archy/impact.py:28: archy.impact -> archy.graph  (line: 28)
+  src/archy/index.py:31: archy.index -> archy.graph  (line: 31)
+  src/archy/mcp.py:117: archy.mcp -> archy.affected  (line: 117)
+  src/archy/mcp.py:119: archy.mcp -> archy.conventions  (line: 119)
+  src/archy/mcp.py:157: archy.mcp -> archy.duplicates  (line: 157)
+  src/archy/mcp.py:166: archy.mcp -> archy.graph  (line: 166)
+  src/archy/mcp.py:182: archy.mcp -> archy.impact  (line: 182)
+  src/archy/mcp.py:202: archy.mcp -> archy.scan_config  (line: 202)
+  src/archy/mcp.py:204: archy.mcp -> archy.simulate  (line: 204)
+  src/archy/mcp.py:205: archy.mcp -> archy.watcher  (line: 205)
+  src/archy/scan_config.py:25: archy.scan_config -> archy.graph  (line: 25)
+  src/archy/simulate.py:46: archy.simulate -> archy.graph  (line: 46)
+  src/archy/watcher.py:35: archy.watcher -> archy.graph  (line: 35)
+  src/archy/watcher.py:36: archy.watcher -> archy.index  (line: 36)
 
 $ uvx archy score .
 # archy score: 0.636          (0.639 before the edit)
@@ -205,7 +205,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.53.1, working, installed and maintained. Usable today via:
+**Status:** v0.55.0, working, installed and maintained. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -257,7 +257,7 @@ That relationship load is exactly what archy reads. Coupling, the DSM, import cy
 
 ## Scope
 
-- **Python only.** The cross-language story belongs to [sentrux](https://github.com/sentrux/sentrux); that division is settled. archy goes deep on Python (transitive contracts, SDP, NCCD, `if TYPE_CHECKING:` semantics) rather than broad across languages; see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) §"Competitive landscape".
+- **Python only.** The cross-language story belongs to [sentrux](https://github.com/sentrux/sentrux); that division is settled. archy goes deep on Python (transitive contracts, SDP, NCCD, `if TYPE_CHECKING:` handling in `archy cycles`) rather than broad across languages; see [`docs/LEARNINGS.md`](docs/LEARNINGS.md) §"Competitive landscape".
 - **Tree-sitter powered.** Robust to in-flight edits and partial files; survives syntax errors that would crash `ast`.
 - **Score that trends over time.** A single number per commit, persisted, plotted. Trend matters more than the absolute value.
 - **Rules as YAML.** "Layer X cannot import Y." No DSL, no plugins (yet).
@@ -307,7 +307,10 @@ Tarjan SCCs of size >= 2, plus self-loops (a module importing itself). Use `--st
 archy cycles path/to/project
 archy cycles path/to/project --format json
 archy cycles path/to/project --strict
+archy cycles path/to/project --strict --exclude-type-checking
 ```
+
+The usual way to break an import cycle is to move the back-import under `if TYPE_CHECKING:`, where it never runs. By default archy still counts that edge, and a cycle that has such edges says so (`type_checking_edges` in JSON). `--exclude-type-checking` (or `exclude_type_checking_imports: true` in `archy.yaml`; the flag overrides it either way, `--include-type-checking` turns it back off) leaves them out. It is opt-in so exit codes do not change. With it on, the output reports how many edges it excluded, and `--format json` becomes `{"cycles": [...], "excluded_type_checking_edges": N}` so an exclusion that empties the list still shows. Only the body of a bare `if TYPE_CHECKING:` or `if typing.TYPE_CHECKING:` counts; an `else:` branch, a function-local import, and an edge that any unguarded import or call also supports stay in. `archy check` layer rules and the score's acyclicity axis are unchanged.
 
 ### Enforce layer rules
 
@@ -332,6 +335,8 @@ archy contracts path/to/project --format json
 `archy check --contracts` runs this same transitive verdict inline, nested under the check output. It never changes `check`'s own exit code: a flag that can turn a passing check into a failing one because an optional dependency is absent would be unsafe to leave on in CI. Use the standalone `archy contracts` when the transitive result should itself gate the build.
 
 **A kept contract is not automatically protection.** A contract whose module expressions match nothing in the graph holds no matter what the code does, so `all_kept` calls it kept while nothing was ever checked. `archy contracts` exits non-zero on `verified` (evaluated *and* held), not on `all_kept`, and `archy check --contracts` reports `transitive_checked: false` for the same reason: a rule that could not have failed was not evaluated. The text output marks such a contract `??` rather than `OK` and names the expressions that matched no module; `--format json` adds top-level `verified` and `unverifiable` alongside `kept`/`broken`, and per-contract `matched_nothing` and `unmatched_expressions`. A `.importlinter` `type = layers` contract needs no such flag: import-linter itself refuses to run when a required layer's module is absent, which archy reports as a config error, and an optional layer (written `(name)`) is absent by design.
+
+**Directories the engine does not read.** import-linter's engine (grimp) skips a directory with no `__init__.py` once it is inside a regular package, so a path through it is invisible and the contract is reported as kept. `archy contracts` and `check --contracts` list those directories (`unscanned_dirs` in JSON and the MCP payload; one `# N directory not visible to the contracts engine` line in text). It is a note on the verdict and does not change `verified` or the exit code, since a stray scripts or fixtures directory would otherwise fail every existing gate. Add the `__init__.py` to bring the modules under the contract.
 
 **Config resolution.** `archy contracts` reads, in order:
 
@@ -411,7 +416,7 @@ git diff --name-only HEAD | archy affected . --stdin --quiet | xargs pytest
 archy affected . src/foo.py --filter "tests/integration/**" --json
 ```
 
-Test classification defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `--filter <glob>`. Internal modules only; vendored or third-party code is not traced.
+Test classification defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `--filter <glob>`. A filter that matches no file in the graph is an error (exit 1) rather than an empty selection, and it ends with a `did you mean` when a directory is close. A `tests/` with no `__init__.py` beside a `src/` layout is scanned (test files outside a package are named from the scan root, as in a flat layout), so `affected` selects them; other `.py` files outside every package (`docs/conf.py`, `noxfile.py`, `examples/`) are still not in the graph, and a filter that names only those is refused. Internal modules only; vendored or third-party code is not traced.
 
 ### Design Structure Matrix (`archy dsm`)
 
@@ -473,15 +478,15 @@ The server is backed by a persistent parse cache (`.archy/index.db`): each tool 
 |---|---|
 | `archy_brief` | One call before starting on an unfamiliar repository. Composes `archy_conventions` (bounded to `top_n` rows per ranked section; `conventions.totals` says how many were dropped, while `gates`, `errors`, `export_gaps` and `doc_gaps` are never truncated), the layer `coverage` of `archy.yaml` (null when there is none), and with `contracts=True` the transitive import-linter verdict. Does NOT run the direct-edge check, so `transitive_checked=false` plus a `transitive_unverified_reason` means the `forbid` rules are unverified, not that they hold. Ranked and truncated, so use `archy_module_view` for a negative. Same field names as `archy brief --format json`. Advisory; mutates nothing. |
 | `archy_score` | Compute the five-metric score (modularity, acyclicity, depth, equality, complexity, geometric mean); optional `record=True` and `strict=True` for the same regression-gate behaviour the CLI offers. Pass `record=True` to record a start-of-session baseline (replaces the removed `archy_record_baseline`). `view="history"` returns the recent score history from `.archy/history.jsonl` (up to `last_n` rows, oldest-first, for comparing deltas over time; replaces the removed `archy_trend`). |
-| `archy_cycles` | Find import cycles. |
+| `archy_cycles` | Find import cycles; `exclude_type_checking` leaves out `if TYPE_CHECKING:` edges. |
 | `archy_check` | Run direct-edge layer rules from `archy.yaml`. Pass `contracts=True` to also run the transitive import-linter contracts (Layers, Forbidden, Independence, Protected, AcyclicSiblings; stricter than the direct edges), nested under the `contracts` field (replaces the removed `archy_contracts`; requires `archy[contracts]`, and degrades to `available=false` with an advisory if the extra is absent). Contracts are skipped when no `archy.yaml` is found (you get a `CheckErrorPayload` first). Always returns `coverage`: how many modules and import edges the rules actually reach, so `passed=true` can be told apart from a config that governs almost nothing. `transitive_checked` says whether this run actually evaluated the `forbid` rules transitively; it is false when contracts were never requested, when they produced no verdict, and when any contract could not have failed, since none of the three evaluated the rules. `transitive_unverified_reason` then says which, naming `archy_check(contracts=True)` if it was never requested, the actual failure if it produced no verdict, and how many contracts matched nothing if that is what happened. So a clean pass is never silent about having seen direct edges only. `min_layers_present:` in `archy.yaml` also gates `passed` here, not just the CLI exit code. `required_violations` reports unsatisfied `required:` rules (module X must transitively reach Y, counting the implicit package-`__init__` import), and gates `passed` too; fix by adding the missing import, not by deleting the rule. Within `contracts`, read `verified`, not `all_kept`: a contract whose module expressions match nothing in the graph is `kept` because it could not have failed, `unverifiable` counts those, and each one carries `matched_nothing` and `unmatched_expressions` naming the patterns that matched no module. |
-| `archy_impact` | Given changed file paths, return what they affect. `mode="blast"` (**default**) returns the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. `mode="affected"` (replaces the removed `archy_affected`) is the CI-shaped lookup instead: modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes; `test_filter` overrides pytest test detection with a recursive glob. `co_change=true` (blast mode, opt-in) adds a `co_changed` list: modules that historically co-change with the edit in git but have no import/call edge to it, so the structural blast radius misses them (`archy coupling` scoped to your edit; source-only, best-effort, the only path that reads git). A file that matches no module comes back in `unresolved` with a `did you mean` in `unresolved_hints`, and `nothing_resolved` is true when none matched, so an empty blast radius is not mistaken for a safe edit. |
+| `archy_impact` | Given changed file paths, return what they affect. `mode="blast"` (**default**) returns the modules that transitively import them (blast radius), plus `chains`: the shortest import path back to a changed module (with line numbers) explaining why each is impacted. `mode="affected"` (replaces the removed `archy_affected`) is the CI-shaped lookup instead: modules pre-classified into `impacted_tests` and `impacted_modules`, depth-capped (default 5 hops) so a single-line edit doesn't fan out to thousands of nodes; `test_filter` overrides pytest test detection with a recursive glob, and one that matches no file in the graph is an error, not an empty `impacted_tests`, ending with a `did you mean` when a directory is close. `co_change=true` (blast mode, opt-in) adds a `co_changed` list: modules that historically co-change with the edit in git but have no import/call edge to it, so the structural blast radius misses them (`archy coupling` scoped to your edit; source-only, best-effort, the only path that reads git). A file that matches no module comes back in `unresolved` with a `did you mean` in `unresolved_hints`, and `nothing_resolved` is true when none matched, so an empty blast radius is not mistaken for a safe edit. |
 | `archy_snapshot` | Capture score, cycles, and violations to `.archy/baseline.json`. Call at session start. Also returns an `invariant_brief` (declared layers, forbidden edges, declared `required:` reach rules, acyclic invariant, baseline score, load-bearing modules) to read before the first edit. |
 | `archy_diff` | Compare current state against the snapshot; returns added/resolved cycles & violations, per-component score deltas, and a risk-weighted `summary` whose items carry a `prompt` reframing each delta as a judgment question ("new cycle a -> b; intended, or invert an edge?"). `strict=True` with `baseline` (a committed file) adds a `strict` verdict whose `passed` is false on any cycle or layer violation that baseline does not carry, with `reason` naming the closing edges. |
 | `archy_simulate` | Counterfactual pre-edit check: given a proposed import-edge delta (`add`/`remove` of `{from, to}` pairs), return the would-be cycles, back-edges, layer/SDP/required-reach violations, per-axis score delta, and blast-radius change, with no file written. Test a refactoring hypothesis before committing to it. An endpoint that matches no module gets a `did you mean` (`applied.unresolved_hints`) and its spec is listed in `applied.skipped`; `applied.coverage` is `complete`, `partial` or `none`, and `none` means nothing was simulated, so the zero deltas are not a prediction. |
 | `archy_graph` | Inspect the dependency graph. With no `focus`, `response_format="summary"` (**default**) returns the top-N overview by fan-in / fan-out / PageRank plus top external deps (replaces the removed `archy_graph_summary`; `top_n` controls N); `response_format="full"` returns the complete node/edge dump matching `archy graph --format json`, refusing graphs larger than `max_nodes` (default 500) with an explicit `GraphTooLargePayload`. Pass `focus=[...]` (replaces the removed `archy_graph_focus`) for a bounded subgraph around one or more modules (qualnames or file paths): `depth` caps hops, `direction` is `in`/`out`/`both`, each edge carries import line numbers, and `response_format`/`max_nodes`/`top_n` do not apply. A `focus` name that matches no module comes back in `unresolved` with a `did you mean` in `unresolved_hints`. |
 | `archy_what_to_refactor_next` | Ranked refactor-priority list (replaces the removed `archy_hotspots` and `archy_high_risk_modules` via `lens`). `lens="fused"` (**default**) sums the behavioral lens (CC x churn) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal can still rank first). `lens="behavioral"` ranks CC x churn hotspots only (needs git); `lens="structural"` ranks the edit-risk composite only (git-free; pass `min_risk=0` for no floor). Each entry names which lenses fired and carries a one-line `rationale`. An empty list plus a `note` is a real answer. |
-| `archy_dsm` | Design Structure Matrix view of the import graph. `response_format="summary"` (**default**) returns a compact overview (block structure, counts, back-edges, cross-block coupling) without the full cell list. `response_format="full"` returns the positional matrix (cell `(row=source, col=target)` non-empty when source imports target), refusing matrices over `DEFAULT_MAX_DSM_CELLS` cells with a `DSMTooLargePayload`. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff (regardless of `response_format`) whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md). A `focus` or `package` that matches no module is an error, not an empty matrix. |
+| `archy_dsm` | Design Structure Matrix view of the import graph. `response_format="summary"` (**default**) returns a compact overview (block structure, counts, back-edges, cross-block coupling) without the full cell list. `response_format="full"` returns the positional matrix (cell `(row=source, col=target)` non-empty when source imports target), refusing matrices over `DEFAULT_MAX_DSM_CELLS` cells with a `DSMTooLargePayload`. `group_by` controls row/col ordering (`community` for block-diagonal cohesion, `layer` for layer-violation forensics, `topological` to localize back-edges). `weight` is `imports` or `calls`. Narrow large projects with `focus=<qualname>` + `focus_depth` or `package=<prefix>`. When `baseline_path` is provided, returns a structured diff (regardless of `response_format`) whose `new_back_edges` field flags cycles the edit just introduced. Visualization-only; see [`docs/research/DSM_EMPIRICS.md`](docs/research/DSM_EMPIRICS.md). A `focus` or `package` that matches no module is an error, not an empty matrix, and the error ends with a `did you mean` naming the closest module names when any are close. |
 | `archy_duplicates` | Cluster functions with identical normalized body shape into two tiers: `duplicates` (likely-real, investigate) and `variants` (demoted likely-intentional clusters - same-class / boilerplate / test / vendored / `independent`, each with a `variant_reason`). `co_change=true` (**default**, needs git) adds the `independent` demotion: copies in actively-maintained files that never co-change (deliberately parallel implementations), the principled precision lever that lifts the primary tier above the ~50% syntactic ceiling (§12f). Within the primary tier, `exact=true` marks byte-identical (Type-1) clusters, the highest-confidence subset. `near_miss=true` (opt-in, slower) adds a lower-confidence `near_miss` tier: Type-3 (gapped) clones the exact shape-hash misses, found by token-multiset overlap (§12h). `response_format="summary"` (**default**) returns ranking fields + one sample member per cluster; `"full"` returns member lists. Advisory surfacer, not a score axis: refactorability is a semantic call (see [`docs/research/RESEARCH_METRICS.md`](docs/research/RESEARCH_METRICS.md) §12c/§12f/§12h). `min_nodes` (default 30) skips trivial stubs. |
 | `archy_conventions` | Report the project's own house style, derived from its source: `naming` (class-name suffix families grouped by **home module**, so the module you are about to edit shows its own patterns), `surfaces` (mirrored helper sets like `_x_to_text`/`_x_to_json`, plus names defined in several modules - the "wire all of these together" list), `gates` (sites where a **failed finding** exits non-zero, each with its literal exit `code` and controlling lever: `flag:--strict`, `config:<attr>`, `param:<name>`, `hardcoded`), `errors` (the separate user-error exits - bad config, missing file - kept apart so the gate count stays meaningful), `models` (base-class / frozen / tuple-vs-list census), `bases` (kind families grouped by what they derive from *transitively*, counting only bases the project defines, with suffix agreement reported so a family whose name is not the rule says so), `registries` (`NAME = Ctor(...)` families and the distribution of every keyword passed - how a project declares codes or flags when it does not use classes), `export_gaps` (members absent from an `__all__`, or from a `from .x import Y as Y` block, that already lists their siblings) and `doc_gaps` (members the project's own `.rst`/`.md` surface does not name). Call before adding a class, field, or command to a project you do not know. Advisory: never fails, mutates nothing. `min_family` (default 2) raises the reporting floor; `include_tests` censuses test modules too (default false, because test fixtures dilute a real family). |
 | `archy_module_view` | Everything known about ONE module, complete and unranked - the **lookup** counterpart to `archy_conventions`'s ranked report. Because the report truncates, a module's absence from it means nothing; every list here is complete for the module named, so absence is the answer to "does `risk` import `hotspots`" or "does anything still reach `layers`". Returns `imports_internal` (relative imports resolved), `imported_by` (counting test importers even when tests are otherwise set aside, because a module imported only by tests is imported), `classes`, `functions`, `exports` (null when the module declares no `__all__` and no explicit re-exports - different from an empty one), `suffix_families`, `gates`, and `status`, which says whether the module was censused or set aside and why, so an empty view is never mistaken for "nothing to report". An unknown module name raises rather than returning an empty view. Advisory: never mutates. |
@@ -526,7 +531,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.53.1
+- uses: hslee16/archy@v0.55.0
   with:
     command: score      # score | check | cycles | diff | history
     path: .
@@ -556,7 +561,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.53.1
+    rev: v0.55.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -602,7 +607,11 @@ forbid:
   - {from: application, to: infra}
 ```
 
+**Unknown keys are errors.** A key `archy.yaml` does not read, at any level, is refused rather than ignored: `forbidden:` for `forbid:` used to print "No layer violations" and exit 0, because a rule that cannot fire looks exactly like a clean codebase. The error names the key, the closest allowed spelling when there is one, and the allowed keys. Top level: `layers`, `forbid`, `required`, `exclude`, `roots`, `sdp`, `max_modules`, `min_layers_present`, `exclude_type_checking_imports`; a layer takes `modules`; a forbid entry `from` and `to`; a required entry `source`, `must_reach`, `reason` and `within`; `sdp` takes `enabled`, `tolerance` and `mode`. `exclude:` matches whole directory names (`generated`), never paths or globs, so an entry containing `/`, `\`, `*`, `?` or `[` is refused too.
+
 **Pattern syntax.** Dotted-name globs: `*` matches one segment, `**` matches zero or more. `myapp.domain.**` covers the package itself and every descendant, whereas a bare `myapp.domain` matches that one module exactly and silently leaves its submodules unlayered (import-linter contracts, by contrast, match a named package together with its descendants). `archy check` flags the bare form when it leaves descendants out; see Coverage below. A layer pattern may start with `**.` to mean "this package wherever it sits" (`**.services.**` matches `services`, `conduit.services.user`, not `myservices.x`); `archy contracts` cannot derive import-linter contracts from such a layer, so it refuses with a message when a `forbid` rule uses one. Modules must belong to at most one layer.
+
+**Layers that name a third-party package.** `orm: {modules: ["sqlalchemy.**"]}` is a real layer: `forbid: [{from: domain, to: orm}]` fires on a direct import, the layer counts toward `layers present` and `min_layers_present`, and `archy contracts` evaluates it. Edges into such a layer are reported as a separate "internal-to-external" count (`external_edges_governed` in the JSON and MCP coverage), apart from the internal edge ratio. Only the top-level name exists in the graph, because every external import collapses to its package, so write `sqlalchemy.**` or `sqlalchemy`; a deeper pattern such as `sqlalchemy.orm.**` (in a layer or a `required:` rule) can never match and is refused with that suggestion. An external layer can be the target of a forbid rule but not its source in `archy contracts`.
 
 **Required reach (`required:`).** The inverse of `forbid:`. A forbid rule catches an edge that should not exist; a required rule catches one that should exist and does not, which forbidding cannot express:
 
@@ -633,7 +642,7 @@ required:
 
 An entrypoint is a module with a top-level `if __name__ == "__main__":` guard (parenthesized or `and`-combined forms count), a `__main__.py`, or a target of `[project.scripts]`, `[project.gui-scripts]` or `[tool.poetry.scripts]`. Script targets are read from every `pyproject.toml` between a scanned module and the repository root (the nearest directory holding `.git`, `.hg`, `.jj`, `.svn` or `.sl`; with none, nothing above the scanned directory is read), so `archy check src` sees what the project root declares and each monorepo sub-project contributes its own. Each violation says which of these made the module an entrypoint. Derivation finds every runnable file, guarded test modules and one-off scripts included, so most rules want `within:` to scope it to the part of the tree that carries the obligation; `within` is rejected on any other `source`, where editing the pattern does the same job.
 
-A rule that derives nothing is reported as a violation. So is a `pyproject.toml` that cannot be parsed, since dropping its script targets would let the rule pass over the modules they name. A script target that matches no scanned module (an `exclude:`d directory, a re-exported third-party tool) is skipped; under a namespace package without `__init__.py`, `acme.tool.cli` is matched to the `tool.cli` archy scanned. Not read: `setup.py` and `setup.cfg` `console_scripts`, and `.py` files that sit outside every package, which have no module name in archy's graph.
+A rule that derives nothing is reported as a violation. So is a `pyproject.toml` that cannot be parsed, since dropping its script targets would let the rule pass over the modules they name. A script target that matches no scanned module (an `exclude:`d directory, a re-exported third-party tool) is skipped; under a namespace package without `__init__.py`, `acme.tool.cli` is matched to the `tool.cli` archy scanned. Not read: `setup.py` and `setup.cfg` `console_scripts`, and `.py` files that sit outside every package, which have no module name in archy's graph (test files are the exception: they are named from the scan root, so `affected` can see them).
 
 **Excluding directories.** archy skips two kinds of directory by name.
 

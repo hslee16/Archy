@@ -656,13 +656,13 @@ def test_resolve_modules_accepts_absolute_path(tmp_path: Path, pkg: Path):
 def test_call_edge_attached_to_existing_import_edge(tmp_path: Path, pkg: Path):
     # Calls that flow along an existing import edge enrich it in place
     # rather than creating a parallel edge.
-    (pkg / "a.py").write_text("from pkg import b\nb.do()\nb.do()\n")
+    (pkg / "a.py").write_text("from pkg import b\nb.do(); b.do()\nb.do()\n")
     (pkg / "b.py").write_text("def do():\n    pass\n")
     g = build_graph(tmp_path)
     edge = g["pkg.a"]["pkg.b"]
     assert edge["kinds"] == ("import", "call")
-    assert edge["call_count"] == 2
-    assert edge["call_lines"] == (2, 3)
+    assert edge["call_count"] == 3
+    assert edge["call_lines"] == (2, 2, 3)
 
 
 def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
@@ -672,13 +672,15 @@ def test_call_edge_resolves_deeper_than_import_edge(tmp_path: Path, pkg: Path):
     sub = pkg / "sub"
     sub.mkdir()
     (sub / "__init__.py").write_text("")
-    (pkg / "consumer.py").write_text("import pkg\npkg.sub.do()\n")
+    (pkg / "consumer.py").write_text("import pkg\npkg.sub.do()\npkg.sub.do()\n")
     g = build_graph(tmp_path)
     assert g.has_edge("pkg.consumer", "pkg")
+    assert "call_lines" not in g["pkg.consumer"]["pkg"]
     assert g.has_edge("pkg.consumer", "pkg.sub")
     call_only = g["pkg.consumer"]["pkg.sub"]
     assert call_only["kinds"] == ("call",)
-    assert call_only["call_count"] == 1
+    assert call_only["call_count"] == 2
+    assert call_only["call_lines"] == (2, 3)
 
 
 def test_call_to_unimported_name_is_dropped(tmp_path: Path, pkg: Path):
@@ -837,7 +839,7 @@ def test_effective_max_modules_resolution():
 def test_graph_to_dict_shape_is_pinned_by_hand():
     """The wire shape as a literal, because every other test of it is relative.
 
-    `archy graph --format json` and `mcp._graph_payload_from` BOTH call this
+    `archy graph --format json` and `mcp_runs._graph_payload_from` BOTH call this
     function, so the cross-surface parity test in `tests/test_mcp.py` cannot
     catch a consistent regression here: dropping a field or renaming a key moves
     both sides together and that test still passes (#439). Nothing else pins the
@@ -1132,3 +1134,40 @@ def test_hint_unresolved_does_not_offer_external_modules(tmp_path: Path):
     graph = build_graph(tmp_path)
     assert graph.nodes["requests"]["external"]  # the near miss exists, as an external
     assert hint_unresolved(graph, ["requestz"]) == ()
+
+
+def test_from_external_import_name_call_edges_pin_external_targets(tmp_path: Path, pkg: Path):
+    # #705: `from <external> import name` must bind calls through
+    # `_external_target`. The `import json` form was already pinned; this
+    # form (the common third-party call shape) was not.
+    (pkg / "a.py").write_text(
+        "from requests import get\n"
+        "from os.path import join\n"
+        "from requests import get as g\n"
+        "import json\n"
+        "def f():\n"
+        "    get('x')\n"
+        "    join('a', 'b')\n"
+        "    g('y')\n"
+        "    json.dumps(1)\n"
+    )
+    data = graph_to_dict(build_graph(tmp_path))
+    # dotted external collapses to its top-level package
+    get_edge = _edge(data, "pkg.a", "requests")
+    assert get_edge["call_count"] == 2  # get + g alias
+    assert "call" in get_edge["kinds"]
+    assert "import" in get_edge["kinds"]
+    join_edge = _edge(data, "pkg.a", "os")
+    assert join_edge["call_count"] == 1
+    assert "call" in join_edge["kinds"]
+    json_edge = _edge(data, "pkg.a", "json")
+    assert json_edge["call_count"] == 1
+
+
+def test_relative_import_past_project_root_creates_no_alias_or_call_edge(tmp_path: Path, pkg: Path):
+    # #705: an unresolvable relative base must leave the name unbound so no
+    # call edge is invented, and the failed import must not drop the module.
+    (pkg / "a.py").write_text("from ......missing import ghost\nghost()\n")
+    g = build_graph(tmp_path)
+    assert not any(d.get("call_count") for _, _, d in g.edges(data=True))
+    assert "pkg.a" in g

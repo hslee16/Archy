@@ -84,7 +84,7 @@ These are essentially free - no new edge type, no AST work, no git mining - and 
 ## Hard problems that probably won't ship
 
 - **Dynamic imports** - `importlib.import_module(name)` where `name` is a runtime string. Static analysis can flag these as opaque but can't resolve them. Acceptable.
-- **Conditional imports under `sys.platform` / `TYPE_CHECKING`** - currently treated as unconditional. We could tag edges with their guarding condition for richer rules ("CI must not depend on Windows-only modules") but the YAML schema for that is non-trivial.
+- **Conditional imports under `sys.platform` / `TYPE_CHECKING`** - `if TYPE_CHECKING:` imports are now tagged on the edge and `archy cycles` can leave them out (opt-in, #520); `check` layer rules and the score still treat them as unconditional, and `sys.platform` guards are not recognised. We could tag edges with their guarding condition for richer rules ("CI must not depend on Windows-only modules") but the YAML schema for that is non-trivial.
 
 ## Anti-goals (stay disciplined)
 

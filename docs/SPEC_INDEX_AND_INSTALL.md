@@ -174,8 +174,8 @@ Per-adapter path table (config paths only; CLI names follow `claude` / `cursor` 
 |---|---|---|
 | Claude Code | `~/.claude.json` | `%USERPROFILE%\.claude.json` |
 | Cursor | `~/.cursor/mcp.json` | `%USERPROFILE%\.cursor\mcp.json` |
-| Codex CLI | `~/.codex/config.toml` | `%USERPROFILE%\.codex\config.toml` |
-| opencode | `~/.config/opencode/opencode.json` (+ project-local `opencode.json`) | `%APPDATA%\opencode\opencode.json` (+ project-local) |
+| Codex CLI | `$CODEX_HOME/config.toml`, default `~/.codex/config.toml` | `%USERPROFILE%\.codex\config.toml` |
+| opencode | `$XDG_CONFIG_HOME/opencode/opencode.json`, default `~/.config/opencode/opencode.json` (+ project-local `opencode.json`) | `%APPDATA%\opencode\opencode.json` (+ project-local) |
 | Continue | `~/.continue/` | `%USERPROFILE%\.continue\` |
 
 Implementation refinements (verified against each client's docs while building the adapters in `src/archy/install/adapters/`):

@@ -18,25 +18,29 @@ archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
                   create_baseline_command, default_baseline_path,
                   missing_baseline_hint, read_snapshot, score_delta, snapshot_to_dict,
                   strict_baseline_problem, strict_verdict, take_snapshot, write_snapshot
-archy:mirrored-by DiffReport -> archy.cli, archy.diff_summary, archy.mcp,
-                  DiffSummary -> archy.cli, archy.diff_summary, archy.simulate,
-                  ScoreDelta -> archy.cli, archy.simulate, compute_diff -> archy.cli,
-                  archy.mcp, archy.simulate, bench.delta_direction,
-                  bench.simulate_oracle, create_baseline_command -> archy.cli,
-                  archy.mcp, default_baseline_path -> archy.cli, archy.mcp,
-                  missing_baseline_hint -> archy.cli, archy.mcp,
-                  read_snapshot -> archy.cli, archy.mcp,
-                  strict_baseline_problem -> archy.cli, archy.mcp,
-                  strict_verdict -> archy.cli, archy.mcp, take_snapshot -> archy.cli,
-                  archy.mcp, archy.simulate, bench.delta_direction,
-                  bench.simulate_oracle, write_snapshot -> archy.cli, archy.mcp
+archy:mirrored-by DiffReport -> archy.cli_render, archy.diff_summary, archy.mcp,
+                  archy.mcp_runs, DiffSummary -> archy.cli_render, archy.diff_summary,
+                  archy.simulate, ScoreDelta -> archy.cli_render, archy.simulate,
+                  compute_diff -> archy.cli, archy.mcp_runs, archy.simulate,
+                  bench.delta_direction, bench.simulate_oracle,
+                  create_baseline_command -> archy.cli, archy.mcp_runs,
+                  default_baseline_path -> archy.cli, archy.mcp_runs,
+                  missing_baseline_hint -> archy.cli, archy.mcp_runs,
+                  read_snapshot -> archy.cli, archy.mcp_runs,
+                  strict_baseline_problem -> archy.cli, archy.mcp_runs,
+                  strict_verdict -> archy.cli, archy.mcp_runs,
+                  take_snapshot -> archy.cli, archy.mcp_runs, archy.simulate,
+                  bench.delta_direction, bench.simulate_oracle,
+                  write_snapshot -> archy.cli, archy.mcp_runs
 """
 
 from __future__ import annotations
 
 import json
 import shlex
+from collections.abc import Callable, Hashable
 from pathlib import Path
+from typing import TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -475,7 +479,8 @@ def _cycle_to_dict(cycle: Cycle) -> dict[str, object]:
     return {
         "modules": list(cycle.modules),
         "edges": [
-            {"source": e.source, "target": e.target, "lines": list(e.lines)} for e in cycle.edges
+            {"source": e.source, "target": e.target, "lines": list(e.lines), "path": e.path}
+            for e in cycle.edges
         ],
     }
 
@@ -486,6 +491,7 @@ def _violation_to_dict(v: Violation) -> dict[str, object]:
         "source": v.source,
         "target": v.target,
         "lines": list(v.lines),
+        "path": v.path,
     }
 
 
@@ -509,6 +515,7 @@ def _sdp_violation_to_dict(v: SdpViolation) -> dict[str, object]:
         "source_instability": v.source_instability,
         "target_instability": v.target_instability,
         "lines": list(v.lines),
+        "path": v.path,
     }
 
 
@@ -573,9 +580,14 @@ def _snapshot_from_dict(payload: dict[str, object]) -> Snapshot:
 
 
 def _findings_only(payload: dict[str, object]) -> dict[str, object]:
+    # `lines` and `path` are where a finding sits, not what it is: both are left
+    # out so a committed baseline does not churn when code moves or when a file
+    # written before `path` existed is compared with one written after (#522).
+    location_keys = ("lines", "path")
+
     def strip(item: object) -> object:
         if isinstance(item, dict):
-            return {k: strip(v) for k, v in item.items() if k != "lines"}
+            return {k: strip(v) for k, v in item.items() if k not in location_keys}
         if isinstance(item, list):
             return [strip(v) for v in item]
         return item
@@ -720,6 +732,7 @@ def _cycle_from_dict(d: dict[str, object]) -> Cycle:
             source=str(_expect_dict(e)["source"]),
             target=str(_expect_dict(e)["target"]),
             lines=tuple(_expect_int(x) for x in _expect_list(_expect_dict(e).get("lines", []))),
+            path=str(_expect_dict(e).get("path", "")),
         )
         for e in _expect_list(d["edges"])
     )
@@ -733,6 +746,7 @@ def _violation_from_dict(d: dict[str, object]) -> Violation:
         source=str(d["source"]),
         target=str(d["target"]),
         lines=tuple(_expect_int(x) for x in _expect_list(d.get("lines", []))),
+        path=str(d.get("path", "")),
     )
 
 
@@ -758,6 +772,7 @@ def _sdp_violation_from_dict(d: dict[str, object]) -> SdpViolation:
         source_instability=_expect_float(d["source_instability"]),
         target_instability=_expect_float(d["target_instability"]),
         lines=tuple(_expect_int(x) for x in _expect_list(d.get("lines", []))),
+        path=str(d.get("path", "")),
     )
 
 
@@ -772,27 +787,42 @@ def score_delta(baseline: Score, current: Score) -> ScoreDelta:
     )
 
 
-def _cycle_set_diff(baseline: tuple[Cycle, ...], current: tuple[Cycle, ...]) -> CycleSetDiff:
-    baseline_keys = {frozenset(c.modules) for c in baseline}
-    current_keys = {frozenset(c.modules) for c in current}
-    return CycleSetDiff(
-        added=tuple(c for c in current if frozenset(c.modules) not in baseline_keys),
-        resolved=tuple(c for c in baseline if frozenset(c.modules) not in current_keys),
+_T = TypeVar("_T")
+
+
+def _added_resolved(
+    baseline: tuple[_T, ...],
+    current: tuple[_T, ...],
+    key: Callable[[_T], Hashable],
+    *,
+    resolvable: Callable[[_T], bool] = lambda _: True,
+) -> tuple[tuple[_T, ...], tuple[_T, ...]]:
+    """Split two snapshots into (added, resolved) by identity ``key``.
+
+    ``resolvable`` lets a caller veto a "resolved" row it cannot vouch for.
+    """
+    baseline_keys = {key(v) for v in baseline}
+    current_keys = {key(v) for v in current}
+    return (
+        tuple(v for v in current if key(v) not in baseline_keys),
+        tuple(v for v in baseline if key(v) not in current_keys and resolvable(v)),
     )
+
+
+def _cycle_set_diff(baseline: tuple[Cycle, ...], current: tuple[Cycle, ...]) -> CycleSetDiff:
+    added, resolved = _added_resolved(baseline, current, lambda c: frozenset(c.modules))
+    return CycleSetDiff(added=added, resolved=resolved)
 
 
 def _violation_set_diff(
     baseline: tuple[Violation, ...], current: tuple[Violation, ...]
 ) -> ViolationSetDiff:
-    def _key(v: Violation) -> tuple[str, str, str, str]:
-        return (v.rule.from_layer, v.rule.to_layer, v.source, v.target)
-
-    baseline_keys = {_key(v) for v in baseline}
-    current_keys = {_key(v) for v in current}
-    return ViolationSetDiff(
-        added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
+    added, resolved = _added_resolved(
+        baseline,
+        current,
+        lambda v: (v.rule.from_layer, v.rule.to_layer, v.source, v.target),
     )
+    return ViolationSetDiff(added=added, resolved=resolved)
 
 
 def _reach_violation_set_diff(
@@ -803,34 +833,23 @@ def _reach_violation_set_diff(
     def _key(v: ReachViolation) -> tuple[str, str, str, str]:
         return (v.rule.source, v.rule.within or "", v.rule.must_reach, v.module or "")
 
-    baseline_keys = {_key(v) for v in baseline}
-    current_keys = {_key(v) for v in current}
     # A rule that is dead NOW (one `module=None` row) evaluated no module, so
     # its baseline failures are unknown, not fixed. Reporting them as resolved
     # would tell the reader an unreadable pyproject.toml repaired the code. The
     # reverse needs no guard: a rule coming back to life reports its failures as
     # added, which over-reports and is the safe direction.
     dead_now = {_key(v)[:3] for v in current if v.module is None}
-    return ReachViolationSetDiff(
-        added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(
-            v for v in baseline if _key(v) not in current_keys and _key(v)[:3] not in dead_now
-        ),
+    added, resolved = _added_resolved(
+        baseline, current, _key, resolvable=lambda v: _key(v)[:3] not in dead_now
     )
+    return ReachViolationSetDiff(added=added, resolved=resolved)
 
 
 def _sdp_violation_set_diff(
     baseline: tuple[SdpViolation, ...], current: tuple[SdpViolation, ...]
 ) -> SdpViolationSetDiff:
-    def _key(v: SdpViolation) -> tuple[str, str]:
-        return (v.source, v.target)
-
-    baseline_keys = {_key(v) for v in baseline}
-    current_keys = {_key(v) for v in current}
-    return SdpViolationSetDiff(
-        added=tuple(v for v in current if _key(v) not in baseline_keys),
-        resolved=tuple(v for v in baseline if _key(v) not in current_keys),
-    )
+    added, resolved = _added_resolved(baseline, current, lambda v: (v.source, v.target))
+    return SdpViolationSetDiff(added=added, resolved=resolved)
 
 
 def _expect_dict(value: object) -> dict[str, object]:

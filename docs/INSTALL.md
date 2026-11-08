@@ -43,7 +43,14 @@ There are three ways to wire archy in, plus the optional CLI install.
 ### 1. `archy install` (recommended, all clients)
 
 Auto-detects which clients are present and configures each one. Idempotent, and
-unrelated config in shared files is preserved.
+unrelated config in shared files is preserved. A shared rules file (`CLAUDE.md`,
+`AGENTS.md`) with an `<!-- archy:begin -->` line that has no `<!-- archy:end -->`
+of its own is refused and left as it is: `archy install` and `archy uninstall`
+name the file and the line. Delete that marker, or add the end marker right after
+archy's text and before anything of yours, then re-run. Install writes nothing
+when it refuses; uninstall has already done the steps before the refusal, and the
+re-run finishes the rest. Cursor's and Continue's rules files are archy's own:
+install refuses the same way, and uninstall deletes them whatever they hold.
 
 ```bash
 uvx archy install                              # detect, confirm, wire all
@@ -138,8 +145,11 @@ project-scoped files under the current directory (or `--project-root`).
 | Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` (owned) | `.continue/rules/archy.md` (owned) | n/a |
 
 On Windows the homedir-anchored paths resolve under `%USERPROFILE%`, and
-opencode's global config lives under `%APPDATA%\opencode\`. "owned" marks files
-archy creates exclusively; everything else is a shared file archy merges into.
+opencode's global config lives under `%APPDATA%\opencode\`. Set `CODEX_HOME` and
+Codex's global files go there; set `XDG_CONFIG_HOME` to an absolute path (not on
+Windows) and opencode's go to `$XDG_CONFIG_HOME/opencode/`. Install, uninstall,
+`--print-config` and detection all follow them. "owned" marks files archy creates
+exclusively; everything else is a shared file archy merges into.
 
 ## Uninstalling
 

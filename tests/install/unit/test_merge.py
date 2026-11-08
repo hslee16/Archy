@@ -252,3 +252,26 @@ def test_strip_claude_permissions_leaves_deny_untouched():
     assert stripped["permissions"]["deny"] == [denied, "Bash(rm:*)"]
     assert denied not in stripped["permissions"]["allow"]
     assert not any(p in stripped["permissions"]["allow"] for p in patterns)
+
+
+@pytest.mark.parametrize("deny_entry", ["mcp__archy", "mcp__archy__*"])
+def test_claude_permissions_skips_all_tools_for_server_wide_deny(deny_entry):
+    # #798: Claude's server-wide deny forms cover every archy tool, not just
+    # an exact per-tool string match.
+    patterns = permission_patterns()
+    assert patterns, "fixture precondition: archy exposes at least one tool"
+    # The fixture must not also list per-tool entries, or the assertion would
+    # pass via the old exact-match path (#798 acceptance).
+    assert "mcp__archy__archy_" not in deny_entry
+    existing = json.dumps({"permissions": {"deny": [deny_entry], "allow": ["Bash(ls:*)"]}})
+
+    denied = denied_archy_permission_patterns(existing)
+    assert denied == patterns
+
+    obj = json.loads(render_claude_permissions(existing))
+    allow = obj["permissions"]["allow"]
+    deny = obj["permissions"]["deny"]
+
+    assert deny_entry in deny
+    assert "Bash(ls:*)" in allow
+    assert not any(p in allow for p in patterns)

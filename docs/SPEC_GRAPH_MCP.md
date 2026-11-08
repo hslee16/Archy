@@ -76,7 +76,7 @@ Concise-by-default, with a full-dump escape hatch (the #226 response-shaping wor
 
 ## Response models
 
-Add to `src/archy/mcp.py`:
+Add to `src/archy/mcp_payloads.py` (the tool wiring stays in `src/archy/mcp.py`):
 
 ```python
 class GraphNode(BaseModel):

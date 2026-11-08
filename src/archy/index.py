@@ -42,8 +42,11 @@ from archy.parser import ParseResult, parse_file
 # v1 rows would validate with empty hashes and yield zero duplicates on a warm
 # cache until incidental reparse. v3 added `ParseResult.has_main_guard`: a v2
 # row would validate with False and silently drop every guarded script from
-# the `@entrypoints` set until the file happened to change.
-SCHEMA_VERSION = 3
+# the `@entrypoints` set until the file happened to change. v4 added
+# `ImportRef.type_checking`: a v3 row would validate with
+# False and report every TYPE_CHECKING-guarded import as a runtime dependency
+# until the file happened to change.
+SCHEMA_VERSION = 4
 
 
 class SyncStats(BaseModel):
