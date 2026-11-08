@@ -96,6 +96,41 @@ def compare(archy: set[Edge], ruff: set[Edge]) -> tuple[set[Edge], set[Edge], se
     return archy & ruff, ruff - archy, archy - ruff
 
 
+def _is_implicit_init(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> bool:
+    """archy-only edge into an ancestor package's `__init__.py`."""
+    source, target = edge
+    return side == "archy" and _is_init(target) and _within(source, _dir(target))
+
+
+def _reaches_package_via_init(edge: Edge, other: set[Edge]) -> bool:
+    """The other engine reaches the package this edge targets, `__init__` side aside."""
+    source, target = edge
+    package = _dir(target)
+    if _is_init(target):
+        return any(s == source and _within(t, package) for s, t in other)
+    return any(s == source and _is_init(t) and _dir(t) == package for s, t in other)
+
+
+def _is_init_targeting(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> bool:
+    """Same source reaches the same package, one engine via `__init__`, one not."""
+    return _reaches_package_via_init(edge, other)
+
+
+def _is_script_sibling(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> bool:
+    """ruff-only bare-name sibling import in a directory that is not a package."""
+    source, target = edge
+    in_plain_dir = f"{_dir(source)}/__init__.py" not in tree_files
+    return side == "ruff" and _dir(source) == _dir(target) and not _is_init(target) and in_plain_dir
+
+
+# Order matters: the first rule that fires names the reason.
+RULES = (
+    ("implicit_init", _is_implicit_init),
+    ("init_targeting", _is_init_targeting),
+    ("script_sibling", _is_script_sibling),
+)
+
+
 def classify(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> str | None:
     """The allow-list reason for a one-sided edge, or None when unexplained.
 
@@ -103,28 +138,11 @@ def classify(edge: Edge, side: str, other: set[Edge], tree_files: set[str]) -> s
     the other engine's full edge set; `tree_files` is every file either engine
     saw, used to tell whether a directory is a package.
     """
-    source, target = edge
-    package = _dir(target)
-    if side == "archy" and _is_init(target) and _within(source, package):
-        # `from pkg import Name` inside pkg resolves to the package; the edge is to an ancestor.
-        return "implicit_init"
-    if _is_init(target):
-        if any(s == source and _within(t, package) for s, t in other):
-            return "init_targeting"
-    elif any(s == source and _is_init(t) and _dir(t) == package for s, t in other):
-        return "init_targeting"
-    if (
-        side == "ruff"
-        and _dir(source) == _dir(target)
-        and not _is_init(target)
-        and f"{_dir(source)}/__init__.py" not in tree_files
-    ):
-        return "script_sibling"
-    return None
+    return next((name for name, rule in RULES if rule(edge, side, other, tree_files)), None)
 
 
-def run_archy(tree: Path) -> set[Edge]:
-    """Internal file-level edges from archy's CLI, as repo-relative path pairs."""
+def _archy_graph_json(tree: Path) -> dict:
+    """`archy graph` output for a tree; a deliberate refusal is not an error."""
     done = subprocess.run(
         [
             str(Path(sys.executable).parent / "archy"),
@@ -139,17 +157,27 @@ def run_archy(tree: Path) -> set[Edge]:
         text=True,
         check=False,
     )
-    if done.returncode:
-        # #531/#850: two files mapping to one qualname is a deliberate refusal.
-        if "Run archy on each member separately" in done.stderr:
-            raise ArchyRefused(done.stderr.strip().splitlines()[0])
-        raise RuntimeError(done.stderr.strip()[-300:])
-    data = json.loads(done.stdout)
-    root = tree.resolve()
-    path_of = {}
-    for node in data["nodes"]:
-        if node.get("path") and not node.get("external"):
-            path_of[node["id"]] = Path(node["path"]).resolve().relative_to(root).as_posix()
+    if done.returncode == 0:
+        return json.loads(done.stdout)
+    # #531/#850: two files mapping to one qualname is a deliberate refusal.
+    if "Run archy on each member separately" in done.stderr:
+        raise ArchyRefused(done.stderr.strip().splitlines()[0])
+    raise RuntimeError(done.stderr.strip()[-300:])
+
+
+def _node_paths(data: dict, root: Path) -> dict[str, str]:
+    """Node id -> repo-relative path, for internal nodes that have a file."""
+    return {
+        n["id"]: Path(n["path"]).resolve().relative_to(root).as_posix()
+        for n in data["nodes"]
+        if n.get("path") and not n.get("external")
+    }
+
+
+def run_archy(tree: Path) -> set[Edge]:
+    """Internal file-level edges from archy's CLI, as repo-relative path pairs."""
+    data = _archy_graph_json(tree)
+    path_of = _node_paths(data, tree.resolve())
     edges = {
         (path_of[e["source"]], path_of[e["target"]])
         for e in data["edges"]
@@ -183,12 +211,21 @@ def run_ruff(tree: Path) -> tuple[set[Edge], str]:
     return {e for e in edges if e[0] != e[1]}, version
 
 
+def _tally(row: dict, side: str, edges: set[Edge], other: set[Edge], files: set[str]) -> None:
+    """Sort one engine's one-sided edges into explained counts or unexplained rows."""
+    for edge in sorted(edges):
+        reason = classify(edge, side, other, files)
+        if reason:
+            row["explained"][reason] = row["explained"].get(reason, 0) + 1
+        else:
+            row[f"unexplained_{side}_only"].append(list(edge))
+
+
 def run_repo(tree: Path) -> dict:
     """One row: counts, per-reason explained gaps, and the unexplained edges."""
     archy = run_archy(tree)
     ruff, version = run_ruff(tree)
     both, only_ruff, only_archy = compare(archy, ruff)
-    files = {p for e in archy | ruff for p in e}
     row: dict = {
         "repo": tree.resolve().name,
         "ruff_version": version,
@@ -199,13 +236,9 @@ def run_repo(tree: Path) -> dict:
         "unexplained_ruff_only": [],
         "unexplained_archy_only": [],
     }
+    files = {p for e in archy | ruff for p in e}
     for side, edges, other in (("ruff", only_ruff, archy), ("archy", only_archy, ruff)):
-        for edge in sorted(edges):
-            reason = classify(edge, side, other, files)
-            if reason:
-                row["explained"][reason] = row["explained"].get(reason, 0) + 1
-            else:
-                row[f"unexplained_{side}_only"].append(list(edge))
+        _tally(row, side, edges, other, files)
     ratio = max(len(ruff), 1) / max(len(archy), 1)
     row["ruff_over_archy"] = round(ratio, 2)
     row["flagged"] = ratio > GAP_RATIO or ratio < 1 / GAP_RATIO
@@ -239,6 +272,17 @@ def load_corpus() -> list[Path]:
     return [CLONES / n for n in names if (CLONES / n).is_dir()]
 
 
+def _row_for(tree: Path) -> dict:
+    """A result row for one tree; a failure becomes a row so the pass continues."""
+    name = tree.resolve().name
+    try:
+        return run_repo(tree)
+    except ArchyRefused as exc:
+        return {"repo": name, "refused": str(exc)[:300]}
+    except Exception as exc:  # one bad repo must not end the pass
+        return {"repo": name, "error": f"{type(exc).__name__}: {exc}"[:300]}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--repo", type=Path, action="append", help="tree to compare")
@@ -253,13 +297,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     failed = 0
     for tree in trees:
-        try:
-            row = run_repo(tree)
-        except ArchyRefused as exc:
-            row = {"repo": tree.resolve().name, "refused": str(exc)[:300]}
-        except Exception as exc:  # one bad repo must not end the pass
-            failed += 1
-            row = {"repo": tree.resolve().name, "error": f"{type(exc).__name__}: {exc}"[:300]}
+        row = _row_for(tree)
+        failed += "error" in row
         print(json.dumps(row) if args.json else _text(row))
     return 1 if failed == len(trees) else 0
 
