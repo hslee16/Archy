@@ -81,5 +81,11 @@ What is left is concentrated, and mostly not an archy bug:
   archy looks right and ruff looks incomplete. Not allow-listed, because the path
   sets alone cannot tell a relative import from an absolute one and a rule that
   broad would hide real bugs. Unconfirmed against ruff's source.
-- Tiny-Swarm-World (16 ruff-only), Chamartin3 (16 ruff-only), hextools (9 ruff-only),
-  axor-core (23 archy-only), mcp_coder (9 archy-only): not yet looked at.
+- **axor-core (23), mcp_coder (9), docvet (5), Chamartin3 (11) archy-only: by design.**
+  `from axor_core import GovernedSession` and `from mcp_coder import prompt_llm` are
+  followed by archy through the package's re-export to the file that defines the name
+  (`worker/session.py`, `llm/interface.py`); ruff stops at `pkg/__init__.py`. Added
+  as the `reexport_resolution` allow-list rule: 64 edges explained, unexplained
+  archy-only 559 to 495, ruff-only unchanged at 1193.
+- Tiny-Swarm-World (16 ruff-only), Chamartin3 (16 ruff-only), hextools (9 ruff-only):
+  not yet looked at.
