@@ -549,11 +549,27 @@ class _ModuleFacts:
 def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _ModuleFacts:
     facts = _ModuleFacts(qualname)
     facts.is_package = is_package
+    _collect_definitions(tree, facts)
+    _collect_imports(tree, facts, qualname, is_package)
+    _collect_assignments(tree, facts)
+    if facts.exports is None:
+        reexports = _redundant_alias_reexports(tree)
+        if reexports:
+            facts.exports = frozenset(reexports)
+    return facts
+
+
+def _collect_definitions(tree: ast.Module, facts: _ModuleFacts) -> None:
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             facts.classes.append(node)
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
             facts.functions.append(node)
+
+
+def _collect_imports(
+    tree: ast.Module, facts: _ModuleFacts, qualname: str, is_package: bool
+) -> None:
     # The package a relative import is relative to. For a package's own
     # `__init__.py` that is the qualname itself, because Python sets
     # `__package__ == __name__` there; stripping a level as if it were a plain
@@ -566,22 +582,29 @@ def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _M
             for alias in node.names:
                 facts.imported_modules.add(alias.name)
         elif isinstance(node, ast.ImportFrom):
-            source = "" if node.level else (node.module or "")
-            for alias in node.names:
-                if alias.name != "*":
-                    facts.internal_imports.add((source, alias.name))
-            base = _resolve_relative(node.module, node.level, pkg)
-            if base:
-                # `from X import a, b` is statically ambiguous: the names may be
-                # submodules or symbols in X's namespace. Which one cannot be
-                # decided here, because it depends on what the project defines,
-                # so the statement is recorded whole and resolved by
-                # `_resolved_imports` once the module set is known. `node.module`
-                # is carried because `from . import sibling` imports the sibling
-                # and must never fall back to the containing package.
-                facts.import_froms.append(
-                    (base, tuple((a.name, a.asname or a.name) for a in node.names if a.name != "*"))
-                )
+            _collect_import_from(node, facts, pkg)
+
+
+def _collect_import_from(node: ast.ImportFrom, facts: _ModuleFacts, pkg: str) -> None:
+    source = "" if node.level else (node.module or "")
+    for alias in node.names:
+        if alias.name != "*":
+            facts.internal_imports.add((source, alias.name))
+    base = _resolve_relative(node.module, node.level, pkg)
+    if base:
+        # `from X import a, b` is statically ambiguous: the names may be
+        # submodules or symbols in X's namespace. Which one cannot be
+        # decided here, because it depends on what the project defines,
+        # so the statement is recorded whole and resolved by
+        # `_resolved_imports` once the module set is known. `node.module`
+        # is carried because `from . import sibling` imports the sibling
+        # and must never fall back to the containing package.
+        facts.import_froms.append(
+            (base, tuple((a.name, a.asname or a.name) for a in node.names if a.name != "*"))
+        )
+
+
+def _collect_assignments(tree: ast.Module, facts: _ModuleFacts) -> None:
     for node in tree.body:
         if isinstance(node, ast.Assign | ast.AnnAssign):
             facts.body_assignments.append(node)
@@ -589,23 +612,25 @@ def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _M
             for target in targets:
                 if isinstance(target, ast.Name) and target.id == "__all__":
                     facts.exports = _string_literals(node.value)
-    if facts.exports is None:
-        # `click` publishes its API with `from .x import Y as Y` and no
-        # `__all__` at all -- the PEP 484 explicit re-export form, which type
-        # checkers treat as public. Reading only `__all__` would report that
-        # such a package exports nothing, so a missing member would never
-        # surface. Only the redundant-alias form counts: a plain
-        # `from .x import Y` is an implementation import, not a promise.
-        reexports = {
-            alias.asname
-            for node in tree.body
-            if isinstance(node, ast.ImportFrom)
-            for alias in node.names
-            if alias.asname and alias.asname == alias.name
-        }
-        if reexports:
-            facts.exports = frozenset(reexports)
-    return facts
+
+
+def _redundant_alias_reexports(tree: ast.Module) -> set[str]:
+    """Names a module re-exports with the redundant-alias form, absent `__all__`.
+
+    `click` publishes its API with `from .x import Y as Y` and no `__all__` at
+    all -- the PEP 484 explicit re-export form, which type checkers treat as
+    public. Reading only `__all__` would report that such a package exports
+    nothing, so a missing member would never surface. Only the redundant-alias
+    form counts: a plain `from .x import Y` is an implementation import, not a
+    promise.
+    """
+    return {
+        alias.asname
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+        if alias.asname and alias.asname == alias.name
+    }
 
 
 def _resolve_relative(module: str | None, level: int, pkg: str) -> str:
@@ -891,43 +916,8 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
     family, and they say nothing an agent could act on. Requiring a local
     definition removes them without a stop-list to maintain.
     """
-    facts = list(facts)
-    home_of: dict[str, str] = {}
-    node_of: dict[str, ast.ClassDef] = {}
-    parents: dict[str, set[str]] = defaultdict(set)
-    for f in facts:
-        for cls in f.classes:
-            home_of.setdefault(cls.name, f.qualname)
-            node_of.setdefault(cls.name, cls)
-            for base in cls.bases:
-                name = _dotted(base).split(".")[-1]
-                if name:
-                    parents[cls.name].add(name)
-
-    def ancestors(name: str) -> set[str]:
-        seen: set[str] = set()
-        stack = list(parents.get(name, ()))
-        while stack:
-            cur = stack.pop()
-            if cur in seen:
-                continue
-            seen.add(cur)
-            stack.extend(parents.get(cur, ()))
-        return seen
-
-    members: dict[str, set[str]] = defaultdict(set)
-    for name in node_of:
-        for base in ancestors(name):
-            if base in node_of:  # local definitions only; see the docstring
-                members[base].add(name)
-                # The class that names the family belongs to it. Without this the
-                # root's own declarations are invisible, and the root is exactly
-                # where a family states its defaults: `click` sets
-                # `exit_code = 1` on `ClickException` and `2` on `UsageError`,
-                # which is the whole severity convention and reads as a single
-                # unexplained override if the base is left out.
-                members[base].add(base)
-
+    home_of, node_of, parents = _class_index(list(facts))
+    members = _family_members(node_of, parents)
     out: list[BaseFamily] = []
     for base, names in members.items():
         if len(names) < min_count:
@@ -951,6 +941,54 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
         )
     out.sort(key=lambda b: (-b.count, b.base))
     return tuple(out)
+
+
+def _class_index(
+    facts: list[_ModuleFacts],
+) -> tuple[dict[str, str], dict[str, ast.ClassDef], dict[str, set[str]]]:
+    """Home module, definition node and direct base names, each keyed by class name."""
+    home_of: dict[str, str] = {}
+    node_of: dict[str, ast.ClassDef] = {}
+    parents: dict[str, set[str]] = defaultdict(set)
+    for f in facts:
+        for cls in f.classes:
+            home_of.setdefault(cls.name, f.qualname)
+            node_of.setdefault(cls.name, cls)
+            for base in cls.bases:
+                name = _dotted(base).split(".")[-1]
+                if name:
+                    parents[cls.name].add(name)
+    return home_of, node_of, parents
+
+
+def _ancestors(parents: dict[str, set[str]], name: str) -> set[str]:
+    seen: set[str] = set()
+    stack = list(parents.get(name, ()))
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        stack.extend(parents.get(cur, ()))
+    return seen
+
+
+def _family_members(
+    node_of: dict[str, ast.ClassDef], parents: dict[str, set[str]]
+) -> dict[str, set[str]]:
+    members: dict[str, set[str]] = defaultdict(set)
+    for name in node_of:
+        for base in _ancestors(parents, name):
+            if base in node_of:  # local definitions only; see `_base_families`
+                members[base].add(name)
+                # The class that names the family belongs to it. Without this the
+                # root's own declarations are invisible, and the root is exactly
+                # where a family states its defaults: `click` sets
+                # `exit_code = 1` on `ClickException` and `2` on `UsageError`,
+                # which is the whole severity convention and reads as a single
+                # unexplained override if the base is left out.
+                members[base].add(base)
+    return members
 
 
 def _shared_constants_from(
@@ -1007,22 +1045,7 @@ def _shared_constants(classes: list[ast.ClassDef], *, min_count: int) -> tuple[S
 
 def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[RegistryEntry, ...]:
     """Module-level ``NAME = Ctor(...)`` families. See RegistryEntry."""
-    calls: dict[str, list[tuple[str, str, ast.Call]]] = defaultdict(list)
-    for f in facts:
-        for node in f.body_assignments:
-            if not isinstance(node.value, ast.Call):
-                continue
-            ctor = _dotted(node.value.func).split(".")[-1]
-            if not ctor or not ctor[:1].isupper():
-                continue
-            # Type-system plumbing is declared this way in every typed project
-            # and is identical everywhere, so it out-counts real registries while
-            # telling an agent nothing about this repository.
-            if ctor in _TYPING_PLUMBING:
-                continue
-            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
-                if isinstance(target, ast.Name):
-                    calls[ctor].append((target.id, f.qualname, node.value))
+    calls = _constructor_calls(facts)
     out: list[RegistryEntry] = []
     for ctor, rows in calls.items():
         if len(rows) < max(min_count, 3):
@@ -1035,19 +1058,9 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
             for keyword in call.keywords:
                 if keyword.arg and isinstance(keyword.value, ast.Constant):
                     kw[keyword.arg].append(repr(keyword.value.value))
-            if (
-                call.args
-                and isinstance(call.args[0], ast.Constant)
-                and isinstance(call.args[0].value, str)
-            ):
-                first = call.args[0].value
-                # 🔴 Slugs only. `mypy.message_registry` declares 102 entries whose
-                # first argument is a full diagnostic sentence, and a census that
-                # echoed them would emit tens of kilobytes of prose -- spending the
-                # context this command exists to save. A name an agent could copy is
-                # short and has no spaces; anything else is content, not convention.
-                if first and len(first) <= 40 and " " not in first:
-                    literals.append(first)
+            slug = _first_arg_slug(call)
+            if slug:
+                literals.append(slug)
         # `min_count`, not the registry's own floor of 3: a keyword passed by
         # two members of a larger family is precisely the interesting case --
         # the minority that opts out of a default is what the split is about.
@@ -1065,6 +1078,46 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
         )
     out.sort(key=lambda r: (-r.count, r.constructor))
     return tuple(out)
+
+
+def _constructor_calls(
+    facts: Iterable[_ModuleFacts],
+) -> dict[str, list[tuple[str, str, ast.Call]]]:
+    """Module-level ``NAME = Ctor(...)`` rows of (name, module, call), by constructor."""
+    calls: dict[str, list[tuple[str, str, ast.Call]]] = defaultdict(list)
+    for f in facts:
+        for node in f.body_assignments:
+            if not isinstance(node.value, ast.Call):
+                continue
+            ctor = _dotted(node.value.func).split(".")[-1]
+            if not ctor or not ctor[:1].isupper():
+                continue
+            # Type-system plumbing is declared this way in every typed project
+            # and is identical everywhere, so it out-counts real registries while
+            # telling an agent nothing about this repository.
+            if ctor in _TYPING_PLUMBING:
+                continue
+            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
+                if isinstance(target, ast.Name):
+                    calls[ctor].append((target.id, f.qualname, node.value))
+    return calls
+
+
+def _first_arg_slug(call: ast.Call) -> str | None:
+    """The call's first argument when it is a short, copyable string, else None."""
+    if not (
+        call.args and isinstance(call.args[0], ast.Constant) and isinstance(call.args[0].value, str)
+    ):
+        return None
+    first = call.args[0].value
+    # 🔴 Slugs only. `mypy.message_registry` declares 102 entries whose
+    # first argument is a full diagnostic sentence, and a census that
+    # echoed them would emit tens of kilobytes of prose -- spending the
+    # context this command exists to save. A name an agent could copy is
+    # short and has no spaces; anything else is content, not convention.
+    if first and len(first) <= 40 and " " not in first:
+        return first
+    return None
 
 
 # Directive targets: reStructuredText `.. autoclass:: Thing` and the
@@ -1286,8 +1339,19 @@ def _surface_families(
     one-helper-per-MCP-tool that no caller needs to keep in step.
     """
     facts = list(facts)
-    out: list[SurfaceFamily] = []
+    out = [
+        *_helper_families(facts, min_count),
+        *_consumer_families(facts, min_count, max_consumers),
+        *_mirrored_families(facts, min_count),
+    ]
+    # Cross-module first, then by size. See the docstring: a same-module family is
+    # wired in one edit; a cross-module one is what gets half-wired.
+    out.sort(key=lambda s: (0 if s.kind == "helper" else -1, -s.surface_count, s.kind, s.stem))
+    return tuple(out)
 
+
+def _helper_families(facts: list[_ModuleFacts], min_count: int) -> list[SurfaceFamily]:
+    out: list[SurfaceFamily] = []
     for f in facts:
         variants: dict[str, set[str]] = defaultdict(set)
         for fn in f.functions:
@@ -1304,19 +1368,46 @@ def _surface_families(
                         surfaces=tuple(sorted(tails)),
                     )
                 )
+    return out
 
-    # 🔴 EVERY module that defines the name, not the first one seen. Keying on
-    # the bare name and taking the first definition is a WRONG ANSWER, not a
-    # missing one: with `foo` defined in both `pkg.a` and `pkg.b`, an importer
-    # of `pkg.b.foo` was reported as consuming `pkg.a`, pointing an agent at a
-    # module it must not edit. This repository carries five such collisions
-    # (`_load_graph`, `_load_graph_pair` and `_score_to_dict` among them).
+
+def _definition_homes(facts: list[_ModuleFacts]) -> dict[str, set[str]]:
+    """Every module that defines each class or function name.
+
+    🔴 EVERY module that defines the name, not the first one seen. Keying on
+    the bare name and taking the first definition is a WRONG ANSWER, not a
+    missing one: with `foo` defined in both `pkg.a` and `pkg.b`, an importer
+    of `pkg.b.foo` was reported as consuming `pkg.a`, pointing an agent at a
+    module it must not edit. This repository carries five such collisions
+    (`_load_graph`, `_load_graph_pair` and `_score_to_dict` among them).
+    """
     defined_in: dict[str, set[str]] = defaultdict(set)
     for f in facts:
         for node in f.classes:
             defined_in[node.name].add(f.qualname)
         for node in f.functions:
             defined_in[node.name].add(f.qualname)
+    return defined_in
+
+
+def _import_home(source: str, candidates: set[str]) -> str | None:
+    """The module a ``from source import name`` resolves to, or None if unclear."""
+    if source in candidates:
+        return source
+    if len(candidates) == 1:
+        # A relative import, or one written through a re-export. The
+        # name has one definition project-wide, so there is nothing to
+        # get wrong.
+        return next(iter(candidates))
+    # Ambiguous and unresolved. Saying nothing beats naming the
+    # wrong module, which is the failure this section causes most.
+    return None
+
+
+def _consumer_families(
+    facts: list[_ModuleFacts], min_count: int, max_consumers: int
+) -> list[SurfaceFamily]:
+    defined_in = _definition_homes(facts)
     # Keyed by (home, name), never by name alone. Two modules can define the
     # same name and each be imported unambiguously; merging them into one
     # family reports half its consumers against the wrong home, which is the
@@ -1325,22 +1416,11 @@ def _surface_families(
     for f in facts:
         for source, name in f.internal_imports:
             candidates = defined_in.get(name)
-            if not candidates:
-                continue
-            if source in candidates:
-                home = source
-            elif len(candidates) == 1:
-                # A relative import, or one written through a re-export. The
-                # name has one definition project-wide, so there is nothing to
-                # get wrong.
-                home = next(iter(candidates))
-            else:
-                # Ambiguous and unresolved. Saying nothing beats naming the
-                # wrong module, which is the failure this section causes most.
-                continue
+            home = _import_home(source, candidates) if candidates else None
             # A module importing from itself is not a surface.
-            if home != f.qualname:
+            if home is not None and home != f.qualname:
                 consumers[(home, name)].add(f.qualname)
+    out: list[SurfaceFamily] = []
     for (home, name), modules in sorted(consumers.items()):
         # 🔴 A co-update set is SMALL BY NATURE, and the cap is what separates one
         # from a popular utility. Sixteen modules import `build_graph`; forgetting
@@ -1358,23 +1438,19 @@ def _surface_families(
                     surfaces=tuple(sorted(modules)),
                 )
             )
+    return out
 
+
+def _mirrored_families(facts: list[_ModuleFacts], min_count: int) -> list[SurfaceFamily]:
     homes: dict[str, set[str]] = defaultdict(set)
     for f in facts:
         for cls in f.classes:
             homes[cls.name].add(f.qualname)
-    for name, modules in homes.items():
-        if len(modules) >= min_count:
-            out.append(
-                SurfaceFamily(
-                    kind="mirrored", stem=name, module="", surfaces=tuple(sorted(modules))
-                )
-            )
-
-    # Cross-module first, then by size. See the docstring: a same-module family is
-    # wired in one edit; a cross-module one is what gets half-wired.
-    out.sort(key=lambda s: (0 if s.kind == "helper" else -1, -s.surface_count, s.kind, s.stem))
-    return tuple(out)
+    return [
+        SurfaceFamily(kind="mirrored", stem=name, module="", surfaces=tuple(sorted(modules)))
+        for name, modules in homes.items()
+        if len(modules) >= min_count
+    ]
 
 
 def _click_flags(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:
