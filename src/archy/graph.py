@@ -10,7 +10,7 @@ archy:owns        Module, QualnameCollisionError, ScanTooLargeError, UnresolvedH
                   internal_subgraph, is_ignored_path, parse_project,
                   resolve_from_import, resolve_modules, resolve_relative_import,
                   suggest_files, suggest_modules, zero_modules_reason
-archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
+archy:mirrored-by Module -> archy.conventions_collect, archy.duplicates, archy.headers,
                   archy.index, UnresolvedHint -> archy.impact, archy.mcp_payloads,
                   archy.mcp_runs, archy.simulate, assemble_graph -> archy.index,
                   archy.watcher, bench.pattern_detection,
