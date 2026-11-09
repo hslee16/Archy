@@ -823,9 +823,10 @@ def _try_collect_detailed(
     """Parse one module, or an UnparsedModule naming why it was skipped.
 
     Advisory command: an unreadable or half-written file is a fact to report,
-    never a reason to fail. Shared so the two callers cannot drift on WHICH
-    failures are tolerated -- a narrower except tuple in one of them would turn
-    a work-in-progress file into a crash on only one of the two surfaces.
+    never a reason to fail. `_collect_all` is the one place that calls this, so
+    the two surfaces that census a project cannot drift on WHICH failures are
+    tolerated -- a narrower except tuple in one of them would turn a
+    work-in-progress file into a crash on only one of the two surfaces.
     """
     try:
         # Bytes, not read_text("utf-8"): ast.parse honours the PEP 263 cookie,
@@ -958,11 +959,6 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
     return tuple(out)
 
 
-def _base_names(cls: ast.ClassDef) -> set[str]:
-    """The last dotted segment of each base class expression, non-empty only."""
-    return {name for base in cls.bases if (name := _dotted(base).split(".")[-1])}
-
-
 def _class_index(
     facts: list[_ModuleFacts],
 ) -> tuple[dict[str, str], dict[str, ast.ClassDef], dict[str, set[str]]]:
@@ -974,7 +970,7 @@ def _class_index(
         for cls in f.classes:
             home_of.setdefault(cls.name, f.qualname)
             node_of.setdefault(cls.name, cls)
-            bases = _base_names(cls)
+            bases = set(_declared_bases(cls))
             if bases:
                 parents[cls.name] |= bases
     return home_of, node_of, parents
@@ -1687,7 +1683,11 @@ def _collection_fields(cls: ast.ClassDef) -> tuple[int, int]:
 
 
 def _declared_bases(cls: ast.ClassDef) -> list[str]:
-    """The last dotted segment of each base class expression, non-empty only."""
+    """The last dotted segment of each base class expression, non-empty only.
+
+    The one definition of a class's base names. A list, so a base named twice is
+    counted twice by the census; `_class_index` wants the set and wraps it.
+    """
     return [name for b in cls.bases if (name := _dotted(b).rsplit(".", 1)[-1])]
 
 
