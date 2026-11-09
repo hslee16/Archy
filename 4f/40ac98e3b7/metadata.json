@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4f40ac98e3b7",
+  "strategy": "manual-commit",
+  "branch": "alee/code-health-cli-render",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/4f/40ac98e3b7/0/metadata.json",
+      "transcript": "/4f/40ac98e3b7/0/full.jsonl",
+      "content_hash": "/4f/40ac98e3b7/0/content_hash.txt",
+      "prompt": "/4f/40ac98e3b7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 412,
+    "cache_creation_tokens": 333095,
+    "cache_read_tokens": 38216506,
+    "output_tokens": 131007,
+    "api_call_count": 184
+  }
+}
