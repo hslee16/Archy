@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "389560dd3eeb",
+  "strategy": "manual-commit",
+  "branch": "alee/codescene-health-model-doc",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/38/9560dd3eeb/0/metadata.json",
+      "transcript": "/38/9560dd3eeb/0/full.jsonl",
+      "content_hash": "/38/9560dd3eeb/0/content_hash.txt",
+      "prompt": "/38/9560dd3eeb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 332,
+    "cache_creation_tokens": 279718,
+    "cache_read_tokens": 25945821,
+    "output_tokens": 93379,
+    "api_call_count": 147
+  }
+}
