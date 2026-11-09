@@ -1,0 +1,64 @@
+<task-notification>
+<task-id>a070369bf5f034936</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a070369bf5f034936.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings. A grep for U+2014 in `/Users/hosanglee/archy/README.md` and `/Users/hosanglee/archy/docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md` returned no matches. I marked the review as passed.</result>
+<usage><subagent_tokens>18704</subagent_tokens><tool_uses>3</tool_uses><duration_ms>8304</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3711fb3a154e7505</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a3711fb3a154e7505.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I did not open `.deepreview` or the two files. I judged this from the instruction file and the changeset's description, a docs-only positioning edit to `README.md` and `docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`. A one-off wording change in prose like that doesn't plausibly create a recurring class of mistake that a new rule could check cheaply.
+
+I marked the review as passed.</result>
+<usage><subagent_tokens>18853</subagent_tokens><tool_uses>2</tool_uses><duration_ms>7439</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2e372bd6f8d54b9d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a2e372bd6f8d54b9d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Review result: findings, so this does not pass.** I did not call `mark_review_as_passed`.
+
+This diff changes only docs (`README.md` and `docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`), so no `src/` change invalidates anything. The drift is inside the research doc. The new §3c and the rewritten §6 contradict claims the commit left in place. The README edit itself is consistent.
+
+**Finding 1: §7 still says the normative job is unoccupied**
+- File: `/Users/hosanglee/archy/docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md`, §7 "Is archy worth working on?", about lines 325-329.
+- Claim: "The normative job is real, unoccupied, and structurally hard for a navigation-first tool to enter, because it needs user-supplied intent rather than better parsing."
+- Why it is wrong: §3c in the same diff records that optave/codegraph (boundary presets, `BoundaryRule`, exit-code `check`), tach and agent-arch carry declared rules. optave is a navigation-first graph tool that has already entered.
+- Suggested rewrite: "The normative job is real and only partly occupied: optave/codegraph, tach and agent-arch carry declared layer and boundary rules (§3c). It is still unoccupied for the combination in §6 (Python-specific resolution including `__init__` re-exports, transitive `forbid:` through import-linter, a `required:` reach rule, behind an MCP surface). It is structurally harder for a navigation-first tool because it needs user-supplied intent, but not impossible."
+
+**Finding 2: §3b closing line still says "unoccupied today"**
+- File: same document, end of §3b, line 199.
+- Claim: "The judgment space is unoccupied **today**; it is not guaranteed to stay that way, and the encroachment would come from the direction of PR review."
+- Why it is wrong: §3c immediately below says the tripwire already fired. The sentence now reads as a forecast of something that has happened.
+- Suggested rewrite: "The judgment space was unoccupied on 2026-07-27. It is no longer, for declared rules (see §3c); what remains differentiated is the combination in §6."
+
+**Finding 3: §7 "11 of 13 tools have no counterpart" is not scoped**
+- File: same document, §7, about line 323, and the Summary bullet "none of the 11 that carry its actual thesis".
+- Claim: "11 of 13 MCP tools have no counterpart in the most successful tool in the adjacent category."
+- Why it is wrong: it is true only for colbymchenry/codegraph. After §3c, optave/codegraph has boundary rules, cycle checks, snapshot and branch-compare, so the sentence implies a wider claim than the doc now supports. The "Is archy differentiated? Yes, and more cleanly than expected" heading has the same problem.
+- Suggested rewrite: "11 of 13 MCP tools have no counterpart in colbymchenry/codegraph, the most successful tool in the adjacent category. optave/codegraph overlaps on rules, cycles and snapshot/diff (§3c), so differentiation against it rests on the §6 combination."
+
+**Finding 4: the header and Summary dates and scope are stale**
+- File: same document, the "Fact-gathering date" paragraph at the top and the Summary's first bullet.
+- Claim: "Fact-gathering date: 2026-07-24, with §3a and §3b re-verified ... on 2026-07-27". The bullet says "codegraph ships no quality score, no architecture rules..."
+- Why it is wrong: §3c and §6 were re-checked on 2026-11-09, and the Summary bullet does not say it is about colbymchenry/codegraph only.
+- Suggested rewrite: append "§3c and §6 were re-verified on 2026-11-09 against optave/codegraph, agent-arch and colbymchenry/codegraph v1.6.2." Change the bullet to "colbymchenry/codegraph ships no ...", with a pointer to §3c for optave/codegraph.</result>
+<usage><subagent_tokens>29575</subagent_tokens><tool_uses>5</tool_uses><duration_ms>23511</duration_ms></usage>
+</task-notification>
