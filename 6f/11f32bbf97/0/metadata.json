@@ -1,0 +1,82 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6f11f32bbf97",
+  "session_id": "2baa2158-73fd-4a98-bed1-d7f35235506f",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-09T19:07:26.685877Z",
+  "branch": "alee/global-install-no-instruction-block",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "tests/install/unit/test_global_no_instructions.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "972e1fa48f7a",
+  "checkpoint_transcript_start": 295,
+  "transcript_lines_at_start": 295,
+  "token_usage": {
+    "input_tokens": 86,
+    "cache_creation_tokens": 73502,
+    "cache_read_tokens": 5704177,
+    "output_tokens": 26889,
+    "api_call_count": 41
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01HxNwQmxLGxSYmMkssMXvKx",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "972e1fa48f7a",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 124,
+        "end": 125,
+        "entry_ids": [
+          "cdbd5c63-20d3-450d-b80c-aca9aa9ef277"
+        ],
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 5
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-09T19:07:26.648019Z",
+    "agent_lines": 157,
+    "agent_removed": 0,
+    "human_added": 166,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 323,
+    "total_lines_changed": 839,
+    "agent_percentage": 18.71275327771156,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}

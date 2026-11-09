@@ -1,0 +1,148 @@
+<task-notification>
+<task-id>abf28de6fa4d261c5</task-id>
+<tool-use-id>toolu_01H7osP8PgBXgvJhNGE9z5ot</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/abf28de6fa4d261c5.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No findings. I found zero U+2014 characters in the four changed files, and I marked the review `no_em_dashes--4_files--9c828a3d640f` as passed.
+
+I ran two `grep` checks from `/Users/hosanglee/archy`: one for the Unicode character and one for its raw UTF-8 bytes. Both came back empty. The files checked:
+- `/Users/hosanglee/archy/docs/AGENT_LOOP.md`
+- `/Users/hosanglee/archy/plugins/claude/skills/archy/SKILL.md`
+- `/Users/hosanglee/archy/skills/archy/SKILL.md`
+- `/Users/hosanglee/archy/src/archy/mcp.py`</result>
+<usage><subagent_tokens>18715</subagent_tokens><tool_uses>3</tool_uses><duration_ms>9411</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a5ee751501bc9a261</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a5ee751501bc9a261.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I did not open the four files. I applied the instruction file's default verdict of pass, which holds unless a candidate rule meets all four conditions. I marked review `suggest_new_reviews--4_files--9c828a3d640f` as passed.</result>
+<usage><subagent_tokens>18609</subagent_tokens><tool_uses>2</tool_uses><duration_ms>6580</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3dc2cf3c2e084456</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a3dc2cf3c2e084456.output</output-file>
+<status>completed</status>
+<summary>Agent "Review cli_mcp_surface_parity" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No cross-surface fields changed. The diff to `src/archy/mcp.py` only rewords the `_AGENT_LOOP_PROMPT` text. It drops the "cheap" claim and the per-edit cadence. It adds no field or gate, and `src/archy/cli.py` has no diff. I marked the review as passed.</result>
+<usage><subagent_tokens>19588</subagent_tokens><tool_uses>3</tool_uses><duration_ms>7950</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae3ad34bbee1eb55b</task-id>
+<tool-use-id>toolu_01ESjcVEU9T5Jt9wSod4XqSY</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/ae3ad34bbee1eb55b.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** I did not call `mark_review_as_passed`. I found one violation and one minor DRY item.
+
+I checked `src/archy/mcp.py` against the criteria in the instruction file. I did not read `.deepwork/review/python_conventions.md`.
+
+**Findings**
+
+1. **Line 458, `_with_expected_refusal_as_tool_error`**
+   - Criterion: "Imports grouped stdlib / third-party / local with single blank line between groups."
+   - Offending construct: `from functools import wraps` is imported inside the function body. The stdlib group at the top of the module (lines 145-146) holds only `types` and `pathlib`, so this stdlib import sits outside the grouping.
+   - Fix: Move `from functools import wraps` into the top stdlib block, before `import types`, in the order the project's ruff isort config expects. Delete the inline import. Nothing in the module suggests a circular-import reason for deferring it, and none is commented.
+
+2. **Lines 600 and 606, `archy_check` (minor)**
+   - Criterion: "DRY: no copy-pasted blocks that should be a shared helper."
+   - Offending construct: `resolve_against(root, [Path(config_path)])[0] if config_path else None` and the same expression for `contracts_config_path` are written out twice.
+   - Fix: Add a small helper such as `_resolve_optional(root, value: str | None) -&gt; Path | None` and call it in both places.
+
+**Checks that passed**
+- `from __future__ import annotations` is present.
+- Type syntax is PEP 604 throughout; there is no `typing.List` or `Optional`.
+- Naming follows the snake_case, PascalCase and underscore-prefix rules.
+- `pathlib.Path` is used instead of `os.path`.
+- No line exceeds 100 characters (checked with `awk`).
+- Comments explain why rather than what.
+- The module defines no value objects, so the pydantic frozen-model rule does not apply.</result>
+<usage><subagent_tokens>40158</subagent_tokens><tool_uses>2</tool_uses><duration_ms>13938</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aac8fb6f027e3ef8a</task-id>
+<tool-use-id>toolu_01U7CQ7ovoFVzqTKqNpS68XC</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/aac8fb6f027e3ef8a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+- The two SKILL.md files are byte-identical.
+- `src/archy/mcp.py`, `docs/AGENT_LOOP.md` and both SKILL.md files now give the same guidance. Use of the loop around edits is optional, and the diff runs at verification points.
+- I searched `README.md`, `CONTRIBUTING.md`, `docs/*.md`, `skills`, `plugins`, `src/archy` and `tests` for the old wording ("each edit", "after every edit", "stay cheap", "keeps every call cheap"). I found no remaining copy of it.
+- `README.md` line 496 mentions "per-edit decision", but it says freshness is not one, which doesn't conflict with the change.</result>
+<usage><subagent_tokens>27527</subagent_tokens><tool_uses>6</tool_uses><duration_ms>16342</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a09aa6c8b765ec03d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a09aa6c8b765ec03d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring_accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings, and I marked it as passed. The only prose the diff changes is in `_AGENT_LOOP_PROMPT` in `/Users/hosanglee/archy/src/archy/mcp.py`.
+
+I traced each claim against the code:
+- **Parse cache and watcher:** a persistent cache kept warm by a background file watcher exists in `src/archy/index.py` and `src/archy/watcher.py`.
+- **`archy index status`:** the CLI command named in the prompt still exists, and `mcp.py` refers to it by that name.
+- **Diff verdict:** `archy_diff` takes a `strict` parameter at `mcp.py:714-717`, so the "verdict can block a commit" claim holds.
+- **Consistency with the skill doc:** the new wording matches `skills/archy/SKILL.md:18`.
+
+I did not run anything to confirm the "few seconds" warm-build timing for 10k+ module repos. That figure was already in the prompt before this diff and is repeated in `SKILL.md:18`.</result>
+<usage><subagent_tokens>23971</subagent_tokens><tool_uses>6</tool_uses><duration_ms>18224</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a26ca0cf95e93ecf7</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a26ca0cf95e93ecf7.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy_grounded_structural_review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+The change to `src/archy/mcp.py` only rewrites wording in the `_AGENT_LOOP_PROMPT` string. It adds, removes and moves no imports.
+
+- **Impact:** `uv run archy impact . --file src/archy/mcp.py` reports 24 transitive dependents. They include `archy.cli` and test modules such as `tests.test_cli` and `tests.test_config_unknown_keys`.
+- **Affected tests:** `uv run archy affected . src/archy/mcp.py` lists 23 tests to run at depth 5.
+- **Cycles:** `uv run archy cycles .` found none.
+- **Layer rules:** `uv run archy check .` reported no violations. It also warned that it governs too little of the graph to verify the 26 forbid rules, and pointed to `archy check --contracts` for those. That warning is not specific to this change.
+- **Stale wording:** grepping `tests`, `src`, `docs`, `skills` and `README.md` for the old "consult archy on each edit" phrasing found nothing.
+
+I did not run `what-to-refactor-next`. Since the diff touches only a string, I judged edit-risk irrelevant here.</result>
+<usage><subagent_tokens>20802</subagent_tokens><tool_uses>4</tool_uses><duration_ms>47181</duration_ms></usage>
+</task-notification>
+
+---
+
+864 merged
+
+---
+
+560
