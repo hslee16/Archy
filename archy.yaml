@@ -41,6 +41,10 @@ layers:
   policy:
     modules:
       - "archy.layers"
+      - "archy.layers_check"
+      - "archy.layers_config"
+      - "archy.layers_match"
+      - "archy.layers_models"
   analysis:
     modules:
       - "archy.affected"
