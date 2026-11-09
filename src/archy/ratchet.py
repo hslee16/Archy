@@ -150,38 +150,66 @@ def evaluate_strict(
             ),
         )
     baseline_violations = list(baseline_violations)
-    # A baseline violation can only be carried or resolved by a rule that still
-    # runs. With no archy.yaml, or a layer whose patterns now match nothing (a
-    # bare `pkg.core` for `pkg.core.**`, a package renamed under the config),
-    # the violation silently drops out and new ones go unseen: a rule set that
-    # cannot fire reading as clean.
-    if baseline_violations:
-        remedy = (
-            "Restore the rules, or if they were removed on purpose, regenerate the "
-            f"baseline with `{regenerate}`."
+    refused = _refusal_for_dead_rules(baseline_violations, ungoverned, regenerate)
+    if refused is not None:
+        return StrictVerdict(baseline=baseline_label, refused=refused)
+    cycle_findings, carried_cycles = _new_cycles(
+        set(baseline_modules), list(baseline_cycles), current_cycles, module_paths
+    )
+    violation_findings, carried_violations = _new_violations(
+        baseline_violations, current_violations, module_paths
+    )
+    return StrictVerdict(
+        baseline=baseline_label,
+        findings=(*cycle_findings, *violation_findings),
+        carried_cycles=carried_cycles,
+        carried_violations=carried_violations,
+    )
+
+
+def _refusal_for_dead_rules(
+    baseline_violations: list[Violation],
+    ungoverned: tuple[Violation, ...] | None,
+    regenerate: str,
+) -> str | None:
+    """Why the baseline's violations cannot be judged, or None when they can.
+
+    A baseline violation can only be carried or resolved by a rule that still
+    runs. With no archy.yaml, or a layer whose patterns now match nothing (a
+    bare `pkg.core` for `pkg.core.**`, a package renamed under the config),
+    the violation silently drops out and new ones go unseen: a rule set that
+    cannot fire reading as clean.
+    """
+    if not baseline_violations:
+        return None
+    remedy = (
+        "Restore the rules, or if they were removed on purpose, regenerate the "
+        f"baseline with `{regenerate}`."
+    )
+    if ungoverned is None:
+        return (
+            f"the baseline records {len(baseline_violations)} layer violation(s), "
+            "but no archy.yaml was found for this scan, so no layer rule was "
+            f"checked. {remedy}"
         )
-        if ungoverned is None:
-            return StrictVerdict(
-                baseline=baseline_label,
-                refused=(
-                    f"the baseline records {len(baseline_violations)} layer violation(s), "
-                    "but no archy.yaml was found for this scan, so no layer rule was "
-                    f"checked. {remedy}"
-                ),
-            )
-        if ungoverned:
-            first = ungoverned[0]
-            return StrictVerdict(
-                baseline=baseline_label,
-                refused=(
-                    f"the rules in archy.yaml no longer cover {len(ungoverned)} baseline "
-                    f"violation(s) whose modules still exist (e.g. {first.source} -> "
-                    f"{first.target}, {first.rule.from_layer} -> {first.rule.to_layer}), so "
-                    f"those rules cannot fire. {remedy}"
-                ),
-            )
-    known = set(baseline_modules)
-    baseline_cycles = list(baseline_cycles)
+    if ungoverned:
+        first = ungoverned[0]
+        return (
+            f"the rules in archy.yaml no longer cover {len(ungoverned)} baseline "
+            f"violation(s) whose modules still exist (e.g. {first.source} -> "
+            f"{first.target}, {first.rule.from_layer} -> {first.rule.to_layer}), so "
+            f"those rules cannot fire. {remedy}"
+        )
+    return None
+
+
+def _new_cycles(
+    known: set[str],
+    baseline_cycles: list[Cycle],
+    current_cycles: Iterable[Cycle],
+    module_paths: Mapping[str, str],
+) -> tuple[list[StrictFinding], int]:
+    """The current cycles the baseline does not carry, and how many it does."""
     old_cycles = [set(c.modules) for c in baseline_cycles]
     old_cycle_edges = {(e.source, e.target) for c in baseline_cycles for e in c.edges}
     # Which baseline cycle each module sat in. An edge between two members of
@@ -198,15 +226,7 @@ def evaluate_strict(
     carried_cycles = 0
     for cycle in current_cycles:
         seen = set(cycle.modules) & known
-        if len(cycle.modules) == 1:
-            # A self-import is its own kind of cycle: carried only if the
-            # baseline had that exact self-edge, not merely because the module
-            # once sat in a larger cycle that has since been broken.
-            [module] = cycle.modules
-            carried = (module, module) in old_cycle_edges
-        else:
-            carried = bool(seen) and any(seen <= old for old in old_cycles)
-        if carried:
+        if _cycle_is_carried(cycle, seen, old_cycles, old_cycle_edges):
             carried_cycles += 1
             continue
         closing = [e for e in cycle.edges if closes(e.source, e.target)]
@@ -226,8 +246,32 @@ def evaluate_strict(
                 detail=_cycle_detail(cycle, seen, old_cycles, edges),
             )
         )
+    return findings, carried_cycles
 
+
+def _cycle_is_carried(
+    cycle: Cycle,
+    seen: set[str],
+    old_cycles: list[set[str]],
+    old_cycle_edges: set[tuple[str, str]],
+) -> bool:
+    if len(cycle.modules) == 1:
+        # A self-import is its own kind of cycle: carried only if the
+        # baseline had that exact self-edge, not merely because the module
+        # once sat in a larger cycle that has since been broken.
+        [module] = cycle.modules
+        return (module, module) in old_cycle_edges
+    return bool(seen) and any(seen <= old for old in old_cycles)
+
+
+def _new_violations(
+    baseline_violations: list[Violation],
+    current_violations: Iterable[Violation],
+    module_paths: Mapping[str, str],
+) -> tuple[list[StrictFinding], int]:
+    """The current violations the baseline does not carry, and how many it does."""
     old_violations = {_violation_key(v) for v in baseline_violations}
+    findings: list[StrictFinding] = []
     carried_violations = 0
     for v in current_violations:
         if _violation_key(v) in old_violations:
@@ -249,12 +293,7 @@ def evaluate_strict(
                 ),
             )
         )
-    return StrictVerdict(
-        baseline=baseline_label,
-        findings=tuple(findings),
-        carried_cycles=carried_cycles,
-        carried_violations=carried_violations,
-    )
+    return findings, carried_violations
 
 
 def _cycle_detail(
@@ -348,35 +387,71 @@ def weakened_rules(
     `must_reach` is, because more modules then count as satisfying it. An
     added `exclude` entry is too, because it drops directories out of the scan.
     """
-    notes: list[str] = []
+    notes = [
+        *_weakened_forbids(baseline, current, since),
+        *_weakened_layers(baseline, current, since),
+        *_weakened_required(baseline, current, since),
+        *_added_excludes(baseline, current, since),
+        *_removed_roots(baseline, current, since),
+    ]
+    return tuple(sorted(notes))
+
+
+def _weakened_forbids(
+    baseline: RulesFingerprint, current: RulesFingerprint, since: str
+) -> list[str]:
     current_forbid = set(current.forbid)
-    for src, dst in baseline.forbid:
-        if (src, dst) not in current_forbid:
-            notes.append(f"forbid {src} -> {dst} removed since {since}")
+    return [
+        f"forbid {src} -> {dst} removed since {since}"
+        for src, dst in baseline.forbid
+        if (src, dst) not in current_forbid
+    ]
+
+
+def _weakened_layers(
+    baseline: RulesFingerprint, current: RulesFingerprint, since: str
+) -> list[str]:
+    notes: list[str] = []
     current_layers = dict(current.layers)
     for name, patterns in baseline.layers:
         if name not in current_layers:
             notes.append(f"layer {name} removed since {since}")
             continue
-        for pattern in patterns:
-            if not any(_pattern_covers(wider, pattern) for wider in current_layers[name]):
-                notes.append(f"layer {name} pattern {pattern} narrowed since {since}")
-    current_required = current.required
+        notes.extend(
+            f"layer {name} pattern {pattern} narrowed since {since}"
+            for pattern in patterns
+            if not any(_pattern_covers(wider, pattern) for wider in current_layers[name])
+        )
+    return notes
+
+
+def _weakened_required(
+    baseline: RulesFingerprint, current: RulesFingerprint, since: str
+) -> list[str]:
+    notes: list[str] = []
     for contract in baseline.required:
-        if any(_required_covers(other, contract) for other in current_required):
+        if any(_required_covers(other, contract) for other in current.required):
             continue
         source, must, within = contract
         scope = f" within {within}" if within is not None else ""
         notes.append(f"required {source}{scope} must reach {must} removed since {since}")
+    return notes
+
+
+def _added_excludes(baseline: RulesFingerprint, current: RulesFingerprint, since: str) -> list[str]:
     baseline_exclude = set(baseline.exclude)
-    for name in current.exclude:
-        if name not in baseline_exclude:
-            notes.append(f"exclude {name} added since {since}")
+    return [
+        f"exclude {name} added since {since}"
+        for name in current.exclude
+        if name not in baseline_exclude
+    ]
+
+
+def _removed_roots(baseline: RulesFingerprint, current: RulesFingerprint, since: str) -> list[str]:
     current_roots = set(current.roots)
-    for name in baseline.roots:
-        if name not in current_roots:
-            notes.append(f"root {name} removed since {since}")
-    return tuple(sorted(notes))
+    return [
+        f"root {name} removed since {since}" for name in baseline.roots if name not in current_roots
+    ]
 
 
 def _required_key(contract: tuple[str, str, str | None]) -> tuple[str, str, bool, str]:
