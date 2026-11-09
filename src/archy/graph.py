@@ -10,7 +10,7 @@ archy:owns        Module, QualnameCollisionError, ScanTooLargeError, UnresolvedH
                   internal_subgraph, is_ignored_path, parse_project,
                   resolve_from_import, resolve_modules, resolve_relative_import,
                   suggest_files, suggest_modules, zero_modules_reason
-archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
+archy:mirrored-by Module -> archy.conventions_collect, archy.duplicates, archy.headers,
                   archy.index, UnresolvedHint -> archy.impact, archy.mcp_payloads,
                   archy.mcp_runs, archy.simulate, assemble_graph -> archy.index,
                   archy.watcher, bench.pattern_detection,
@@ -1026,7 +1026,7 @@ def resolve_from_import(
 ) -> list[str]:
     """Which internal modules `from base import ...` actually reaches.
 
-    🔴 SHARED BECAUSE THE TWO CALLERS MUST AGREE. `archy.conventions` answers
+    🔴 SHARED BECAUSE THE TWO CALLERS MUST AGREE. `archy.conventions_collect` answers
     the same question for `conventions --module`, and when it had its own copy
     the two disagreed five separate ways (#414), every one a case where the
     lookup contradicted `archy impact` on archy's own source. A lookup whose
