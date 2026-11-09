@@ -172,9 +172,11 @@ _AGENT_LOOP_PROMPT = """\
 
 archy turns the project's structural health into a number you can act on
 between edits. A persistent parse cache, kept warm by a background file
-watcher, makes every call cheap (warm graph builds are a few seconds even on
-10k+ module repos), so consult archy on *each* edit to keep your working
-surface relevant, not just at the start and end of a task. You never need to
+watcher, makes calls fast (warm graph builds are a few seconds even on
+10k+ module repos). Using archy around edits is optional; the step whose
+verdict can block a commit is the diff, so run it at verification points:
+before you commit, at the end of a task, and whenever an edit adds or removes
+a cross-package import. You never need to
 worry about staleness: every tool re-syncs the changed files on demand, so a
 result always reflects the current code (the CLI `archy index status` reports
 the cache state if you ever want to confirm it out of band). The loop is:

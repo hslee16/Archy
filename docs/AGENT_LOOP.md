@@ -7,11 +7,13 @@ as the `loop` prompt on the MCP server, so an agent connected to
 `archy mcp` can pull it on demand.
 
 A persistent parse cache (`.archy/index.db`), kept warm by a background file
-watcher inside `archy mcp`, keeps every call cheap: warm graph builds are a
-few seconds even on 10k+ module repos, because only files whose content
-changed are re-parsed. That economics is the point of the loop below: consult
-archy on *each* edit to keep your working surface relevant (impact before,
-diff after), not just once at the start and end. Freshness is automatic: every
+watcher inside `archy mcp`, makes calls fast: warm graph builds are a few
+seconds even on 10k+ module repos, because only files whose content changed
+are re-parsed. Using the loop around edits is optional, and nothing archy has
+measured supports a per-edit cadence. The step whose verdict can block a
+commit is the diff, so run it at verification points: before a commit, at the
+end of a task, and when an edit adds or removes a cross-package import.
+Freshness is automatic: every
 tool re-syncs changed files on demand, so a result is never stale; the CLI
 `archy index status` reports the cache state if you ever want to confirm it
 explicitly.
@@ -20,7 +22,7 @@ explicitly.
 
 ![The archy agent loop: six stations, Snapshot, Impact, Risk, Edit, Diff and Fix or revert, arranged clockwise around a shared .archy/baseline.json record that only Snapshot writes and only Diff reads back.](assets/diagrams/agent-loop.png)
 
-Work advances around the ring once per edit; the baseline at the centre is the
+Work advances around the ring once per pass; the baseline at the centre is the
 only thing that persists across passes, which is why a stale one quietly
 invalidates every later diff.
 
