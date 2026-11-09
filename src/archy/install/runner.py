@@ -312,6 +312,20 @@ def _without_archy(action: FileAction, rendered: str) -> str:
     return "" if kept is None or kept == rendered else kept
 
 
+def _refuse_if_install_would(action: FileAction, existing_text: str | None) -> None:
+    """Run a ``retire`` action's strip so a block install would refuse is refused here too.
+
+    A retire action is a clean-up of an old block, not a file install would leave,
+    so it is not previewed; only its refusal (an unclosed marker) is surfaced.
+    """
+    if existing_text is None:
+        return
+    try:
+        action.unrender(existing_text)
+    except InstallError as exc:
+        raise InstallError(f"{action.path}: {exc}") from exc
+
+
 def preview_config(
     adapter_id: str,
     scope: Scope,
@@ -327,14 +341,7 @@ def preview_config(
     for action in plan:
         existing_text = ws.read_text(action.path)
         if action.retire:
-            # A clean-up of an old block, not a file install would leave, so it is
-            # not previewed. Still run it so a block install would refuse (an
-            # unclosed marker) is refused here too.
-            if existing_text is not None:
-                try:
-                    action.unrender(existing_text)
-                except InstallError as exc:
-                    raise InstallError(f"{action.path}: {exc}") from exc
+            _refuse_if_install_would(action, existing_text)
             continue
         try:
             rendered = action.render(existing_text)
