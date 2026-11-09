@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "b835a9ab64c6",
+  "session_id": "2baa2158-73fd-4a98-bed1-d7f35235506f",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-09T20:29:57.487427Z",
+  "branch": "alee/health-repro-prereg",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "bench/health_repro.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "fe9f163f0960",
+  "token_usage": {
+    "input_tokens": 526,
+    "cache_creation_tokens": 426307,
+    "cache_read_tokens": 58419697,
+    "output_tokens": 190996,
+    "api_call_count": 234
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01HxNwQmxLGxSYmMkssMXvKx",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "fe9f163f0960",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 124,
+        "end": 125,
+        "entry_ids": [
+          "cdbd5c63-20d3-450d-b80c-aca9aa9ef277"
+        ],
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-09T20:29:57.355314Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 12,
+    "human_modified": 16,
+    "human_removed": 0,
+    "total_committed": 12,
+    "total_lines_changed": 40,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 19,
+      "user_lines_removed": 14,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "bench/_common.py": 10,
+        "bench/health_repro.py": 9
+      },
+      "user_removed_per_file": {
+        "bench/_common.py": 12,
+        "bench/health_repro.py": 2
+      }
+    }
+  ]
+}
