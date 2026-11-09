@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "aa065860e6b7",
+  "strategy": "manual-commit",
+  "branch": "alee/code-health-conventions-2",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/aa/065860e6b7/0/metadata.json",
+      "transcript": "/aa/065860e6b7/0/full.jsonl",
+      "content_hash": "/aa/065860e6b7/0/content_hash.txt",
+      "prompt": "/aa/065860e6b7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 732,
+    "cache_creation_tokens": 578040,
+    "cache_read_tokens": 110426574,
+    "output_tokens": 293564,
+    "api_call_count": 333
+  }
+}
