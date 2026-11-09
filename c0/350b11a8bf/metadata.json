@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "c0350b11a8bf",
+  "strategy": "manual-commit",
+  "branch": "alee/split-layers",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/c0/350b11a8bf/0/metadata.json",
+      "transcript": "/c0/350b11a8bf/0/full.jsonl",
+      "content_hash": "/c0/350b11a8bf/0/content_hash.txt",
+      "prompt": "/c0/350b11a8bf/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1314,
+    "cache_creation_tokens": 1123292,
+    "cache_read_tokens": 267260840,
+    "output_tokens": 561209,
+    "api_call_count": 603
+  }
+}
