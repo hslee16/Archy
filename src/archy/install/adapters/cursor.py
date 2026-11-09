@@ -20,8 +20,8 @@ from archy.install.base import (
     FileAction,
     Scope,
     delete_file,
+    instructions_action,
     local_root,
-    upsert_instructions,
 )
 from archy.install.merge import render_json_mcp, strip_json_mcp
 
@@ -60,7 +60,7 @@ class CursorAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
-        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
+        for_uninstall: bool = False,
     ) -> list[FileAction]:
         root = self._root(scope, project_root)
         return [
@@ -70,10 +70,10 @@ class CursorAdapter(AgentAdapter):
                 render=render_json_mcp,
                 unrender=strip_json_mcp,
             ),
-            FileAction(
-                path=root / "rules" / "archy.mdc",
-                kind="instructions",
-                render=upsert_instructions,
+            instructions_action(
+                root / "rules" / "archy.mdc",
+                scope,
+                for_uninstall=for_uninstall,
                 unrender=delete_file,
             ),
         ]

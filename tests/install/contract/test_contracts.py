@@ -83,7 +83,8 @@ def test_continue_block_parses_as_yaml(simulate_os):
 
 @pytest.mark.parametrize("adapter_id", ["claude", "cursor", "codex", "opencode", "continue"])
 def test_instruction_file_is_nonempty_text(adapter_id, simulate_os):
-    files = _emit(adapter_id, simulate_os)
+    # Local: a global install writes no instruction block (#560).
+    files = _emit(adapter_id, simulate_os, Scope.LOCAL)
     rule_names = {"CLAUDE.md", "AGENTS.md", "archy.mdc", "archy.md"}
     instruction_files = [c for name, c in files.items() if name in rule_names]
     assert instruction_files, f"{adapter_id} emitted no instruction file"

@@ -25,9 +25,8 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    instructions_action,
     local_root,
-    remove_instructions,
-    upsert_instructions,
 )
 from archy.install.merge import (
     render_claude_permissions,
@@ -72,6 +71,13 @@ class ClaudeAdapter(AgentAdapter):
         if scope is Scope.LOCAL:
             return local_root(project_root) / "CLAUDE.md"
         return paths.home() / ".claude" / "CLAUDE.md"
+
+    def _instructions_action(
+        self, scope: Scope, project_root: Path | None, for_uninstall: bool
+    ) -> FileAction:
+        return instructions_action(
+            self._instructions_path(scope, project_root), scope, for_uninstall=for_uninstall
+        )
 
     def plugin_installed(self) -> bool:
         """Heuristic: is the archy Claude plugin already linked into ~/.claude?
@@ -122,14 +128,11 @@ class ClaudeAdapter(AgentAdapter):
                     unrender=strip_json_mcp,
                 )
             )
-            actions.append(
-                FileAction(
-                    path=self._instructions_path(scope, project_root),
-                    kind="instructions",
-                    render=upsert_instructions,
-                    unrender=remove_instructions,
-                )
-            )
+            actions.append(self._instructions_action(scope, project_root, for_uninstall))
+        elif scope is Scope.GLOBAL:
+            # The plugin ships the skill, so no block is wanted; still clear one a
+            # pre-#560 global install left behind.
+            actions.append(self._instructions_action(scope, project_root, for_uninstall))
         if seed_permissions:
             actions.append(
                 FileAction(

@@ -22,9 +22,8 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    instructions_action,
     local_root,
-    remove_instructions,
-    upsert_instructions,
 )
 from archy.install.merge import render_opencode_mcp, strip_opencode_mcp
 
@@ -54,7 +53,7 @@ class OpencodeAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
-        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
+        for_uninstall: bool = False,
     ) -> list[FileAction]:
         root = local_root(project_root) if scope is Scope.LOCAL else self._global_dir()
         return [
@@ -64,10 +63,5 @@ class OpencodeAdapter(AgentAdapter):
                 render=render_opencode_mcp,
                 unrender=strip_opencode_mcp,
             ),
-            FileAction(
-                path=root / "AGENTS.md",
-                kind="instructions",
-                render=upsert_instructions,
-                unrender=remove_instructions,
-            ),
+            instructions_action(root / "AGENTS.md", scope, for_uninstall=for_uninstall),
         ]

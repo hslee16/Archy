@@ -29,8 +29,14 @@ Code plugin. Per client it writes up to three things:
    the functional wiring: the client launches the archy server on startup.
    Because it uses `uvx`, archy itself is fetched and run on demand from PyPI;
    nothing is copied onto your PATH.
-2. **An instructions/rules file** with a short, marker-fenced block telling the
-   agent *when* to call the tools (the snapshot -> impact -> diff loop).
+2. **An instructions/rules block, local installs only.** With `--location local`
+   it writes a short, marker-fenced block into the project's own rules file
+   telling the agent *when* to call the tools (the snapshot -> impact -> diff
+   loop), so the guidance appears only where you opted archy in. A global
+   install writes **no** block: a client-wide file such as `~/.claude/CLAUDE.md`
+   is loaded in every project, Python or not. Running a global install on a
+   machine where an earlier version wrote that block removes it, leaving the text
+   around it as it was (an archy-owned rules file is deleted).
 3. **A permission allowlist (Claude Code only)** so you are not prompted to
    approve each of the 14 `mcp__archy__*` tools on first use.
 
@@ -120,7 +126,7 @@ distribution channels.
 | Clients | Claude Code, Cursor, Codex, opencode, Continue | Claude Code only |
 | Acquisition | run a command in your shell | `/plugin marketplace add hslee16/archy` then `/plugin install archy@archy` |
 | Seeds Claude `permissions.allow` | yes | no (loader limitation) |
-| Ships the `archy` skill as a first-class skill | no (drops a `CLAUDE.md` block) | yes |
+| Ships the `archy` skill as a first-class skill | no (a local install drops a `CLAUDE.md` block) | yes |
 | Updates | you re-run / edit config | managed by Claude Code |
 | Scriptable / CI | yes (`--yes`, `--target`, `--print-config`) | no |
 
@@ -138,13 +144,13 @@ permission allowlist the plugin cannot write. Practical guidance:
 `--location global` configures every project; `--location local` writes
 project-scoped files under the current directory (or `--project-root`).
 
-| Client | MCP config (global / local) | Instructions (global / local) | Permissions |
+| Client | MCP config (global / local) | Instructions (local only; global writes none and removes an old block) | Permissions |
 |---|---|---|---|
-| Claude Code | `~/.claude.json` / `<project>/.mcp.json` | `~/.claude/CLAUDE.md` / `<project>/CLAUDE.md` | `~/.claude/settings.json` (or `<project>/.claude/settings.json`) |
-| Cursor | `~/.cursor/mcp.json` / `<project>/.cursor/mcp.json` | `.cursor/rules/archy.mdc` (owned) | n/a |
-| Codex CLI | `~/.codex/config.toml` / `<project>/.codex/config.toml` | `~/.codex/AGENTS.md` / `<project>/AGENTS.md` | n/a |
-| opencode | `~/.config/opencode/opencode.json` / `<project>/opencode.json` | `AGENTS.md` (alongside config) | n/a |
-| Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` (owned) | `.continue/rules/archy.md` (owned) | n/a |
+| Claude Code | `~/.claude.json` / `<project>/.mcp.json` | `<project>/CLAUDE.md` | `~/.claude/settings.json` (or `<project>/.claude/settings.json`) |
+| Cursor | `~/.cursor/mcp.json` / `<project>/.cursor/mcp.json` | `<project>/.cursor/rules/archy.mdc` (owned) | n/a |
+| Codex CLI | `~/.codex/config.toml` / `<project>/.codex/config.toml` | `<project>/AGENTS.md` | n/a |
+| opencode | `~/.config/opencode/opencode.json` / `<project>/opencode.json` | `<project>/AGENTS.md` | n/a |
+| Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` (owned) | `<project>/.continue/rules/archy.md` (owned) | n/a |
 
 On Windows the homedir-anchored paths resolve under `%USERPROFILE%`, and
 opencode's global config lives under `%APPDATA%\opencode\`. Set `CODEX_HOME` and

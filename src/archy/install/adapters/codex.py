@@ -21,9 +21,8 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
+    instructions_action,
     local_root,
-    remove_instructions,
-    upsert_instructions,
 )
 from archy.install.merge import render_toml_mcp, strip_toml_mcp
 
@@ -62,7 +61,7 @@ class CodexAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
-        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
+        for_uninstall: bool = False,
     ) -> list[FileAction]:
         return [
             FileAction(
@@ -71,10 +70,7 @@ class CodexAdapter(AgentAdapter):
                 render=render_toml_mcp,
                 unrender=strip_toml_mcp,
             ),
-            FileAction(
-                path=self._instructions_path(scope, project_root),
-                kind="instructions",
-                render=upsert_instructions,
-                unrender=remove_instructions,
+            instructions_action(
+                self._instructions_path(scope, project_root), scope, for_uninstall=for_uninstall
             ),
         ]

@@ -455,16 +455,11 @@ def test_mcp_tools_write_only_cache_and_baseline(sandbox):
 
 GLOBAL_INSTALL_WRITES = [
     ".claude.json",
-    ".claude/CLAUDE.md",
     ".claude/settings.json",
-    ".codex/AGENTS.md",
     ".codex/config.toml",
-    ".config/opencode/AGENTS.md",
     ".config/opencode/opencode.json",
     ".continue/mcpServers/archy.yaml",
-    ".continue/rules/archy.md",
     ".cursor/mcp.json",
-    ".cursor/rules/archy.mdc",
 ]
 
 LOCAL_INSTALL_WRITES = [

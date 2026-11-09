@@ -34,6 +34,11 @@ def _claude_json(home, *, indent: int = 2, extra: str = "") -> None:
     _seed(home / ".claude.json", json.dumps(config, indent=indent, ensure_ascii=False) + "\n")
 
 
+def _local(project) -> tuple[str, ...]:
+    """Flags for the local scope: only there does install write an instruction block (#560)."""
+    return ("--location", "local", "--project-root", str(project))
+
+
 def _print_config(agent: str = "claude", *args: str) -> str:
     result = CliRunner().invoke(main, ["install", "--print-config", agent, *args])
     assert result.exit_code == 0, result.output
@@ -90,18 +95,19 @@ def test_a_permission_entry_that_only_gains_a_comma_is_not_printed(simulate_os):
 
 def test_a_last_line_without_a_newline_is_not_printed_or_glued(simulate_os):
     fake = simulate_os("linux")
-    _seed(fake.home / ".claude" / "CLAUDE.md", f"# my notes\nAPI key is {SENTINEL}")
+    project = fake.home / "proj"
+    _seed(project / "CLAUDE.md", f"# my notes\nAPI key is {SENTINEL}")
 
-    out = _print_config()
+    out = _print_config("claude", *_local(project))
 
     assert "archy:begin" in out
     assert SENTINEL not in out
 
 
 def test_a_file_that_does_not_exist_yet_prints_whole(simulate_os):
-    simulate_os("linux")
+    fake = simulate_os("linux")
 
-    out = _print_config("codex")
+    out = _print_config("codex", *_local(fake.home / "proj"))
 
     # AGENTS.md is archy's own when absent; its closing marker proves "whole".
     assert "<!-- archy:end -->" in out
@@ -148,12 +154,13 @@ def test_user_text_kept_in_an_archy_owned_rules_file_is_not_printed(simulate_os)
     """Cursor's rules file unrenders by deletion, but install keeps text outside
     the marker block, so an empty baseline would print it."""
     fake = simulate_os("linux")
+    project = fake.home / "proj"
     _seed(
-        fake.home / ".cursor" / "rules" / "archy.mdc",
+        project / ".cursor" / "rules" / "archy.mdc",
         f"my notes: token={SENTINEL}\n\n<!-- archy:begin -->\nold\n<!-- archy:end -->\n",
     )
 
-    out = _print_config("cursor")
+    out = _print_config("cursor", *_local(project))
 
     assert "archy:begin" in out
     assert SENTINEL not in out
@@ -226,11 +233,12 @@ def test_the_rewrite_count_includes_lines_that_start_with_dashes(simulate_os):
     """CRLF front matter: all four lines are rewritten, `---` lines included.
     Skipping every line starting `---` (the file header) undercounted to 2."""
     fake = simulate_os("linux")
-    path = fake.home / ".claude" / "CLAUDE.md"
+    project = fake.home / "proj"
+    path = project / "CLAUDE.md"
     path.parent.mkdir(parents=True)
     path.write_bytes(b"---\r\ntitle: x\r\n---\r\nbody\r\n")
 
-    out = _print_config()
+    out = _print_config("claude", *_local(project))
 
     assert "changes 4 other" in out
 
