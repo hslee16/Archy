@@ -245,6 +245,11 @@ def _cs_version() -> str:
     return (out.stdout or out.stderr).strip().splitlines()[0] if (out.stdout or out.stderr) else ""
 
 
+def _serializable(flags: dict[str, Flags]) -> dict[str, dict[str, list[tuple[str, int]]]]:
+    """Sets become sorted lists so the ledger row is JSON and diffs cleanly."""
+    return {p: {s: sorted(v) for s, v in f.items()} for p, f in flags.items()}
+
+
 def run_project(name: str, root: Path) -> dict:
     """One unit: archy and `cs` flags for every source file of one project."""
     started = time.time()
@@ -294,8 +299,8 @@ def run_project(name: str, root: Path) -> dict:
         "files": len(scores),
         "dropped": dropped,
         "scores": scores,
-        "archy": {p: {s: sorted(v) for s, v in f.items()} for p, f in mine.items()},
-        "cs": {p: {s: sorted(v) for s, v in f.items()} for p, f in theirs["flags"].items()},
+        "archy": _serializable(mine),
+        "cs": _serializable(theirs["flags"]),
         "unresolved": theirs["unresolved"],
     }
 
@@ -354,6 +359,8 @@ def main(argv: list[str] | None = None) -> int:
         rows = [json.loads(ln) for ln in args.ledger.read_text().splitlines() if ln.strip()]
         print(report(rows, args.exclude))
         return 0
+    # `bench/` is not a package, so `_common` imports only once this directory is on
+    # `sys.path`; and the `--report` path above must work without the clone machinery.
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from _common import clone_or_update, load_manifest
 
