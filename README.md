@@ -295,6 +295,8 @@ archy graph path/to/project --format json > graph.json
 archy graph path/to/project --format dot | dot -Tsvg > graph.svg
 ```
 
+A reader that closes early, such as `archy graph ... | head -1`, makes archy exit 141 (as if by SIGPIPE) with nothing on stderr. That is deliberately not exit 1: `check`, `cycles --strict` and `diff --strict` use 1 for a finding, so a truncated pipeline must not read as a failed gate. `archy mcp` keeps its stdio transport and is unaffected.
+
 ### Find import cycles
 
 ![Three modules ranked by dependency depth, where pkg.a imports pkg.b and pkg.b imports pkg.c, and a back-edge from pkg.c to pkg.a closes a cycle.](docs/assets/diagrams/import-cycle.png)

@@ -6,11 +6,15 @@ archy:mirrored-by _graph_kwargs_or_exit -> archy.cli_conventions, archy.cli_git,
                   archy.cli_history, _load_graph -> archy.cli_git, archy.cli_graph,
                   archy.cli_history, _require -> archy.cli_conventions, archy.cli_git,
                   archy.cli_graph, archy.cli_history
+archy:gates       exit 141 (hardcoded)
 """
 
 from __future__ import annotations
 
+import errno
 import functools
+import os
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
@@ -47,6 +51,19 @@ class _ArchyGroup(click.Group):
             return super().invoke(ctx)
         except QualnameCollisionError as exc:
             raise click.ClickException(str(exc)) from exc
+        except OSError as exc:
+            if exc.errno != errno.EPIPE:
+                raise
+            # Click's standalone_mode turns an EPIPE from a command's output
+            # into exit 1 with no stderr. Exit 1 is a finding code for `check`,
+            # `cycles --strict` and `diff --strict`, so `archy graph ... | head`
+            # reads as a failed gate. Follow Python's own guidance instead:
+            # redirect stdout to devnull at shutdown and die as if by SIGPIPE
+            # (128 + 13 = 141). `archy mcp` speaks over stdio by design and
+            # never writes command output, so its own transport is unaffected.
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+            sys.exit(141)
 
 
 @click.group(cls=_ArchyGroup)
