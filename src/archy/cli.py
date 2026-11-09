@@ -439,9 +439,9 @@ class _CheckRun(BaseModel):
     config_path: Path
     config: LayerConfig
     coverage: LayerCoverage
-    violations: list[Violation]
-    reach_violations: list[ReachViolation]
-    sdp_violations: list[SdpViolation]
+    violations: tuple[Violation, ...]
+    reach_violations: tuple[ReachViolation, ...]
+    sdp_violations: tuple[SdpViolation, ...]
     presence_fails: bool
     contracts: ContractsOutcome | None = None
 
@@ -473,9 +473,9 @@ def _check_scan(path: Path, config_path: Path, config: LayerConfig) -> _CheckRun
 
     coverage = compute_coverage(g, config)
 
-    sdp_violations: list[SdpViolation] = []
+    sdp_violations: tuple[SdpViolation, ...] = ()
     if config.sdp.enabled:
-        sdp_violations = find_sdp_violations(g, tolerance=config.sdp.tolerance)
+        sdp_violations = tuple(find_sdp_violations(g, tolerance=config.sdp.tolerance))
 
     presence_fails = (
         config.min_layers_present is not None
@@ -485,8 +485,8 @@ def _check_scan(path: Path, config_path: Path, config: LayerConfig) -> _CheckRun
         config_path=config_path,
         config=config,
         coverage=coverage,
-        violations=violations,
-        reach_violations=reach_violations,
+        violations=tuple(violations),
+        reach_violations=tuple(reach_violations),
         sdp_violations=sdp_violations,
         presence_fails=presence_fails,
     )
@@ -495,9 +495,9 @@ def _check_scan(path: Path, config_path: Path, config: LayerConfig) -> _CheckRun
 def _check_payload(run: _CheckRun) -> dict:
     checked = _transitive_checked(run.contracts)
     payload = {
-        "violations": _violations_to_json(run.violations),
-        "required_violations": _reach_violations_to_json(run.reach_violations),
-        "sdp_violations": _sdp_violations_to_json(run.sdp_violations),
+        "violations": _violations_to_json(list(run.violations)),
+        "required_violations": _reach_violations_to_json(list(run.reach_violations)),
+        "sdp_violations": _sdp_violations_to_json(list(run.sdp_violations)),
         "sdp_mode": run.config.sdp.mode,
         "coverage": _coverage_to_json(run.coverage),
         "min_layers_present": run.config.min_layers_present,
@@ -513,7 +513,7 @@ def _check_payload(run: _CheckRun) -> dict:
             else _transitive_unverified_reason(
                 run.config,
                 run.coverage,
-                run.violations,
+                list(run.violations),
                 no_verdict_error=_no_verdict_error(run.contracts),
                 unverifiable=_unverifiable_contracts(run.contracts),
             )
@@ -526,15 +526,15 @@ def _check_payload(run: _CheckRun) -> dict:
 
 def _echo_check_text(run: _CheckRun, *, show_unlayered: bool) -> None:
     config, coverage = run.config, run.coverage
-    click.echo(_violations_to_text(run.violations, run.config_path, coverage))
+    click.echo(_violations_to_text(list(run.violations), run.config_path, coverage))
     if config.required:
-        click.echo(_reach_violations_to_text(run.reach_violations, config.required))
+        click.echo(_reach_violations_to_text(list(run.reach_violations), config.required))
     click.echo(_coverage_to_text(coverage))
     hints = _pattern_hints_to_text(coverage)
     if hints:
         click.echo(hints)
     if run.contracts is None:
-        handoff = _contracts_handoff_to_text(config, coverage, run.violations)
+        handoff = _contracts_handoff_to_text(config, coverage, list(run.violations))
         if handoff:
             click.echo(handoff)
     presence = _presence_to_text(coverage, config.min_layers_present)
@@ -545,7 +545,7 @@ def _echo_check_text(run: _CheckRun, *, show_unlayered: bool) -> None:
             click.echo(f"#     {module}")
     if config.sdp.enabled:
         click.echo("")
-        click.echo(_sdp_violations_to_text(run.sdp_violations, config.sdp.tolerance))
+        click.echo(_sdp_violations_to_text(list(run.sdp_violations), config.sdp.tolerance))
         if run.sdp_violations and config.sdp.mode == "warn":
             click.echo("# (sdp.mode=warn; not failing the gate)")
     if run.contracts is not None:
