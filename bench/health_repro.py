@@ -47,9 +47,10 @@ MAX_CODE_LINES = 70
 NESTING_AT_LEAST = 4
 BOOL_OPS_AT_LEAST = 2
 
+ARGS_SMELL = "Excess Number of Function Arguments"
 SMELLS = (
     "Complex Method",
-    "Excess Number of Function Arguments",
+    ARGS_SMELL,
     "Large Method",
     "Deep, Nested Complexity",
     "Complex Conditional",
@@ -83,10 +84,14 @@ def _functions(tree: ast.Module) -> list[tuple[Func, bool]]:
     return found
 
 
+_RECEIVERS = {"self", "cls"}
+
+
 def _parameter_count(fn: Func, *, is_method: bool) -> int:
     a = fn.args
     positional = [*a.posonlyargs, *a.args]
-    if is_method and positional and positional[0].arg in {"self", "cls"}:
+    receiver = positional[0].arg if positional else None
+    if is_method and receiver in _RECEIVERS:
         positional = positional[1:]
     return len(positional) + len(a.kwonlyargs) + (a.vararg is not None) + (a.kwarg is not None)
 
@@ -107,16 +112,24 @@ def _is_elif(parent: ast.If, child: ast.AST) -> bool:
     )
 
 
+_NESTING = (ast.If, ast.For, ast.AsyncFor, ast.While)
+_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+
+
+def _adds_depth(parent: ast.AST, child: ast.AST) -> bool:
+    if not isinstance(child, _NESTING):
+        return False
+    return not (isinstance(parent, ast.If) and _is_elif(parent, child))
+
+
 def _depth(node: ast.AST, current: int = 0) -> int:
     """Deepest nesting of `if`, `for`, `while`; `with`, `try` and `elif` add none."""
     deepest = current
     for child in ast.iter_child_nodes(node):
-        if isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.ClassDef):
+        if isinstance(child, _SCOPES):
             continue
-        counts = isinstance(child, ast.If | ast.For | ast.AsyncFor | ast.While)
-        if counts and isinstance(node, ast.If) and _is_elif(node, child):
-            counts = False
-        deepest = max(deepest, _depth(child, current + 1 if counts else current))
+        step = 1 if _adds_depth(node, child) else 0
+        deepest = max(deepest, _depth(child, current + step))
     return deepest
 
 
@@ -131,6 +144,26 @@ def _complex_condition(fn: Func) -> bool:
     return False
 
 
+def _is_complex_method(fn: Func, cc: dict[tuple[str, int], int]) -> bool:
+    return any(
+        v >= CC_AT_LEAST
+        for (name, line), v in cc.items()
+        if name == fn.name and abs(line - fn.lineno) <= MATCH_WINDOW
+    )
+
+
+def _function_smells(fn: Func, *, is_method: bool, lines: list[str], cc: dict) -> list[str]:
+    """The names of the smells one function has."""
+    checks = (
+        (_is_complex_method(fn, cc), "Complex Method"),
+        (_parameter_count(fn, is_method=is_method) > MAX_ARGS, ARGS_SMELL),
+        (_code_lines(fn, lines) > MAX_CODE_LINES, "Large Method"),
+        (_depth(fn) >= NESTING_AT_LEAST, "Deep, Nested Complexity"),
+        (_complex_condition(fn), "Complex Conditional"),
+    )
+    return [smell for flagged, smell in checks if flagged]
+
+
 def smells_in_source(source: str) -> Flags:
     """The five smells archy can derive, as {smell: {(name, start_line)}}."""
     tree = ast.parse(source)
@@ -140,38 +173,36 @@ def smells_in_source(source: str) -> Flags:
     }
     out: Flags = {s: set() for s in SMELLS}
     for fn, is_method in _functions(tree):
-        key = (fn.name, fn.lineno)
-        if any(
-            v >= CC_AT_LEAST
-            for (name, line), v in cc.items()
-            if name == fn.name and abs(line - fn.lineno) <= MATCH_WINDOW
-        ):
-            out["Complex Method"].add(key)
-        if _parameter_count(fn, is_method=is_method) > MAX_ARGS:
-            out["Excess Number of Function Arguments"].add(key)
-        if _code_lines(fn, lines) > MAX_CODE_LINES:
-            out["Large Method"].add(key)
-        if _depth(fn) >= NESTING_AT_LEAST:
-            out["Deep, Nested Complexity"].add(key)
-        if _complex_condition(fn):
-            out["Complex Conditional"].add(key)
+        for smell in _function_smells(fn, is_method=is_method, lines=lines, cc=cc):
+            out[smell].add((fn.name, fn.lineno))
     return out
+
+
+def _by_start(same: list[tuple[str, int, int]], start: int | None) -> tuple[str, int] | None:
+    near = [(n, s) for n, s, _ in same if start is not None and abs(s - start) <= MATCH_WINDOW]
+    return near[0] if near else None
+
+
+def _by_containing_line(
+    same: list[tuple[str, int, int]], inside: int | None
+) -> tuple[str, int] | None:
+    holds = [(n, s) for n, s, e in same if inside is not None and s <= inside <= e]
+    return holds[0] if holds else None
 
 
 def _resolve(
     table: list[tuple[str, int, int]], name: str, start: int | None, inside: int | None
 ) -> tuple[str, int] | None:
     """Map a `cs` finding to the (name, start_line) of a function in `table`."""
-    same = [(n, s, e) for n, s, e in table if n == name]
-    if start is not None:
-        near = [(n, s, e) for n, s, e in same if abs(s - start) <= MATCH_WINDOW]
-        if near:
-            return near[0][0], near[0][1]
-    if inside is not None:
-        holds = [(n, s, e) for n, s, e in same if s <= inside <= e]
-        if holds:
-            return holds[0][0], holds[0][1]
-    return None
+    same = [row for row in table if row[0] == name]
+    return _by_start(same, start) or _by_containing_line(same, inside)
+
+
+def _finding_key(path: str, tables: dict, finding: dict) -> tuple[str, int] | None:
+    qualified, _, tail = finding["title"].partition(":")
+    name = qualified.rsplit(".", 1)[-1]  # `cs` titles methods `Class.method`
+    inside = int(tail) if tail.isdigit() else None
+    return _resolve(tables.get(path, []), name, finding.get("start-line"), inside)
 
 
 def cs_flags(cs_review: list[dict], tables: dict[str, list[tuple[str, int, int]]]) -> dict:
@@ -181,18 +212,18 @@ def cs_flags(cs_review: list[dict], tables: dict[str, list[tuple[str, int, int]]
     for entry in cs_review:
         path = entry["path"]
         per_file: Flags = {s: set() for s in SMELLS}
-        for issue in entry.get("review", []):
-            if issue["category"] not in per_file:
-                continue
-            for f in issue.get("functions", []):
-                qualified, _, tail = f["title"].partition(":")
-                name = qualified.rsplit(".", 1)[-1]  # `cs` titles methods `Class.method`
-                inside = int(tail) if tail.isdigit() else None
-                key = _resolve(tables.get(path, []), name, f.get("start-line"), inside)
-                if key is None:
-                    unresolved.append((path, issue["category"], f["title"]))
-                else:
-                    per_file[issue["category"]].add(key)
+        findings = [
+            (issue["category"], f)
+            for issue in entry.get("review", [])
+            if issue["category"] in per_file
+            for f in issue.get("functions", [])
+        ]
+        for category, f in findings:
+            key = _finding_key(path, tables, f)
+            if key is None:
+                unresolved.append((path, category, f["title"]))
+            else:
+                per_file[category].add(key)
         flags[path] = per_file
     return {"flags": flags, "unresolved": unresolved}
 
@@ -318,34 +349,66 @@ def _done(ledger: Path) -> set[str]:
     return {r["project"] for r in rows if r.get("status") == "ok"}
 
 
-def report(rows: Iterable[dict], exclude: Iterable[str] = ()) -> str:
-    """The pooled result. `exclude` drops the pilot projects, which the
-    pre-registration keeps out of the result."""
-    skip = set(exclude)
-    rows = [r for r in rows if r.get("status") == "ok" and r["project"] not in skip]
-    lines = [f"projects: {len(rows)}   files: {sum(r['files'] for r in rows)}"]
+def _pool(rows: list[dict]) -> tuple[dict[str, tuple[set, set]], list[float], list[float]]:
+    """Per-smell (archy, cs) flag sets, and the per-file smell count with its cs score."""
     pooled: dict[str, tuple[set, set]] = {s: (set(), set()) for s in SMELLS}
     xs: list[float] = []
     ys: list[float] = []
     for r in rows:
         for path in r["archy"]:
             for s in SMELLS:
-                for fn in r["archy"][path][s]:
-                    pooled[s][0].add((r["project"], path, *fn))
-                for fn in r["cs"][path][s]:
-                    pooled[s][1].add((r["project"], path, *fn))
+                pooled[s][0].update((r["project"], path, *fn) for fn in r["archy"][path][s])
+                pooled[s][1].update((r["project"], path, *fn) for fn in r["cs"][path][s])
             xs.append(float(sum(len(v) for v in r["archy"][path].values())))
             ys.append(r["scores"][path])
-    for s in SMELLS:
-        a, c = pooled[s]
-        j = jaccard(a, c)
-        lines.append(
-            f"{s:38} archy {len(a):5}  cs {len(c):5}  both {len(a & c):5}  "
-            f"jaccard {'n/a' if j is None else f'{j:.3f}'}"
-        )
-    rho = spearman(xs, ys)
-    lines.append(f"file-level spearman (archy smell count vs cs score): {rho}")
+    return pooled, xs, ys
+
+
+def _agreement_line(smell: str, archy: set, cs: set) -> str:
+    j = jaccard(archy, cs)
+    return (
+        f"{smell:38} archy {len(archy):5}  cs {len(cs):5}  both {len(archy & cs):5}  "
+        f"jaccard {'n/a' if j is None else f'{j:.3f}'}"
+    )
+
+
+def report(rows: Iterable[dict], exclude: Iterable[str] = ()) -> str:
+    """The pooled result. `exclude` drops the pilot projects, which the
+    pre-registration keeps out of the result."""
+    skip = set(exclude)
+    kept = [r for r in rows if r.get("status") == "ok" and r["project"] not in skip]
+    pooled, xs, ys = _pool(kept)
+    lines = [f"projects: {len(kept)}   files: {sum(r['files'] for r in kept)}"]
+    lines += [_agreement_line(s, *pooled[s]) for s in SMELLS]
+    lines.append(f"file-level spearman (archy smell count vs cs score): {spearman(xs, ys)}")
     return "\n".join(lines)
+
+
+def _should_run(name: str, args: argparse.Namespace, done: set[str]) -> bool:
+    if name in done or name in args.exclude:
+        return False
+    return not args.only or name in args.only
+
+
+def _run_all(args: argparse.Namespace) -> None:
+    # `bench/` is not a package, so `_common` imports only once this directory is on
+    # `sys.path`; and the `--report` path must work without the clone machinery.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from _common import clone_or_update, load_manifest
+
+    done = _done(args.ledger)
+    for proj in load_manifest():
+        name = proj["name"]
+        if not _should_run(name, args, done):
+            continue
+        root = clone_or_update(proj)
+        if root is None:
+            _append(args.ledger, {"project": name, "status": "error", "reason": "clone failed"})
+            continue
+        try:
+            _append(args.ledger, run_project(name, root))
+        except Exception as exc:
+            _append(args.ledger, {"project": name, "status": "error", "reason": repr(exc)})
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -359,25 +422,8 @@ def main(argv: list[str] | None = None) -> int:
         rows = [json.loads(ln) for ln in args.ledger.read_text().splitlines() if ln.strip()]
         print(report(rows, args.exclude))
         return 0
-    # `bench/` is not a package, so `_common` imports only once this directory is on
-    # `sys.path`; and the `--report` path above must work without the clone machinery.
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from _common import clone_or_update, load_manifest
-
-    done = _done(args.ledger)
     try:
-        for proj in load_manifest():
-            name = proj["name"]
-            if (args.only and name not in args.only) or name in done or name in args.exclude:
-                continue
-            root = clone_or_update(proj)
-            if root is None:
-                _append(args.ledger, {"project": name, "status": "error", "reason": "clone failed"})
-                continue
-            try:
-                _append(args.ledger, run_project(name, root))
-            except Exception as exc:
-                _append(args.ledger, {"project": name, "status": "error", "reason": repr(exc)})
+        _run_all(args)
     except KeyboardInterrupt:
         print(f"interrupted; re-run with --ledger {args.ledger} to resume", file=sys.stderr)
         return 130
