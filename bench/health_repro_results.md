@@ -70,8 +70,8 @@ the one with a real definitional gap, is the one that missed.
   it says nothing about whether any smell predicts defects, review effort or agent
   success, and none of that is claimed.
 - **26% of files were dropped** (5,745 of 22,059): `cs` returned no score for them or
-  they did not parse. The ledger does not record which, so the split is unknown and a
-  detector could behave differently on the dropped files. Dropped files were never
+  they did not parse. The ledger does not record which (#888), so the split is unknown
+  and a detector could behave differently on the dropped files. Dropped files were never
   counted as clean.
 - 384 of 37,252 `cs` findings (1.03%) did not resolve to a function and are listed in
   the ledger as unresolved; they count against agreement.
