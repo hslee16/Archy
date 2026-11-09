@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import click
 
@@ -63,10 +62,6 @@ from archy.scan_config import (
 from archy.score import compute_score
 from archy.simulate import find_simulate
 from archy.trend import render_text as render_trend
-
-if TYPE_CHECKING:
-    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
-    pass
 
 
 @main.command()

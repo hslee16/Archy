@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import click
 from pydantic import BaseModel, ConfigDict
@@ -52,10 +51,6 @@ from archy.layers import (
     discover_config,
     load_config,
 )
-
-if TYPE_CHECKING:
-    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
-    pass
 
 
 @main.command()

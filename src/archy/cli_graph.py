@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import click
 import networkx as nx
@@ -34,10 +34,6 @@ from archy.history import read as read_history
 from archy.impact import DEFAULT_MAX_CHAINS, find_impact
 from archy.render import DEFAULT_MAX_NODES as RENDER_MAX_NODES
 from archy.render import render_dsm_html, render_trend_html
-
-if TYPE_CHECKING:
-    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
-    pass
 
 
 @main.command()

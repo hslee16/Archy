@@ -13,7 +13,6 @@ from __future__ import annotations
 import functools
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import click
 import networkx as nx
@@ -34,10 +33,6 @@ from archy.scan_config import (
     resolve_max_modules,
 )
 from archy.score import Score
-
-if TYPE_CHECKING:
-    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
-    pass
 
 
 class _ArchyGroup(click.Group):

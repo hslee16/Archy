@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import click
 
@@ -53,10 +52,6 @@ from archy.refactor import (
 from archy.scan_config import (
     resolve_max_modules,
 )
-
-if TYPE_CHECKING:
-    # Type-only: archy.install is imported lazily inside `install` to keep startup cheap.
-    pass
 
 
 @main.command()
