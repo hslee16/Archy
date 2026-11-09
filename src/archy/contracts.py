@@ -407,17 +407,7 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
     from importlinter.application.user_options import UserOptions
 
     config: LayerConfig = load_config(archy_yaml_path)
-    layer_modules = {layer.name: list(layer.patterns) for layer in config.layers}
-
-    forbidden_layers = {name for rule in config.forbid for name in (rule.from_layer, rule.to_layer)}
-    for layer in config.layers:
-        floating = [p for p in layer.patterns if is_floating_pattern(p)]
-        if floating and layer.name in forbidden_layers:
-            raise LayerConfigError(
-                f"layer {layer.name!r} pattern {floating[0]!r} has no root package, so "
-                "import-linter contracts cannot be derived from it. Use `archy check` "
-                "(it enforces floating patterns), or write a `.importlinter` file."
-            )
+    _reject_floating_forbidden_layers(config)
     pattern_roots = {
         pattern.split(".", 1)[0]
         for layer in config.layers
@@ -432,6 +422,41 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
     check_external_patterns(external_graph, config)
     external_roots = pattern_roots - internal_roots
     roots = sorted(pattern_roots & internal_roots)
+    _reject_external_sources(config, external_roots)
+    if not roots:
+        raise LayerConfigError(
+            f"could not infer root_package from {archy_yaml_path}: no layer patterns"
+        )
+
+    # Always emit `root_packages` (list). import-linter normalizes singular
+    # `root_package` -> list inside `read_user_options`, but we bypass that
+    # path when building UserOptions directly, so `create_report` would
+    # KeyError on the missing list. Plural-list works in both shapes.
+    session_options: dict[str, object] = {"root_packages": roots}
+    if _forbids_external_package(config, external_roots):
+        # The STRING "True": import-linter compares the option against "True" /
+        # "true", so a real bool is read as false and the contract then raises
+        # "must have include_external_packages=True".
+        session_options["include_external_packages"] = "True"
+
+    return UserOptions(
+        session_options=session_options, contracts_options=_forbidden_contracts(config)
+    )
+
+
+def _reject_floating_forbidden_layers(config: LayerConfig) -> None:
+    forbidden_layers = {name for rule in config.forbid for name in (rule.from_layer, rule.to_layer)}
+    for layer in config.layers:
+        floating = [p for p in layer.patterns if is_floating_pattern(p)]
+        if floating and layer.name in forbidden_layers:
+            raise LayerConfigError(
+                f"layer {layer.name!r} pattern {floating[0]!r} has no root package, so "
+                "import-linter contracts cannot be derived from it. Use `archy check` "
+                "(it enforces floating patterns), or write a `.importlinter` file."
+            )
+
+
+def _reject_external_sources(config: LayerConfig, external_roots: set[str]) -> None:
     for rule in config.forbid:
         source = next(layer for layer in config.layers if layer.name == rule.from_layer)
         named = sorted(
@@ -444,17 +469,10 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
                 f"external package {named[0]!r}; import-linter reads imports made by the "
                 "project's own modules, so an external package cannot be a source."
             )
-    if not roots:
-        raise LayerConfigError(
-            f"could not infer root_package from {archy_yaml_path}: no layer patterns"
-        )
 
-    # Always emit `root_packages` (list). import-linter normalizes singular
-    # `root_package` → list inside `read_user_options`, but we bypass that
-    # path when building UserOptions directly, so `create_report` would
-    # KeyError on the missing list. Plural-list works in both shapes.
-    session_options: dict[str, object] = {"root_packages": roots}
-    forbidden_external = any(
+
+def _forbids_external_package(config: LayerConfig, external_roots: set[str]) -> bool:
+    return any(
         p.split(".", 1)[0] in external_roots
         for rule in config.forbid
         for layer in config.layers
@@ -462,30 +480,22 @@ def _archy_yaml_to_user_options(archy_yaml_path: Path) -> UserOptions:
         for p in layer.patterns
         if not is_floating_pattern(p)
     )
-    if forbidden_external:
-        # The STRING "True": import-linter compares the option against "True" /
-        # "true", so a real bool is read as false and the contract then raises
-        # "must have include_external_packages=True".
-        session_options["include_external_packages"] = "True"
 
-    contracts_options: list[dict[str, object]] = []
-    for rule in config.forbid:
-        contract_id = f"{rule.from_layer}-must-not-reach-{rule.to_layer}"
-        contracts_options.append(
-            {
-                "id": contract_id,
-                "name": f"{rule.from_layer} layer must not reach {rule.to_layer} layer",
-                "type": "forbidden",
-                "source_modules": _to_import_linter_expressions(
-                    layer_modules.get(rule.from_layer, ())
-                ),
-                "forbidden_modules": _to_import_linter_expressions(
-                    layer_modules.get(rule.to_layer, ())
-                ),
-            }
-        )
 
-    return UserOptions(session_options=session_options, contracts_options=contracts_options)
+def _forbidden_contracts(config: LayerConfig) -> list[dict[str, object]]:
+    layer_modules = {layer.name: list(layer.patterns) for layer in config.layers}
+    return [
+        {
+            "id": f"{rule.from_layer}-must-not-reach-{rule.to_layer}",
+            "name": f"{rule.from_layer} layer must not reach {rule.to_layer} layer",
+            "type": "forbidden",
+            "source_modules": _to_import_linter_expressions(layer_modules.get(rule.from_layer, ())),
+            "forbidden_modules": _to_import_linter_expressions(
+                layer_modules.get(rule.to_layer, ())
+            ),
+        }
+        for rule in config.forbid
+    ]
 
 
 def _scanned_roots(project_dir: Path, config: LayerConfig) -> tuple[set[str], nx.DiGraph]:
