@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "81a5798aab02",
+  "strategy": "manual-commit",
+  "branch": "alee/positioning-retire-only-tool-claims",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/research/CODEGRAPH_COMPETITIVE_ANALYSIS.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/81/a5798aab02/0/metadata.json",
+      "transcript": "/81/a5798aab02/0/full.jsonl",
+      "content_hash": "/81/a5798aab02/0/content_hash.txt",
+      "prompt": "/81/a5798aab02/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 20,
+    "cache_creation_tokens": 41535,
+    "cache_read_tokens": 447966,
+    "output_tokens": 5039,
+    "api_call_count": 8
+  }
+}
