@@ -47,6 +47,20 @@ def clone_or_update(proj: dict) -> Path | None:
     )
     if has_sha.returncode != 0:
         subprocess.run(["git", "-C", str(target), "fetch", "--quiet", "origin"], check=False)
+    # A shallow clone cannot resolve an abbreviated pin, and a plain fetch does not
+    # deepen it, so the checkout below failed and the project was skipped with no
+    # reason given (found piloting #870: 24 of 28 cached clones were shallow).
+    if (
+        subprocess.run(
+            ["git", "-C", str(target), "cat-file", "-e", sha], capture_output=True
+        ).returncode
+        != 0
+    ):
+        subprocess.run(
+            ["git", "-C", str(target), "fetch", "--quiet", "--unshallow", "origin"],
+            capture_output=True,
+            check=False,
+        )
     if (
         subprocess.run(
             ["git", "-C", str(target), "checkout", "--quiet", sha],
