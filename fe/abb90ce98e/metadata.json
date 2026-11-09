@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "feabb90ce98e",
+  "strategy": "manual-commit",
+  "branch": "alee/codescene-feature-map",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/fe/abb90ce98e/0/metadata.json",
+      "transcript": "/fe/abb90ce98e/0/full.jsonl",
+      "content_hash": "/fe/abb90ce98e/0/content_hash.txt",
+      "prompt": "/fe/abb90ce98e/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1012,
+    "cache_creation_tokens": 835764,
+    "cache_read_tokens": 204353742,
+    "output_tokens": 448190,
+    "api_call_count": 464
+  }
+}
