@@ -36,9 +36,9 @@ result set to fewer than 20 items. Use ``--since`` (a date or git ref; see
 should I refactor right now" lens instead of the historical view.
 
 archy:owns        Hotspot, NoCommitsError, compute_hotspots, git_churn
-archy:mirrored-by NoCommitsError -> archy.cli, archy.mcp_runs,
-                  compute_hotspots -> archy.cli, archy.refactor,
-                  git_churn -> archy.cli, archy.mcp_runs
+archy:mirrored-by NoCommitsError -> archy.cli_git, archy.mcp_runs,
+                  compute_hotspots -> archy.cli_git, archy.refactor,
+                  git_churn -> archy.cli_git, archy.mcp_runs
 """
 
 from __future__ import annotations

@@ -21,10 +21,10 @@ archy:owns        InvalidSinceError, fold_rename, normalize_py_path,
                   since_window_empty
 archy:mirrored-by fold_rename -> archy.coupling, archy.hotspots,
                   normalize_py_path -> archy.coupling, archy.hotspots,
-                  resolve_changed_paths -> archy.cli, archy.mcp_runs,
-                  resolve_repo_root -> archy.cli, archy.coupling, archy.hotspots,
+                  resolve_changed_paths -> archy.cli_graph, archy.mcp_runs,
+                  resolve_repo_root -> archy.cli_git, archy.coupling, archy.hotspots,
                   archy.mcp_runs, resolve_since_log_args -> archy.coupling,
-                  archy.hotspots, archy.mcp_runs, since_window_empty -> archy.cli,
+                  archy.hotspots, archy.mcp_runs, since_window_empty -> archy.cli_git,
                   archy.mcp_runs
 """
 

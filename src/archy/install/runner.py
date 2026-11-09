@@ -7,11 +7,12 @@ driven directly by unit tests without going through ``CliRunner``.
 archy:owns        AdapterResult, ConfigPreview, Detection, InstallResult, detect_all,
                   plan_for, preview_config, print_config, resolve_targets, run_install,
                   run_uninstall
-archy:mirrored-by ConfigPreview -> archy.cli, archy.install, detect_all -> archy.cli,
-                  archy.install, preview_config -> archy.cli, archy.install,
-                  resolve_targets -> archy.cli, archy.install,
-                  run_install -> archy.cli, archy.install, run_uninstall -> archy.cli,
-                  archy.install
+archy:mirrored-by ConfigPreview -> archy.cli_install, archy.install,
+                  detect_all -> archy.cli_install, archy.install,
+                  preview_config -> archy.cli_install, archy.install,
+                  resolve_targets -> archy.cli_install, archy.install,
+                  run_install -> archy.cli_install, archy.install,
+                  run_uninstall -> archy.cli_install, archy.install
 """
 
 from __future__ import annotations

@@ -13,8 +13,9 @@ The DB at `.archy/index.db` is a pure cache: deleting it only costs a cold
 reparse, never data. A schema-version bump drops and rebuilds it.
 
 archy:owns        SyncStats, build_graph_cached, default_db_path, open_index, sync
-archy:mirrored-by default_db_path -> archy.cli, archy.watcher, open_index -> archy.cli,
-                  archy.watcher, sync -> archy.cli, archy.watcher
+archy:mirrored-by default_db_path -> archy.cli_install, archy.watcher,
+                  open_index -> archy.cli_install, archy.watcher,
+                  sync -> archy.cli_install, archy.watcher
 """
 
 from __future__ import annotations

@@ -21,17 +21,17 @@ archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
 archy:mirrored-by DiffReport -> archy.cli_render, archy.diff_summary, archy.mcp,
                   archy.mcp_runs, DiffSummary -> archy.cli_render, archy.diff_summary,
                   archy.simulate, ScoreDelta -> archy.cli_render, archy.simulate,
-                  compute_diff -> archy.cli, archy.mcp_runs, archy.simulate,
+                  compute_diff -> archy.cli_history, archy.mcp_runs, archy.simulate,
                   bench.delta_direction, bench.simulate_oracle,
-                  create_baseline_command -> archy.cli, archy.mcp_runs,
-                  default_baseline_path -> archy.cli, archy.mcp_runs,
-                  missing_baseline_hint -> archy.cli, archy.mcp_runs,
-                  read_snapshot -> archy.cli, archy.mcp_runs,
-                  strict_baseline_problem -> archy.cli, archy.mcp_runs,
-                  strict_verdict -> archy.cli, archy.mcp_runs,
-                  take_snapshot -> archy.cli, archy.mcp_runs, archy.simulate,
+                  create_baseline_command -> archy.cli_history, archy.mcp_runs,
+                  default_baseline_path -> archy.cli_history, archy.mcp_runs,
+                  missing_baseline_hint -> archy.cli_history, archy.mcp_runs,
+                  read_snapshot -> archy.cli_history, archy.mcp_runs,
+                  strict_baseline_problem -> archy.cli_history, archy.mcp_runs,
+                  strict_verdict -> archy.cli_history, archy.mcp_runs,
+                  take_snapshot -> archy.cli_history, archy.mcp_runs, archy.simulate,
                   bench.delta_direction, bench.simulate_oracle,
-                  write_snapshot -> archy.cli, archy.mcp_runs
+                  write_snapshot -> archy.cli_history, archy.mcp_runs
 """
 
 from __future__ import annotations

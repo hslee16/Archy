@@ -60,6 +60,13 @@ layers:
   cli:
     modules:
       - "archy.cli"
+      - "archy.cli_app"
+      - "archy.cli_check"
+      - "archy.cli_conventions"
+      - "archy.cli_git"
+      - "archy.cli_graph"
+      - "archy.cli_history"
+      - "archy.cli_install"
       - "archy.cli_render"
       - "archy.mcp"
       - "archy.mcp_compat"

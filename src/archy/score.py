@@ -44,8 +44,8 @@ archy:mirrored-by ScoreInputs -> archy.diff, archy.mcp_payloads,
                   bench.dsm, compute_depth -> bench.call_weighted_modularity,
                   bench.dsm, compute_equality -> bench.call_weighted_modularity,
                   bench.dsm, compute_modularity -> bench.call_weighted_modularity,
-                  bench.dsm, compute_score -> archy.cli, archy.diff, archy.mcp_runs,
-                  bench.inloop_prevalence, bench.q1b_score
+                  bench.dsm, compute_score -> archy.cli_history, archy.diff,
+                  archy.mcp_runs, bench.inloop_prevalence, bench.q1b_score
 """
 
 from __future__ import annotations
