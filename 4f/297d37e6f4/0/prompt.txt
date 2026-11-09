@@ -1,0 +1,1 @@
+lets check all the recnetly filed tickets and add labels to them. We should consider 'good first issue' and 'good second issue' labels along with others
