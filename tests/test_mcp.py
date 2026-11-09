@@ -18,6 +18,7 @@ import re
 import sqlite3
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Annotated, cast, get_args, get_origin, get_type_hints
 
@@ -26,6 +27,7 @@ from pydantic import BaseModel
 
 from archy.diff import DiffReport, take_snapshot, write_snapshot
 from archy.dsm import DSM, DSMSummary
+from archy.gitlog import resolve_changed_paths
 from archy.graph import build_graph, internal_subgraph
 from archy.layers import LayerConfigError
 from archy.mcp import (
@@ -2178,6 +2180,98 @@ def _project_with_a_test_of_a(root: Path) -> dict:
     (root / "pkg" / "lone.py").write_text("")
     (root / "tests" / "test_a.py").write_text("from pkg.a import thing\n")
     return {"path": str(root), "files": ["pkg/a.py"], "mode": "affected"}
+
+
+@pytest.mark.parametrize("layout", ["normal", "symlink", "nested", "worktree"])
+def test_resolve_changed_paths_accepts_git_root_paths_from_subdirectory(
+    tmp_path: Path, layout: str
+):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    if layout == "nested":
+        repo = repo / "nested"
+        repo.mkdir()
+        _init_git_repo(repo)
+    elif layout == "worktree":
+        _git(repo, "commit", "--allow-empty", "-qm", "init")
+        linked = tmp_path / "linked"
+        _git(repo, "worktree", "add", "-b", "linked", str(linked))
+        repo = linked
+    project = repo / "services/api"
+    project.mkdir(parents=True)
+    _project_with_a_test_of_a(project)
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "project")
+    if layout == "symlink":
+        alias = tmp_path / "alias"
+        alias.symlink_to(project, target_is_directory=True)
+        project = alias
+    changed = Path("services/api/pkg/a.py")
+    (repo / changed).write_text("thing = 2\n")
+    assert not (project / changed).exists()
+    assert (repo / changed).exists()
+
+    assert resolve_changed_paths(project, [changed]) == [repo / changed]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(resolve_changed_paths, project, [changed])
+        second = pool.submit(resolve_changed_paths, project, [changed])
+        assert first.result() == second.result() == [repo / changed]
+    result = run_affected(project, files=[changed], depth=5, test_filter=None).model_dump(
+        mode="json"
+    )
+    assert result["impacted_tests"] == ["tests.test_a"]
+    assert result["deleted"] == []
+
+    _git(repo, "rm", "-f", str(changed))
+    assert resolve_changed_paths(project, [changed]) == [project / changed]
+    deleted = run_affected(project, files=[changed], depth=5, test_filter=None).model_dump(
+        mode="json"
+    )
+    assert deleted["impacted_tests"] == []
+    assert deleted["deleted"] == [str(project / changed)]
+
+
+def test_resolve_changed_paths_preserves_project_precedence_and_absolute_paths(tmp_path: Path):
+    _init_git_repo(tmp_path)
+    project = tmp_path / "project"
+    project.mkdir()
+    (tmp_path / "a.py").write_text("root = 1\n")
+    (project / "a.py").write_text("project = 1\n")
+    absolute_missing = tmp_path / "missing.py"
+    assert resolve_changed_paths(project, [Path("a.py"), tmp_path / "a.py", absolute_missing]) == [
+        project / "a.py",
+        tmp_path / "a.py",
+        absolute_missing,
+    ]
+
+
+def test_resolve_changed_paths_keeps_deleted_project_file_with_root_namesake(tmp_path: Path):
+    _init_git_repo(tmp_path)
+    project = tmp_path / "sub"
+    project.mkdir()
+    _project_with_a_test_of_a(project)
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg/a.py").write_text("unrelated = 1\n")
+    (project / "pkg/a.py").unlink()
+    assert resolve_changed_paths(project, [Path("pkg/a.py")]) == [project / "pkg/a.py"]
+    deleted = run_affected(project, files=[Path("pkg/a.py")], depth=5, test_filter=None)
+    assert deleted.model_dump(mode="json")["deleted"] == [str(project / "pkg/a.py")]
+
+
+@pytest.mark.parametrize("git_available", [True, False], ids=["not-a-worktree", "git-missing"])
+def test_resolve_changed_paths_without_git_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_available: bool
+):
+    if git_available:
+        monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path.parent))
+    else:
+        _init_git_repo(tmp_path)
+        monkeypatch.setenv("PATH", "")
+    project = tmp_path / "project"
+    project.mkdir()
+    (tmp_path / "a.py").write_text("")
+    assert resolve_changed_paths(project, [Path("a.py")]) == [project / "a.py"]
 
 
 @pytest.mark.parametrize(

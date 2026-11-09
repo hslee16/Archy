@@ -108,7 +108,12 @@ from archy.duplicates import (
     demote_independent,
     is_test_path,
 )
-from archy.gitlog import InvalidSinceError, resolve_repo_root, since_window_empty
+from archy.gitlog import (
+    InvalidSinceError,
+    resolve_changed_paths,
+    resolve_repo_root,
+    since_window_empty,
+)
 from archy.graph import (
     QualnameCollisionError,
     ScanTooLargeError,
@@ -699,7 +704,7 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> No
     g = _load_graph(path, internal_only=True)
     result = find_impact(
         g,
-        [path / f for f in files],
+        resolve_changed_paths(path, list(files)),
         max_chains=max_chains,
     )
 
@@ -725,7 +730,10 @@ def impact(path: Path, files: tuple[Path, ...], fmt: str, max_chains: int) -> No
         "Read changed file paths from stdin, one per line. These are MERGED "
         "with any FILES passed as positional arguments (both sources combine; "
         "they are not alternatives). Pairs with "
-        "`git diff --name-only | archy affected --stdin`."
+        "`git diff --name-only | archy affected --stdin`. Relative paths are "
+        "tried under PATH first, then at its git work-tree root if missing "
+        "(kept only if that file exists inside PATH). "
+        "Use `git diff --relative --name-only` from PATH for project-relative paths."
     ),
 )
 @click.option(
@@ -794,7 +802,7 @@ def affected(
         )
 
     g = _load_graph(path, internal_only=True)
-    resolved = [path / f for f in file_list]
+    resolved = resolve_changed_paths(path, file_list)
     try:
         result = find_affected(g, resolved, project_root=path, depth=depth, test_filter=test_filter)
     except ValueError as exc:

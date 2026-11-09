@@ -611,6 +611,8 @@ def _register_tools(server: Server) -> None:
         annotations=_READ_ONLY_ANNOTATIONS,
         description=(
             "Given a list of changed file paths, return what they affect. "
+            "Relative `files` are tried under `path` first; missing paths are "
+            "retried at its git work-tree root and used if they exist there, inside `path`. "
             "`mode='blast'` (the DEFAULT) returns the internal modules that "
             "transitively import any of them (the blast radius): use before "
             "refactoring or removing a module to see what would break. "

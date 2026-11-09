@@ -1242,7 +1242,7 @@ def _git(repo: Path, *args: str) -> None:
     )
 
 
-def _repo_with_deleted_module(tmp_path: Path) -> Path:
+def _repo_with_deleted_module(tmp_path: Path, *, subdir: str = ".") -> Path:
     """A committed `pkg/a.py` imported by a test, then removed from the worktree."""
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -1250,11 +1250,13 @@ def _repo_with_deleted_module(tmp_path: Path) -> Path:
     _git(repo, "config", "user.email", "t@t.t")
     _git(repo, "config", "user.name", "t")
     _git(repo, "config", "commit.gpgsign", "false")
-    pkg = repo / "pkg"
+    project = repo / subdir
+    project.mkdir(parents=True, exist_ok=True)
+    pkg = project / "pkg"
     pkg.mkdir()
     (pkg / "__init__.py").write_text("")
     (pkg / "a.py").write_text("x = 1\n")
-    tests = repo / "tests"
+    tests = project / "tests"
     tests.mkdir()
     (tests / "__init__.py").write_text("")
     (tests / "test_a.py").write_text("from pkg.a import x\n")
@@ -1317,6 +1319,50 @@ def test_affected_stdin_reads_paths(tmp_path: Path):
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     assert payload["impacted_tests"] == ["tests.test_core"]
+
+
+def test_affected_stdin_accepts_git_root_paths_from_subdirectory(tmp_path: Path):
+    repo = _repo_with_deleted_module(tmp_path, subdir="services/api")
+    project = repo / "services/api"
+    changed = "services/api/pkg/a.py"
+    _git(repo, "restore", changed)
+    (repo / changed).write_text("x = 2\n")
+    assert not (project / changed).exists()
+    assert (repo / changed).exists()
+    diff = subprocess.run(
+        ["git", "-C", str(repo), "diff", "--name-only", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert diff == changed + "\n"
+
+    args = ["affected", str(project), "--stdin", "--quiet"]
+    result = CliRunner().invoke(main, args, input=diff)
+    assert result.exit_code == 0, result.output
+    assert result.stdout.splitlines() == [str(project / "tests/test_a.py")]
+    assert "deleted or renamed" not in result.output
+
+    _git(repo, "rm", "-f", changed)
+    deleted = CliRunner().invoke(main, args, input=diff)
+    assert deleted.exit_code == 0, deleted.output
+    assert deleted.stdout == ""
+    assert _DELETED_NOTE in deleted.stderr
+    assert changed in deleted.stderr
+
+
+def test_impact_accepts_git_root_paths_from_subdirectory(tmp_path: Path):
+    repo = _repo_with_deleted_module(tmp_path, subdir="services/api")
+    project = repo / "services/api"
+    _git(repo, "restore", "services/api/pkg/a.py")
+
+    args = ["impact", str(project), "--file", "services/api/pkg/a.py", "--format", "json"]
+    result = CliRunner().invoke(main, args)
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["changed"] == ["pkg.a"]
+    assert payload["unresolved"] == []
+    assert "tests.test_a" in payload["impacted"]
 
 
 def test_affected_json_and_quiet_mutually_exclusive(tmp_path: Path):

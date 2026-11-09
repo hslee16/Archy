@@ -133,6 +133,14 @@ archy_impact(path=".", files=["src/app/db.py"], mode="affected", depth=5)
 
 Use this instead of the default `mode="blast"` when the question is "given this diff, which tests should I run?" rather than "what's the full blast radius?". Returns `impacted_tests` and `impacted_modules` as separate lists. Test detection defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `test_filter=<recursive glob>`. A filter that matches no file in the graph is an error, not an empty `impacted_tests`, ending with a `did you mean` when a directory is close. The depth cap prevents a single-line edit on a monorepo from fanning out to thousands of nodes. The CLI form `git diff --name-only HEAD | archy affected . --stdin -q | xargs pytest` is the canonical CI / pre-commit shape.
 
+Changed paths (CLI arguments/`--stdin` and MCP `files`) are relative to the
+project `path` first. A missing relative path is retried at the git work-tree
+root, if available, and used if it exists there and lies inside `path`. Thus git-root-relative paths
+also work when `path` is a subdirectory such as `services/api`. Absolute paths
+are unchanged; without git or outside a work tree, resolution stays relative to
+`path`. To generate project-relative paths instead, run
+`git diff --relative --name-only HEAD` from the project directory.
+
 For positional context (where blocks are dense, where back-edges sit, where layer leakage shows up), reach for the Design Structure Matrix:
 
 ```

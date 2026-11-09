@@ -16,10 +16,12 @@ what "the same file" is, so their outputs line up module-for-module.
 "now" (matching 0 commits). :func:`resolve_since_log_args` turns a real ref into
 a ``<ref>..HEAD`` range, passes real dates through, and refuses garbage.
 
-archy:owns        InvalidSinceError, fold_rename, normalize_py_path, resolve_repo_root,
-                  resolve_since_log_args, since_window_empty
+archy:owns        InvalidSinceError, fold_rename, normalize_py_path,
+                  resolve_changed_paths, resolve_repo_root, resolve_since_log_args,
+                  since_window_empty
 archy:mirrored-by fold_rename -> archy.coupling, archy.hotspots,
                   normalize_py_path -> archy.coupling, archy.hotspots,
+                  resolve_changed_paths -> archy.cli, archy.mcp_runs,
                   resolve_repo_root -> archy.cli, archy.coupling, archy.hotspots,
                   archy.mcp_runs, resolve_since_log_args -> archy.coupling,
                   archy.hotspots, archy.mcp_runs, since_window_empty -> archy.cli,
@@ -76,6 +78,26 @@ def resolve_repo_root(root: Path) -> Path | None:
     except (FileNotFoundError, subprocess.CalledProcessError):
         return None
     return Path(proc.stdout.strip())
+
+
+def resolve_changed_paths(path: Path, files: list[Path]) -> list[Path]:
+    """Anchor changed-file args against PATH, retrying missing relatives at the git root.
+
+    Existing project-relative paths take precedence. A git-root candidate is
+    used only if it exists and lies inside PATH, so a deleted project file is
+    never matched to a namesake elsewhere in the repository. Absolute paths and
+    paths missing from both roots keep their original resolution, including
+    when git is unavailable or PATH is outside a work tree.
+    """
+    resolved = [path / f for f in files]
+    missing = [i for i, f in enumerate(files) if not f.is_absolute() and not resolved[i].exists()]
+    if missing and (repo_root := resolve_repo_root(path)) is not None:
+        project = path.resolve()
+        for i in missing:
+            candidate = repo_root / files[i]
+            if candidate.exists() and candidate.resolve().is_relative_to(project):
+                resolved[i] = candidate
+    return resolved
 
 
 def resolve_since_log_args(repo_root: Path, since: str) -> tuple[str, ...]:

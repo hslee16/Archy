@@ -68,7 +68,12 @@ from archy.duplicates import (
     demote_independent,
     is_test_path,
 )
-from archy.gitlog import resolve_repo_root, resolve_since_log_args, since_window_empty
+from archy.gitlog import (
+    resolve_changed_paths,
+    resolve_repo_root,
+    resolve_since_log_args,
+    since_window_empty,
+)
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -613,14 +618,15 @@ def run_impact(
     if max_chains == 0:
         raise ValueError("--max-chains must be negative (for all) or positive (for a limit); got 0")
     graph = _load_graph(path, internal_only=True)
-    result = find_impact(graph, resolve_against(path, files), max_chains=max_chains)
+    result = find_impact(graph, resolve_changed_paths(path, files), max_chains=max_chains)
     if not co_change or not result.changed:
         return result
     # Opt-in behavioral overlay: surface modules that co-change with the edited
     # set but have no structural edge (so the blast radius above missed them).
     # Source-only (test co-change is mostly the module's own test) and best-effort
     # (no git -> empty). Exclude modules already in `impacted` - the point is the
-    # HIDDEN dependents. This is the only path that makes archy_impact touch git.
+    # HIDDEN dependents. Only this path reads git history; resolving `files`
+    # may also ask git for the work-tree root.
     source_paths = frozenset(p for p in internal_module_paths(graph) if not is_test_path(p))
     cochange = git_cochange(path, keep_paths=source_paths)
     if cochange is None:
@@ -646,7 +652,7 @@ def run_affected(
     if not files:
         raise ValueError("pass at least one file (got files=[])")
     graph = _load_graph(path, internal_only=True)
-    resolved = resolve_against(path, files)
+    resolved = resolve_changed_paths(path, files)
     return find_affected(
         graph,
         resolved,
