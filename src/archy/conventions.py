@@ -710,29 +710,35 @@ def _shadow_roots(
     module names under a second prefix is a copy whatever it is called.
     """
     names = list(qualnames)
-    by_prefix: dict[str, set[str]] = defaultdict(set)
-    outside: dict[str, set[str]] = defaultdict(set)
-    for q in names:
-        parts = q.split(".")
-        if len(parts) < 3:
-            continue
-        prefix = ".".join(parts[:2])
-        by_prefix[prefix].add(".".join(parts[2:]))
-    for prefix in by_prefix:
-        root = prefix.split(".")[0]
-        for q in names:
-            if q.startswith(prefix + "."):
-                continue
-            if q.startswith(root + "."):
-                outside[prefix].add(q[len(root) + 1 :])
+    by_prefix = _inner_names_by_prefix(names)
     shadows = set()
     for prefix, inner in by_prefix.items():
         if len(inner) < min_modules:
             continue
-        overlap = len(inner & outside[prefix])
+        overlap = len(inner & _names_outside_prefix(prefix, names))
         if overlap / len(inner) >= ratio:
             shadows.add(prefix)
     return frozenset(shadows)
+
+
+def _inner_names_by_prefix(names: list[str]) -> dict[str, set[str]]:
+    """`{pkg.sub: {names below it, with that prefix stripped}}` for names 3+ deep."""
+    by_prefix: dict[str, set[str]] = defaultdict(set)
+    for q in names:
+        parts = q.split(".")
+        if len(parts) >= 3:
+            by_prefix[".".join(parts[:2])].add(".".join(parts[2:]))
+    return by_prefix
+
+
+def _names_outside_prefix(prefix: str, names: list[str]) -> set[str]:
+    """Names under the same top-level package as `prefix` but not under `prefix`."""
+    root = prefix.split(".")[0]
+    return {
+        q[len(root) + 1 :]
+        for q in names
+        if not q.startswith(prefix + ".") and q.startswith(root + ".")
+    }
 
 
 def _reexport_maps(
@@ -752,26 +758,7 @@ def _reexport_maps(
     for qualname, f in facts.items():
         if not f.is_package:
             continue
-        pkg_map: dict[str, str] = {}
-        for base, names in f.import_froms:
-            # Only a SELF-referential import re-exports. `graph._reexport_source`
-            # skips anything else, on the grounds that re-exporting a module from
-            # outside the package says nothing about where the package's own names
-            # live; treating it as a re-export routed `from pkgA import Thing` to
-            # `pkgB.impl` and reported nothing importing `pkgA`, where the graph
-            # reports the `pkgA` edge. A relative import always lands inside the
-            # package by construction, so this one check covers both forms.
-            if base != qualname and not base.startswith(qualname + "."):
-                continue
-            for _name, local in names:
-                # `from .x import y` re-exports `y` from the submodule `x`, always.
-                # Whether `x.y` is a module or a symbol `x` defines is not in the
-                # syntax: Python prefers the attribute, so a symbol `y` shadows a
-                # sibling `x/y.py`, and mapping to `x.y` would invent an import
-                # the program never makes (#436). `x` is an edge in both cases.
-                source = base
-                if source in known and source != qualname:
-                    pkg_map[local] = source
+        pkg_map = _package_reexports(qualname, f, known)
         if pkg_map:
             maps[qualname] = pkg_map
     # The graph's own walker, not a copy of it. The two resolvers have to agree
@@ -779,6 +766,29 @@ def _reexport_maps(
     # implementation is exactly the drift this module already had to fix.
     _follow_reexport_chains(maps)
     return maps
+
+
+def _package_reexports(qualname: str, f: _ModuleFacts, known: frozenset[str]) -> dict[str, str]:
+    """The names one package re-exports, each mapped to the submodule it came from."""
+    pkg_map: dict[str, str] = {}
+    for base, names in f.import_froms:
+        # Only a SELF-referential import re-exports. `graph._reexport_source`
+        # skips anything else, on the grounds that re-exporting a module from
+        # outside the package says nothing about where the package's own names
+        # live; treating it as a re-export routed `from pkgA import Thing` to
+        # `pkgB.impl` and reported nothing importing `pkgA`, where the graph
+        # reports the `pkgA` edge. A relative import always lands inside the
+        # package by construction, so this one check covers both forms.
+        if base != qualname and not base.startswith(qualname + "."):
+            continue
+        # `from .x import y` re-exports `y` from the submodule `x`, always.
+        # Whether `x.y` is a module or a symbol `x` defines is not in the
+        # syntax: Python prefers the attribute, so a symbol `y` shadows a
+        # sibling `x/y.py`, and mapping to `x.y` would invent an import
+        # the program never makes (#436). `x` is an edge in both cases.
+        if base in known and base != qualname:
+            pkg_map.update({local: base for _name, local in names})
+    return pkg_map
 
 
 def _resolved_imports(
@@ -813,9 +823,10 @@ def _try_collect_detailed(
     """Parse one module, or an UnparsedModule naming why it was skipped.
 
     Advisory command: an unreadable or half-written file is a fact to report,
-    never a reason to fail. Shared so the two callers cannot drift on WHICH
-    failures are tolerated -- a narrower except tuple in one of them would turn
-    a work-in-progress file into a crash on only one of the two surfaces.
+    never a reason to fail. `_collect_all` is the one place that calls this, so
+    the two surfaces that census a project cannot drift on WHICH failures are
+    tolerated -- a narrower except tuple in one of them would turn a
+    work-in-progress file into a crash on only one of the two surfaces.
     """
     try:
         # Bytes, not read_text("utf-8"): ast.parse honours the PEP 263 cookie,
@@ -948,11 +959,6 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
     return tuple(out)
 
 
-def _base_names(cls: ast.ClassDef) -> set[str]:
-    """The last dotted segment of each base class expression, non-empty only."""
-    return {name for base in cls.bases if (name := _dotted(base).split(".")[-1])}
-
-
 def _class_index(
     facts: list[_ModuleFacts],
 ) -> tuple[dict[str, str], dict[str, ast.ClassDef], dict[str, set[str]]]:
@@ -964,7 +970,7 @@ def _class_index(
         for cls in f.classes:
             home_of.setdefault(cls.name, f.qualname)
             node_of.setdefault(cls.name, cls)
-            bases = _base_names(cls)
+            bases = set(_declared_bases(cls))
             if bases:
                 parents[cls.name] |= bases
     return home_of, node_of, parents
@@ -1629,30 +1635,60 @@ def _gates(facts: Iterable[_ModuleFacts]) -> tuple[tuple[Gate, ...], tuple[Gate,
     return tuple(found_gates), tuple(found_errors)
 
 
+def _model_config_call(stmt: ast.stmt) -> ast.Call | None:
+    """The `ConfigDict(...)` call of a `model_config = ...` statement, else None."""
+    if isinstance(stmt, ast.Assign):
+        targets = list(stmt.targets)
+    elif isinstance(stmt, ast.AnnAssign):
+        targets = [stmt.target]
+    else:
+        return None
+    if not any(isinstance(t, ast.Name) and t.id == "model_config" for t in targets):
+        return None
+    return stmt.value if isinstance(stmt.value, ast.Call) else None
+
+
+def _is_frozen_true(kw: ast.keyword) -> bool:
+    return kw.arg == "frozen" and isinstance(kw.value, ast.Constant) and kw.value.value is True
+
+
 def _frozen_config(cls: ast.ClassDef) -> tuple[bool, list[str]]:
     """Read a pydantic `model_config = ConfigDict(...)` assignment off a class."""
     flags: list[str] = []
     frozen = False
     for stmt in cls.body:
-        targets: list[ast.expr] = []
-        if isinstance(stmt, ast.Assign):
-            targets = list(stmt.targets)
-        elif isinstance(stmt, ast.AnnAssign):
-            targets = [stmt.target]
-        else:
+        call = _model_config_call(stmt)
+        if call is None:
             continue
-        if not any(isinstance(t, ast.Name) and t.id == "model_config" for t in targets):
-            continue
-        value = stmt.value
-        if not isinstance(value, ast.Call):
-            continue
-        for kw in value.keywords:
+        for kw in call.keywords:
             if kw.arg is None:
                 continue
             flags.append(kw.arg)
-            if kw.arg == "frozen" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
-                frozen = True
+            frozen = frozen or _is_frozen_true(kw)
     return frozen, flags
+
+
+def _collection_fields(cls: ast.ClassDef) -> tuple[int, int]:
+    """How many annotated fields of `cls` are tuples and how many are lists."""
+    tuples = lists = 0
+    for stmt in cls.body:
+        if not isinstance(stmt, ast.AnnAssign) or stmt.annotation is None:
+            continue
+        head = ast.unparse(stmt.annotation).split("[", 1)[0].strip()
+        if head.endswith(("tuple", "Tuple")):
+            tuples += 1
+        elif head.endswith(("list", "List")):
+            lists += 1
+    return tuples, lists
+
+
+def _declared_bases(cls: ast.ClassDef) -> list[str]:
+    """The last dotted segment of each base class expression, non-empty only.
+
+    The one definition of a class's base names. A list, so a base named twice is
+    counted twice by the census; `_class_index` wants the set and wraps it.
+    """
+    return [name for b in cls.bases if (name := _dotted(b).rsplit(".", 1)[-1])]
 
 
 def _model_census(facts: Iterable[_ModuleFacts]) -> ModelCensus:
@@ -1667,26 +1703,17 @@ def _model_census(facts: Iterable[_ModuleFacts]) -> ModelCensus:
     for f in facts:
         for cls in f.classes:
             total += 1
-            names = [_dotted(b).rsplit(".", 1)[-1] for b in cls.bases]
-            declared = [n for n in names if n]
-            is_value = any(n in _VALUE_BASES for n in declared)
-            for name in declared:
-                bases[name] += 1
-            if not is_value:
+            declared = _declared_bases(cls)
+            bases.update(declared)
+            if not any(n in _VALUE_BASES for n in declared):
                 continue
             value += 1
             was_frozen, flags = _frozen_config(cls)
             frozen += int(was_frozen)
-            for flag in flags:
-                config_flags[flag] += 1
-            for stmt in cls.body:
-                if not isinstance(stmt, ast.AnnAssign) or stmt.annotation is None:
-                    continue
-                head = ast.unparse(stmt.annotation).split("[", 1)[0].strip()
-                if head.endswith("tuple") or head.endswith("Tuple"):
-                    tuples += 1
-                elif head.endswith("list") or head.endswith("List"):
-                    lists += 1
+            config_flags.update(flags)
+            more_tuples, more_lists = _collection_fields(cls)
+            tuples += more_tuples
+            lists += more_lists
 
     return ModelCensus(
         total_classes=total,
@@ -1697,6 +1724,26 @@ def _model_census(facts: Iterable[_ModuleFacts]) -> ModelCensus:
         tuple_fields=tuples,
         list_fields=lists,
     )
+
+
+def _collect_all(
+    modules: Iterable[Module], root: Path
+) -> tuple[list[_ModuleFacts], list[UnparsedModule]]:
+    """Parse every module; the facts of those that parsed and a record of those that did not.
+
+    One loop for `compute_conventions` and `compute_module_view`, so the two cannot
+    drift on how a module that fails to parse is recorded (#874).
+    """
+    facts: list[_ModuleFacts] = []
+    skipped: list[UnparsedModule] = []
+    for module in modules:
+        collected, miss = _try_collect_detailed(module, root=root)
+        if collected is None:
+            assert miss is not None
+            skipped.append(miss)
+        else:
+            facts.append(collected)
+    return facts, skipped
 
 
 def compute_conventions(
@@ -1731,15 +1778,7 @@ def compute_conventions(
         counts["nonsource"],
     )
     modules = kept
-    facts: list[_ModuleFacts] = []
-    skipped: list[UnparsedModule] = []
-    for module in modules:
-        collected, miss = _try_collect_detailed(module, root=root)
-        if collected is None:
-            assert miss is not None
-            skipped.append(miss)
-            continue
-        facts.append(collected)
+    facts, skipped = _collect_all(modules, root)
 
     gates, errors = _gates(facts)
     bases = _base_families(facts, min_count=min_family)
@@ -1789,15 +1828,8 @@ def compute_module_view(
     modules = list(discover_modules(root, ignored_dirs=ignored_dirs, extra_roots=extra_roots))
     shadows = _shadow_roots(m.qualname for m in modules)
 
-    facts: dict[str, _ModuleFacts] = {}
-    skipped: list[UnparsedModule] = []
-    for m in modules:
-        collected, miss = _try_collect_detailed(m, root=root)
-        if collected is None:
-            assert miss is not None
-            skipped.append(miss)
-            continue
-        facts[m.qualname] = collected
+    collected, skipped = _collect_all(modules, root)
+    facts = {f.qualname: f for f in collected}
     unparsed = tuple(skipped)
 
     if module not in facts:
