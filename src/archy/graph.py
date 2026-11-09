@@ -305,48 +305,13 @@ def assemble_graph(
     qualname_set = {m.qualname for m in modules}
 
     graph: nx.DiGraph = nx.DiGraph()
-    for m in modules:
-        cc_aggregates = _cc_aggregates(parse_results[m.qualname].functions)
-        graph.add_node(
-            m.qualname,
-            path=str(m.path),
-            is_package=m.is_package,
-            external=False,
-            **cc_aggregates,
-        )
-    reexport_maps = _build_reexport_maps(modules, parse_results, qualname_set)
-
-    parse_errors: list[str] = []
-    for m in modules:
-        result = parse_results[m.qualname]
-        if result.has_errors:
-            parse_errors.append(m.qualname)
-        for ref in result.imports:
-            for target in _resolve_targets(ref, m, qualname_set, reexport_maps):
-                if target not in graph:
-                    graph.add_node(target, external=True)
-                _add_or_extend_edge(graph, m.qualname, target, ref)
-
-    # Second pass: call edges. Calls only become an edge if their leftmost
-    # identifier resolves through the source module's import alias table, so
-    # we depend on the import pass having populated qualname_set + reexport
-    # routing first. Call edges land on the longest internal qualname prefix
-    # of (alias_target + chain), which can be deeper than the import edge
-    # (e.g. `import pkg; pkg.sub.foo()` adds a call edge to pkg.sub even
-    # when imports only edged to pkg) - that depth differential is the
-    # whole point of LocAgent's invoke-edges signal.
-    for m in modules:
-        result = parse_results[m.qualname]
-        if not result.calls:
-            continue
-        alias_table = _build_alias_table(result.imports, m, qualname_set, reexport_maps)
-        for call in result.calls:
-            target = _resolve_call_target(call, alias_table, qualname_set)
-            if target is None or target == m.qualname:
-                continue
-            if target not in graph:
-                graph.add_node(target, external=True)
-            _add_or_extend_call_edge(graph, m.qualname, target, call)
+    _add_module_nodes(graph, modules, parse_results)
+    resolver = _Resolver(
+        qualname_set=qualname_set,
+        reexport_maps=_build_reexport_maps(modules, parse_results, qualname_set),
+    )
+    parse_errors = _add_import_edges(graph, modules, parse_results, resolver)
+    _add_call_edges(graph, modules, parse_results, resolver)
 
     # Freeze once per edge to preserve the public tuple without copying it per call.
     for _, _, data in graph.edges(data=True):
@@ -366,6 +331,90 @@ def assemble_graph(
     graph.graph["entrypoints"] = entrypoints
     graph.graph["entrypoint_errors"] = entrypoint_errors
     return graph
+
+
+def _add_module_nodes(
+    graph: nx.DiGraph, modules: list[Module], parse_results: dict[str, ParseResult]
+) -> None:
+    for m in modules:
+        cc_aggregates = _cc_aggregates(parse_results[m.qualname].functions)
+        graph.add_node(
+            m.qualname,
+            path=str(m.path),
+            is_package=m.is_package,
+            external=False,
+            **cc_aggregates,
+        )
+
+
+class _Resolver(BaseModel):
+    """What import and call resolution needs beyond a module's own parse result."""
+
+    model_config = ConfigDict(frozen=True)
+
+    qualname_set: set[str]
+    reexport_maps: dict[str, dict[str, str]]
+
+
+def _add_import_edges(
+    graph: nx.DiGraph,
+    modules: list[Module],
+    parse_results: dict[str, ParseResult],
+    resolver: _Resolver,
+) -> list[str]:
+    """Add one edge per resolved import; return the modules that had parse errors."""
+    parse_errors: list[str] = []
+    for m in modules:
+        result = parse_results[m.qualname]
+        if result.has_errors:
+            parse_errors.append(m.qualname)
+        _add_module_import_edges(graph, m, result, resolver)
+    return parse_errors
+
+
+def _add_module_import_edges(
+    graph: nx.DiGraph, m: Module, result: ParseResult, resolver: _Resolver
+) -> None:
+    for ref in result.imports:
+        for target in _resolve_targets(ref, m, resolver.qualname_set, resolver.reexport_maps):
+            if target not in graph:
+                graph.add_node(target, external=True)
+            _add_or_extend_edge(graph, m.qualname, target, ref)
+
+
+def _add_call_edges(
+    graph: nx.DiGraph,
+    modules: list[Module],
+    parse_results: dict[str, ParseResult],
+    resolver: _Resolver,
+) -> None:
+    # Second pass: call edges. Calls only become an edge if their leftmost
+    # identifier resolves through the source module's import alias table, so
+    # we depend on the import pass having populated qualname_set + reexport
+    # routing first. Call edges land on the longest internal qualname prefix
+    # of (alias_target + chain), which can be deeper than the import edge
+    # (e.g. `import pkg; pkg.sub.foo()` adds a call edge to pkg.sub even
+    # when imports only edged to pkg) - that depth differential is the
+    # whole point of LocAgent's invoke-edges signal.
+    for m in modules:
+        result = parse_results[m.qualname]
+        if result.calls:
+            _add_module_call_edges(graph, m, result, resolver)
+
+
+def _add_module_call_edges(
+    graph: nx.DiGraph, m: Module, result: ParseResult, resolver: _Resolver
+) -> None:
+    alias_table = _build_alias_table(
+        result.imports, m, resolver.qualname_set, resolver.reexport_maps
+    )
+    for call in result.calls:
+        target = _resolve_call_target(call, alias_table, resolver.qualname_set)
+        if target is None or target == m.qualname:
+            continue
+        if target not in graph:
+            graph.add_node(target, external=True)
+        _add_or_extend_call_edge(graph, m.qualname, target, call)
 
 
 def graph_to_dict(graph: nx.DiGraph) -> dict:
@@ -494,8 +543,22 @@ def suggest_files(
     refs = list(refs)
     if not root_raw or not refs:
         return ()
-    root = Path(root_raw).resolve()
+    index = _file_index(graph, Path(root_raw).resolve())
+    hints = (_file_hint(raw_ref, base, index) for raw_ref in refs)
+    return tuple(h for h in hints if h is not None)
 
+
+class _FileIndex(BaseModel):
+    """The project's module files, as `suggest_files` needs to compare a typed path."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    root: Path
+    by_qualname: dict[str, PurePosixPath]
+    longest_first: tuple[tuple[str, ...], ...]
+
+
+def _file_index(graph: nx.DiGraph, root: Path) -> _FileIndex:
     by_qualname: dict[str, PurePosixPath] = {}
     prefixes: set[tuple[str, ...]] = {()}
     for qualname, data in graph.nodes(data=True):
@@ -511,26 +574,26 @@ def suggest_files(
         names = tuple(qualname.split("."))
         if parts[len(parts) - len(names) :] == names:
             prefixes.add(parts[: len(parts) - len(names)])
-    longest_first = sorted(prefixes, key=len, reverse=True)
+    longest_first = tuple(sorted(prefixes, key=lambda prefix: len(prefix), reverse=True))
+    return _FileIndex(root=root, by_qualname=by_qualname, longest_first=longest_first)
 
-    hints: list[UnresolvedHint] = []
-    for raw_ref in refs:
-        typed = Path(raw_ref)
-        if typed.suffix != ".py":
-            continue
-        anchored = typed if base is None or typed.is_absolute() else base / typed
-        try:
-            rel = PurePosixPath(anchored.resolve().relative_to(root).as_posix())
-        except ValueError:
-            continue
-        parts = _module_parts(rel)
-        stripped = next((parts[len(p) :] for p in longest_first if parts[: len(p)] == p), parts)
-        found = suggest_modules(by_qualname, ".".join(stripped))
-        if not found:
-            continue
-        shown = [_in_callers_form(typed, rel, by_qualname[q]) for q in found]
-        hints.append(UnresolvedHint(ref=raw_ref, did_you_mean=tuple(shown)))
-    return tuple(hints)
+
+def _file_hint(raw_ref: str, base: Path | None, index: _FileIndex) -> UnresolvedHint | None:
+    typed = Path(raw_ref)
+    if typed.suffix != ".py":
+        return None
+    anchored = typed if base is None or typed.is_absolute() else base / typed
+    try:
+        rel = PurePosixPath(anchored.resolve().relative_to(index.root).as_posix())
+    except ValueError:
+        return None
+    parts = _module_parts(rel)
+    stripped = next((parts[len(p) :] for p in index.longest_first if parts[: len(p)] == p), parts)
+    found = suggest_modules(index.by_qualname, ".".join(stripped))
+    if not found:
+        return None
+    shown = [_in_callers_form(typed, rel, index.by_qualname[q]) for q in found]
+    return UnresolvedHint(ref=raw_ref, did_you_mean=tuple(shown))
 
 
 def _module_parts(rel: PurePosixPath) -> tuple[str, ...]:
@@ -591,33 +654,41 @@ def resolve_modules(
     nothing.
     """
     internal_nodes = {n for n, d in graph.nodes(data=True) if not d.get("external")}
-    path_index: dict[Path, str] = {}
-    for n in internal_nodes:
-        raw = graph.nodes[n].get("path")
-        if raw:
-            path_index[Path(raw).resolve()] = n
-
+    path_index = _path_index(graph, internal_nodes)
     base = project_root or (Path(graph.graph["root"]) if graph.graph.get("root") else Path.cwd())
 
     resolved: list[str] = []
     seen: set[str] = set()
     unresolved: list[str] = []
     for ref in refs:
-        if ref in internal_nodes:
-            if ref not in seen:
-                resolved.append(ref)
-                seen.add(ref)
-            continue
-        candidate = Path(ref)
-        if not candidate.is_absolute():
-            candidate = base / candidate
-        qualname = path_index.get(candidate.resolve())
+        qualname = _resolve_one(ref, internal_nodes, path_index, base)
         if qualname is None:
             unresolved.append(ref)
         elif qualname not in seen:
             resolved.append(qualname)
             seen.add(qualname)
     return resolved, unresolved
+
+
+def _path_index(graph: nx.DiGraph, internal_nodes: set[str]) -> dict[Path, str]:
+    index: dict[Path, str] = {}
+    for n in internal_nodes:
+        raw = graph.nodes[n].get("path")
+        if raw:
+            index[Path(raw).resolve()] = n
+    return index
+
+
+def _resolve_one(
+    ref: str, internal_nodes: set[str], path_index: dict[Path, str], base: Path
+) -> str | None:
+    """A qualname if `ref` is one, else the qualname of the module at path `ref`."""
+    if ref in internal_nodes:
+        return ref
+    candidate = Path(ref)
+    if not candidate.is_absolute():
+        candidate = base / candidate
+    return path_index.get(candidate.resolve())
 
 
 def _discover_modules(
@@ -1244,33 +1315,50 @@ def _build_alias_table(
         else:
             base = _src_layout_base(ref.module, internal_qualnames)
         if ref.imported_names:
-            base_internal = base in internal_qualnames
-            pkg_map = reexport_maps.get(base, {}) if base_internal else {}
-            for name, local in _local_bindings(ref):
-                if not local:
-                    continue
-                if base_internal:
-                    resolved = _resolve_imported_name(base, name, internal_qualnames, pkg_map)
-                    table[local] = base if resolved is None else resolved
-                else:
-                    table[local] = _external_target(base, internal_qualnames)
-        else:
-            alias = ref.imported_aliases[0] if ref.imported_aliases else None
-            if alias:
-                # `import X.Y as Z` binds Z to the deepest module (X.Y), unlike
-                # bare `import X.Y` which only binds the top-level name X --
-                # the alias short-circuits Python's attribute-walk semantics.
-                table[alias] = _external_target(base, internal_qualnames)
-            else:
-                # `import X.Y` binds only the top-level name `X` per Python's
-                # actual import semantics (X.Y is accessed via attribute on X).
-                top = ref.module.split(".")[0]
-                if not top:
-                    continue
-                table[top] = _external_target(
-                    _src_layout_base(top, internal_qualnames), internal_qualnames
-                )
+            table.update(_from_import_bindings(ref, base, internal_qualnames, reexport_maps))
+            continue
+        binding = _plain_import_binding(ref, base, internal_qualnames)
+        if binding is not None:
+            table[binding[0]] = binding[1]
     return table
+
+
+def _from_import_bindings(
+    ref: ImportRef,
+    base: str,
+    internal_qualnames: set[str],
+    reexport_maps: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    """One entry per name `from base import ...` binds, in source order."""
+    base_internal = base in internal_qualnames
+    pkg_map = reexport_maps.get(base, {}) if base_internal else {}
+    bindings: dict[str, str] = {}
+    named = [(name, local) for name, local in _local_bindings(ref) if local]
+    for name, local in named:
+        if base_internal:
+            resolved = _resolve_imported_name(base, name, internal_qualnames, pkg_map)
+            bindings[local] = base if resolved is None else resolved
+        else:
+            bindings[local] = _external_target(base, internal_qualnames)
+    return bindings
+
+
+def _plain_import_binding(
+    ref: ImportRef, base: str, internal_qualnames: set[str]
+) -> tuple[str, str] | None:
+    """The (name, target) a plain `import X.Y [as Z]` binds, or None if it binds nothing."""
+    alias = ref.imported_aliases[0] if ref.imported_aliases else None
+    if alias:
+        # `import X.Y as Z` binds Z to the deepest module (X.Y), unlike
+        # bare `import X.Y` which only binds the top-level name X --
+        # the alias short-circuits Python's attribute-walk semantics.
+        return alias, _external_target(base, internal_qualnames)
+    # `import X.Y` binds only the top-level name `X` per Python's
+    # actual import semantics (X.Y is accessed via attribute on X).
+    top = ref.module.split(".")[0]
+    if not top:
+        return None
+    return top, _external_target(_src_layout_base(top, internal_qualnames), internal_qualnames)
 
 
 def _local_bindings(ref: ImportRef) -> Iterator[tuple[str, str]]:
