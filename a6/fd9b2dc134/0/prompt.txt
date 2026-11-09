@@ -368,3 +368,27 @@ I checked the other changed prose and found it true:
 One imprecision I did not count as a finding: "Uninstall always gets the plain strip" is loose for the Continue and Cursor adapters, where the unrender is `delete_file` rather than a strip.</result>
 <usage><subagent_tokens>30057</subagent_tokens><tool_uses>5</tool_uses><duration_ms>27917</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>a472b6536972ebc7f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a472b6536972ebc7f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy_grounded_structural_review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+- **Changed modules:** the seven install files under `src/archy/install/`. I read the full diff and the `render_plan`/`write_rendered` call site in `runner.py` by hand.
+- **Blast radius:** I ran `archy impact . --file` on `base`, `runner` and `adapters/claude`, and spot-checked those three. I did not run `archy affected` or an impact query for the other four adapters.
+  - `base`: 48 dependents. These are `archy.cli`, `archy.install`, the five adapters, `merge`, `registry`, `runner`, and the install tests.
+  - `runner`: 27 dependents. These are `archy.cli`, `archy.install`, and tests.
+  - `adapters/claude`: 34 dependents. These are `archy.cli`, `archy.install`, `registry`, `runner`, and tests.
+  - These tests cover the change: `test_global_no_instructions`, `test_runner`, `test_claude`, `test_cli_print_config`, `test_config_home_env`, and the contract tests.
+- **Cycles and layers:** `archy cycles .` found no cycles. `archy check .` found no layer violations.
+- **Headers and types:** `archy conventions . --emit-headers --check` reports the 88 headers match the tree, so the regenerated `base.py` header is current. `ty check` passed.
+- **Return-type widening:** `render_plan` and `write_rendered` now accept `None` content, meaning delete the file. `runner.py` is the only consumer of `render_plan` and `write_rendered`, apart from `apply_plan` inside `base.py`, and it passes the pairs straight through. All three `WriteSystem` implementations in `writer.py` have `remove`.
+- **Refactor ranking:** `archy what-to-refactor-next . --top 10` lists only `archy.install.registry` (rank 8, priority 0.668), which this diff does not touch. None of the changed modules appear in it.</result>
+<usage><subagent_tokens>29094</subagent_tokens><tool_uses>6</tool_uses><duration_ms>96057</duration_ms></usage>
+</task-notification>
