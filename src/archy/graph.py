@@ -34,7 +34,7 @@ import difflib
 from collections.abc import Iterable, Iterator
 from importlib.machinery import EXTENSION_SUFFIXES
 from pathlib import Path, PurePosixPath
-from typing import NamedTuple, cast
+from typing import cast
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
@@ -306,7 +306,10 @@ def assemble_graph(
 
     graph: nx.DiGraph = nx.DiGraph()
     _add_module_nodes(graph, modules, parse_results)
-    resolver = _Resolver(qualname_set, _build_reexport_maps(modules, parse_results, qualname_set))
+    resolver = _Resolver(
+        qualname_set=qualname_set,
+        reexport_maps=_build_reexport_maps(modules, parse_results, qualname_set),
+    )
     parse_errors = _add_import_edges(graph, modules, parse_results, resolver)
     _add_call_edges(graph, modules, parse_results, resolver)
 
@@ -344,8 +347,10 @@ def _add_module_nodes(
         )
 
 
-class _Resolver(NamedTuple):
+class _Resolver(BaseModel):
     """What import and call resolution needs beyond a module's own parse result."""
+
+    model_config = ConfigDict(frozen=True)
 
     qualname_set: set[str]
     reexport_maps: dict[str, dict[str, str]]
@@ -543,12 +548,14 @@ def suggest_files(
     return tuple(h for h in hints if h is not None)
 
 
-class _FileIndex(NamedTuple):
+class _FileIndex(BaseModel):
     """The project's module files, as `suggest_files` needs to compare a typed path."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     root: Path
     by_qualname: dict[str, PurePosixPath]
-    longest_first: list[tuple[str, ...]]
+    longest_first: tuple[tuple[str, ...], ...]
 
 
 def _file_index(graph: nx.DiGraph, root: Path) -> _FileIndex:
@@ -567,8 +574,8 @@ def _file_index(graph: nx.DiGraph, root: Path) -> _FileIndex:
         names = tuple(qualname.split("."))
         if parts[len(parts) - len(names) :] == names:
             prefixes.add(parts[: len(parts) - len(names)])
-    longest_first = sorted(prefixes, key=lambda prefix: len(prefix), reverse=True)
-    return _FileIndex(root, by_qualname, longest_first)
+    longest_first = tuple(sorted(prefixes, key=lambda prefix: len(prefix), reverse=True))
+    return _FileIndex(root=root, by_qualname=by_qualname, longest_first=longest_first)
 
 
 def _file_hint(raw_ref: str, base: Path | None, index: _FileIndex) -> UnresolvedHint | None:
