@@ -61,12 +61,15 @@ All matched the table: 5 sequential `if`s is clean and 8 fires Complex Method;
 4 arguments is clean and 5 fires; a 60-statement function is clean and 70 fires
 Large Method; nesting 3 is clean and 4 fires; a condition with two `and`s fires
 Complex Conditional and one with a single `and` does not; two separate
-`for`/`if` blocks fire Bumpy Road. A file needed roughly 600 lines of code to
-earn Low Cohesion and 1,000 lines of code to earn Lines of Code in a Single
-File; around 333 functions earned Number of Functions in a Single Module.
-Probes that did **not** fire: a 16-line duplicated function pair (below the
-10-line, 75% rule's effective bar for our shape), Primitive Obsession on four
-tiny functions, and Low Cohesion on a two-group eight-line class.
+`for`/`if` blocks fire Bumpy Road. Module smells were harder to
+calibrate. Repetitive synthetic files of ten-line functions earned Low Cohesion
+at 600 lines and Number of Functions in a Single Module at about 333 functions,
+but **never earned Lines of Code in a Single File even at 1,500 lines**, while
+the real 1,003-line `conventions.py` did. So synthetic files cannot calibrate
+that smell; read the 600/3,000/6,000 table instead. Probes that did **not**
+fire, for reasons we did not establish: a 16-line duplicated function pair,
+Primitive Obsession on four small functions, and Low Cohesion on an eight-line
+two-group class.
 
 Command surface worth knowing: `cs review FILES --output-format json` returns
 `{path, score, review[]}` per file with `category`, function names and line
@@ -74,8 +77,10 @@ ranges, which is easy to script. `cs check FILE` prints lint-style
 `warn: file:line: Smell (detail)` lines. `cs delta main` prints per-file
 before and after scores and, usefully, the metric and threshold behind each
 change ("cyclomatic complexity from 23 to 10, threshold = 9"). `cs review`
-needs `cs auth` and does not run offline. It refuses a directory outside a git
-repo for `delta` only.
+needs `cs auth` (it reported OAuth against api.codescene.io), so treat it as
+needing the network. Run outside a git repository it still returned scores but
+printed a `git execution failed` exception; `cs delta` is the command that
+needs git.
 
 ## archy's own code, scored (51 files in `src/archy`, before any refactor)
 
