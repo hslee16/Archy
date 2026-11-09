@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4ae9f816d1d1",
+  "strategy": "manual-commit",
+  "branch": "alee/bench-code-health-score",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/4a/e9f816d1d1/0/metadata.json",
+      "transcript": "/4a/e9f816d1d1/0/full.jsonl",
+      "content_hash": "/4a/e9f816d1d1/0/content_hash.txt",
+      "prompt": "/4a/e9f816d1d1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 872,
+    "cache_creation_tokens": 691305,
+    "cache_read_tokens": 152896504,
+    "output_tokens": 361349,
+    "api_call_count": 398
+  }
+}
