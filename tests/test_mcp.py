@@ -984,6 +984,31 @@ def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
         )
 
 
+def test_run_impact_refuses_empty_files(acyclic_project: Path):
+    """Direct helper refuses files=[] (#794): no input is a refusal, not blast=[]."""
+    with pytest.raises(ValueError, match="pass at least one file"):
+        run_impact(acyclic_project, files=[])
+
+
+def test_run_affected_refuses_empty_files(acyclic_project: Path):
+    """Direct helper refuses files=[] (#794): no input is a refusal, not impacted_tests=[]."""
+    with pytest.raises(ValueError, match="pass at least one file"):
+        run_affected(acyclic_project, files=[], depth=5, test_filter=None)
+
+
+def test_archy_impact_refuses_empty_files_on_the_wire(acyclic_project: Path):
+    """MCP tool boundary carries the refusal as ToolError in both modes (#794 / #636)."""
+    from archy.mcp_compat import ToolError
+
+    server = create_server()
+    path = str(acyclic_project)
+    message = "pass at least one file"
+    with pytest.raises(ToolError, match=message):
+        _call_tool(server, "archy_impact", {"path": path, "files": [], "mode": "blast"})
+    with pytest.raises(ToolError, match=message):
+        _call_tool(server, "archy_impact", {"path": path, "files": [], "mode": "affected"})
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [

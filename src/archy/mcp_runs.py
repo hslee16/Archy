@@ -608,6 +608,8 @@ def run_impact(
     max_chains: int = DEFAULT_MAX_CHAINS,
     co_change: bool = False,
 ) -> Impact:
+    if not files:
+        raise ValueError("pass at least one file (got files=[])")
     if max_chains == 0:
         raise ValueError("--max-chains must be negative (for all) or positive (for a limit); got 0")
     graph = _load_graph(path, internal_only=True)
@@ -641,6 +643,8 @@ def run_affected(
     depth: int,
     test_filter: str | None,
 ) -> Affected:
+    if not files:
+        raise ValueError("pass at least one file (got files=[])")
     graph = _load_graph(path, internal_only=True)
     resolved = resolve_against(path, files)
     return find_affected(
