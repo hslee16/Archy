@@ -73,7 +73,7 @@ Fetch the job's failing *step*, then its log.
 **Wire it to every surface in one change.** Three at the time of writing.
 Confirm that is still current by picking an existing gate and grepping for
 every site that renders it: its `_<cmd>_to_text` helper and `_<cmd>_to_dict` payload in
-`src/archy/cli_render.py` (the command wiring stays in the `src/archy/cli_*.py` command modules, which `src/archy/cli.py` imports to register on `main`), and its tool's return model in `src/archy/mcp_payloads.py` (the tool wiring stays in `src/archy/mcp.py` and the work behind each tool in `src/archy/mcp_runs.py`). A fourth
+`src/archy/cli_render_*.py` (re-exported by `src/archy/cli_render.py`; the command wiring stays in the `src/archy/cli_*.py` command modules, which `src/archy/cli.py` imports to register on `main`), and its tool's return model in `src/archy/mcp_payloads.py` (the tool wiring stays in `src/archy/mcp.py` and the work behind each tool in `src/archy/mcp_runs.py`). A fourth
 surface would show up as a site that none of those three patterns match. A presence check shipped to the CLI alone
 left the MCP surface, the one agents actually call, reporting `passed=true` for
 the exact case the check existed to catch. Three consecutive review rounds each

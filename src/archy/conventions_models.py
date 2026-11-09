@@ -4,12 +4,12 @@ archy:owns        BaseFamily, ConventionsReport, DocGap, ExportGap, Gate, ModelC
                   ModulePartition, ModuleView, NamingFamily, NamingHome, RegistryEntry,
                   SharedConstant, SurfaceFamily, UnparsedModule, camel_suffix
 archy:mirrored-by BaseFamily -> archy.conventions_docs, archy.conventions_families,
-                  Gate -> archy.cli_render, archy.conventions, archy.conventions_gates,
-                  ModuleView -> archy.cli_render, archy.conventions, archy.mcp,
-                  archy.mcp_runs, NamingFamily -> archy.conventions,
-                  archy.conventions_families, RegistryEntry -> archy.conventions_docs,
-                  archy.conventions_families, camel_suffix -> archy.conventions,
-                  archy.conventions_families
+                  Gate -> archy.cli_render_common, archy.conventions,
+                  archy.conventions_gates, ModuleView -> archy.cli_render_conventions,
+                  archy.conventions, archy.mcp, archy.mcp_runs,
+                  NamingFamily -> archy.conventions, archy.conventions_families,
+                  RegistryEntry -> archy.conventions_docs, archy.conventions_families,
+                  camel_suffix -> archy.conventions, archy.conventions_families
 """
 
 from __future__ import annotations
