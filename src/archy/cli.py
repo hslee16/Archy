@@ -4,9 +4,9 @@ archy:owns        affected, brief, check, contracts, conventions, coupling, cycl
                   diff, dsm, duplicates, graph, hotspots, impact, index, index_clear,
                   index_status, index_sync, install, main, mcp, render, score,
                   simulate, snapshot, trend, uninstall, what_to_refactor_next
-archy:gates       exit 1 (config:result.strict), exit 1 (flag:--strict),
-                  exit 1 (flag:--strict-tolerance), exit 1 (hardcoded),
-                  exit 1 (param:check), non-zero exit (hardcoded)
+archy:gates       exit 1 (config:result.strict), exit 1 (config:run.stale),
+                  exit 1 (flag:--strict), exit 1 (flag:--strict-tolerance),
+                  exit 1 (hardcoded), non-zero exit (hardcoded)
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, cast
 
 import click
 import networkx as nx
+from pydantic import BaseModel, ConfigDict
 
 from archy import __version__
 from archy.affected import DEFAULT_DEPTH, Affected, find_affected
@@ -126,7 +127,13 @@ from archy.graph import (
     suggest_modules,
     zero_modules_reason,
 )
-from archy.headers import apply_header, compute_headers, existing_block, render_header
+from archy.headers import (
+    ModuleHeader,
+    apply_header,
+    compute_headers,
+    existing_block,
+    render_header,
+)
 from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
@@ -136,6 +143,7 @@ from archy.layers import (
     LayerConfig,
     LayerConfigError,
     LayerCoverage,
+    ReachViolation,
     SdpViolation,
     Violation,
     compute_coverage,
@@ -410,6 +418,35 @@ def check(
     tool has nested contracts under `archy_check(contracts=True)` since v0.41;
     this is the same capability on the command line, where it was missing.
     """
+    config_path, config = _check_config(path, config_path)
+    run = _check_scan(path, config_path, config)
+    if with_contracts:
+        run = run.model_copy(update={"contracts": _run_check_contracts(path, contracts_config)})
+
+    if fmt == "json":
+        click.echo(json.dumps(_check_payload(run), indent=2, sort_keys=True))
+    else:
+        _echo_check_text(run, show_unlayered=show_unlayered)
+    if _check_fails(run):
+        sys.exit(1)
+
+
+class _CheckRun(BaseModel):
+    """Everything `check` found, so the renderers and the exit decision share one value."""
+
+    model_config = ConfigDict(frozen=True)
+
+    config_path: Path
+    config: LayerConfig
+    coverage: LayerCoverage
+    violations: tuple[Violation, ...]
+    reach_violations: tuple[ReachViolation, ...]
+    sdp_violations: tuple[SdpViolation, ...]
+    presence_fails: bool
+    contracts: ContractsOutcome | None = None
+
+
+def _check_config(path: Path, config_path: Path | None) -> tuple[Path, LayerConfig]:
     if config_path is None:
         discovered = discover_config(path)
         if discovered is None:
@@ -417,12 +454,13 @@ def check(
                 f"no archy.yaml found near {path}; pass --config or create one at the project root."
             )
         config_path = discovered
-
     try:
-        config = load_config(config_path)
+        return config_path, load_config(config_path)
     except LayerConfigError as exc:
         raise click.ClickException(str(exc)) from exc
 
+
+def _check_scan(path: Path, config_path: Path, config: LayerConfig) -> _CheckRun:
     try:
         g = build_graph(path, **scan_kwargs(config))
     except ScanTooLargeError as exc:
@@ -435,84 +473,97 @@ def check(
 
     coverage = compute_coverage(g, config)
 
-    sdp_violations: list[SdpViolation] = []
+    sdp_violations: tuple[SdpViolation, ...] = ()
     if config.sdp.enabled:
-        sdp_violations = find_sdp_violations(g, tolerance=config.sdp.tolerance)
+        sdp_violations = tuple(find_sdp_violations(g, tolerance=config.sdp.tolerance))
 
     presence_fails = (
         config.min_layers_present is not None
         and coverage.layers_present < config.min_layers_present
     )
+    return _CheckRun(
+        config_path=config_path,
+        config=config,
+        coverage=coverage,
+        violations=tuple(violations),
+        reach_violations=tuple(reach_violations),
+        sdp_violations=sdp_violations,
+        presence_fails=presence_fails,
+    )
 
-    contracts_result = _run_check_contracts(path, contracts_config) if with_contracts else None
 
-    if fmt == "json":
-        payload = {
-            "violations": _violations_to_json(violations),
-            "required_violations": _reach_violations_to_json(reach_violations),
-            "sdp_violations": _sdp_violations_to_json(sdp_violations),
-            "sdp_mode": config.sdp.mode,
-            "coverage": _coverage_to_json(coverage),
-            "min_layers_present": config.min_layers_present,
-            "presence_fails": presence_fails,
-            # A clean verdict has to say what it looked at. The text output has
-            # carried this since v0.46 and the JSON did not, so a machine reader
-            # could not tell "checked transitively and clean" from "never
-            # looked" (#343).
-            "transitive_checked": _transitive_checked(contracts_result),
-            "transitive_unverified_reason": (
-                None
-                if _transitive_checked(contracts_result)
-                else _transitive_unverified_reason(
-                    config,
-                    coverage,
-                    violations,
-                    no_verdict_error=_no_verdict_error(contracts_result),
-                    unverifiable=_unverifiable_contracts(contracts_result),
-                )
-            ),
-        }
-        if contracts_result is not None:
-            payload["contracts"] = _contracts_outcome_to_dict(contracts_result)
-        click.echo(json.dumps(payload, indent=2, sort_keys=True))
-    else:
-        click.echo(_violations_to_text(violations, config_path, coverage))
-        if config.required:
-            click.echo(_reach_violations_to_text(reach_violations, config.required))
-        click.echo(_coverage_to_text(coverage))
-        hints = _pattern_hints_to_text(coverage)
-        if hints:
-            click.echo(hints)
-        if not with_contracts:
-            handoff = _contracts_handoff_to_text(config, coverage, violations)
-            if handoff:
-                click.echo(handoff)
-        presence = _presence_to_text(coverage, config.min_layers_present)
-        if presence:
-            click.echo(presence)
-        if show_unlayered and coverage.unlayered_modules:
-            for module in coverage.unlayered_modules:
-                click.echo(f"#     {module}")
-        if config.sdp.enabled:
-            click.echo("")
-            click.echo(_sdp_violations_to_text(sdp_violations, config.sdp.tolerance))
-            if sdp_violations and config.sdp.mode == "warn":
-                click.echo("# (sdp.mode=warn; not failing the gate)")
-        if contracts_result is not None:
-            click.echo("")
-            click.echo(_contracts_outcome_to_text(contracts_result))
+def _check_payload(run: _CheckRun) -> dict:
+    checked = _transitive_checked(run.contracts)
+    payload = {
+        "violations": _violations_to_json(list(run.violations)),
+        "required_violations": _reach_violations_to_json(list(run.reach_violations)),
+        "sdp_violations": _sdp_violations_to_json(list(run.sdp_violations)),
+        "sdp_mode": run.config.sdp.mode,
+        "coverage": _coverage_to_json(run.coverage),
+        "min_layers_present": run.config.min_layers_present,
+        "presence_fails": run.presence_fails,
+        # A clean verdict has to say what it looked at. The text output has
+        # carried this since v0.46 and the JSON did not, so a machine reader
+        # could not tell "checked transitively and clean" from "never
+        # looked" (#343).
+        "transitive_checked": checked,
+        "transitive_unverified_reason": (
+            None
+            if checked
+            else _transitive_unverified_reason(
+                run.config,
+                run.coverage,
+                list(run.violations),
+                no_verdict_error=_no_verdict_error(run.contracts),
+                unverifiable=_unverifiable_contracts(run.contracts),
+            )
+        ),
+    }
+    if run.contracts is not None:
+        payload["contracts"] = _contracts_outcome_to_dict(run.contracts)
+    return payload
 
-    sdp_fails = bool(sdp_violations) and config.sdp.mode == "error"
+
+def _echo_check_text(run: _CheckRun, *, show_unlayered: bool) -> None:
+    config, coverage = run.config, run.coverage
+    click.echo(_violations_to_text(list(run.violations), run.config_path, coverage))
+    if config.required:
+        click.echo(_reach_violations_to_text(list(run.reach_violations), config.required))
+    click.echo(_coverage_to_text(coverage))
+    hints = _pattern_hints_to_text(coverage)
+    if hints:
+        click.echo(hints)
+    if run.contracts is None:
+        handoff = _contracts_handoff_to_text(config, coverage, list(run.violations))
+        if handoff:
+            click.echo(handoff)
+    presence = _presence_to_text(coverage, config.min_layers_present)
+    if presence:
+        click.echo(presence)
+    if show_unlayered and coverage.unlayered_modules:
+        for module in coverage.unlayered_modules:
+            click.echo(f"#     {module}")
+    if config.sdp.enabled:
+        click.echo("")
+        click.echo(_sdp_violations_to_text(list(run.sdp_violations), config.sdp.tolerance))
+        if run.sdp_violations and config.sdp.mode == "warn":
+            click.echo("# (sdp.mode=warn; not failing the gate)")
+    if run.contracts is not None:
+        click.echo("")
+        click.echo(_contracts_outcome_to_text(run.contracts))
+
+
+def _check_fails(run: _CheckRun) -> bool:
+    sdp_fails = bool(run.sdp_violations) and run.config.sdp.mode == "error"
     # Required-reach failures gate like forbid violations do. They are opt-in
     # (`required:` is absent from every config that predates the feature), so
     # nothing that passed before can start failing.
-    reach_fails = bool(reach_violations)
+    reach_fails = bool(run.reach_violations)
     # A presence shortfall fails the gate like a violation does. Forbidding
     # edges between layers says nothing about whether the layers exist, and a
     # codebase that collapsed them into one module satisfies every forbid rule
     # by having no cross-layer edges at all.
-    if violations or reach_fails or sdp_fails or presence_fails:
-        sys.exit(1)
+    return bool(run.violations) or reach_fails or sdp_fails or run.presence_fails
 
 
 @main.command()
@@ -571,6 +622,21 @@ def score(
 
     g = _load_graph(path, internal_only=internal_only)
     s = compute_score(g)
+    _refuse_vacuous_score(path, s, record=record, strict=strict)
+
+    history_path = path / ".archy" / "history.jsonl"
+    # Strict reads BEFORE recording so the comparison is against the truly
+    # previous run rather than the row we are about to append.
+    gate = _gate_against_history(s, history_path) if strict else None
+
+    _echo_score(s, gate, fmt=fmt, strict_tolerance=strict_tolerance)
+    if record:
+        _record_score(path, s, history_path)
+    if gate is not None and gate["delta"] is not None and gate["delta"] < -strict_tolerance:
+        sys.exit(1)
+
+
+def _refuse_vacuous_score(path: Path, s, *, record: bool, strict: bool) -> None:
     if s.inputs.module_count == 0 and (record or strict):
         # A vacuous 1.000 recorded to history reads as an improvement to every
         # later `--strict` run, and `--strict` over it passes by construction (#523).
@@ -579,29 +645,23 @@ def score(
             f"{'record' if record else 'gate against history'}"
         )
 
-    history_path = path / ".archy" / "history.jsonl"
-    # Strict reads BEFORE recording so the comparison is against the truly
-    # previous run rather than the row we are about to append.
-    gate = _gate_against_history(s, history_path) if strict else None
 
+def _echo_score(s, gate: dict | None, *, fmt: str, strict_tolerance: float) -> None:
     if fmt == "json":
         payload = _score_to_dict(s)
         if gate is not None:
             payload["gate"] = _gate_to_dict(gate, strict_tolerance)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
-    else:
-        click.echo(_score_to_text(s))
-        if gate is not None:
-            click.echo("")
-            click.echo(_gate_to_text(gate, strict_tolerance))
+        return
+    click.echo(_score_to_text(s))
+    if gate is not None:
+        click.echo("")
+        click.echo(_gate_to_text(gate, strict_tolerance))
 
-    if record:
-        commit, branch = git_metadata(path)
-        row = row_from_score(s, commit=commit, branch=branch)
-        append_history(history_path, row)
 
-    if gate is not None and gate["delta"] is not None and gate["delta"] < -strict_tolerance:
-        sys.exit(1)
+def _record_score(path: Path, s, history_path: Path) -> None:
+    commit, branch = git_metadata(path)
+    append_history(history_path, row_from_score(s, commit=commit, branch=branch))
 
 
 @main.command()
@@ -2529,15 +2589,20 @@ def _require_headers_flags(
     early, so `--module X --write` parsed the flag, did nothing, and exited 0.
     Someone running that in a script would believe a header had been written.
     """
-    if (write or check) and not emit_headers:
-        raise click.UsageError("--write and --check require --emit-headers.")
-    if write and check:
-        raise click.UsageError("--write rewrites the tree, --check asserts it is already correct.")
-    if module and (emit_headers or write or check):
+    _require_consistent_header_flags(emit_headers, write, check)
+    if module and any((emit_headers, write, check)):
         raise click.UsageError(
             "--module reports on one module; --emit-headers derives blocks for the whole tree. "
             "Run them separately."
         )
+
+
+def _require_consistent_header_flags(emit_headers: bool, write: bool, check: bool) -> None:
+    wants_action = write or check
+    if wants_action and not emit_headers:
+        raise click.UsageError("--write and --check require --emit-headers.")
+    if write and check:
+        raise click.UsageError("--write rewrites the tree, --check asserts it is already correct.")
 
 
 def _emit_headers(
@@ -2561,9 +2626,30 @@ def _emit_headers(
         discover_modules(path, **_graph_kwargs_or_exit(path)),
         include_tests=include_tests,
     )
+    run = _sync_headers(headers, path, write=write, check=check)
+    if fmt == "json":
+        click.echo(json.dumps(_headers_payload(run), indent=2, sort_keys=True))
+    else:
+        _echo_headers_text(run, write=write, check=check)
+    if check and run.stale:
+        sys.exit(1)
+
+
+class _HeaderRun(BaseModel):
+    """What `--emit-headers` did: the derived headers, and which modules were stale or written."""
+
+    model_config = ConfigDict(frozen=True)
+
+    headers: tuple[ModuleHeader, ...]
+    stale: tuple[str, ...]
+    written: tuple[str, ...]
+
+
+def _sync_headers(
+    headers: tuple[ModuleHeader, ...], path: Path, *, write: bool, check: bool
+) -> _HeaderRun:
     stale: list[str] = []
     written: list[str] = []
-
     for header in headers:
         target = path / header.path
         source = target.read_text(encoding="utf-8")
@@ -2577,37 +2663,35 @@ def _emit_headers(
             if updated != source:
                 target.write_text(updated, encoding="utf-8")
                 written.append(header.module)
+    return _HeaderRun(headers=headers, stale=tuple(stale), written=tuple(written))
 
-    if fmt == "json":
-        click.echo(
-            json.dumps(
-                {
-                    "headers": [{**h.model_dump(), "rendered": render_header(h)} for h in headers],
-                    "stale": stale,
-                    "written": written,
-                },
-                indent=2,
-                sort_keys=True,
-            )
-        )
-    elif check:
-        if stale:
-            click.echo(f"# {len(stale)} module(s) with a missing or stale archy header:")
-            for module in stale:
+
+def _headers_payload(run: _HeaderRun) -> dict:
+    return {
+        "headers": [{**h.model_dump(), "rendered": render_header(h)} for h in run.headers],
+        "stale": list(run.stale),
+        "written": list(run.written),
+    }
+
+
+def _echo_headers_text(run: _HeaderRun, *, write: bool, check: bool) -> None:
+    if check:
+        if run.stale:
+            click.echo(f"# {len(run.stale)} module(s) with a missing or stale archy header:")
+            for module in run.stale:
                 click.echo(f"#   {module}")
             click.echo("# `archy conventions --emit-headers --write` regenerates them.")
         else:
-            click.echo(f"# {len(headers)} header(s) match the tree.")
+            click.echo(f"# {len(run.headers)} header(s) match the tree.")
     elif write:
-        click.echo(f"# wrote {len(written)} header(s) into {len(headers)} scanned module(s).")
+        click.echo(
+            f"# wrote {len(run.written)} header(s) into {len(run.headers)} scanned module(s)."
+        )
     else:
-        for header in headers:
+        for header in run.headers:
             click.echo(f"# {header.path}")
             click.echo(render_header(header))
             click.echo("")
-
-    if check and stale:
-        sys.exit(1)
 
 
 if __name__ == "__main__":  # pragma: no cover
