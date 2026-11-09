@@ -411,25 +411,8 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
     ruled_layers = {rule.from_layer for rule in config.forbid} | {
         rule.to_layer for rule in config.forbid
     }
-    roots = governed_roots(config)
-    layer_of: dict[str, str | None] = {}
-    external_layer_of: dict[str, str] = {}
-    outside = 0
-    for node, data in graph.nodes(data=True):
-        if data.get("external"):
-            external_layer = match_layer(node, config.layers)
-            if external_layer is not None:
-                external_layer_of[node] = external_layer
-            continue
-        if roots and node.split(".")[0] not in roots:
-            outside += 1
-            continue
-        layer_of[node] = match_layer(node, config.layers)
-
-    sizes = {layer.name: 0 for layer in config.layers}
-    for layer in (*layer_of.values(), *external_layer_of.values()):
-        if layer is not None:
-            sizes[layer] = sizes.get(layer, 0) + 1
+    layer_of, external_layer_of, outside = _classify_nodes(graph, config)
+    sizes = _layer_sizes(config, layer_of, external_layer_of)
 
     matched = [node for node, layer in layer_of.items() if layer is not None]
     in_ruled = [node for node, layer in layer_of.items() if layer in ruled_layers]
@@ -458,6 +441,38 @@ def compute_coverage(graph: nx.DiGraph, config: LayerConfig) -> LayerCoverage:
         modules_outside_declared_roots=outside,
         layer_sizes=tuple((layer.name, sizes[layer.name]) for layer in config.layers),
     )
+
+
+def _classify_nodes(
+    graph: nx.DiGraph, config: LayerConfig
+) -> tuple[dict[str, str | None], dict[str, str], int]:
+    """Layer of each in-scope internal node, of each layered external node, and the
+    count of internal nodes outside the config's declared roots."""
+    roots = governed_roots(config)
+    layer_of: dict[str, str | None] = {}
+    external_layer_of: dict[str, str] = {}
+    outside = 0
+    for node, data in graph.nodes(data=True):
+        if data.get("external"):
+            external_layer = match_layer(node, config.layers)
+            if external_layer is not None:
+                external_layer_of[node] = external_layer
+            continue
+        if roots and node.split(".")[0] not in roots:
+            outside += 1
+            continue
+        layer_of[node] = match_layer(node, config.layers)
+    return layer_of, external_layer_of, outside
+
+
+def _layer_sizes(
+    config: LayerConfig, layer_of: dict[str, str | None], external_layer_of: dict[str, str]
+) -> dict[str, int]:
+    sizes = {layer.name: 0 for layer in config.layers}
+    for layer in (*layer_of.values(), *external_layer_of.values()):
+        if layer is not None:
+            sizes[layer] = sizes.get(layer, 0) + 1
+    return sizes
 
 
 def contracts_unverified(
@@ -727,6 +742,20 @@ def check_external_patterns(graph: nx.DiGraph, config: LayerConfig) -> None:
     external = {n for n, d in graph.nodes(data=True) if d.get("external")}
     if not external:
         return
+    for where, pattern in _named_patterns(config):
+        if is_floating_pattern(pattern):
+            continue
+        root = pattern.split(".", 1)[0]
+        if root in external and pattern not in (root, f"{root}.**"):
+            raise LayerConfigError(
+                f"{where} pattern {pattern!r} names a submodule of the external package "
+                f"{root!r}, but the graph keeps only the top-level name, so it can never "
+                f"match. Use {root + '.**'!r}."
+            )
+
+
+def _named_patterns(config: LayerConfig) -> list[tuple[str, str]]:
+    """Every pattern the config writes, with where it was written."""
     named: list[tuple[str, str]] = []
     for layer in config.layers:
         named.extend((f"layer {layer.name!r}", pattern) for pattern in layer.patterns)
@@ -738,16 +767,7 @@ def check_external_patterns(graph: nx.DiGraph, config: LayerConfig) -> None:
         ):
             if pattern and pattern != ENTRYPOINTS_SOURCE:
                 named.append((f"required rule {field}", pattern))
-    for where, pattern in named:
-        if is_floating_pattern(pattern):
-            continue
-        root = pattern.split(".", 1)[0]
-        if root in external and pattern not in (root, f"{root}.**"):
-            raise LayerConfigError(
-                f"{where} pattern {pattern!r} names a submodule of the external package "
-                f"{root!r}, but the graph keeps only the top-level name, so it can never "
-                f"match. Use {root + '.**'!r}."
-            )
+    return named
 
 
 def find_violations(graph: nx.DiGraph, config: LayerConfig) -> list[Violation]:
@@ -809,99 +829,89 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
     from archy.reach import with_package_init_edges
 
     augmented = with_package_init_edges(graph)
-    all_nodes = list(graph.nodes)
     internal = [n for n, d in graph.nodes(data=True) if not d.get("external")]
 
     violations: list[ReachViolation] = []
     for rule in config.required:
-        # Targets may be external: "every entrypoint must reach `sqlalchemy`" is
-        # a legitimate thing to require, and external nodes are real nodes here.
-        targets = {n for n in all_nodes if _qualname_matches_any(n, (rule.must_reach,))}
-        why: dict[str, str] = {}
-        if rule.source == ENTRYPOINTS_SOURCE:
-            errors = graph.graph.get("entrypoint_errors", ())
-            if errors:
-                # The derived set is incomplete, so a pass would be a pass over
-                # a subset nobody chose. Refuse the verdict rather than give it.
-                violations.append(
-                    ReachViolation(
-                        rule=rule,
-                        module=None,
-                        detail=f"entrypoints could not be fully derived: {'; '.join(errors)}",
-                    )
-                )
-                continue
-            derived = graph.graph.get("entrypoints", {})
-            why = {
-                n: reason
-                for n, reason in derived.items()
-                if rule.within is None or _qualname_matches_any(n, (rule.within,))
-            }
-            sources = sorted(n for n in internal if n in why)
-        else:
-            sources = sorted(n for n in internal if _qualname_matches_any(n, (rule.source,)))
-        if not targets:
-            violations.append(
-                ReachViolation(
-                    rule=rule,
-                    module=None,
-                    detail=(
-                        f"nothing matches the `must_reach` pattern {rule.must_reach!r} in the "
-                        "scanned tree: either the pattern is wrong, or -- for an external "
-                        "package -- no module imports it any more, which is itself the "
-                        "failure the rule is about."
-                    ),
-                )
-            )
-            continue
-        if not sources and rule.source == ENTRYPOINTS_SOURCE:
-            scope = "" if rule.within is None else f" within {rule.within!r}"
-            violations.append(
-                ReachViolation(
-                    rule=rule,
-                    module=None,
-                    detail=(
-                        f"rule cannot fire: no entrypoint was derived{scope}. An entrypoint is a "
-                        'module with a top-level `if __name__ == "__main__":` guard, a '
-                        "`__main__.py`, or a script target in a pyproject.toml between the "
-                        "scanned modules and the repository root."
-                    ),
-                )
-            )
-            continue
-        if not sources:
-            violations.append(
-                ReachViolation(
-                    rule=rule,
-                    module=None,
-                    detail=(
-                        f"rule cannot fire: `source` pattern {rule.source!r} matches no internal "
-                        'module (patterns are dotted-name globs -- "pkg.**" matches a package and '
-                        'its descendants, "pkg" only that exact module).'
-                    ),
-                )
-            )
-            continue
-        for module in sources:
-            if module in targets:
-                continue
-            if nx.descendants(augmented, module) & targets:
-                continue
-            violations.append(
-                ReachViolation(
-                    rule=rule,
-                    module=module,
-                    detail=(
-                        f"{module} does not transitively reach {rule.must_reach!r} "
-                        "(package __init__ imports included)."
-                        + (f" It is an entrypoint: {why[module]}." if module in why else "")
-                    ),
-                )
-            )
+        violations.extend(_reach_violations_for_rule(rule, graph, augmented, internal))
     violations.sort(
         key=lambda v: (v.rule.source, v.rule.within or "", v.rule.must_reach, v.module or "")
     )
     return violations
+
+
+def _reach_violations_for_rule(
+    rule: RequiredRule,
+    graph: nx.DiGraph,
+    augmented: nx.DiGraph,
+    internal: list[str],
+) -> list[ReachViolation]:
+    # Targets may be external: "every entrypoint must reach `sqlalchemy`" is
+    # a legitimate thing to require, and external nodes are real nodes here.
+    targets = {n for n in graph.nodes if _qualname_matches_any(n, (rule.must_reach,))}
+    sources, why, refusal = _reach_sources(rule, graph, internal)
+    problem = refusal or _unfireable_reason(rule, sources, targets)
+    if problem is not None:
+        return [ReachViolation(rule=rule, module=None, detail=problem)]
+    return [
+        ReachViolation(
+            rule=rule,
+            module=module,
+            detail=(
+                f"{module} does not transitively reach {rule.must_reach!r} "
+                "(package __init__ imports included)."
+                + (f" It is an entrypoint: {why[module]}." if module in why else "")
+            ),
+        )
+        for module in sources
+        if module not in targets and not (nx.descendants(augmented, module) & targets)
+    ]
+
+
+def _reach_sources(
+    rule: RequiredRule, graph: nx.DiGraph, internal: list[str]
+) -> tuple[list[str], dict[str, str], str | None]:
+    """The modules `rule` binds, why each is an entrypoint, and a refusal if any."""
+    if rule.source != ENTRYPOINTS_SOURCE:
+        return sorted(n for n in internal if _qualname_matches_any(n, (rule.source,))), {}, None
+    errors = graph.graph.get("entrypoint_errors", ())
+    if errors:
+        # The derived set is incomplete, so a pass would be a pass over
+        # a subset nobody chose. Refuse the verdict rather than give it.
+        return [], {}, f"entrypoints could not be fully derived: {'; '.join(errors)}"
+    derived = graph.graph.get("entrypoints", {})
+    why = {
+        n: reason
+        for n, reason in derived.items()
+        if rule.within is None or _qualname_matches_any(n, (rule.within,))
+    }
+    return sorted(n for n in internal if n in why), why, None
+
+
+def _unfireable_reason(rule: RequiredRule, sources: list[str], targets: set[str]) -> str | None:
+    """Why `rule` cannot fire against this tree, or None when it can."""
+    if not targets:
+        return (
+            f"nothing matches the `must_reach` pattern {rule.must_reach!r} in the "
+            "scanned tree: either the pattern is wrong, or -- for an external "
+            "package -- no module imports it any more, which is itself the "
+            "failure the rule is about."
+        )
+    if sources:
+        return None
+    if rule.source == ENTRYPOINTS_SOURCE:
+        scope = "" if rule.within is None else f" within {rule.within!r}"
+        return (
+            f"rule cannot fire: no entrypoint was derived{scope}. An entrypoint is a "
+            'module with a top-level `if __name__ == "__main__":` guard, a '
+            "`__main__.py`, or a script target in a pyproject.toml between the "
+            "scanned modules and the repository root."
+        )
+    return (
+        f"rule cannot fire: `source` pattern {rule.source!r} matches no internal "
+        'module (patterns are dotted-name globs -- "pkg.**" matches a package and '
+        'its descendants, "pkg" only that exact module).'
+    )
 
 
 def find_sdp_violations(graph: nx.DiGraph, *, tolerance: float = 0.0) -> list[SdpViolation]:
@@ -997,36 +1007,38 @@ def _validate_pattern(
     derive, so that fallback refuses it with its own message instead.
     """
     segments = pattern.split(".")
+    where = f"{prefix} {pattern!r} in {path}: "
     if any(seg == "" for seg in segments):
         raise LayerConfigError(
-            f"{prefix} {pattern!r} in {path}: "
-            "empty path segment (no leading, trailing, or doubled dots)."
+            f"{where}empty path segment (no leading, trailing, or doubled dots)."
         )
     if allow_floating and is_floating_pattern(pattern):
         if len(segments) < 2 or not _is_package_segment(segments[1]):
             raise LayerConfigError(
-                f"{prefix} {pattern!r} in {path}: "
-                "a leading '**' must be followed by a Python package name "
+                f"{where}a leading '**' must be followed by a Python package name "
                 '(e.g. "**.services.**").'
             )
         segments = segments[1:]
+    else:
+        _check_root_segment(segments[0], where)
+    for seg in segments[1:]:
+        if seg not in ("*", "**") and not _is_package_segment(seg):
+            raise LayerConfigError(
+                f"{where}segment {seg!r} must be a package name, '*' (one segment), "
+                "or '**' (zero or more segments)."
+            )
+
+
+def _check_root_segment(segment: str, where: str) -> None:
     # A package-name segment must be an identifier that is not a Python keyword:
     # no importable package is named `import`/`class`, so accepting one here
     # would just defer the failure to a cryptic import-linter error instead of
     # the clean message this validation exists to give.
-    elif not _is_package_segment(segments[0]):
+    if not _is_package_segment(segment):
         raise LayerConfigError(
-            f"{prefix} {pattern!r} in {path}: "
-            f"must start with a Python package name, not {segments[0]!r} "
+            f"{where}must start with a Python package name, not {segment!r} "
             '(e.g. "myapp.domain.**", not "**").'
         )
-    for seg in segments[1:]:
-        if seg not in ("*", "**") and not _is_package_segment(seg):
-            raise LayerConfigError(
-                f"{prefix} {pattern!r} in {path}: "
-                f"segment {seg!r} must be a package name, '*' (one segment), "
-                "or '**' (zero or more segments)."
-            )
 
 
 def _is_package_segment(segment: str) -> bool:
@@ -1081,33 +1093,38 @@ def _parse_required(raw: object, path: Path) -> list[RequiredRule]:
         return []
     if not isinstance(raw, list):
         raise LayerConfigError(f"`required` must be a list in {path}")
-    out: list[RequiredRule] = []
-    for index, entry_raw in enumerate(raw):
-        entry = _as_str_dict(entry_raw, "required entry", path)
-        _reject_unknown_keys(entry, _REQUIRED_KEYS, f"required entry {index}", path)
-        source, must_reach = _require_str_keys(entry, ("source", "must_reach"), "required", path)
-        reason = entry.get("reason", "")
-        if not isinstance(reason, str):
-            raise LayerConfigError(f"required `reason` must be a string in {path}")
-        within = entry.get("within")
-        if within is not None and not isinstance(within, str):
-            raise LayerConfigError(f"required `within` must be a string in {path}")
-        if source == ENTRYPOINTS_SOURCE:
-            if within is not None:
-                _validate_pattern(within, "required rule has an invalid `within` pattern", path)
-        else:
-            if within is not None:
-                # Accepting it would make `within` a second spelling of an
-                # intersection the `source` glob already expresses, and a reader
-                # could not tell which of the two the author meant to bind.
-                raise LayerConfigError(
-                    f"required `within` only applies to `source: {ENTRYPOINTS_SOURCE!r}` in "
-                    f"{path}; narrow a written pattern by editing `source` instead."
-                )
-            _validate_pattern(source, "required rule has an invalid `source` pattern", path)
-        _validate_pattern(must_reach, "required rule has an invalid `must_reach` pattern", path)
-        out.append(RequiredRule(source=source, must_reach=must_reach, reason=reason, within=within))
-    return out
+    return [_parse_required_entry(entry_raw, index, path) for index, entry_raw in enumerate(raw)]
+
+
+def _parse_required_entry(entry_raw: object, index: int, path: Path) -> RequiredRule:
+    entry = _as_str_dict(entry_raw, "required entry", path)
+    _reject_unknown_keys(entry, _REQUIRED_KEYS, f"required entry {index}", path)
+    source, must_reach = _require_str_keys(entry, ("source", "must_reach"), "required", path)
+    reason = entry.get("reason", "")
+    if not isinstance(reason, str):
+        raise LayerConfigError(f"required `reason` must be a string in {path}")
+    within = entry.get("within")
+    if within is not None and not isinstance(within, str):
+        raise LayerConfigError(f"required `within` must be a string in {path}")
+    _validate_required_scope(source, within, path)
+    _validate_pattern(must_reach, "required rule has an invalid `must_reach` pattern", path)
+    return RequiredRule(source=source, must_reach=must_reach, reason=reason, within=within)
+
+
+def _validate_required_scope(source: str, within: str | None, path: Path) -> None:
+    if source == ENTRYPOINTS_SOURCE:
+        if within is not None:
+            _validate_pattern(within, "required rule has an invalid `within` pattern", path)
+        return
+    if within is not None:
+        # Accepting it would make `within` a second spelling of an
+        # intersection the `source` glob already expresses, and a reader
+        # could not tell which of the two the author meant to bind.
+        raise LayerConfigError(
+            f"required `within` only applies to `source: {ENTRYPOINTS_SOURCE!r}` in "
+            f"{path}; narrow a written pattern by editing `source` instead."
+        )
+    _validate_pattern(source, "required rule has an invalid `source` pattern", path)
 
 
 def _check_known_layer(name: str, field: str, known: set[str], path: Path) -> None:
