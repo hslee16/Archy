@@ -24,8 +24,8 @@ from archy.install.base import (
     FileAction,
     Scope,
     delete_file,
+    instructions_action,
     local_root,
-    upsert_instructions,
 )
 from archy.install.merge import render_continue_yaml
 
@@ -60,7 +60,7 @@ class ContinueAdapter(AgentAdapter):
         *,
         project_root: Path | None = None,
         seed_permissions: bool = True,
-        for_uninstall: bool = False,  # part of the shared plan() contract; unused here
+        for_uninstall: bool = False,
     ) -> list[FileAction]:
         root = self._root(scope, project_root)
         return [
@@ -70,10 +70,10 @@ class ContinueAdapter(AgentAdapter):
                 render=render_continue_yaml,
                 unrender=delete_file,
             ),
-            FileAction(
-                path=root / "rules" / "archy.md",
-                kind="instructions",
-                render=upsert_instructions,
+            instructions_action(
+                root / "rules" / "archy.md",
+                scope,
+                for_uninstall=for_uninstall,
                 unrender=delete_file,
             ),
         ]

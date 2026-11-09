@@ -80,17 +80,19 @@ def test_run_install_dry_run_records_without_writing(simulate_os):
     adapters = resolve_targets("cursor")
     result = run_install(adapters, Scope.GLOBAL, write_system=ws)
     assert result.results[0].adapter_id == "cursor"
-    assert len(ws.records) == 2
+    # mcp.json only: a global install writes no rules file (#560).
+    assert len(ws.records) == 1
     # The dry-run system must capture writes, never touch disk.
     assert all(not r.path.exists() for r in ws.records)
 
 
-def test_print_config_returns_paths_and_content(simulate_os):
+def test_print_config_returns_paths_and_content(simulate_os, tmp_path):
     simulate_os("linux")
     files = print_config("codex", Scope.GLOBAL)
     names = [p.name for p, _ in files]
-    assert "config.toml" in names
-    assert "AGENTS.md" in names
+    assert names == ["config.toml"]
+    local = print_config("codex", Scope.LOCAL, project_root=tmp_path)
+    assert [p.name for p, _ in local] == ["config.toml", "AGENTS.md"]
 
 
 def test_run_uninstall_on_clean_machine_touches_nothing(simulate_os):

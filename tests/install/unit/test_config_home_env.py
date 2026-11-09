@@ -36,15 +36,14 @@ def test_install_and_uninstall_use_the_variables_dirs(relocated):
 
     assert result.exit_code == 0, result.output
     assert _files(fake.home) == []
-    assert _files(codex_home) == [codex_home / "AGENTS.md", codex_home / "config.toml"]
-    assert _files(xdg) == [xdg / "opencode" / "AGENTS.md", xdg / "opencode" / "opencode.json"]
+    # No AGENTS.md: a global install writes no instruction block (#560).
+    assert _files(codex_home) == [codex_home / "config.toml"]
+    assert _files(xdg) == [xdg / "opencode" / "opencode.json"]
 
     result = CliRunner().invoke(main, ["uninstall", "--target", "codex,opencode", "-y"])
 
     assert result.exit_code == 0, result.output
-    assert not (codex_home / "AGENTS.md").exists()
     assert "archy" not in (codex_home / "config.toml").read_text(encoding="utf-8")
-    assert not (xdg / "opencode" / "AGENTS.md").exists()
     assert "archy" not in (xdg / "opencode" / "opencode.json").read_text(encoding="utf-8")
 
 

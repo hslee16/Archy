@@ -70,8 +70,10 @@ def test_plan_skips_mcp_when_plugin_installed(simulate_os):
     _write_plugin_manifest(fake.home, "archy")
     assert ADAPTER.plugin_installed() is True
     plan = ADAPTER.plan(Scope.GLOBAL, seed_permissions=True)
-    # Plugin already registers MCP + ships the skill; only permissions remain.
-    assert _kinds(plan) == ["permissions"]
+    # Plugin already registers MCP + ships the skill; permissions remain, plus
+    # the clean-up of an old global block (#560), which writes nothing new.
+    assert _kinds(plan) == ["instructions", "permissions"]
+    assert [a.retire for a in plan] == [True, False]
 
 
 def test_plan_for_uninstall_includes_mcp_even_when_plugin_installed(simulate_os):
@@ -86,7 +88,7 @@ def test_plan_for_uninstall_includes_mcp_even_when_plugin_installed(simulate_os)
     uninstall_plan = ADAPTER.plan(Scope.GLOBAL, seed_permissions=True, for_uninstall=True)
     # Install still skips MCP + instructions (avoids #104 double-registration),
     # but uninstall removes them so the round-trip leaves no footprint.
-    assert _kinds(install_plan) == ["permissions"]
+    assert _kinds(install_plan) == ["instructions", "permissions"]
     assert _kinds(uninstall_plan) == ["mcp", "instructions", "permissions"]
 
 

@@ -178,7 +178,7 @@ def _run_for_adapters(
             )
         return InstallResult(results=tuple(results))
 
-    prepared: list[tuple[str, tuple[str, ...], list[tuple[Path, str]]]] = []
+    prepared: list[tuple[str, tuple[str, ...], list[tuple[Path, str | None]]]] = []
     errors: list[str] = []
     for adapter in adapters:
         plan = plan_for(
@@ -326,6 +326,16 @@ def preview_config(
     previews: list[ConfigPreview] = []
     for action in plan:
         existing_text = ws.read_text(action.path)
+        if action.retire:
+            # A clean-up of an old block, not a file install would leave, so it is
+            # not previewed. Still run it so a block install would refuse (an
+            # unclosed marker) is refused here too.
+            if existing_text is not None:
+                try:
+                    action.unrender(existing_text)
+                except InstallError as exc:
+                    raise InstallError(f"{action.path}: {exc}") from exc
+            continue
         try:
             rendered = action.render(existing_text)
         except InstallError as exc:

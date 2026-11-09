@@ -12,17 +12,15 @@ contract tests (layer 4) parse back; the filesystem only enters when
 :func:`apply_plan` feeds those renders through a :class:`WriteSystem`.
 
 archy:owns        AgentAdapter, FileAction, Scope, apply_plan, apply_uninstall,
-                  delete_file, instructions_block, local_root, permission_patterns,
-                  remove_instructions, render_plan, upsert_instructions, write_rendered
+                  delete_file, instructions_action, instructions_block, local_root,
+                  permission_patterns, remove_instructions, render_plan,
+                  upsert_instructions, write_rendered
 archy:mirrored-by delete_file -> archy.install.adapters.continue_,
                   archy.install.adapters.cursor,
-                  local_root -> archy.install.adapters.claude,
+                  instructions_action -> archy.install.adapters.claude,
                   archy.install.adapters.codex, archy.install.adapters.continue_,
                   archy.install.adapters.cursor, archy.install.adapters.opencode,
-                  remove_instructions -> archy.install.adapters.claude,
-                  archy.install.adapters.codex, archy.install.adapters.opencode,
-                  archy.install.runner,
-                  upsert_instructions -> archy.install.adapters.claude,
+                  local_root -> archy.install.adapters.claude,
                   archy.install.adapters.codex, archy.install.adapters.continue_,
                   archy.install.adapters.cursor, archy.install.adapters.opencode
 """
@@ -183,13 +181,42 @@ def remove_instructions(existing: str | None) -> str | None:
     if span is None:
         return existing
     start, end = span
-    remainder = existing[:start] + _drop_leading_newline(existing[end:])
+    before = existing[:start]
+    # upsert_instructions put one blank line between the user's text and the
+    # block; take it back out so the strip is the exact inverse (#560).
+    if before.endswith("\n\n"):
+        before = before[:-1]
+    remainder = before + _drop_leading_newline(existing[end:])
     return None if not remainder.strip() else remainder
 
 
 def delete_file(_existing: str | None) -> None:
     """Unrender for files archy owns outright: always remove them on uninstall."""
     return None
+
+
+def instructions_action(
+    path: Path,
+    scope: Scope,
+    *,
+    for_uninstall: bool,
+    unrender: Callable[[str | None], str | None] = remove_instructions,
+) -> FileAction:
+    """The instruction-block action for ``path``, scoped to where the user opted in.
+
+    A local install writes the block into the project's own rules file, so the
+    guidance appears only where archy was chosen. A global install writes
+    nothing: a client-wide file is loaded in every project, Python or not, and
+    an install that once wrote the block there is cleaned up by ``retire`` (#560).
+    Uninstall always gets the plain strip, so install and uninstall stay inverse.
+    """
+    return FileAction(
+        path=path,
+        kind="instructions",
+        render=upsert_instructions,
+        unrender=unrender,
+        retire=scope is Scope.GLOBAL and not for_uninstall,
+    )
 
 
 def local_root(project_root: Path | None) -> Path:
@@ -214,6 +241,11 @@ class FileAction(BaseModel):
     directions on one object keeps install and uninstall symmetric per file, so a
     new adapter declares both at once. ``kind`` is ``mcp`` / ``instructions`` /
     ``permissions`` for reporting and selective skipping.
+
+    ``retire`` marks an action that runs ``unrender`` at INSTALL time: it strips
+    archy's part from a file that already exists and never creates one (#560).
+    A file with nothing of archy's in it is left untouched, not rewritten, so a
+    user's own text stays byte-identical (a rewrite would normalise CRLF).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -222,6 +254,7 @@ class FileAction(BaseModel):
     kind: str
     render: Callable[[str | None], str]
     unrender: Callable[[str | None], str | None]
+    retire: bool = False
 
 
 class AgentAdapter(ABC):
@@ -292,12 +325,25 @@ class AgentAdapter(ABC):
         """
 
 
-def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple[Path, str]]:
-    """Render each action against the write system without writing. Returns pairs."""
-    rendered: list[tuple[Path, str]] = []
+def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple[Path, str | None]]:
+    """Render each action against the write system without writing. Returns pairs.
+
+    Content ``None`` means delete the file. A ``retire`` action contributes a pair
+    only when it would change something: an absent file, or one holding none of
+    archy's text, yields nothing.
+    """
+    rendered: list[tuple[Path, str | None]] = []
     for action in plan:
         existing = write_system.read_text(action.path)
         try:
+            if action.retire:
+                if existing is None:
+                    continue
+                content = action.unrender(existing)
+                if content == existing:
+                    continue
+                rendered.append((action.path, content))
+                continue
             content = action.render(existing)
         except InstallError as exc:
             msg = str(exc)
@@ -308,11 +354,17 @@ def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple
     return rendered
 
 
-def write_rendered(pairs: list[tuple[Path, str]], write_system: WriteSystem) -> list[Path]:
-    """Write previously rendered ``(path, content)`` pairs. Returns paths."""
+def write_rendered(pairs: list[tuple[Path, str | None]], write_system: WriteSystem) -> list[Path]:
+    """Write previously rendered ``(path, content)`` pairs. Returns paths.
+
+    Content ``None`` removes the file.
+    """
     written: list[Path] = []
     for path, content in pairs:
-        write_system.write_text(path, content)
+        if content is None:
+            write_system.remove(path)
+        else:
+            write_system.write_text(path, content)
         written.append(path)
     return written
 
