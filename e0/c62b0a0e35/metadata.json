@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "e0c62b0a0e35",
+  "strategy": "manual-commit",
+  "branch": "alee/complex-method-layers",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/e0/c62b0a0e35/0/metadata.json",
+      "transcript": "/e0/c62b0a0e35/0/full.jsonl",
+      "content_hash": "/e0/c62b0a0e35/0/content_hash.txt",
+      "prompt": "/e0/c62b0a0e35/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1264,
+    "cache_creation_tokens": 1084255,
+    "cache_read_tokens": 262749286,
+    "output_tokens": 547681,
+    "api_call_count": 580
+  }
+}
