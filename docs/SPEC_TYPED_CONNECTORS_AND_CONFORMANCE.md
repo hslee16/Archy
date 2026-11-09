@@ -45,7 +45,7 @@ Grounding references, so this spec stays honest about the delta:
 - **DSM weight is type-blind.** `dsm.py` weights a cell `1.0` for imports or
   `call_count` for calls; it cannot distinguish an inheritance edge from a
   type-only import.
-- **Constraints today are edge-agnostic.** `layers.py` (`archy_check`) matches
+- **Constraints today are edge-agnostic.** `layers_check.py` / `layers_match.py` (`archy_check`) match
   *direct forbidden edges* between layers; `contracts.py` wraps import-linter
   (Layers / Forbidden / Independence / Protected). Neither can say "no *inheritance*
   across this boundary" because edge kind is not available to the rule engine.
@@ -151,7 +151,7 @@ into a single **conformance score** with drift tracking.
 
 ### Intended-architecture spec (the "little ADL")
 
-Reuse the existing `archy.yaml` config surface (already parsed by `layers.py`
+Reuse the existing `archy.yaml` config surface (already parsed by `layers_config.py`
 `load_config`). Add an optional `intended:` block. Deliberately minimal, a
 component-and-connector model in the paper's vocabulary:
 
@@ -210,7 +210,7 @@ Reported payload:
   top-level MCP tool. This aligns with the in-flight consolidation (#265, folding
   `archy_check` + `archy_contracts` + `archy_cycles` into one constraint-validation
   tool, #268). Conformance is naturally a *mode* of that unified constraint tool.
-- **Config:** `layers.py` `load_config` gains the `intended:` block parse.
+- **Config:** `layers_config.py` `load_config` gains the `intended:` block parse.
 - **Trend:** add `conformance` as an optional column to `HistoryRow` /
   `history.jsonl` (nullable for pre-feature rows, exactly like `complexity` was
   added post-v0.20). `archy_diff` / `Snapshot` gains `conformance` so drift shows

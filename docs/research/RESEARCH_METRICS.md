@@ -72,7 +72,7 @@ For reference, archy ships these and they're documented in
 | Depth         | Longest path through the SCC condensation      |
 | Equality      | `1 - Gini(out_degree)`                          |
 | Martin's `I` (instability) | Per-module `Ce / (Ce + Ca)`; exposed per-node in `archy graph --format json` (`compute_instability` in `instability.py`) |
-| SDP violation check | Edges from stable to less-stable modules; enabled via `sdp:` in `archy.yaml`, reported by `archy check` (`find_sdp_violations` in `layers.py`) |
+| SDP violation check | Edges from stable to less-stable modules; enabled via `sdp:` in `archy.yaml`, reported by `archy check` (`find_sdp_violations` in `layers_check.py`) |
 
 Plus rule-based fitness functions: layer rules and exclusion patterns
 in `archy.yaml`, checked by `archy check`.
@@ -118,7 +118,7 @@ Two derived rules from Clean Architecture:
 
 **Status:** `I` and SDP are **shipped** - `compute_instability` in
 `src/archy/instability.py`, exposed via `archy graph --format json`,
-and `find_sdp_violations` in `src/archy/layers.py`, wired into
+and `find_sdp_violations` in `src/archy/layers_check.py`, wired into
 `archy check` (enable with `sdp:` in `archy.yaml`). `A`/`D`/SAP
 remain deferred: `A` requires AST work (tree-sitter pass to count
 `ABC`/`Protocol` subclasses and `@abstractmethod`), on the roadmap
@@ -1217,7 +1217,7 @@ importing from a higher-rank layer is a violation).
 Two implications for archy, both sharper than the earlier citations:
 
 - The verifier's dependency-direction rule **is** archy's `forbid`-rule
-  check (`find_violations` in `src/archy/layers.py`), and the
+  check (`find_violations` in `src/archy/layers_check.py`), and the
   transitive version is `archy contracts`. The paper independently
   reinvented archy's core check as its measurement instrument, which
   validates the *category*, not just individual metrics: archy already

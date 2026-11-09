@@ -92,7 +92,7 @@ What is genuinely present:
 
 What is **not** present, stated plainly because the first draft of this note overstated it:
 
-- **The dial is off by default and defaults to hard-fail when on.** `SdpConfig` is `enabled: bool = False`, `mode: str = "error"` (`layers.py:53-55`), and `mcp.py:1122` gates the whole SDP computation on `enabled`. Setting `mode: warn` alone does nothing. On a default archy install there is no advisory tier at all.
+- **The dial is off by default and defaults to hard-fail when on.** `SdpConfig` is `enabled: bool = False`, `mode: str = "error"` (`layers_models.py:133-135`), and `mcp.py:1122` gates the whole SDP computation on `enabled`. Setting `mode: warn` alone does nothing. On a default archy install there is no advisory tier at all.
 - **SDP is not a project rule.** It is a built-in global heuristic (the Stable Dependencies Principle). The rules a project authors, `forbid`, have **no** severity: every one of them is hard-fail, always. So what ships is a working *precedent* for the dial on one built-in check, not the contract the article asks for.
 
 That reframes the disposition rather than reversing it. The article's first bullet is a genuine gap, but it is an **archy-side** gap (one config field, described in §8 and filed) rather than anything a framework integration would address. Both of the following are worth having on their own merit even if no integration ever ships, and the first is now load-bearing rather than a nicety:
