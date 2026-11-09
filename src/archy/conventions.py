@@ -901,16 +901,18 @@ def _home_module(by_module: Counter[str]) -> tuple[str, int]:
     One definition for all three family kinds, so "where does a new one go"
     cannot come out differently depending on which report asked (#415).
 
-    Ties are broken by `Counter.most_common`, which is insertion order, so the
-    winner is whichever module the scan reached first. That is not a meaningful
-    ordering; it is recorded here rather than at three call sites so a caller
-    who needs a deterministic tie-break has one place to change.
+    Ties go to the module whose name sorts first. Not `Counter.most_common`,
+    whose tie order is insertion order: `_base_families` builds its counter from
+    a `set` of class names, so that order is string-hash order and changed with
+    `PYTHONHASHSEED`, and one repo got a different home on each run (#875).
+    Name order is not a judgement about which module is the better home; it
+    only makes the answer a function of the project, not of the process.
 
     Callers pass a non-empty counter. `_base_families` is the only one that can
     produce an empty one (its members may all be missing from `home_of`), and it
     guards before calling.
     """
-    return by_module.most_common(1)[0]
+    return min(by_module.items(), key=lambda item: (-item[1], item[0]))
 
 
 def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[BaseFamily, ...]:

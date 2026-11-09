@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -427,6 +430,57 @@ class C(ABC): pass
 """
     report = compute_conventions(_tmp(src))
     assert not [b for b in report.bases if b.base == "ABC"]
+
+
+_TIED_FAMILY = {
+    "base.py": "class Widget:\n    pass\n",
+    "zeta.py": (
+        "from pkg.base import Widget\n"
+        "class AlphaWidget(Widget): pass\n"
+        "class BravoWidget(Widget): pass\n"
+    ),
+    "alpha.py": (
+        "from pkg.base import Widget\n"
+        "class CharlieWidget(Widget): pass\n"
+        "class DeltaWidget(Widget): pass\n"
+    ),
+}
+
+_HOME_UNDER_SEED = """
+import sys
+from pathlib import Path
+from archy.conventions import compute_conventions
+report = compute_conventions(Path(sys.argv[1]))
+family = next(b for b in report.bases if b.base == "Widget")
+print(family.home_module, family.home_count)
+"""
+
+
+def test_kind_family_home_is_the_same_under_every_hash_seed(tmp_path: Path):
+    """#875: `_base_families` counts members from a `set` of names, so a tie
+    was broken in string-hash order and the home changed with PYTHONHASHSEED.
+    `pkg.zeta` and `pkg.alpha` host two members each (`pkg.base` hosts one);
+    the tie goes to the name that sorts first, worked out by hand: `pkg.alpha`."""
+    root = _project(tmp_path, _TIED_FAMILY)
+    family = next(b for b in compute_conventions(root).bases if b.base == "Widget")
+    # The fixture must really tie, or the assertion below proves nothing.
+    assert family.count == 5
+    assert family.home_count == 2  # five members, at most two per module: a 2-2-1 tie
+    per_module = {name: source.count("(Widget)") for name, source in _TIED_FAMILY.items()}
+    assert per_module == {"base.py": 0, "zeta.py": 2, "alpha.py": 2}
+
+    homes = set()
+    for seed in ("0", "1", "2", "3", "4", "5"):
+        env = {**os.environ, "PYTHONHASHSEED": seed}
+        done = subprocess.run(
+            [sys.executable, "-c", _HOME_UNDER_SEED, str(root)],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=True,
+        )
+        homes.add(done.stdout.strip())
+    assert homes == {"pkg.alpha 2"}
 
 
 def test_shared_constant_reports_the_split_not_just_the_values():
