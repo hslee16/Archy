@@ -65,7 +65,7 @@ import ast
 import re
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, computed_field
@@ -1201,30 +1201,84 @@ def _harvest_docs(root: Path, ignored_dirs: frozenset[str]) -> tuple[dict[str, s
     """
     found: dict[str, set[str]] = defaultdict(set)
     seen = 0
+    for path, rel in _doc_files(root, ignored_dirs):
+        text = _read_doc(path)
+        if text is None:
+            continue
+        seen += 1
+        key = rel.parts[0] if len(rel.parts) > 1 else "."
+        found[key] |= _doc_names(text)
+    return dict(found), seen
+
+
+def _doc_files(root: Path, ignored_dirs: frozenset[str]) -> Iterator[tuple[Path, Path]]:
+    """Documentation files under `root` as (path, path relative to root), skipping ignored dirs."""
     for path in sorted(root.rglob("*")):
         if path.suffix not in _DOC_SUFFIXES or not path.is_file():
             continue
         rel = path.relative_to(root)
         if any(part in ignored_dirs or part.startswith(".") for part in rel.parts[:-1]):
             continue
-        try:
-            if path.stat().st_size > _DOC_MAX_BYTES:
-                continue
-            text = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
+        yield path, rel
+
+
+def _read_doc(path: Path) -> str | None:
+    """The file's text, or None when it is too large or cannot be read."""
+    try:
+        if path.stat().st_size > _DOC_MAX_BYTES:
+            return None
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def _doc_names(text: str) -> set[str]:
+    """Every identifier a documentation file names, by directive, code span, slug or bracket."""
+    names: set[str] = set()
+    for match in _DOC_DIRECTIVE.finditer(text):
+        names.add(match.group(1).rsplit(".", 1)[-1])
+    for match in _DOC_CODE_SPAN.finditer(text):
+        names.add(match.group(1).rsplit(".", 1)[-1])
+    for match in _DOC_SLUG.finditer(text):
+        names.add(match.group(1))
+    for match in _DOC_BRACKET.finditer(text):
+        names.add(match.group(1).rsplit(".", 1)[-1])
+    return names
+
+
+def _doc_groups(
+    families: tuple[BaseFamily, ...], registries: tuple[RegistryEntry, ...]
+) -> list[tuple[str, tuple[str, ...]]]:
+    groups: list[tuple[str, tuple[str, ...]]] = [(f.base, f.members) for f in families]
+    # A registry's values are documented by the string they are declared with,
+    # not by the constant that holds them: `mypy` documents `arg-type`, and
+    # splits its codes across two files by whether they are on by default, so
+    # for that project the docs *are* the gate convention.
+    groups += [(f"{r.constructor}(...)", r.literal_names) for r in registries if r.literal_names]
+    return groups
+
+
+def _best_doc_gap(
+    name: str, public: tuple[str, ...], docs: dict[str, set[str]], min_documented: int
+) -> DocGap | None:
+    # One row per family, from the directory that documents it best. A
+    # project with a `docs/` tree and a README covers most families in
+    # both, and reporting each twice buries the real gaps under near
+    # duplicates that differ only in which stray mention they caught.
+    best: DocGap | None = None
+    for doc_root, names in sorted(docs.items()):
+        documented = [m for m in public if m in names]
+        if not _is_partial_coverage(len(documented), len(public), min_count=min_documented):
             continue
-        seen += 1
-        key = rel.parts[0] if len(rel.parts) > 1 else "."
-        names = found[key]
-        for match in _DOC_DIRECTIVE.finditer(text):
-            names.add(match.group(1).rsplit(".", 1)[-1])
-        for match in _DOC_CODE_SPAN.finditer(text):
-            names.add(match.group(1).rsplit(".", 1)[-1])
-        for match in _DOC_SLUG.finditer(text):
-            names.add(match.group(1))
-        for match in _DOC_BRACKET.finditer(text):
-            names.add(match.group(1).rsplit(".", 1)[-1])
-    return dict(found), seen
+        if best is None or len(documented) > best.documented:
+            best = DocGap(
+                doc_root=doc_root,
+                family=name,
+                documented=len(documented),
+                defined=len(public),
+                missing=tuple(sorted(set(public) - names)),
+            )
+    return best
 
 
 def _doc_gaps(
@@ -1235,36 +1289,14 @@ def _doc_gaps(
     min_documented: int = 2,
 ) -> tuple[DocGap, ...]:
     """Public family members a documentation directory does not name."""
-    groups: list[tuple[str, tuple[str, ...]]] = [(f.base, f.members) for f in families]
-    # A registry's values are documented by the string they are declared with,
-    # not by the constant that holds them: `mypy` documents `arg-type`, and
-    # splits its codes across two files by whether they are on by default, so
-    # for that project the docs *are* the gate convention.
-    groups += [(f"{r.constructor}(...)", r.literal_names) for r in registries if r.literal_names]
     out: list[DocGap] = []
-    for name, members in groups:
+    for name, members in _doc_groups(families, registries):
         # Private names are not a documentation defect; a project is entitled
         # to leave `_PydanticGeneralMetadata` out of its docs on purpose.
         public = tuple(m for m in members if not m.startswith("_"))
         if len(public) < min_documented:
             continue
-        # One row per family, from the directory that documents it best. A
-        # project with a `docs/` tree and a README covers most families in
-        # both, and reporting each twice buries the real gaps under near
-        # duplicates that differ only in which stray mention they caught.
-        best: DocGap | None = None
-        for doc_root, names in sorted(docs.items()):
-            documented = [m for m in public if m in names]
-            if not _is_partial_coverage(len(documented), len(public), min_count=min_documented):
-                continue
-            if best is None or len(documented) > best.documented:
-                best = DocGap(
-                    doc_root=doc_root,
-                    family=name,
-                    documented=len(documented),
-                    defined=len(public),
-                    missing=tuple(sorted(set(public) - names)),
-                )
+        best = _best_doc_gap(name, public, docs, min_documented)
         if best is not None:
             out.append(best)
     out.sort(key=lambda g: (-(g.defined - g.documented), g.doc_root, g.family))
