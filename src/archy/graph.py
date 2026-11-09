@@ -1026,7 +1026,7 @@ def resolve_from_import(
 ) -> list[str]:
     """Which internal modules `from base import ...` actually reaches.
 
-    🔴 SHARED BECAUSE THE TWO CALLERS MUST AGREE. `archy.conventions` answers
+    🔴 SHARED BECAUSE THE TWO CALLERS MUST AGREE. `archy.conventions_collect` answers
     the same question for `conventions --module`, and when it had its own copy
     the two disagreed five separate ways (#414), every one a case where the
     lookup contradicted `archy impact` on archy's own source. A lookup whose
