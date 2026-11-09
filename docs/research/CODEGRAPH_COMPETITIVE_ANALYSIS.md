@@ -10,7 +10,8 @@ building?**
 
 Fact-gathering date: 2026-07-24, with §3a and §3b re-verified against the live
 repository on 2026-07-27 after #369 made the descriptive-versus-normative split
-archy's headline. Every number below is measured, not asserted; where a number
+archy's headline. §3c and §6 were re-verified on 2026-11-09 against
+optave/codegraph, agent-arch and colbymchenry/codegraph v1.6.2. Every number below is measured, not asserted; where a number
 could not be pulled it says so.
 
 ## Summary
@@ -21,9 +22,10 @@ thing that decides whether archy is worth working on.**
 - codegraph and archy do **different jobs**: codegraph is **descriptive**
   (what is in this codebase, where, and what calls what), archy is
   **normative** (what did you declare this codebase should look like, and is it
-  drifting). codegraph ships **no quality score, no architecture rules, no
-  cycle analysis, no history, and no counterfactual check**. That is not an
-  oversight on their part; it is a different product.
+  drifting). colbymchenry/codegraph ships **no quality score, no architecture
+  rules, no cycle analysis, no history, and no counterfactual check**. That is
+  not an oversight on their part; it is a different product. (optave/codegraph
+  does carry rules and cycle checks; see §3c.)
 - Where the two **do** overlap, archy loses on the merits, and the overlap is
   narrow: 2 of archy's 13 MCP tools (3 CLI commands), and none of the 11 that
   carry its actual thesis.
@@ -196,8 +198,30 @@ as "for every PR, know exactly what to test, what could break, which flows are
 affected, and whether business logic is compromised". "What could break" on a
 PR is adjacent to [#145](https://github.com/hslee16/Archy/issues/145) (archy's
 per-PR structural review brief), which is archy's strongest unbuilt feature.
-The judgment space is unoccupied **today**; it is not guaranteed to stay that
-way, and the encroachment would come from the direction of PR review.
+The judgment space was unoccupied on 2026-07-27. It is no longer, for declared
+rules (see §3c); what remains differentiated is the combination in §6.
+
+### 3c. The tripwire fired (2026-11-09)
+
+§3b pre-registered that a codegraph-like tool shipping rules, policy or CI
+gating would mean this document needs redoing. Two did, and §6 was already wrong
+when it was written. Recorded, with sources, as of 2026-11-09:
+
+- **[optave/codegraph](https://github.com/optave/codegraph)** (99 stars, last
+  push 2026-11-04; a different project from colbymchenry/codegraph despite the
+  shared name). `src/features/boundaries.ts` defines hexagonal, layered, clean
+  and onion presets and a `BoundaryRule{from, notTo, onlyTo}`; `codegraph check
+  --staged --boundaries` and `--cycles` exit 0 or 1; it covers 34 languages
+  including Python and ships a MCP server. It also ships `snapshot.ts` and
+  `branch-compare.ts`, so snapshot and diff are **not** archy-only. Not found in
+  `boundaries.ts`: transitive forbid rules, a `required:` reach rule.
+- **[agent-arch](https://pypi.org/project/agent-arch/)** (PyPI 0.1.0 and 0.1.1,
+  both 2026-10-20): "deterministic codebase architecture guardrails" for coding
+  agents, Python only, layer-rank rules, pre-commit hook. Its PyPI page names no
+  MCP server, score or trend.
+- **[colbymchenry/codegraph](https://github.com/colbymchenry/codegraph/releases)**
+  is still rule-free: latest release v1.6.2 (2026-10-03), re-checked 2026-11-09.
+  Everything said about it in §3 and §3a still holds.
 
 ## 4. C1: multi-language, answered honestly
 
@@ -266,17 +290,23 @@ score.
 
 ## 6. C3: the one falsifiable sentence
 
-> **archy is the only local, agent-facing tool that holds a codebase's
-> *declared* structure (layers, forbidden edges, an acyclicity invariant, a
-> recorded score baseline) and reports when an edit or a week of edits violates
-> it; every graph tool in its category, codegraph included, describes the
-> structure that exists and has no representation of the structure you
-> intended.**
+> **archy is the only tool that combines all of: Python-specific import
+> resolution (including `__init__` re-exports), transitive `forbid:` rules
+> checked through import-linter, and a `required:` reach rule (#387), behind an
+> agent-facing MCP surface. Declared layer and boundary rules alone are not
+> unique: optave/codegraph, tach and agent-arch carry them.**
+
+Each difference above was checked against optave/codegraph's and agent-arch's
+source or package page on 2026-11-09 (§3c). Deliberately **not** claimed:
+snapshot and diff (optave ships `snapshot.ts` and `branch-compare.ts`), a
+recorded trend (unverified against optave), and `TYPE_CHECKING` handling
+(archy does not have it today).
 
 Falsifiable three ways, and worth re-checking on any revisit:
 
 1. codegraph (or an equivalent) ships architecture rules, a quality score, or a
-   trend. Today: none of the three.
+   trend. **Fired 2026-11-09** for optave/codegraph and agent-arch (§3c), which
+   carry rules; colbymchenry/codegraph still has none of the three.
 2. import-linter, deptry, or a similar Python tool ships an agent-facing MCP
    surface with a composite score and history. import-linter is the closest
    (archy *wraps* it for transitive contracts) but is CI-shaped, not
@@ -295,10 +325,13 @@ Falsifiable three ways, and worth re-checking on any revisit:
 Separate two questions that keep getting merged.
 
 **Is archy differentiated? Yes, and more cleanly than expected.** 11 of 13 MCP
-tools have no counterpart in the most successful tool in the adjacent category. The
-normative job is real, unoccupied, and structurally hard for a
-navigation-first tool to enter, because it needs user-supplied intent rather
-than better parsing.
+tools have no counterpart in colbymchenry/codegraph, the most successful tool
+in the adjacent category. optave/codegraph overlaps on rules, cycles and
+snapshot/diff (§3c), so differentiation against it rests on the §6 combination.
+The normative job is real and only partly occupied: optave/codegraph, tach and
+agent-arch carry declared layer and boundary rules. It is structurally harder
+for a navigation-first tool because it needs user-supplied intent rather than
+better parsing, but not impossible.
 
 **Is archy succeeding? No, and the reason is not differentiation.**
 
