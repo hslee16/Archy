@@ -24,6 +24,13 @@ def load_manifest() -> list[dict]:
     return yaml.safe_load(MANIFEST.read_text())["projects"]
 
 
+def _has_commit(target: Path, sha: str) -> bool:
+    probe = subprocess.run(
+        ["git", "-C", str(target), "cat-file", "-e", sha], capture_output=True, check=False
+    )
+    return probe.returncode == 0
+
+
 def clone_or_update(proj: dict) -> Path | None:
     """Clone/checkout a project at its pinned SHA; never raises -- on any failure
     return None so the caller can skip the project and keep the sweep going. The
@@ -41,12 +48,17 @@ def clone_or_update(proj: dict) -> Path | None:
         )
         if res.returncode != 0:
             return None
-    has_sha = subprocess.run(
-        ["git", "-C", str(target), "cat-file", "-e", sha],
-        capture_output=True,
-    )
-    if has_sha.returncode != 0:
+    if not _has_commit(target, sha):
         subprocess.run(["git", "-C", str(target), "fetch", "--quiet", "origin"], check=False)
+    # A shallow clone cannot resolve an abbreviated pin, and a plain fetch does not
+    # deepen it, so the checkout below failed and the project was skipped with no
+    # reason given (found piloting #870, against clones cached shallow).
+    if not _has_commit(target, sha):
+        subprocess.run(
+            ["git", "-C", str(target), "fetch", "--quiet", "--unshallow", "origin"],
+            capture_output=True,
+            check=False,
+        )
     if (
         subprocess.run(
             ["git", "-C", str(target), "checkout", "--quiet", sha],

@@ -17,7 +17,8 @@ module scope doesn't have a CC analogue.
 archy:owns        FunctionComplexity, FunctionFeatures, compute_function_complexity,
                   extract_function_features, extract_token_bags, walk_functions
 archy:mirrored-by FunctionComplexity -> archy.duplicates, archy.graph, archy.parser,
-                  extract_token_bags -> archy.duplicates,
+                  compute_function_complexity -> bench.duplicates_recall_experiment,
+                  bench.health_repro, extract_token_bags -> archy.duplicates,
                   bench.duplicates_recall_experiment
 """
 
