@@ -21,7 +21,8 @@ archy:owns        AppliedDelta, EdgeRef, EdgeSpec, PropagationDelta, SimulateRep
                   find_simulate
 archy:mirrored-by EdgeSpec -> archy.mcp, archy.mcp_runs,
                   SimulateReport -> archy.cli_render, archy.mcp, archy.mcp_runs,
-                  find_simulate -> archy.cli, archy.mcp_runs, bench.simulate_oracle
+                  find_simulate -> archy.cli_history, archy.mcp_runs,
+                  bench.simulate_oracle
 """
 
 from __future__ import annotations

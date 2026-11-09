@@ -3,7 +3,8 @@
 archy:owns        Cycle, CycleEdge, CycleScan, find_cycles, scan_cycles
 archy:mirrored-by CycleScan -> archy.cli_render, archy.mcp, archy.mcp_runs,
                   find_cycles -> archy.diff, archy.score, bench.acyclicity_dilution,
-                  bench.delta_direction, scan_cycles -> archy.cli, archy.mcp_runs
+                  bench.delta_direction, scan_cycles -> archy.cli_history,
+                  archy.mcp_runs
 """
 
 from __future__ import annotations

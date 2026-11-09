@@ -43,10 +43,11 @@ graph node - a pre-existing limitation shared with `hotspots.git_churn`.
 
 archy:owns        CoChangeData, CoChangeHint, CouplingPair, co_changed_with,
                   compute_coupling, git_cochange, internal_module_paths
-archy:mirrored-by compute_coupling -> archy.cli, bench.coupling_sweep,
-                  git_cochange -> archy.cli, archy.mcp_runs, bench.coupling_sweep,
-                  bench.duplicates_cochange_sweep, internal_module_paths -> archy.cli,
-                  archy.mcp_runs, bench.coupling_sweep
+archy:mirrored-by compute_coupling -> archy.cli_git, bench.coupling_sweep,
+                  git_cochange -> archy.cli_git, archy.mcp_runs, bench.coupling_sweep,
+                  bench.duplicates_cochange_sweep,
+                  internal_module_paths -> archy.cli_git, archy.mcp_runs,
+                  bench.coupling_sweep
 """
 
 from __future__ import annotations

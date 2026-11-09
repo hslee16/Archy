@@ -4,6 +4,13 @@ Split out of `archy.cli` (#395) so the commands read as commands and the
 renderers can be tested without a Click context.
 
 archy:owns        ContractsOutcome
+archy:mirrored-by _contracts_outcome_to_dict -> archy.cli_check, archy.cli_conventions,
+                  _coupling_to_text -> archy.cli, archy.cli_git,
+                  _coverage_to_json -> archy.cli_check, archy.cli_conventions,
+                  _diff_to_text -> archy.cli, archy.cli_history,
+                  _duplicates_to_text -> archy.cli, archy.cli_git,
+                  _hotspots_to_text -> archy.cli, archy.cli_git,
+                  _simulate_to_text -> archy.cli, archy.cli_history
 """
 
 from __future__ import annotations

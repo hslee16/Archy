@@ -5,10 +5,10 @@ branch where available), and rough scale inputs. The file is append-only
 and line-oriented so it is trivial to diff, grep, jq, and hand-merge.
 
 archy:owns        HistoryRow, append, git_metadata, read, row_from_score
-archy:mirrored-by HistoryRow -> archy.render, archy.trend, append -> archy.cli,
-                  archy.mcp_runs, git_metadata -> archy.cli, archy.mcp_runs,
-                  read -> archy.cli, archy.mcp_runs, row_from_score -> archy.cli,
-                  archy.mcp_runs
+archy:mirrored-by HistoryRow -> archy.render, archy.trend, append -> archy.cli_history,
+                  archy.mcp_runs, git_metadata -> archy.cli_history, archy.mcp_runs,
+                  read -> archy.cli_app, archy.cli_graph, archy.cli_history,
+                  archy.mcp_runs, row_from_score -> archy.cli_history, archy.mcp_runs
 """
 
 from __future__ import annotations

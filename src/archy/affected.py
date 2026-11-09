@@ -14,8 +14,8 @@ behavior could be affected. Internal-only at launch (see
 of scope until real user demand surfaces.
 
 archy:owns        Affected, find_affected
-archy:mirrored-by Affected -> archy.cli, archy.cli_render, archy.mcp, archy.mcp_runs,
-                  find_affected -> archy.cli, archy.mcp_runs
+archy:mirrored-by Affected -> archy.cli_graph, archy.cli_render, archy.mcp,
+                  archy.mcp_runs, find_affected -> archy.cli_graph, archy.mcp_runs
 """
 
 from __future__ import annotations

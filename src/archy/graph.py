@@ -11,21 +11,19 @@ archy:owns        Module, QualnameCollisionError, ScanTooLargeError, UnresolvedH
                   resolve_from_import, resolve_modules, resolve_relative_import,
                   suggest_files, suggest_modules, zero_modules_reason
 archy:mirrored-by Module -> archy.conventions, archy.duplicates, archy.headers,
-                  archy.index, ScanTooLargeError -> archy.cli, archy.mcp,
-                  archy.mcp_runs, UnresolvedHint -> archy.impact, archy.mcp_payloads,
+                  archy.index, UnresolvedHint -> archy.impact, archy.mcp_payloads,
                   archy.mcp_runs, archy.simulate, assemble_graph -> archy.index,
                   archy.watcher, bench.pattern_detection,
-                  discover_modules -> archy.cli, archy.conventions, archy.index,
-                  archy.mcp_runs, archy.watcher, graph_to_dict -> archy.cli,
-                  archy.mcp_runs, hint_unresolved -> archy.mcp_runs, archy.simulate,
-                  internal_module_count -> archy.cli, archy.mcp_runs,
-                  internal_subgraph -> archy.cli, archy.mcp_runs,
-                  parse_project -> archy.cli, archy.mcp_runs,
+                  graph_to_dict -> archy.cli_graph, archy.mcp_runs,
+                  hint_unresolved -> archy.mcp_runs, archy.simulate,
+                  internal_module_count -> archy.cli_history, archy.mcp_runs,
+                  internal_subgraph -> archy.cli_app, archy.mcp_runs,
+                  parse_project -> archy.cli_git, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
                   bench.pattern_detection, resolve_modules -> archy.mcp_runs,
-                  archy.simulate, suggest_modules -> archy.affected, archy.cli,
-                  archy.conventions, archy.mcp_runs, zero_modules_reason -> archy.cli,
-                  archy.mcp_runs
+                  archy.simulate, suggest_modules -> archy.affected, archy.cli_graph,
+                  archy.conventions, archy.mcp_runs,
+                  zero_modules_reason -> archy.cli_history, archy.mcp_runs
 """
 
 from __future__ import annotations

@@ -14,10 +14,11 @@ from 7 to 9 for the sake of two small functions.
 
 archy:owns        graph_kwargs, resolve_exclude_type_checking, resolve_max_modules,
                   scan_kwargs
-archy:mirrored-by graph_kwargs -> archy.cli, archy.mcp_runs,
-                  resolve_exclude_type_checking -> archy.cli, archy.mcp_runs,
-                  resolve_max_modules -> archy.cli, archy.mcp_runs,
-                  scan_kwargs -> archy.cli, archy.mcp_runs
+archy:mirrored-by graph_kwargs -> archy.cli_app, archy.mcp_runs,
+                  resolve_exclude_type_checking -> archy.cli_history, archy.mcp_runs,
+                  resolve_max_modules -> archy.cli_app, archy.cli_git,
+                  archy.cli_install, archy.mcp_runs, scan_kwargs -> archy.cli_check,
+                  archy.mcp_runs
 """
 
 from __future__ import annotations
