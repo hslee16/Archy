@@ -199,6 +199,28 @@ per-PR structural review brief), which is archy's strongest unbuilt feature.
 The judgment space is unoccupied **today**; it is not guaranteed to stay that
 way, and the encroachment would come from the direction of PR review.
 
+### 3c. The tripwire fired (2026-11-09)
+
+§3b pre-registered that a codegraph-like tool shipping rules, policy or CI
+gating would mean this document needs redoing. Two did, and §6 was already wrong
+when it was written. Recorded, with sources, as of 2026-11-09:
+
+- **[optave/codegraph](https://github.com/optave/codegraph)** (99 stars, last
+  push 2026-11-04; a different project from colbymchenry/codegraph despite the
+  shared name). `src/features/boundaries.ts` defines hexagonal, layered, clean
+  and onion presets and a `BoundaryRule{from, notTo, onlyTo}`; `codegraph check
+  --staged --boundaries` and `--cycles` exit 0 or 1; it covers 34 languages
+  including Python and ships a MCP server. It also ships `snapshot.ts` and
+  `branch-compare.ts`, so snapshot and diff are **not** archy-only. Not found in
+  `boundaries.ts`: transitive forbid rules, a `required:` reach rule.
+- **[agent-arch](https://pypi.org/project/agent-arch/)** (PyPI 0.1.0 and 0.1.1,
+  both 2026-10-20): "deterministic codebase architecture guardrails" for coding
+  agents, Python only, layer-rank rules, pre-commit hook. Its PyPI page names no
+  MCP server, score or trend.
+- **[colbymchenry/codegraph](https://github.com/colbymchenry/codegraph/releases)**
+  is still rule-free: latest release v1.6.2 (2026-10-03), re-checked 2026-11-09.
+  Everything said about it in §3 and §3a still holds.
+
 ## 4. C1: multi-language, answered honestly
 
 **Disposition: still Python-only. The rejection stands, the reasoning is
@@ -266,17 +288,23 @@ score.
 
 ## 6. C3: the one falsifiable sentence
 
-> **archy is the only local, agent-facing tool that holds a codebase's
-> *declared* structure (layers, forbidden edges, an acyclicity invariant, a
-> recorded score baseline) and reports when an edit or a week of edits violates
-> it; every graph tool in its category, codegraph included, describes the
-> structure that exists and has no representation of the structure you
-> intended.**
+> **archy is the only tool that combines all of: Python-specific import
+> resolution (including `__init__` re-exports), transitive `forbid:` rules
+> checked through import-linter, and a `required:` reach rule (#387), behind an
+> agent-facing MCP surface. Declared layer and boundary rules alone are not
+> unique: optave/codegraph, tach and agent-arch carry them.**
+
+Each difference above was checked against optave/codegraph's and agent-arch's
+source or package page on 2026-11-09 (§3c). Deliberately **not** claimed:
+snapshot and diff (optave ships `snapshot.ts` and `branch-compare.ts`), a
+recorded trend (unverified against optave), and `TYPE_CHECKING` handling
+(archy does not have it today).
 
 Falsifiable three ways, and worth re-checking on any revisit:
 
 1. codegraph (or an equivalent) ships architecture rules, a quality score, or a
-   trend. Today: none of the three.
+   trend. **Fired 2026-11-09** for optave/codegraph and agent-arch (§3c), which
+   carry rules; colbymchenry/codegraph still has none of the three.
 2. import-linter, deptry, or a similar Python tool ships an agent-facing MCP
    surface with a composite score and history. import-linter is the closest
    (archy *wraps* it for transitive contracts) but is CI-shaped, not
