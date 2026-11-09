@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "a2f3530683e2",
+  "strategy": "manual-commit",
+  "branch": "alee/global-install-no-instruction-block",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/a2/f3530683e2/0/metadata.json",
+      "transcript": "/a2/f3530683e2/0/full.jsonl",
+      "content_hash": "/a2/f3530683e2/0/content_hash.txt",
+      "prompt": "/a2/f3530683e2/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 182,
+    "cache_creation_tokens": 178482,
+    "cache_read_tokens": 9847231,
+    "output_tokens": 46824,
+    "api_call_count": 81
+  }
+}
