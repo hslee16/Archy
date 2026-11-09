@@ -183,7 +183,8 @@ def remove_instructions(existing: str | None) -> str | None:
     start, end = span
     before = existing[:start]
     # upsert_instructions put one blank line between the user's text and the
-    # block; take it back out so the strip is the exact inverse (#560).
+    # block; take it back out so a file that ended in a newline round-trips
+    # exactly. One that did not gains a newline, which upsert added too (#560).
     if before.endswith("\n\n"):
         before = before[:-1]
     remainder = before + _drop_leading_newline(existing[end:])
@@ -208,7 +209,7 @@ def instructions_action(
     guidance appears only where archy was chosen. A global install writes
     nothing: a client-wide file is loaded in every project, Python or not, and
     an install that once wrote the block there is cleaned up by ``retire`` (#560).
-    Uninstall always gets the plain strip, so install and uninstall stay inverse.
+    Uninstall always gets the adapter's own ``unrender``, so install and uninstall stay inverse.
     """
     return FileAction(
         path=path,
@@ -245,7 +246,9 @@ class FileAction(BaseModel):
     ``retire`` marks an action that runs ``unrender`` at INSTALL time: it strips
     archy's part from a file that already exists and never creates one (#560).
     A file with nothing of archy's in it is left untouched, not rewritten, so a
-    user's own text stays byte-identical (a rewrite would normalise CRLF).
+    user's own text stays byte-identical (a rewrite would normalise CRLF). A file
+    that held a block is rewritten: its text is kept, but one that had no trailing
+    newline before the block was added ends with one.
     """
 
     model_config = ConfigDict(frozen=True)
