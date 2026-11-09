@@ -1,0 +1,98 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "f90b70ecac11",
+  "session_id": "2baa2158-73fd-4a98-bed1-d7f35235506f",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-09T23:10:47.830077Z",
+  "branch": "alee/split-cli-render",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "124815925030",
+  "token_usage": {
+    "input_tokens": 1122,
+    "cache_creation_tokens": 930335,
+    "cache_read_tokens": 251532321,
+    "output_tokens": 508368,
+    "api_call_count": 516
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01HxNwQmxLGxSYmMkssMXvKx",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "124815925030",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 124,
+        "end": 125,
+        "entry_ids": [
+          "cdbd5c63-20d3-450d-b80c-aca9aa9ef277"
+        ],
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 15
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 2028,
+      "user_lines_removed": 1820,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "AGENTS.md": 1,
+        "archy.yaml": 6,
+        "src/archy/affected.py": 1,
+        "src/archy/cli_render.py": 101,
+        "src/archy/cli_render_check.py": 572,
+        "src/archy/cli_render_common.py": 128,
+        "src/archy/cli_render_conventions.py": 288,
+        "src/archy/cli_render_git.py": 404,
+        "src/archy/cli_render_graph.py": 174,
+        "src/archy/cli_render_history.py": 329,
+        "src/archy/conventions_models.py": 6,
+        "src/archy/cycles.py": 1,
+        "src/archy/diff.py": 4,
+        "src/archy/duplicates.py": 1,
+        "src/archy/impact.py": 1,
+        "src/archy/layers.py": 9,
+        "src/archy/simulate.py": 2
+      },
+      "user_removed_per_file": {
+        "AGENTS.md": 1,
+        "src/archy/affected.py": 1,
+        "src/archy/cli_render.py": 1796,
+        "src/archy/conventions_models.py": 6,
+        "src/archy/cycles.py": 1,
+        "src/archy/diff.py": 3,
+        "src/archy/duplicates.py": 1,
+        "src/archy/impact.py": 1,
+        "src/archy/layers.py": 8,
+        "src/archy/simulate.py": 2
+      }
+    }
+  ]
+}
