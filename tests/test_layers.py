@@ -563,6 +563,25 @@ def test_required_reach_submodule_needs_no_import_of_its_own(tmp_path: Path):
     assert find_reach_violations(graph, config) == []
 
 
+def test_required_reach_a_source_that_is_itself_the_target_is_satisfied(tmp_path: Path):
+    """A module matching both sides reaches itself, even with no outgoing edge.
+
+    `descendants` excludes the node itself, so without the explicit membership
+    check `commands.registry` would be reported for not reaching `commands.registry`.
+    The sibling that imports nothing proves the rule still fires in this graph.
+    """
+    config = _cfg(
+        tmp_path,
+        "layers: {}\nforbid: []\n"
+        "required:\n"
+        "  - source: 'commands.**'\n"
+        "    must_reach: commands.registry\n",
+    )
+    graph = _reach_graph(nodes=("commands.registry", "commands.other"))
+
+    assert [v.module for v in find_reach_violations(graph, config)] == ["commands.other"]
+
+
 def test_required_reach_does_not_pass_vacuously_on_an_empty_scan(tmp_path: Path):
     """The vacuity case that survives: nothing scanned, so nothing to reach.
 
