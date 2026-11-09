@@ -10,7 +10,8 @@ building?**
 
 Fact-gathering date: 2026-07-24, with §3a and §3b re-verified against the live
 repository on 2026-07-27 after #369 made the descriptive-versus-normative split
-archy's headline. Every number below is measured, not asserted; where a number
+archy's headline. §3c and §6 were re-verified on 2026-11-09 against
+optave/codegraph, agent-arch and colbymchenry/codegraph v1.6.2. Every number below is measured, not asserted; where a number
 could not be pulled it says so.
 
 ## Summary
@@ -21,9 +22,10 @@ thing that decides whether archy is worth working on.**
 - codegraph and archy do **different jobs**: codegraph is **descriptive**
   (what is in this codebase, where, and what calls what), archy is
   **normative** (what did you declare this codebase should look like, and is it
-  drifting). codegraph ships **no quality score, no architecture rules, no
-  cycle analysis, no history, and no counterfactual check**. That is not an
-  oversight on their part; it is a different product.
+  drifting). colbymchenry/codegraph ships **no quality score, no architecture
+  rules, no cycle analysis, no history, and no counterfactual check**. That is
+  not an oversight on their part; it is a different product. (optave/codegraph
+  does carry rules and cycle checks; see §3c.)
 - Where the two **do** overlap, archy loses on the merits, and the overlap is
   narrow: 2 of archy's 13 MCP tools (3 CLI commands), and none of the 11 that
   carry its actual thesis.
@@ -196,8 +198,8 @@ as "for every PR, know exactly what to test, what could break, which flows are
 affected, and whether business logic is compromised". "What could break" on a
 PR is adjacent to [#145](https://github.com/hslee16/Archy/issues/145) (archy's
 per-PR structural review brief), which is archy's strongest unbuilt feature.
-The judgment space is unoccupied **today**; it is not guaranteed to stay that
-way, and the encroachment would come from the direction of PR review.
+The judgment space was unoccupied on 2026-07-27. It is no longer, for declared
+rules (see §3c); what remains differentiated is the combination in §6.
 
 ### 3c. The tripwire fired (2026-11-09)
 
@@ -323,10 +325,13 @@ Falsifiable three ways, and worth re-checking on any revisit:
 Separate two questions that keep getting merged.
 
 **Is archy differentiated? Yes, and more cleanly than expected.** 11 of 13 MCP
-tools have no counterpart in the most successful tool in the adjacent category. The
-normative job is real, unoccupied, and structurally hard for a
-navigation-first tool to enter, because it needs user-supplied intent rather
-than better parsing.
+tools have no counterpart in colbymchenry/codegraph, the most successful tool
+in the adjacent category. optave/codegraph overlaps on rules, cycles and
+snapshot/diff (§3c), so differentiation against it rests on the §6 combination.
+The normative job is real and only partly occupied: optave/codegraph, tach and
+agent-arch carry declared layer and boundary rules. It is structurally harder
+for a navigation-first tool because it needs user-supplied intent rather than
+better parsing, but not impossible.
 
 **Is archy succeeding? No, and the reason is not differentiation.**
 
