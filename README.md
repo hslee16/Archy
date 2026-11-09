@@ -416,6 +416,14 @@ git diff --name-only HEAD | archy affected . --stdin --quiet | xargs pytest
 archy affected . src/foo.py --filter "tests/integration/**" --json
 ```
 
+Relative changed paths are tried under `PATH` first. If missing there and `PATH`
+is inside a git work tree, archy retries at the git root and uses the file if it
+exists there and lies inside `PATH`. This accepts git-root-relative paths such as `services/api/pkg/a.py`
+with `archy affected services/api --stdin`. Without git or outside a work tree,
+paths stay relative to `PATH`. Alternatively, run `git diff --relative --name-only
+HEAD` from `PATH` to produce project-relative paths. `archy impact` and MCP
+`archy_impact` resolve their changed files the same way.
+
 Test classification defaults to pytest conventions (`test_*.py`, `*_test.py`, anything under a `tests/` directory); override with `--filter <glob>`. A filter that matches no file in the graph is an error (exit 1) rather than an empty selection, and it ends with a `did you mean` when a directory is close. A `tests/` with no `__init__.py` beside a `src/` layout is scanned (test files outside a package are named from the scan root, as in a flat layout), so `affected` selects them; other `.py` files outside every package (`docs/conf.py`, `noxfile.py`, `examples/`) are still not in the graph, and a filter that names only those is refused. Internal modules only; vendored or third-party code is not traced.
 
 ### Design Structure Matrix (`archy dsm`)
