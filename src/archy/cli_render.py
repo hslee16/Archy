@@ -376,6 +376,24 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
     it, does it gate, and what can this configuration not see. The last is the
     one an agent skips and then re-derives at length.
     """
+    lines = [
+        *_brief_headline(report),
+        "",
+        *_brief_kind_lines(report, top_n),
+        "",
+        *_brief_cochange_lines(report, top_n),
+        "",
+        *_brief_gate_lines(report, top_n),
+        "",
+        *_brief_blind_spot_lines(coverage, config),
+    ]
+    if contracts is not None:
+        lines.append("")
+        lines.append(_contracts_outcome_to_text(contracts))
+    return "\n".join(lines)
+
+
+def _brief_headline(report: ConventionsReport) -> list[str]:
     lines = [f"# archy brief: {report.root}"]
     p = report.partition
     if p:
@@ -393,9 +411,11 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
             + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else "")
             + (f"; set aside: {aside}" if aside else "")
         )
+    return lines
 
-    lines.append("")
-    lines.append("## what kind of thing am I adding, and where does it go")
+
+def _brief_kind_lines(report: ConventionsReport, top_n: int) -> list[str]:
+    lines = ["## what kind of thing am I adding, and where does it go"]
     kinds = [b for b in report.bases if b.count >= 3][:top_n]
     if not kinds:
         lines.append("  (no base class in this project has enough subclasses to be a convention)")
@@ -409,9 +429,11 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
         for c in b.shared_constants[:2]:
             dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
             lines.append(f"  {'':<26}     {c.name} = {dist}  ({c.setters} of {b.count} set it)")
+    return lines
 
-    lines.append("")
-    lines.append("## what must change WITH it")
+
+def _brief_cochange_lines(report: ConventionsReport, top_n: int) -> list[str]:
+    lines = ["## what must change WITH it"]
     # 🔴 Cross-module first and never truncated below the fold: a co-update set is
     # the one thing here that is actionable rather than descriptive, and a
     # half-wired feature is this project's most-replicated defect.
@@ -430,41 +452,40 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
             f"  🔴 {g.doc_root}/: {g.family} "
             f"{g.documented}/{g.defined}, missing {', '.join(g.missing)}"
         )
+    return lines
 
-    lines.append("")
+
+def _brief_gate_lines(report: ConventionsReport, top_n: int) -> list[str]:
     codes = ", ".join(str(c) for c in report.gate_codes) or "none literal"
-    lines.append(
+    header = (
         f"## does a new finding gate ({len(report.gates)} "
         f"finding-failure exit(s); code(s): {codes})"
     )
-    lines += [_gate_row(g) for g in report.gates[:top_n]] or [
-        "  (nothing here fails a build on a finding)"
-    ]
+    rows = [_gate_row(g) for g in report.gates[:top_n]]
+    return [header, *(rows or ["  (nothing here fails a build on a finding)"])]
 
-    lines.append("")
-    lines.append("## what this configuration cannot see")
 
-    def indent(block: str) -> list[str]:
-        # Per LINE, not per block: these renderers emit multi-line text and a
-        # single strip() left every continuation flush against the margin,
-        # which reads as a new section rather than the rest of a sentence.
-        return ["  " + ln.lstrip("# ").rstrip() for ln in block.split("\n") if ln.strip()]
+def _indent_block(block: str) -> list[str]:
+    # Per LINE, not per block: these renderers emit multi-line text and a
+    # single strip() left every continuation flush against the margin,
+    # which reads as a new section rather than the rest of a sentence.
+    return ["  " + ln.lstrip("# ").rstrip() for ln in block.split("\n") if ln.strip()]
 
+
+def _brief_blind_spot_lines(coverage, config) -> list[str]:
+    lines = ["## what this configuration cannot see"]
     if coverage is None:
         lines.append("  (no archy.yaml discovered, so no layer rule governs anything)")
-    else:
-        lines += indent(_coverage_to_text(coverage))
-        hints = _pattern_hints_to_text(coverage)
-        if hints:
-            lines += indent(hints)
-        if config is not None:
-            handoff = _contracts_handoff_to_text(config, coverage, [])
-            if handoff:
-                lines += indent(handoff)
-    if contracts is not None:
-        lines.append("")
-        lines.append(_contracts_outcome_to_text(contracts))
-    return "\n".join(lines)
+        return lines
+    lines += _indent_block(_coverage_to_text(coverage))
+    hints = _pattern_hints_to_text(coverage)
+    if hints:
+        lines += _indent_block(hints)
+    if config is not None:
+        handoff = _contracts_handoff_to_text(config, coverage, [])
+        if handoff:
+            lines += _indent_block(handoff)
+    return lines
 
 
 class ContractsOutcome(BaseModel):
@@ -630,6 +651,20 @@ def _score_delta_lines(delta: ScoreDelta, header: str) -> list[str]:
 
 
 def _diff_to_text(result: DiffReport) -> str:
+    lines = [
+        *_diff_head_lines(result),
+        *_diff_cycle_lines(result),
+        *_diff_violation_lines(result),
+        *_diff_reach_lines(result),
+    ]
+    if result.strict is not None:
+        lines.append("")
+        verdict = "PASS" if result.strict.passed else "FAIL"
+        lines.append(f"# strict: {verdict}, {result.strict.reason}")
+    return "\n".join(lines)
+
+
+def _diff_head_lines(result: DiffReport) -> list[str]:
     lines: list[str] = []
     if result.summary is not None:
         lines.extend(_summary_to_text(result.summary))
@@ -640,18 +675,25 @@ def _diff_to_text(result: DiffReport) -> str:
         lines.extend(_score_delta_lines(result.score_delta, "# score deltas (current - baseline):"))
     if result.baseline_findings_only:
         lines.append("# sdp: not compared (the baseline records findings only)")
+    return lines
+
+
+def _diff_cycle_lines(result: DiffReport) -> list[str]:
     cycles = result.cycles
-    lines.append("")
-    lines.append(f"# cycles: +{len(cycles.added)} added, -{len(cycles.resolved)} resolved")
+    lines = ["", f"# cycles: +{len(cycles.added)} added, -{len(cycles.resolved)} resolved"]
     for c in cycles.added:
         lines.append(f"  + cycle: {', '.join(c.modules)}")
     for c in cycles.resolved:
         lines.append(f"  - cycle (resolved): {', '.join(c.modules)}")
+    return lines
+
+
+def _diff_violation_lines(result: DiffReport) -> list[str]:
     violations = result.violations
-    lines.append("")
-    lines.append(
-        f"# violations: +{len(violations.added)} added, -{len(violations.resolved)} resolved"
-    )
+    lines = [
+        "",
+        f"# violations: +{len(violations.added)} added, -{len(violations.resolved)} resolved",
+    ]
     for v in violations.added:
         lines.append(
             f"  + {_location(v.path, v.lines)}{v.source} -> {v.target}  "
@@ -660,27 +702,28 @@ def _diff_to_text(result: DiffReport) -> str:
     for v in violations.resolved:
         rule = f"{v.rule.from_layer} -> {v.rule.to_layer}"
         lines.append(f"  - {v.source} -> {v.target}  resolved ({rule})")
+    return lines
+
+
+def _diff_reach_lines(result: DiffReport) -> list[str]:
     reach = result.required_violations
     # Only printed when there is something to say: a diff on a project with no
     # `required:` rules should not grow a permanent zero line.
-    if reach.added or reach.resolved:
-        lines.append("")
-        lines.append(
-            f"# required-reach: +{len(reach.added)} added, -{len(reach.resolved)} resolved"
-        )
-        for v in reach.added:
-            lines.append(f"  + {v.detail}")
-        for v in reach.resolved:
-            if v.module is None:
-                rule = f"{v.rule.describe_source()} must reach {v.rule.must_reach}"
-                lines.append(f"  - rule can be checked again: {rule}")
-            else:
-                lines.append(f"  - {v.module} now reaches {v.rule.must_reach}")
-    if result.strict is not None:
-        lines.append("")
-        verdict = "PASS" if result.strict.passed else "FAIL"
-        lines.append(f"# strict: {verdict}, {result.strict.reason}")
-    return "\n".join(lines)
+    if not (reach.added or reach.resolved):
+        return []
+    lines = [
+        "",
+        f"# required-reach: +{len(reach.added)} added, -{len(reach.resolved)} resolved",
+    ]
+    for v in reach.added:
+        lines.append(f"  + {v.detail}")
+    for v in reach.resolved:
+        if v.module is None:
+            rule = f"{v.rule.describe_source()} must reach {v.rule.must_reach}"
+            lines.append(f"  - rule can be checked again: {rule}")
+        else:
+            lines.append(f"  - {v.module} now reaches {v.rule.must_reach}")
+    return lines
 
 
 def _summary_to_text(summary: DiffSummary) -> list[str]:
@@ -701,22 +744,7 @@ def _summary_to_text(summary: DiffSummary) -> list[str]:
 
 def _simulate_to_text(result: SimulateReport) -> str:
     a = result.applied
-    lines = [
-        f"# simulation (no files written): +{len(a.added_edges)} / -{len(a.removed_edges)} edge(s)"
-    ]
-    suggestions = {h.ref: h.did_you_mean for h in a.unresolved_hints}
-    for name in a.unresolved:
-        hint = f"  (did you mean {', '.join(suggestions[name])}?)" if name in suggestions else ""
-        lines.append(f"  ! unresolved endpoint: {name}{hint}")
-    for item in a.rejected:
-        lines.append(f"  ! rejected: {item}")
-    for note, edges in (
-        ("no-op add (edge already exists)", a.no_op_adds),
-        ("no-op remove (edge absent)", a.no_op_removes),
-    ):
-        for e in edges:
-            lines.append(f"  ~ {note}: {e.source} -> {e.target}")
-
+    lines = _simulate_applied_lines(a)
     lines.append("")
     if a.coverage == "none":
         # Every number below would describe the unchanged graph: a `+0.000` that
@@ -737,36 +765,64 @@ def _simulate_to_text(result: SimulateReport) -> str:
     lines.extend(_score_delta_lines(result.score_delta, "# would-be score deltas:"))
     p = result.propagation_cost
     lines.append(f"  {'blast radius':11s} {p.before:.3f} -> {p.after:.3f} ({p.delta:+.3f})")
+    lines.extend(_simulate_added_lines(result))
+    return "\n".join(lines)
 
-    if result.cycles.added:
-        lines.append("")
-        lines.append(f"# new cycles (+{len(result.cycles.added)}):")
-        for c in result.cycles.added:
-            lines.append(f"  + {', '.join(c.modules)}")
-    if result.new_back_edges:
-        lines.append("")
-        lines.append(f"# new back-edges (+{len(result.new_back_edges)}):")
-        for e in result.new_back_edges:
-            lines.append(f"  + {e.source} -> {e.target}")
-    if result.violations.added:
-        lines.append("")
-        lines.append(f"# new layer violations (+{len(result.violations.added)}):")
-        for v in result.violations.added:
-            lines.append(
-                f"  + {v.source} -> {v.target}  ({v.rule.from_layer} -> {v.rule.to_layer})"
-            )
-    # Listed unconditionally, like the block above, NOT left to the ranked
+
+def _simulate_applied_lines(a) -> list[str]:
+    lines = [
+        f"# simulation (no files written): +{len(a.added_edges)} / -{len(a.removed_edges)} edge(s)"
+    ]
+    suggestions = {h.ref: h.did_you_mean for h in a.unresolved_hints}
+    for name in a.unresolved:
+        hint = f"  (did you mean {', '.join(suggestions[name])}?)" if name in suggestions else ""
+        lines.append(f"  ! unresolved endpoint: {name}{hint}")
+    for item in a.rejected:
+        lines.append(f"  ! rejected: {item}")
+    for note, edges in (
+        ("no-op add (edge already exists)", a.no_op_adds),
+        ("no-op remove (edge absent)", a.no_op_removes),
+    ):
+        for e in edges:
+            lines.append(f"  ~ {note}: {e.source} -> {e.target}")
+    return lines
+
+
+def _added_block(header: str, rows: list[str]) -> list[str]:
+    """A blank line, the header and the rows, or nothing when there are no rows."""
+    return ["", header, *rows] if rows else []
+
+
+def _simulate_added_lines(result: SimulateReport) -> list[str]:
+    cycles = result.cycles.added
+    back = result.new_back_edges
+    violations = result.violations.added
+    # Listed unconditionally, like the blocks above, NOT left to the ranked
     # summary. `simulate` has no --top-n and takes the default cap of 5, and a
     # whole-rule reach item carries risk 0.0 (it names no module to weight), so
     # it is the first thing evicted from the top-5 exactly when a simulation has
     # a lot going on. "Would removing this import break a required-reach rule?"
     # is a question simulate exists to answer; it must not depend on ranking.
-    if result.required_violations.added:
-        lines.append("")
-        lines.append(f"# new required-reach violations (+{len(result.required_violations.added)}):")
-        for v in result.required_violations.added:
-            lines.append(f"  + {v.detail}")
-    return "\n".join(lines)
+    required = result.required_violations.added
+    return [
+        *_added_block(
+            f"# new cycles (+{len(cycles)}):", [f"  + {', '.join(c.modules)}" for c in cycles]
+        ),
+        *_added_block(
+            f"# new back-edges (+{len(back)}):", [f"  + {e.source} -> {e.target}" for e in back]
+        ),
+        *_added_block(
+            f"# new layer violations (+{len(violations)}):",
+            [
+                f"  + {v.source} -> {v.target}  ({v.rule.from_layer} -> {v.rule.to_layer})"
+                for v in violations
+            ],
+        ),
+        *_added_block(
+            f"# new required-reach violations (+{len(required)}):",
+            [f"  + {v.detail}" for v in required],
+        ),
+    ]
 
 
 def _contracts_to_dict(result: ContractsResult) -> dict:
@@ -827,39 +883,48 @@ def _contracts_to_text(result: ContractsResult) -> str:
             f"says nothing about the modules in {pronoun}: " + ", ".join(result.unscanned_dirs)
         )
     for c in result.contracts:
-        # A contract that could not have failed gets its own marker. Rendering
-        # it as `OK` is the whole of #435: it reads as protection that is not
-        # there, and the exit code agrees with the marker.
-        marker = "??" if c.matched_nothing else ("OK" if c.kept else "X ")
-        lines.append(f"{marker} {c.name}  [{c.contract_type}]")
-        if c.matched_nothing:
-            lines.append(
-                "    ! could not have failed: no module matched, so this "
-                "contract holds whatever the code does"
-            )
-        for expression in c.unmatched_expressions:
-            lines.append(f"    ! matched no module: {expression}")
-        for w in c.warnings:
-            lines.append(f"    ! {w}")
-        if not c.kept:
-            # `metadata` is `dict[str, object]` (import-linter's per-contract-
-            # type shape); cast each level explicitly at the read sites rather
-            # than typing the import-linter wire format.
-            chains = cast(list[dict[str, object]], c.metadata.get("invalid_chains") or [])
-            for chain in chains:
-                upstream = chain.get("upstream_module", "?")
-                downstream = chain.get("downstream_module", "?")
-                lines.append(f"    {downstream} -> {upstream}")
-                paths = cast(list[list[dict[str, object]]], chain.get("chains") or [])
-                for path in paths:
-                    # Multi-step paths are worth showing; single-step paths
-                    # are already in the line above.
-                    if len(path) <= 1:
-                        continue
-                    nodes = [str(path[0].get("importer", "?"))]
-                    nodes.extend(str(step.get("imported", "?")) for step in path)
-                    lines.append(f"      via {' -> '.join(nodes)}")
+        lines.extend(_contract_lines(c))
     return "\n".join(lines)
+
+
+def _contract_lines(c) -> list[str]:
+    # A contract that could not have failed gets its own marker. Rendering
+    # it as `OK` is the whole of #435: it reads as protection that is not
+    # there, and the exit code agrees with the marker.
+    marker = "??" if c.matched_nothing else ("OK" if c.kept else "X ")
+    lines = [f"{marker} {c.name}  [{c.contract_type}]"]
+    if c.matched_nothing:
+        lines.append(
+            "    ! could not have failed: no module matched, so this "
+            "contract holds whatever the code does"
+        )
+    for expression in c.unmatched_expressions:
+        lines.append(f"    ! matched no module: {expression}")
+    for w in c.warnings:
+        lines.append(f"    ! {w}")
+    if not c.kept:
+        lines.extend(_invalid_chain_lines(c))
+    return lines
+
+
+def _invalid_chain_lines(c) -> list[str]:
+    # `metadata` is `dict[str, object]` (import-linter's per-contract-
+    # type shape); cast each level explicitly at the read sites rather
+    # than typing the import-linter wire format.
+    lines: list[str] = []
+    chains = cast(list[dict[str, object]], c.metadata.get("invalid_chains") or [])
+    for chain in chains:
+        upstream = chain.get("upstream_module", "?")
+        downstream = chain.get("downstream_module", "?")
+        lines.append(f"    {downstream} -> {upstream}")
+        paths = cast(list[list[dict[str, object]]], chain.get("chains") or [])
+        # Multi-step paths are worth showing; single-step paths are already in
+        # the line above.
+        for path in (p for p in paths if len(p) > 1):
+            nodes = [str(path[0].get("importer", "?"))]
+            nodes.extend(str(step.get("imported", "?")) for step in path)
+            lines.append(f"      via {' -> '.join(nodes)}")
+    return lines
 
 
 def _affected_to_dict(result: Affected) -> dict:
@@ -1539,49 +1604,60 @@ def _shown(total: int, top_n: int) -> str:
 
 def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
     """Terse on purpose: an agent pays per token to read this."""
-    m = report.models
     lines = [
-        f"# {report.root}: {report.modules_scanned} module(s) parsed"
-        + (
-            f", {report.modules_unparsed} unparsed ("
-            + ", ".join(u.module for u in report.unparsed_modules)
-            + ")"
-            if report.modules_unparsed
-            else ""
-        )
-        + (f", {report.docs_scanned} doc file(s)" if report.docs_scanned else ""),
-        *(
-            [
-                "# set aside: "
-                + ", ".join(
-                    part
-                    for part in (
-                        f"{report.partition.tests} test" if report.partition.tests else "",
-                        f"{report.partition.nonsource} non-source"
-                        if report.partition.nonsource
-                        else "",
-                        f"{report.partition.shadowed} in {', '.join(report.partition.shadow_roots)}"
-                        " (duplicates its parent)"
-                        if report.partition.shadowed
-                        else "",
-                    )
-                    if part
-                )
-                # 🔴 Say how to get them back. Setting tests aside is right when a
-                # vendored copy or a fixture pile would otherwise win every count,
-                # and wrong when the question IS about tests -- "where do helpers
-                # live in this test file, and what are they called" is a real
-                # convention this command silently cannot answer. One of the 24
-                # scored derivations asked exactly that.
-                + ("  (--include-tests to census them)" if report.partition.tests else "")
-            ]
-            if report.partition
-            and (report.partition.tests or report.partition.shadowed or report.partition.nonsource)
-            else []
-        ),
+        _conventions_headline(report),
+        *_set_aside_lines(report),
         "",
-        f"## naming - by home module {_shown(len(report.naming), top_n)}",
+        *_naming_lines(report, top_n),
+        *_kinds_lines(report, top_n),
+        *_registry_lines(report, top_n),
+        *_gap_lines(report),
+        *_surface_lines(report, top_n),
+        *_gate_lines(report),
+        *_error_lines(report),
+        *_model_lines(report),
     ]
+    return "\n".join(lines)
+
+
+def _conventions_headline(report: ConventionsReport) -> str:
+    unparsed = (
+        f", {report.modules_unparsed} unparsed ("
+        + ", ".join(u.module for u in report.unparsed_modules)
+        + ")"
+        if report.modules_unparsed
+        else ""
+    )
+    docs = f", {report.docs_scanned} doc file(s)" if report.docs_scanned else ""
+    return f"# {report.root}: {report.modules_scanned} module(s) parsed{unparsed}{docs}"
+
+
+def _set_aside_lines(report: ConventionsReport) -> list[str]:
+    part = report.partition
+    if not part or not (part.tests or part.shadowed or part.nonsource):
+        return []
+    parts = (
+        f"{part.tests} test" if part.tests else "",
+        f"{part.nonsource} non-source" if part.nonsource else "",
+        f"{part.shadowed} in {', '.join(part.shadow_roots)} (duplicates its parent)"
+        if part.shadowed
+        else "",
+    )
+    return [
+        "# set aside: "
+        + ", ".join(p for p in parts if p)
+        # 🔴 Say how to get them back. Setting tests aside is right when a
+        # vendored copy or a fixture pile would otherwise win every count,
+        # and wrong when the question IS about tests -- "where do helpers
+        # live in this test file, and what are they called" is a real
+        # convention this command silently cannot answer. One of the 24
+        # scored derivations asked exactly that.
+        + ("  (--include-tests to census them)" if part.tests else "")
+    ]
+
+
+def _naming_lines(report: ConventionsReport, top_n: int) -> list[str]:
+    lines = [f"## naming - by home module {_shown(len(report.naming), top_n)}"]
     if not report.naming:
         lines.append("  (none: no class-name suffix is shared by enough definitions)")
     for home in report.naming[:top_n]:
@@ -1589,11 +1665,14 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         lines.append(f"  {home.module:<34} {home.total:>3}  {families}")
         top = home.families[0]
         lines.append(f"  {'':<34}      e.g. {', '.join(top.examples)}")
+    return lines
 
+
+def _kinds_lines(report: ConventionsReport, top_n: int) -> list[str]:
     # Kinds before names. A base family answers "what is it a kind of", which is
     # the question a suffix census silently fails when the two disagree -- and
     # they disagree in most projects, so this section leads.
-    lines += [
+    lines = [
         "",
         f"## kinds - classes grouped by what they derive from {_shown(len(report.bases), top_n)}",
     ]
@@ -1611,8 +1690,11 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         for c in b.shared_constants[:3]:
             dist = ", ".join(f"{v}x{n}" for v, n in c.distribution)
             lines.append(f"  {'':<28}     {c.name} = {dist}  ({c.setters} of {b.count} set it)")
+    return lines
 
-    lines += [
+
+def _registry_lines(report: ConventionsReport, top_n: int) -> list[str]:
+    lines = [
         "",
         "## registries - values declared by repeated construction "
         + _shown(len(report.registries), top_n),
@@ -1631,7 +1713,11 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
             # whole family were declared that way, which inverts the meaning of
             # an argument that is usually left at its default.
             lines.append(f"  {'':<28}     {c.name} = {dist}  ({c.setters} of {r.count} pass it)")
+    return lines
 
+
+def _gap_lines(report: ConventionsReport) -> list[str]:
+    lines: list[str] = []
     if report.export_gaps:
         lines += [
             "",
@@ -1643,7 +1729,6 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
                 f"  {g.export_module:<28} {g.family}: {g.exported}/{g.defined}"
                 f"  missing {', '.join(g.missing)}"
             )
-
     if report.doc_gaps:
         lines += [
             "",
@@ -1654,8 +1739,11 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
                 f"  {g.doc_root + '/':<28} {g.family}: {g.documented}/{g.defined}"
                 f"  missing {', '.join(g.missing)}"
             )
+    return lines
 
-    lines += [
+
+def _surface_lines(report: ConventionsReport, top_n: int) -> list[str]:
+    lines = [
         "",
         f"## surfaces {_shown(len(report.surfaces), top_n)} - wire all of these together",
     ]
@@ -1666,33 +1754,41 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         lines.append(
             f"  {s.kind:<8} {s.stem:<28} {s.surface_count} @ {where}: {', '.join(s.surfaces)}"
         )
+    return lines
 
+
+def _gate_lines(report: ConventionsReport) -> list[str]:
     # The question this section exists for is "should MY NEW FINDING gate?", so
     # a finding-failure exit and a bad-input exit must not share a count.
     optional = [g for g in report.gates if g.optional]
     codes = ", ".join(str(c) for c in report.gate_codes) or "none literal"
-    lines += [
+    lines = [
         "",
         f"## gates ({len(report.gates)} finding-failure exit(s), "
         f"{len(optional)} caller-controlled; exit code(s): {codes})",
     ]
     if not report.gates:
         lines.append("  (none: no finding in this project fails the build)")
-    lines += [_gate_row(g) for g in report.gates]
+    return [*lines, *(_gate_row(g) for g in report.gates)]
 
+
+def _error_lines(report: ConventionsReport) -> list[str]:
     kinds = ", ".join(
         f"{kind}={sum(1 for g in report.errors if g.kind == kind)}"
         for kind in sorted({g.kind for g in report.errors})
     )
     where = ", ".join(sorted({g.module for g in report.errors}))
-    lines += [
+    return [
         "",
         f"## errors ({len(report.errors)} user-error exit(s) - bad input, not a finding)",
+        f"  {kinds} @ {where}" if report.errors else "  (none)",
     ]
-    lines.append(f"  {kinds} @ {where}" if report.errors else "  (none)")
 
+
+def _model_lines(report: ConventionsReport) -> list[str]:
+    m = report.models
     bases = ", ".join(f"{b}={n}" for b, n in m.base_counts[:5])
-    lines += [
+    return [
         "",
         "## models",
         f"  {m.value_classes} value class(es) of {m.total_classes} class(es); "
@@ -1702,4 +1798,3 @@ def _conventions_to_text(report: ConventionsReport, *, top_n: int) -> str:
         f"  collection fields: {m.tuple_fields} tuple / {m.list_fields} list "
         f"({m.tuple_ratio:.0%} tuple)",
     ]
-    return "\n".join(lines)
