@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "567cee5c4409",
+  "strategy": "manual-commit",
+  "branch": "alee/health-repro-result",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/56/7cee5c4409/0/metadata.json",
+      "transcript": "/56/7cee5c4409/0/full.jsonl",
+      "content_hash": "/56/7cee5c4409/0/content_hash.txt",
+      "prompt": "/56/7cee5c4409/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 678,
+    "cache_creation_tokens": 535628,
+    "cache_read_tokens": 94711551,
+    "output_tokens": 267932,
+    "api_call_count": 306
+  }
+}
