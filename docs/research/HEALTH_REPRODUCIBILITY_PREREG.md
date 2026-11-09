@@ -36,11 +36,11 @@ each detector means, so the comparison is not lost to a definition mismatch.
 | Complex Conditional | two or more boolean operators in an `if` or `while` condition | `return a and b and c` and assignments do not fire; `if a and b or c` does |
 | Bumpy Road | **not in this round** | the definition (what separates two bumps) was not recoverable from probes |
 
-Two calibration surprises recorded rather than papered over: a nested function
-with five parameters was not flagged by `cs`, and a nested class method was not
-checked either way. The detector follows `cs` (top-level functions and methods
-only) so the comparison is like for like; whether archy should differ is a
-separate decision.
+One calibration surprise recorded rather than papered over: a function nested
+inside another function, with five parameters, was not flagged by `cs`. Methods
+of a top-level class were. The detector follows `cs` (top-level functions and
+class methods, not functions nested in functions) so the comparison is like for
+like; whether archy should differ is a separate decision.
 
 ## Data
 
