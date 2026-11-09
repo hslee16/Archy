@@ -53,7 +53,7 @@ from `archy.graph.parse_project` instead.
 archy:owns        DuplicateGroup, DuplicateMember, classify_variants,
                   compute_duplicates, compute_near_duplicates, demote_independent,
                   is_test_path
-archy:mirrored-by DuplicateGroup -> archy.cli_render, archy.mcp_payloads,
+archy:mirrored-by DuplicateGroup -> archy.cli_render_git, archy.mcp_payloads,
                   archy.mcp_runs, classify_variants -> archy.cli_git, archy.mcp_runs,
                   bench.duplicates_cochange_sweep, compute_duplicates -> archy.cli_git,
                   archy.mcp_runs, bench.duplicates_cochange_sweep,
