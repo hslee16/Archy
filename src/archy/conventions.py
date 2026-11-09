@@ -604,14 +604,19 @@ def _collect_import_from(node: ast.ImportFrom, facts: _ModuleFacts, pkg: str) ->
         )
 
 
+def _assigned_names(node: ast.Assign | ast.AnnAssign) -> list[str]:
+    """The plain names a module-level assignment binds."""
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    return [t.id for t in targets if isinstance(t, ast.Name)]
+
+
 def _collect_assignments(tree: ast.Module, facts: _ModuleFacts) -> None:
     for node in tree.body:
-        if isinstance(node, ast.Assign | ast.AnnAssign):
-            facts.body_assignments.append(node)
-            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-            for target in targets:
-                if isinstance(target, ast.Name) and target.id == "__all__":
-                    facts.exports = _string_literals(node.value)
+        if not isinstance(node, ast.Assign | ast.AnnAssign):
+            continue
+        facts.body_assignments.append(node)
+        if "__all__" in _assigned_names(node):
+            facts.exports = _string_literals(node.value)
 
 
 def _redundant_alias_reexports(tree: ast.Module) -> set[str]:
@@ -943,6 +948,11 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
     return tuple(out)
 
 
+def _base_names(cls: ast.ClassDef) -> set[str]:
+    """The last dotted segment of each base class expression, non-empty only."""
+    return {name for base in cls.bases if (name := _dotted(base).split(".")[-1])}
+
+
 def _class_index(
     facts: list[_ModuleFacts],
 ) -> tuple[dict[str, str], dict[str, ast.ClassDef], dict[str, set[str]]]:
@@ -954,10 +964,9 @@ def _class_index(
         for cls in f.classes:
             home_of.setdefault(cls.name, f.qualname)
             node_of.setdefault(cls.name, cls)
-            for base in cls.bases:
-                name = _dotted(base).split(".")[-1]
-                if name:
-                    parents[cls.name].add(name)
+            bases = _base_names(cls)
+            if bases:
+                parents[cls.name] |= bases
     return home_of, node_of, parents
 
 
@@ -1080,6 +1089,20 @@ def _registries(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Regis
     return tuple(out)
 
 
+def _registry_call(node: ast.Assign | ast.AnnAssign) -> tuple[str, ast.Call] | None:
+    """(constructor, call) for a module-level ``NAME = Ctor(...)``, else None."""
+    call = node.value
+    if not isinstance(call, ast.Call):
+        return None
+    ctor = _dotted(call.func).split(".")[-1]
+    if not ctor or not ctor[:1].isupper():
+        return None
+    # Type-system plumbing is declared this way in every typed project
+    # and is identical everywhere, so it out-counts real registries while
+    # telling an agent nothing about this repository.
+    return None if ctor in _TYPING_PLUMBING else (ctor, call)
+
+
 def _constructor_calls(
     facts: Iterable[_ModuleFacts],
 ) -> dict[str, list[tuple[str, str, ast.Call]]]:
@@ -1087,19 +1110,12 @@ def _constructor_calls(
     calls: dict[str, list[tuple[str, str, ast.Call]]] = defaultdict(list)
     for f in facts:
         for node in f.body_assignments:
-            if not isinstance(node.value, ast.Call):
+            found = _registry_call(node)
+            if found is None:
                 continue
-            ctor = _dotted(node.value.func).split(".")[-1]
-            if not ctor or not ctor[:1].isupper():
-                continue
-            # Type-system plumbing is declared this way in every typed project
-            # and is identical everywhere, so it out-counts real registries while
-            # telling an agent nothing about this repository.
-            if ctor in _TYPING_PLUMBING:
-                continue
-            for target in node.targets if isinstance(node, ast.Assign) else [node.target]:
-                if isinstance(target, ast.Name):
-                    calls[ctor].append((target.id, f.qualname, node.value))
+            ctor, call = found
+            for name in _assigned_names(node):
+                calls[ctor].append((name, f.qualname, call))
     return calls
 
 
