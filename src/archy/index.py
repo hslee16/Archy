@@ -82,20 +82,26 @@ def open_index(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Conn
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
-    version = _read_version(conn)
-    if version is not None and version != SCHEMA_VERSION:
-        conn.executescript("DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS schema_version;")
-        version = None
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS files ("
-        "path TEXT PRIMARY KEY, mtime REAL, size INTEGER, "
-        "sha256 TEXT, parse_json TEXT, last_parsed_at TEXT)"
-    )
-    conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)")
-    if version is None:
-        conn.execute("DELETE FROM schema_version")
-        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
-    conn.commit()
+    try:
+        version = _read_version(conn)
+        if version is not None and version != SCHEMA_VERSION:
+            conn.executescript("DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS schema_version;")
+            version = None
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS files ("
+            "path TEXT PRIMARY KEY, mtime REAL, size INTEGER, "
+            "sha256 TEXT, parse_json TEXT, last_parsed_at TEXT)"
+        )
+        conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)")
+        if version is None:
+            conn.execute("DELETE FROM schema_version")
+            conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
+        conn.commit()
+    except BaseException:
+        # A non-SQLite or corrupt file fails on the first read: release the
+        # handle so the caller's error path (or `archy index clear`) can act on it.
+        conn.close()
+        raise
     return conn
 
 

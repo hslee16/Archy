@@ -6,6 +6,8 @@ archy:owns        index, index_clear, index_status, index_sync, install, mcp, un
 from __future__ import annotations
 
 import difflib
+import shlex
+import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -54,10 +56,11 @@ def index_sync(path: Path) -> None:
     Re-parses only files whose content changed since the last sync, prunes
     entries for deleted files, and leaves the rest untouched.
     """
-    from archy.index import default_db_path, open_index
+    from archy.index import default_db_path
     from archy.index import sync as sync_index
 
-    conn = open_index(default_db_path(path))
+    db = default_db_path(path)
+    conn = _open_index_or_exit(db, path)
     try:
         modules = discover_modules(path, **_graph_kwargs_or_exit(path))
         # Apply the same scan-size backstop as the graph commands: `index sync`
@@ -66,7 +69,10 @@ def index_sync(path: Path) -> None:
         limit = resolve_max_modules(path)
         if limit and len(modules) > limit:
             raise click.ClickException(str(ScanTooLargeError(len(modules), path.resolve(), limit)))
-        _results, stats = sync_index(conn, modules)
+        try:
+            _results, stats = sync_index(conn, modules)
+        except sqlite3.DatabaseError as exc:
+            raise _cache_error(db, path, exc) from exc
     finally:
         conn.close()
     click.echo(
@@ -104,23 +110,73 @@ def index_status(path: Path) -> None:
 
     Diagnostic plumbing demoted off the MCP surface in v0.41 (#267): every
     analysis tool syncs on demand, so a result is never stale and an agent
-    rarely needs this mid-task. Reports the on-disk cache state (db location
-    and cached file count); `watching` is an MCP-server-only concept and does
-    not apply to a one-shot CLI call.
+    rarely needs this mid-task. Reports the db location, the cached file
+    count, and how far the cache has drifted from the tree: `stale` (cached,
+    but the file's mtime or size changed, so the next sync rehashes it),
+    `missing` (cached, but no longer on disk, so the next sync prunes it) and
+    `unindexed` (on disk, not cached yet). The counts compare paths exactly as
+    `archy index sync PATH` does. Nothing is parsed, but opening the cache may
+    initialize an empty database or rebuild one from an older schema version.
+    `watching` is an MCP-server-only concept and does not apply to a one-shot CLI call.
     """
-    from archy.index import default_db_path, open_index
+    from archy.index import default_db_path
 
     db = default_db_path(path)
     if not db.exists():
         click.echo(f"no cache at {db} (a build or `archy index sync` will create it).")
         return
-    conn = open_index(db)
+    modules = discover_modules(path, **_graph_kwargs_or_exit(path))
+    conn = _open_index_or_exit(db, path)
     try:
-        row = conn.execute("SELECT COUNT(*) FROM files").fetchone()
+        rows = conn.execute("SELECT path, mtime, size FROM files").fetchall()
+    except sqlite3.DatabaseError as exc:
+        raise _cache_error(db, path, exc) from exc
     finally:
         conn.close()
-    cached = int(row[0]) if row else 0
-    click.echo(f"cache: {db}\ncached_files: {cached}")
+    cached = {row["path"]: (row["mtime"], row["size"]) for row in rows}
+    stale = unindexed = 0
+    on_disk: set[str] = set()
+    for module in modules:
+        key = str(module.path)
+        try:
+            stat = module.path.stat()
+        except OSError:
+            continue  # vanished since discovery: a cached row for it counts as missing
+        on_disk.add(key)
+        if key not in cached:
+            unindexed += 1
+        elif cached[key] != (stat.st_mtime, stat.st_size):
+            stale += 1
+    missing = sum(1 for key in cached if key not in on_disk)
+    click.echo(
+        f"cache: {db}\ncached_files: {len(cached)}\n"
+        f"stale: {stale}\nmissing: {missing}\nunindexed: {unindexed}"
+    )
+
+
+def _open_index_or_exit(db: Path, path: Path) -> sqlite3.Connection:
+    """Open the cache, turning SQLite failures into one-line errors."""
+    from archy.index import open_index
+
+    try:
+        return open_index(db)
+    except sqlite3.DatabaseError as exc:
+        raise _cache_error(db, path, exc) from exc
+
+
+def _cache_error(db: Path, path: Path, exc: sqlite3.DatabaseError) -> click.ClickException:
+    if db.is_dir():
+        return click.ClickException(
+            f"cache path {db} is a directory; move it aside before retrying."
+        )
+    if isinstance(exc, sqlite3.OperationalError):
+        # A lock or access failure does not establish corruption; clearing a live
+        # database can interfere with the process currently writing it.
+        return click.ClickException(f"cannot access cache at {db} ({exc}).")
+    return click.ClickException(
+        f"corrupt cache at {db} ({exc}); "
+        f"run `archy index clear {shlex.quote(str(path))}` to reset it."
+    )
 
 
 @main.command()
