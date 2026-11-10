@@ -67,17 +67,12 @@ def acyclic_project(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def project_with_caller(tmp_path: Path) -> Path:
+def project_with_caller(acyclic_project: Path) -> Path:
     # Shared by direction='in'/'out' tests: pkg.a imports pkg.b (so pkg.a has
     # a downstream dependency), and pkg.c imports pkg.a (so pkg.a has an
     # upstream caller). Anchoring focus on pkg.a then exercises both halves.
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "a.py").write_text("from pkg.b import thing\n")
-    (pkg / "b.py").write_text("")
-    (pkg / "c.py").write_text("from pkg.a import other\n")
-    return tmp_path
+    (acyclic_project / "pkg" / "c.py").write_text("from pkg.a import other\n")
+    return acyclic_project
 
 
 @pytest.fixture
