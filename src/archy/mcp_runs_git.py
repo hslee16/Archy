@@ -1,7 +1,7 @@
 """The work behind the duplicates and what-to-refactor-next tools.
 
 archy:owns        run_duplicates, run_what_to_refactor_next
-archy:mirrored-by run_what_to_refactor_next -> archy.mcp, archy.mcp_runs
+archy:mirrored-by run_what_to_refactor_next -> archy.mcp_runs, archy.mcp_tools_git
 """
 
 from __future__ import annotations

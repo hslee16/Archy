@@ -3,13 +3,16 @@
 archy:owns        contracts_verdict, run_brief, run_check, run_contracts,
                   run_conventions, run_cycles, run_diff, run_module_view, run_score,
                   run_simulate, run_snapshot, run_trend, score_components
-archy:mirrored-by contracts_verdict -> archy.mcp, archy.mcp_runs,
-                  run_brief -> archy.mcp, archy.mcp_runs, run_conventions -> archy.mcp,
-                  archy.mcp_runs, run_cycles -> archy.mcp, archy.mcp_runs,
-                  run_diff -> archy.mcp, archy.mcp_runs, run_module_view -> archy.mcp,
-                  archy.mcp_runs, run_score -> archy.mcp, archy.mcp_runs,
-                  run_simulate -> archy.mcp, archy.mcp_runs, run_snapshot -> archy.mcp,
-                  archy.mcp_runs, run_trend -> archy.mcp, archy.mcp_runs
+archy:mirrored-by contracts_verdict -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_brief -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_conventions -> archy.mcp_runs, archy.mcp_tools_conventions,
+                  run_cycles -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_diff -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_module_view -> archy.mcp_runs, archy.mcp_tools_conventions,
+                  run_score -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_simulate -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_snapshot -> archy.mcp_runs, archy.mcp_tools_check,
+                  run_trend -> archy.mcp_runs, archy.mcp_tools_check
 """
 
 from __future__ import annotations

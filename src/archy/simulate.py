@@ -19,9 +19,9 @@ graphs agree on every field the report compares.
 
 archy:owns        AppliedDelta, EdgeRef, EdgeSpec, PropagationDelta, SimulateReport,
                   find_simulate
-archy:mirrored-by EdgeSpec -> archy.mcp, archy.mcp_runs_check,
-                  SimulateReport -> archy.cli_render_history, archy.mcp,
-                  archy.mcp_runs_check, find_simulate -> archy.cli_history,
+archy:mirrored-by EdgeSpec -> archy.mcp_runs_check, archy.mcp_tools_check,
+                  SimulateReport -> archy.cli_render_history, archy.mcp_runs_check,
+                  archy.mcp_tools_check, find_simulate -> archy.cli_history,
                   archy.mcp_runs_check, bench.simulate_oracle
 """
 

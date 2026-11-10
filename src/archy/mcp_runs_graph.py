@@ -2,9 +2,10 @@
 
 archy:owns        run_affected, run_dsm, run_graph, run_graph_dump, run_graph_focus,
                   run_graph_summary, run_impact
-archy:mirrored-by run_affected -> archy.mcp, archy.mcp_runs, run_dsm -> archy.mcp,
-                  archy.mcp_runs, run_graph -> archy.mcp, archy.mcp_runs,
-                  run_impact -> archy.mcp, archy.mcp_runs
+archy:mirrored-by run_affected -> archy.mcp_runs, archy.mcp_tools_graph,
+                  run_dsm -> archy.mcp_runs, archy.mcp_tools_graph,
+                  run_graph -> archy.mcp_runs, archy.mcp_tools_graph,
+                  run_impact -> archy.mcp_runs, archy.mcp_tools_graph
 """
 
 from __future__ import annotations

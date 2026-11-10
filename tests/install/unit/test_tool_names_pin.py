@@ -2,8 +2,8 @@
 
 The Claude permission seed is only correct if `base.TOOL_NAMES` matches the
 tools the MCP server actually registers. This test parses the names straight
-out of `src/archy/mcp.py` so the two cannot drift: add a tool to the server
-without updating the installer and this fails.
+out of the `src/archy/mcp_tools_*.py` registration modules so the two cannot
+drift: add a tool to the server without updating the installer and this fails.
 """
 
 from __future__ import annotations
@@ -13,11 +13,14 @@ from pathlib import Path
 
 from archy.install.base import TOOL_NAMES, permission_patterns
 
-MCP_SOURCE = Path(__file__).resolve().parents[3] / "src" / "archy" / "mcp.py"
+MCP_TOOL_SOURCES = sorted(
+    (Path(__file__).resolve().parents[3] / "src" / "archy").glob("mcp_tools_*.py")
+)
 
 
 def _server_tool_names() -> set[str]:
-    text = MCP_SOURCE.read_text(encoding="utf-8")
+    assert MCP_TOOL_SOURCES, "no mcp_tools_*.py registration module found"
+    text = "".join(p.read_text(encoding="utf-8") for p in MCP_TOOL_SOURCES)
     return set(re.findall(r'name="(archy_[a-z_]+)"', text))
 
 
