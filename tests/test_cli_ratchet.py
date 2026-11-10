@@ -1,5 +1,7 @@
 """The `snapshot`, `diff` and `simulate` commands and the strict ratchet."""
 
+from __future__ import annotations
+
 import json
 import subprocess
 import sys

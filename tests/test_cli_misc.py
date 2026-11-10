@@ -1,5 +1,7 @@
 """The `index` command and the edge-spec parser."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import click

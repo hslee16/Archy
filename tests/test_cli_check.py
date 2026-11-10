@@ -1,5 +1,7 @@
 """The `check` command: layer rules, coverage, required reach, SDP and the scan guards."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 

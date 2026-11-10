@@ -1,5 +1,7 @@
 """The `contracts` and `brief` commands and the transitive-contract handoff."""
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 

@@ -1,5 +1,7 @@
 """Project builders and invokers shared by the `tests/test_cli_*.py` modules."""
 
+from __future__ import annotations
+
 import json
 import subprocess
 from pathlib import Path
