@@ -20,9 +20,15 @@ from archy.duplicates import (
     DEFAULT_MIN_SIZE,
     DuplicateGroup,
     DuplicateMember,
+    _all_trivial,
+    _any_pair_co_changes,
+    _Candidate,
+    _cluster_by_similarity,
     _is_vendored_path,
     _jaccard,
+    _near_miss_group,
     _same_class,
+    _variant_reason,
     classify_variants,
     compute_duplicates,
     compute_near_duplicates,
@@ -821,7 +827,6 @@ def test_cli_duplicates_near_miss_json(tmp_path: Path):
 
 
 def _cand(qual: str, size: int, bag: dict[str, int]):
-    from archy.duplicates import _Candidate
 
     return _Candidate(
         qual, f"{qual}.py", _fn(qual, shape=f"s-{qual}", size=size, line=1), Counter(bag)
@@ -830,7 +835,6 @@ def _cand(qual: str, size: int, bag: dict[str, int]):
 
 def test_a_pair_exactly_at_the_floor_joins_when_its_size_is_exactly_the_band_limit():
     """Jaccard 10/20 is 0.5, and size 20 is exactly size 10 / 0.5: both edges are inclusive."""
-    from archy.duplicates import _cluster_by_similarity
 
     items = [_cand("a", 10, {"x": 10}), _cand("b", 20, {"x": 10, "y": 10})]
 
@@ -841,7 +845,6 @@ def test_a_pair_exactly_at_the_floor_joins_when_its_size_is_exactly_the_band_lim
 
 
 def test_the_comparison_budget_stops_at_exactly_max_comparisons_and_warns():
-    from archy.duplicates import _cluster_by_similarity
 
     same = {"x": 10}
     items = [_cand("a", 10, same), _cand("b", 10, same), _cand("c", 10, same)]
@@ -853,7 +856,6 @@ def test_the_comparison_budget_stops_at_exactly_max_comparisons_and_warns():
 
 
 def test_a_near_miss_group_reports_its_weakest_edge_and_its_median_size():
-    from archy.duplicates import _near_miss_group
 
     items = [_cand("a", 10, {"x": 1}), _cand("b", 12, {"x": 1}), _cand("c", 14, {"x": 1})]
     edges = {frozenset({0, 1}): 0.9, frozenset({1, 2}): 0.6}
@@ -867,7 +869,6 @@ def test_a_near_miss_group_reports_its_weakest_edge_and_its_median_size():
 
 
 def test_variant_signals_apply_in_their_documented_order_and_abstain_without_evidence():
-    from archy.duplicates import _all_trivial, _variant_reason
 
     both_vendored_and_test = _path_group("tests/vendored/a.py", "tests/vendored/b.py")
     plain_pair = _path_group("pkg/a.py", "pkg/b.py")
@@ -879,7 +880,6 @@ def test_variant_signals_apply_in_their_documented_order_and_abstain_without_evi
 
 
 def test_co_change_abstains_for_files_with_no_commit_history_instead_of_dividing_by_zero():
-    from archy.duplicates import _any_pair_co_changes
 
     assert _any_pair_co_changes(["a.py", "b.py"], {}, {("a.py", "b.py"): 5}, (1, 0.5)) is False
     assert _any_pair_co_changes(
