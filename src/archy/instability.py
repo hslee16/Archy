@@ -19,7 +19,7 @@ callers can rely on a complete map.
 
 archy:owns        compute_instability
 archy:mirrored-by compute_instability -> archy.graph, archy.layers_check,
-                  archy.mcp_runs, archy.refactor, archy.risk
+                  archy.mcp_runs_graph, archy.refactor, archy.risk
 """
 
 from __future__ import annotations

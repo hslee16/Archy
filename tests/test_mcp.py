@@ -662,7 +662,7 @@ def test_dsm_summary_localizes_back_edges(tmp_path: Path):
 def test_dsm_full_oversized_returns_too_large(tmp_path: Path, monkeypatch):
     # The full matrix is capped; over the ceiling it refuses with an explicit
     # indicator pointing at the summary / focus / package escape hatches.
-    monkeypatch.setattr("archy.mcp_runs.DEFAULT_MAX_DSM_CELLS", 2)
+    monkeypatch.setattr("archy.mcp_runs_graph.DEFAULT_MAX_DSM_CELLS", 2)
     project = _fan_out_project(tmp_path, fan=5)  # 5 cells > cap of 2
     result = _dsm(project, response_format="full")
     assert isinstance(result, DSMTooLargePayload)
@@ -1144,7 +1144,7 @@ def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
     def boom(*args, **kwargs):
         raise AssertionError(f"{name} must be validated before the project is scanned")
 
-    monkeypatch.setattr("archy.mcp_runs._load_graph", boom)
+    monkeypatch.setattr("archy.mcp_runs_graph._load_graph", boom)
 
     # Kept str-only (group_by/weight/response_format) so `**base` unifies to
     # `dict[str, str]`; mixing in the None/int fields below would widen that
@@ -2569,7 +2569,7 @@ def test_warm_paths_fall_back_cold_when_the_cache_fails(
 ):
     # The index is an optimization, never a dependency: a cache that cannot open
     # (read-only filesystem, locked database) must still yield an answer (#395).
-    import archy.mcp_runs as mcp_module
+    import archy.mcp_runs_core as mcp_module
 
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -2900,7 +2900,7 @@ def test_cold_fallback_keeps_the_scan_size_guard(
     an unbounded scan of a vendored tree, the #216 failure mode. Dropping
     `max_modules` from the cold call passed the whole suite before this test.
     """
-    import archy.mcp_runs as mcp_module
+    import archy.mcp_runs_core as mcp_module
     from archy.graph import ScanTooLargeError
 
     pkg = tmp_path / "myapp"
@@ -3401,7 +3401,7 @@ def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
 def test_brief_reads_the_contracts_verdict(
     tmp_path: Path, monkeypatch, contracts: ContractsPayload, checked: bool, reason_has
 ):
-    monkeypatch.setattr("archy.mcp_runs.run_contracts", lambda *a, **k: contracts)
+    monkeypatch.setattr("archy.mcp_runs_check.run_contracts", lambda *a, **k: contracts)
     project = _write_brief_project(tmp_path, with_config=True)
     payload = run_brief(project, top_n=8, with_contracts=True, include_tests=False)
     assert payload.transitive_checked is checked

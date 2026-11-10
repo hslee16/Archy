@@ -12,19 +12,20 @@ archy:owns        BriefConventions, BriefLayer, BriefPayload, CheckErrorPayload,
                   LoadBearingModule, RefactorPriorityEntry, RequiredReach,
                   ScoreComponents, ScoreGate, ScorePayload, SnapshotPayload, TrendRow,
                   TrendRowInputs, TrendRowScore, WhatToRefactorPayload
-archy:mirrored-by BriefPayload -> archy.mcp, archy.mcp_runs,
-                  CheckErrorPayload -> archy.mcp, archy.mcp_runs,
-                  CheckPayload -> archy.mcp, archy.mcp_runs,
-                  DSMErrorPayload -> archy.mcp, archy.mcp_runs,
-                  DSMTooLargePayload -> archy.mcp, archy.mcp_runs,
-                  DiffErrorPayload -> archy.mcp, archy.mcp_runs,
-                  DuplicatesPayload -> archy.mcp, archy.mcp_runs,
-                  GraphPayload -> archy.mcp, archy.mcp_runs,
-                  GraphSummaryPayload -> archy.mcp, archy.mcp_runs,
-                  GraphTooLargePayload -> archy.mcp, archy.mcp_runs,
-                  ScorePayload -> archy.mcp, archy.mcp_runs,
-                  SnapshotPayload -> archy.mcp, archy.mcp_runs, TrendRow -> archy.mcp,
-                  archy.mcp_runs, WhatToRefactorPayload -> archy.mcp, archy.mcp_runs
+archy:mirrored-by BriefPayload -> archy.mcp, archy.mcp_runs_check,
+                  CheckErrorPayload -> archy.mcp, archy.mcp_runs_check,
+                  CheckPayload -> archy.mcp, archy.mcp_runs_check,
+                  DSMErrorPayload -> archy.mcp, archy.mcp_runs_graph,
+                  DSMTooLargePayload -> archy.mcp, archy.mcp_runs_graph,
+                  DiffErrorPayload -> archy.mcp, archy.mcp_runs_check,
+                  DuplicatesPayload -> archy.mcp, archy.mcp_runs_git,
+                  GraphPayload -> archy.mcp, archy.mcp_runs_graph,
+                  GraphSummaryPayload -> archy.mcp, archy.mcp_runs_graph,
+                  GraphTooLargePayload -> archy.mcp, archy.mcp_runs_graph,
+                  ScorePayload -> archy.mcp, archy.mcp_runs_check,
+                  SnapshotPayload -> archy.mcp, archy.mcp_runs_check,
+                  TrendRow -> archy.mcp, archy.mcp_runs_check,
+                  WhatToRefactorPayload -> archy.mcp, archy.mcp_runs_git
 """
 
 from __future__ import annotations

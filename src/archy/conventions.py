@@ -50,9 +50,9 @@ discovery is shared with the graph builder so the file set matches what
 every other archy command sees.
 
 archy:owns        compute_conventions, compute_module_view
-archy:mirrored-by compute_conventions -> archy.cli_conventions, archy.mcp_runs,
+archy:mirrored-by compute_conventions -> archy.cli_conventions, archy.mcp_runs_check,
                   bench.conventions_bench,
-                  compute_module_view -> archy.cli_conventions, archy.mcp_runs
+                  compute_module_view -> archy.cli_conventions, archy.mcp_runs_check
 """
 
 from __future__ import annotations

@@ -6,9 +6,10 @@ and line-oriented so it is trivial to diff, grep, jq, and hand-merge.
 
 archy:owns        HistoryRow, append, git_metadata, read, row_from_score
 archy:mirrored-by HistoryRow -> archy.render, archy.trend, append -> archy.cli_history,
-                  archy.mcp_runs, git_metadata -> archy.cli_history, archy.mcp_runs,
-                  read -> archy.cli_app, archy.cli_graph, archy.cli_history,
-                  archy.mcp_runs, row_from_score -> archy.cli_history, archy.mcp_runs
+                  archy.mcp_runs_check, git_metadata -> archy.cli_history,
+                  archy.mcp_runs_check, read -> archy.cli_app, archy.cli_graph,
+                  archy.cli_history, archy.mcp_runs_check,
+                  row_from_score -> archy.cli_history, archy.mcp_runs_check
 """
 
 from __future__ import annotations
