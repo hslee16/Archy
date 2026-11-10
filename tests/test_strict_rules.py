@@ -10,10 +10,11 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from archy.cli import main
-from archy.diff import DiffReport
+from archy.diff import DiffReport, read_snapshot
 from archy.mcp_payloads import DiffErrorPayload
 from archy.mcp_runs import run_diff
 
@@ -409,10 +410,6 @@ def _baseline_with_rules(root: Path, **rules: object) -> Path:
 
 
 def test_a_baseline_rule_the_reader_cannot_parse_is_refused_with_the_reason(tmp_path: Path):
-    import pytest
-
-    from archy.diff import read_snapshot
-
     root = _project(tmp_path, _ISSUE_YAML)
     _snapshot(root)
 

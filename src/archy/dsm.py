@@ -198,7 +198,7 @@ def build_dsm(
 
     Operates on the internal subgraph (external nodes excluded; the
     audience is structural reasoning about your own code, not vendor
-    surface). Applies `focus` and `package` filters in that order.
+    surface). Applies `package`, then `focus`, in that order.
 
     Raises `ValueError` when `package` matches no internal module, or `focus`
     is not one (inside `package`, when both are given). An empty matrix reads
@@ -484,7 +484,8 @@ def _short_label(label: str, width: int) -> str:
 
 
 def _group_lines(dsm: DSM) -> list[str]:
-    """The `Groups:` legend with 1-based index ranges, or nothing when there is none."""
+    """The `Groups:` legend with 1-based index ranges, or nothing when there are no groups
+    or `group_by` is `topological`."""
     if not dsm.groups or dsm.group_by == "topological":
         return []
     lines = ["Groups:"]
