@@ -3,20 +3,20 @@
   "checkpoint_id": "d57fbb160969",
   "session_id": "2baa2158-73fd-4a98-bed1-d7f35235506f",
   "strategy": "manual-commit",
-  "created_at": "2026-11-10T03:08:32.809625Z",
+  "created_at": "2026-11-10T03:09:11.585744Z",
   "branch": "alee/complex-method-families-dups",
   "checkpoints_count": 2,
   "save_step_count": 1,
   "files_touched": [],
   "agent": "Claude Code",
   "model": "claude-sonnet-5-5",
-  "turn_id": "82757288865d",
+  "turn_id": "f2d55dbd812e",
   "token_usage": {
-    "input_tokens": 1916,
-    "cache_creation_tokens": 1668288,
-    "cache_read_tokens": 407610232,
-    "output_tokens": 802487,
-    "api_call_count": 896
+    "input_tokens": 1920,
+    "cache_creation_tokens": 1669724,
+    "cache_read_tokens": 409129077,
+    "output_tokens": 804004,
+    "api_call_count": 898
   },
   "skill_events_version": 1,
   "skill_events": [
@@ -31,7 +31,7 @@
         "signal": "skill_tool_use",
         "confidence": "explicit"
       },
-      "turn_id": "82757288865d",
+      "turn_id": "f2d55dbd812e",
       "transcript_anchor": {
         "unit": "line",
         "start": 124,
@@ -58,17 +58,10 @@
   "prompt_attributions": [
     {
       "checkpoint_number": 2,
-      "user_lines_added": 203,
-      "user_lines_removed": 58,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
       "agent_lines_added": 0,
-      "agent_lines_removed": 0,
-      "user_added_per_file": {
-        "src/archy/duplicates.py": 131,
-        "tests/test_duplicates.py": 72
-      },
-      "user_removed_per_file": {
-        "src/archy/duplicates.py": 58
-      }
+      "agent_lines_removed": 0
     }
   ]
 }
