@@ -19,7 +19,7 @@ archy:owns        CapturedSnapshot, CycleSetDiff, DiffReport, DiffSummary,
                   missing_baseline_hint, read_snapshot, score_delta, snapshot_to_dict,
                   strict_baseline_problem, strict_verdict, take_snapshot, write_snapshot
 archy:mirrored-by DiffReport -> archy.cli_render_history, archy.diff_summary,
-                  archy.mcp, archy.mcp_runs_check,
+                  archy.mcp_runs_check, archy.mcp_tools_check,
                   DiffSummary -> archy.cli_render_common, archy.diff_summary,
                   archy.simulate, ScoreDelta -> archy.cli_render_common,
                   archy.simulate, compute_diff -> archy.cli_history,

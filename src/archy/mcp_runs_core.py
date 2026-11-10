@@ -5,9 +5,9 @@ archy:mirrored-by _load_graph -> archy.mcp_runs, archy.mcp_runs_check,
                   archy.mcp_runs_git, archy.mcp_runs_graph,
                   _rank_desc -> archy.mcp_runs_check, archy.mcp_runs_graph,
                   _validate_response_format -> archy.mcp_runs_git,
-                  archy.mcp_runs_graph, resolve_against -> archy.mcp, archy.mcp_runs,
-                  archy.mcp_runs_graph, validate_impact_mode -> archy.mcp,
-                  archy.mcp_runs
+                  archy.mcp_runs_graph, resolve_against -> archy.mcp_runs,
+                  archy.mcp_runs_graph, archy.mcp_tools_check,
+                  validate_impact_mode -> archy.mcp_runs, archy.mcp_tools_graph
 """
 
 from __future__ import annotations
