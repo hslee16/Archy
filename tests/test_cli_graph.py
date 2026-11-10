@@ -376,7 +376,7 @@ def test_dsm_focus_filter_narrows_output(tmp_path: Path):
 
 def test_dsm_group_flag_reaches_the_matrix(tmp_path: Path):
     """The CLI threads six knobs into `build_dsm`, and only two were visible to
-    this file: the other four could each be hardcoded with every test still
+    the CLI tests: the other four could each be hardcoded with every test still
     green. This one and `--focus-depth` are now pinned too. `--weight` and the
     internal-only load still are not, because neither has a visible effect on a
     fixture this small.
