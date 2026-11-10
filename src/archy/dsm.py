@@ -198,7 +198,7 @@ def build_dsm(
 
     Operates on the internal subgraph (external nodes excluded; the
     audience is structural reasoning about your own code, not vendor
-    surface). Applies `focus` and `package` filters in that order.
+    surface). Applies `package`, then `focus`, in that order.
 
     Raises `ValueError` when `package` matches no internal module, or `focus`
     is not one (inside `package`, when both are given). An empty matrix reads
@@ -210,50 +210,15 @@ def build_dsm(
     `metrics -> graph`, which `archy check .` enforces) names the near misses in
     that refusal (#643).
     """
-    sub = _internal_subgraph(graph)
-
-    def did_you_mean(known: Iterable[str], ref: str) -> str:
-        near = suggest(known, ref) if suggest is not None else []
-        return f"; did you mean {', '.join(near)}?" if near else ""
-
-    if package is not None:
-        everything = sub
-        sub = _filter_by_package(sub, package)
-        if not sub:
-            # The filter matches on dot boundaries, so a trailing dot is not a near miss.
-            hint = did_you_mean(everything, package.rstrip("."))
-            raise ValueError(f"package {package!r} matches no internal module{hint}")
-    if focus is not None:
-        if focus not in sub:
-            within = f" within package {package!r}" if package is not None else ""
-            hint = did_you_mean(sub, focus)
-            raise ValueError(f"focus {focus!r} is not an internal module{within}{hint}")
-        sub = _filter_by_focus(sub, focus, focus_depth)
-
-    if group_by == "community":
-        groups = _group_by_community(sub)
-    elif group_by == "layer":
-        groups = _group_by_layer(sub)
-    else:
-        groups = _group_by_topological(sub)
+    sub = _narrow_to_scope(_internal_subgraph(graph), package, focus, focus_depth, suggest)
+    groups = _GROUPERS.get(group_by, _group_by_topological)(sub)
 
     ordering: list[str] = []
     for g in groups:
         ordering.extend(g.members)
     pos = {name: i for i, name in enumerate(ordering)}
+    cells = _cells_for(sub, pos, weight)
 
-    cells: list[DSMCell] = []
-    for u, v, data in sub.edges(data=True):
-        if u not in pos or v not in pos:
-            continue
-        if weight == "imports":
-            w = 1.0
-        else:
-            cc = data.get("call_count", 0)
-            w = float(cc) if cc > 0 else 1.0
-        cells.append(DSMCell(row=pos[u], col=pos[v], weight=w))
-
-    cells.sort(key=lambda c: (c.row, c.col))
     return DSM(
         ordering=tuple(ordering),
         groups=tuple(groups),
@@ -261,6 +226,72 @@ def build_dsm(
         group_by=group_by,
         weight=weight,
     )
+
+
+def _did_you_mean(
+    suggest: Callable[[Iterable[str], str], list[str]] | None, known: Iterable[str], ref: str
+) -> str:
+    near = suggest(known, ref) if suggest is not None else []
+    return f"; did you mean {', '.join(near)}?" if near else ""
+
+
+def _narrow_to_scope(
+    sub: nx.DiGraph,
+    package: str | None,
+    focus: str | None,
+    focus_depth: int,
+    suggest: Callable[[Iterable[str], str], list[str]] | None,
+) -> nx.DiGraph:
+    """Apply `package` then `focus`, refusing a name that matches nothing."""
+    if package is not None:
+        sub = _narrow_to_package(sub, package, suggest)
+    if focus is not None:
+        within = f" within package {package!r}" if package is not None else ""
+        sub = _narrow_to_focus(sub, (focus, focus_depth), within, suggest)
+    return sub
+
+
+def _narrow_to_package(
+    sub: nx.DiGraph,
+    package: str,
+    suggest: Callable[[Iterable[str], str], list[str]] | None,
+) -> nx.DiGraph:
+    narrowed = _filter_by_package(sub, package)
+    if not narrowed:
+        # The filter matches on dot boundaries, so a trailing dot is not a near miss.
+        hint = _did_you_mean(suggest, sub, package.rstrip("."))
+        raise ValueError(f"package {package!r} matches no internal module{hint}")
+    return narrowed
+
+
+def _narrow_to_focus(
+    sub: nx.DiGraph,
+    focus_spec: tuple[str, int],
+    within: str,
+    suggest: Callable[[Iterable[str], str], list[str]] | None,
+) -> nx.DiGraph:
+    focus, depth = focus_spec
+    if focus not in sub:
+        hint = _did_you_mean(suggest, sub, focus)
+        raise ValueError(f"focus {focus!r} is not an internal module{within}{hint}")
+    return _filter_by_focus(sub, focus, depth)
+
+
+def _cell_weight(data: dict, weight: Weight) -> float:
+    if weight == "imports":
+        return 1.0
+    cc = data.get("call_count", 0)
+    return float(cc) if cc > 0 else 1.0
+
+
+def _cells_for(sub: nx.DiGraph, pos: dict[str, int], weight: Weight) -> list[DSMCell]:
+    cells: list[DSMCell] = []
+    for u, v, data in sub.edges(data=True):
+        if u not in pos or v not in pos:
+            continue
+        cells.append(DSMCell(row=pos[u], col=pos[v], weight=_cell_weight(data, weight)))
+    cells.sort(key=lambda c: (c.row, c.col))
+    return cells
 
 
 def _internal_subgraph(graph: nx.DiGraph) -> nx.DiGraph:
@@ -342,17 +373,29 @@ def _group_by_layer(graph: nx.DiGraph) -> list[DSMGroup]:
         return []
     sccs, cond = _scc_condensation(graph)
     scc_of = {n: i for i, comp in enumerate(sccs) for n in comp}
-    depth: dict[int, int] = dict.fromkeys(cond.nodes(), 0)
-    for scc_idx in nx.topological_sort(cond):
-        for pred in cond.predecessors(scc_idx):
-            if depth[pred] + 1 > depth[scc_idx]:
-                depth[scc_idx] = depth[pred] + 1
+    depth = _longest_path_depths(cond)
     by_layer: dict[int, list[str]] = {}
     for node in graph.nodes():
         by_layer.setdefault(depth[scc_of[node]], []).append(node)
     return [
         DSMGroup(label=f"Layer-{d}", members=tuple(sorted(by_layer[d]))) for d in sorted(by_layer)
     ]
+
+
+_GROUPERS = {
+    "community": _group_by_community,
+    "layer": _group_by_layer,
+    "topological": _group_by_topological,
+}
+
+
+def _longest_path_depths(cond: nx.DiGraph) -> dict[int, int]:
+    depth: dict[int, int] = dict.fromkeys(cond.nodes(), 0)
+    for scc_idx in nx.topological_sort(cond):
+        for pred in cond.predecessors(scc_idx):
+            if depth[pred] + 1 > depth[scc_idx]:
+                depth[scc_idx] = depth[pred] + 1
+    return depth
 
 
 def _cell_glyph(weight: float, mode: Weight) -> str:
@@ -390,58 +433,84 @@ def render_ascii(
     cell_lookup: dict[tuple[int, int], float] = {(c.row, c.col): c.weight for c in dsm.cells}
     boundaries = _group_boundaries(dsm)
 
-    out: list[str] = []
-    out.append(f"DSM (n={n}, group={dsm.group_by}, weight={dsm.weight})\n")
-    out.append("Legend:")
     idx_pad = len(str(n))
-    for i, name in enumerate(dsm.ordering, start=1):
-        out.append(f"  {str(i).rjust(idx_pad)}: {name}")
-    out.append("")
-    if dsm.groups and dsm.group_by != "topological":
-        out.append("Groups:")
-        offset = 0
-        for g in dsm.groups:
-            lo = offset + 1
-            hi = offset + len(g.members)
-            out.append(f"  [{lo}-{hi}] {g.label}")
-            offset = hi
-        out.append("")
+    out: list[str] = [f"DSM (n={n}, group={dsm.group_by}, weight={dsm.weight})\n"]
+    out.extend(_legend_lines(dsm, idx_pad))
+    out.extend(_group_lines(dsm))
 
     cell_w = max(2, idx_pad + 1)
     label_prefix = " " * (idx_pad + 2 + label_width + 1)
 
-    def _row_cells(cells: list[str]) -> str:
-        rendered: list[str] = []
-        for i, glyph in enumerate(cells):
-            if i in boundaries and i != 0:
-                rendered.append("|")
-            rendered.append(glyph.rjust(cell_w - 1))
-        return " ".join(rendered)
-
     header_glyphs = [str(i + 1) for i in range(n)]
-    out.append(label_prefix + _row_cells(header_glyphs))
+    out.append(label_prefix + _join_row(header_glyphs, boundaries, cell_w))
 
     sep_glyphs: list[str] = ["-" * (cell_w - 1) for _ in range(n)]
-    out.append(label_prefix + _row_cells(sep_glyphs).replace(" ", "-").replace("|", "+"))
+    out.append(
+        label_prefix + _join_row(sep_glyphs, boundaries, cell_w).replace(" ", "-").replace("|", "+")
+    )
 
     for r in range(n):
         if r in boundaries and r != 0:
             out.append("")
-        row_glyphs: list[str] = []
-        for c in range(n):
-            if r == c:
-                row_glyphs.append("\\")
-            elif (r, c) in cell_lookup:
-                row_glyphs.append(_cell_glyph(cell_lookup[(r, c)], dsm.weight))
-            else:
-                row_glyphs.append(".")
-        label = dsm.ordering[r]
-        if len(label) > label_width:
-            label = "..." + label[-(label_width - 3) :]
+        row_glyphs = _row_glyphs(r, n, cell_lookup, dsm.weight)
+        label = _short_label(dsm.ordering[r], label_width)
         prefix = f"{str(r + 1).rjust(idx_pad)} {label.ljust(label_width)} "
-        out.append(prefix + _row_cells(row_glyphs))
+        out.append(prefix + _join_row(row_glyphs, boundaries, cell_w))
 
     return "\n".join(out) + "\n"
+
+
+def _legend_lines(dsm: DSM, idx_pad: int) -> list[str]:
+    lines = ["Legend:"]
+    for i, name in enumerate(dsm.ordering, start=1):
+        lines.append(f"  {str(i).rjust(idx_pad)}: {name}")
+    lines.append("")
+    return lines
+
+
+def _join_row(cells: list[str], boundaries: set[int], cell_w: int) -> str:
+    rendered: list[str] = []
+    for i, glyph in enumerate(cells):
+        if i in boundaries and i != 0:
+            rendered.append("|")
+        rendered.append(glyph.rjust(cell_w - 1))
+    return " ".join(rendered)
+
+
+def _short_label(label: str, width: int) -> str:
+    if len(label) > width:
+        return "..." + label[-(width - 3) :]
+    return label
+
+
+def _group_lines(dsm: DSM) -> list[str]:
+    """The `Groups:` legend with 1-based index ranges, or nothing when there are no groups
+    or `group_by` is `topological`."""
+    if not dsm.groups or dsm.group_by == "topological":
+        return []
+    lines = ["Groups:"]
+    offset = 0
+    for g in dsm.groups:
+        lo = offset + 1
+        hi = offset + len(g.members)
+        lines.append(f"  [{lo}-{hi}] {g.label}")
+        offset = hi
+    lines.append("")
+    return lines
+
+
+def _row_glyphs(
+    r: int, n: int, cell_lookup: dict[tuple[int, int], float], weight: Weight
+) -> list[str]:
+    row_glyphs: list[str] = []
+    for c in range(n):
+        if r == c:
+            row_glyphs.append("\\")
+        elif (r, c) in cell_lookup:
+            row_glyphs.append(_cell_glyph(cell_lookup[(r, c)], weight))
+        else:
+            row_glyphs.append(".")
+    return row_glyphs
 
 
 def _group_boundaries(dsm: DSM) -> set[int]:
@@ -541,29 +610,8 @@ def diff_dsm(before: DSM, after: DSM) -> DSMDiff:
     after_edges = _name_indexed(after)
     after_pos = {n: i for i, n in enumerate(after.ordering)}
 
-    added: list[DSMCell] = []
-    removed: list[DSMCell] = []
-    weight_changed: list[tuple[DSMCell, DSMCell]] = []
-    new_back_edges: list[DSMCell] = []
-
-    for key, after_cell in after_edges.items():
-        if key not in before_edges:
-            added.append(after_cell)
-            row_name, col_name = key
-            if (
-                row_name in after_pos
-                and col_name in after_pos
-                and after_pos[row_name] > after_pos[col_name]
-            ):
-                new_back_edges.append(after_cell)
-        else:
-            before_cell = before_edges[key]
-            if before_cell.weight != after_cell.weight:
-                weight_changed.append((before_cell, after_cell))
-
-    for key, before_cell in before_edges.items():
-        if key not in after_edges:
-            removed.append(before_cell)
+    added, weight_changed, new_back_edges = _changes_in_after(before_edges, after_edges, after_pos)
+    removed = [cell for key, cell in before_edges.items() if key not in after_edges]
 
     before_nodes = set(before.ordering)
     after_nodes = set(after.ordering)
@@ -584,8 +632,47 @@ def diff_dsm(before: DSM, after: DSM) -> DSMDiff:
     )
 
 
+def _changes_in_after(
+    before_edges: dict[tuple[str, str], DSMCell],
+    after_edges: dict[tuple[str, str], DSMCell],
+    after_pos: dict[str, int],
+) -> tuple[list[DSMCell], list[tuple[DSMCell, DSMCell]], list[DSMCell]]:
+    """Edges new in `after`, edges whose weight changed, and the new ones that point backward."""
+    added: list[DSMCell] = []
+    weight_changed: list[tuple[DSMCell, DSMCell]] = []
+    new_back_edges: list[DSMCell] = []
+    for key, after_cell in after_edges.items():
+        before_cell = before_edges.get(key)
+        if before_cell is None:
+            added.append(after_cell)
+            if _points_backward(key, after_pos):
+                new_back_edges.append(after_cell)
+        elif before_cell.weight != after_cell.weight:
+            weight_changed.append((before_cell, after_cell))
+    return added, weight_changed, new_back_edges
+
+
+def _points_backward(key: tuple[str, str], after_pos: dict[str, int]) -> bool:
+    row_name, col_name = key
+    if row_name not in after_pos or col_name not in after_pos:
+        return False
+    return after_pos[row_name] > after_pos[col_name]
+
+
 def _name_indexed(dsm: DSM) -> dict[tuple[str, str], DSMCell]:
     return {(dsm.ordering[c.row], dsm.ordering[c.col]): c for c in dsm.cells}
+
+
+def _edge_section(
+    title: str, cells: tuple[DSMCell, ...], dsm: DSM, *, cap: int | None
+) -> list[str]:
+    """A blank line, `title (N):`, and up to `cap` edges named against `dsm`."""
+    shown = cells if cap is None else cells[:cap]
+    lines = ["", f"{title} ({len(cells)}):"]
+    lines.extend(f"  {dsm.ordering[c.row]} -> {dsm.ordering[c.col]}" for c in shown)
+    if cap is not None and len(cells) > cap:
+        lines.append(f"  ... and {len(cells) - cap} more")
+    return lines
 
 
 def render_diff_text(diff: DSMDiff, after: DSM, before: DSM) -> str:
@@ -604,27 +691,11 @@ def render_diff_text(diff: DSMDiff, after: DSM, before: DSM) -> str:
         f"+{len(diff.nodes_added)} modules, -{len(diff.nodes_removed)} modules."
     )
 
-    def _edge(cell: DSMCell, dsm: DSM) -> str:
-        return f"{dsm.ordering[cell.row]} -> {dsm.ordering[cell.col]}"
-
     if diff.new_back_edges:
-        lines.append("")
-        lines.append(f"New back-edges ({len(diff.new_back_edges)}):")
-        for cell in diff.new_back_edges:
-            lines.append(f"  {_edge(cell, after)}")
+        lines.extend(_edge_section("New back-edges", diff.new_back_edges, after, cap=None))
     if diff.added and not diff.new_back_edges:
-        lines.append("")
-        lines.append(f"Added edges ({len(diff.added)}):")
-        for cell in diff.added[:10]:
-            lines.append(f"  {_edge(cell, after)}")
-        if len(diff.added) > 10:
-            lines.append(f"  ... and {len(diff.added) - 10} more")
+        lines.extend(_edge_section("Added edges", diff.added, after, cap=10))
     if diff.removed:
-        lines.append("")
-        lines.append(f"Removed edges ({len(diff.removed)}):")
-        for cell in diff.removed[:10]:
-            # removed cells index `before.ordering`, never `after`.
-            lines.append(f"  {_edge(cell, before)}")
-        if len(diff.removed) > 10:
-            lines.append(f"  ... and {len(diff.removed) - 10} more")
+        # removed cells index `before.ordering`, never `after`.
+        lines.extend(_edge_section("Removed edges", diff.removed, before, cap=10))
     return "\n".join(lines) + "\n"

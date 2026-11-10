@@ -537,3 +537,62 @@ def test_back_edge_count_is_strict_and_excludes_self_loops():
     assert list(summary.back_edges) == [("c", "a")]
     # The diagonal cell exists; it just is not a back edge.
     assert any(c.row == c.col for c in dsm.cells)
+
+
+def _chain_dsm(n: int, *, group_by: str = "community") -> DSM:
+    """`m0 -> m1 -> ... -> m(n-1)`, built through the public builder."""
+    edges = [(f"m{i}", f"m{i + 1}") for i in range(n - 1)]
+    return build_dsm(_g(*edges), group_by=group_by)  # ty: ignore[invalid-argument-type]
+
+
+def test_render_ascii_lists_groups_with_index_ranges_except_for_topological():
+    grouped = render_ascii(_chain_dsm(4, group_by="layer"))
+    topological = render_ascii(_chain_dsm(4, group_by="topological"))
+
+    assert "Groups:" in grouped
+    assert re.search(r"\[1-1\] Layer-0", grouped)
+    assert "Groups:" not in topological
+
+
+def test_render_ascii_shortens_a_label_only_past_the_label_width():
+    exactly = render_ascii(_chain_dsm(2), label_width=2)  # "m0" is exactly 2 wide
+    longer = render_ascii(_chain_dsm(2), label_width=3, max_nodes=80)
+    over = render_ascii(_chain_dsm(2), label_width=1)  # "m0" is one past the width
+
+    assert " m0 " in exactly
+    assert "..." not in longer
+    assert "..." in over
+
+
+def _added_only_diff(count: int) -> str:
+    """Text for a diff that only adds `count` edges, none of them backward."""
+    before = build_dsm(_g(("a", "b")))
+    names = ["a", "b"] + [f"x{i}" for i in range(count)]
+    after = DSM(
+        ordering=tuple(names),
+        groups=(),
+        cells=tuple(DSMCell(row=0, col=i + 2, weight=1.0) for i in range(count)),
+        group_by="community",
+        weight="imports",
+    )
+    return render_diff_text(diff_dsm(before, after), after, before)
+
+
+def test_diff_text_caps_added_edges_at_ten_and_says_how_many_more():
+    twelve = _added_only_diff(12)
+    ten = _added_only_diff(10)
+
+    assert "Added edges (12):" in twelve
+    assert twelve.count("a -> x") == 10
+    assert "... and 2 more" in twelve
+    assert "Added edges (10):" in ten
+    assert ten.count("a -> x") == 10
+    assert "more" not in ten
+
+
+def test_a_new_self_edge_is_not_a_back_edge():
+    before = build_dsm(_g(("a", "b")))
+    after = build_dsm(_g(("a", "b"), ("b", "b")))
+
+    assert any(c.row == c.col for c in diff_dsm(before, after).added)
+    assert diff_dsm(before, after).new_back_edges == ()

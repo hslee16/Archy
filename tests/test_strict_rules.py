@@ -7,12 +7,14 @@ here, not copied back out of a helper the test also calls.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from archy.cli import main
-from archy.diff import DiffReport
+from archy.diff import DiffReport, read_snapshot
 from archy.mcp_payloads import DiffErrorPayload
 from archy.mcp_runs import run_diff
 
@@ -382,3 +384,48 @@ def test_mcp_dump_is_not_an_error_payload(tmp_path: Path):
     dumped = result.model_dump()["strict"]
     assert dumped["passed"] is False
     assert "exclude domain added since" in dumped["reason"]
+
+
+def test_a_recorded_violation_whose_target_left_its_layer_still_refuses(tmp_path: Path):
+    """The forbid rule and the source's layer are unchanged; only the target moved out of `infra`.
+
+    That alone makes the recorded import unflaggable today, which is the case
+    the target half of the ungoverned check exists for.
+    """
+    root = _project(tmp_path, _ISSUE_YAML, service=_IMPORT)
+    _snapshot(root)
+    (root / "archy.yaml").write_text(
+        _ISSUE_YAML.replace("modules: [myapp.infra.**]", "modules: [myapp.infra.elsewhere.**]")
+    )
+
+    _assert_failed(root, "no longer cover")
+
+
+def _baseline_with_rules(root: Path, **rules: object) -> Path:
+    path = root / "base.json"
+    payload = json.loads(path.read_text())
+    payload["rules"].update(rules)
+    path.write_text(json.dumps(payload))
+    return path
+
+
+def test_a_baseline_rule_the_reader_cannot_parse_is_refused_with_the_reason(tmp_path: Path):
+    root = _project(tmp_path, _ISSUE_YAML)
+    _snapshot(root)
+
+    cases = {
+        "forbid pair must be two strings": {"forbid": [["only-one"]]},
+        "layer entry must be [name, patterns]": {"layers": [[7, ["a.**"]]]},
+        "layer patterns must be strings": {"layers": [["domain", [1]]]},
+        "required entry needs string source and must_reach": {
+            "required": [{"source": 1, "must_reach": "a"}]
+        },
+        "required within must be a string or null": {
+            "required": [{"source": "a", "must_reach": "b", "within": 5}]
+        },
+    }
+    for reason, bad in cases.items():
+        path = _baseline_with_rules(root, **bad)
+        with pytest.raises(ValueError, match=re.escape(reason)):
+            read_snapshot(path)
+        _snapshot(root)  # restore a valid baseline for the next case
