@@ -20,9 +20,15 @@ from archy.duplicates import (
     DEFAULT_MIN_SIZE,
     DuplicateGroup,
     DuplicateMember,
+    _all_trivial,
+    _any_pair_co_changes,
+    _Candidate,
+    _cluster_by_similarity,
     _is_vendored_path,
     _jaccard,
+    _near_miss_group,
     _same_class,
+    _variant_reason,
     classify_variants,
     compute_duplicates,
     compute_near_duplicates,
@@ -813,3 +819,69 @@ def test_cli_duplicates_near_miss_json(tmp_path: Path):
         main, ["duplicates", str(tmp_path), "--min-nodes", "10", "--format", "json"]
     )
     assert _json.loads(off.output)["near_total"] == 0
+
+
+# --------------------------------------------------------------------------- #
+# Near-miss clustering and the variant signals, on hand-made inputs
+# --------------------------------------------------------------------------- #
+
+
+def _cand(qual: str, size: int, bag: dict[str, int]):
+
+    return _Candidate(
+        qual, f"{qual}.py", _fn(qual, shape=f"s-{qual}", size=size, line=1), Counter(bag)
+    )
+
+
+def test_a_pair_exactly_at_the_floor_joins_when_its_size_is_exactly_the_band_limit():
+    """Jaccard 10/20 is 0.5, and size 20 is exactly size 10 / 0.5: both edges are inclusive."""
+
+    items = [_cand("a", 10, {"x": 10}), _cand("b", 20, {"x": 10, "y": 10})]
+
+    components, weights = _cluster_by_similarity(items, 0.5, 100)
+
+    assert sorted(len(c) for c in components.values()) == [2]
+    assert list(weights.values()) == [0.5]
+
+
+def test_the_comparison_budget_stops_at_exactly_max_comparisons_and_warns():
+
+    same = {"x": 10}
+    items = [_cand("a", 10, same), _cand("b", 10, same), _cand("c", 10, same)]
+
+    with pytest.warns(UserWarning, match="token-comparison budget"):
+        _components, weights = _cluster_by_similarity(items, 0.5, 1)
+
+    assert len(weights) == 1  # a-b was compared; a-c and b-c were not
+
+
+def test_a_near_miss_group_reports_its_weakest_edge_and_its_median_size():
+
+    items = [_cand("a", 10, {"x": 1}), _cand("b", 12, {"x": 1}), _cand("c", 14, {"x": 1})]
+    edges = {frozenset({0, 1}): 0.9, frozenset({1, 2}): 0.6}
+
+    group = _near_miss_group(items, [0, 1, 2], edges, 0.5)
+
+    assert group.similarity == 0.6
+    assert group.size == 12
+    assert group.member_count == 3
+    assert group.redundancy == 12 * 2
+
+
+def test_variant_signals_apply_in_their_documented_order_and_abstain_without_evidence():
+
+    both_vendored_and_test = _path_group("tests/vendored/a.py", "tests/vendored/b.py")
+    plain_pair = _path_group("pkg/a.py", "pkg/b.py")
+
+    assert _variant_reason(both_vendored_and_test, [None, None]) == "vendored"
+    assert _variant_reason(_path_group("tests/a.py", "tests/b.py"), []) == "test"
+    assert _variant_reason(plain_pair, [None, None]) is None
+    assert _all_trivial(plain_pair, [None], []) is False
+
+
+def test_co_change_abstains_for_files_with_no_commit_history_instead_of_dividing_by_zero():
+
+    assert _any_pair_co_changes(["a.py", "b.py"], {}, {("a.py", "b.py"): 5}, (1, 0.5)) is False
+    assert _any_pair_co_changes(
+        ["a.py", "b.py"], {"a.py": 4, "b.py": 4}, {("a.py", "b.py"): 4}, (1, 0.5)
+    )
