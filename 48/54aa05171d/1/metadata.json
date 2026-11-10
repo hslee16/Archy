@@ -1,0 +1,55 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4854aa05171d",
+  "session_id": "f8b6122b-7cc4-4ac2-8dd5-b25642f8ca94",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-10T01:02:59.593863Z",
+  "branch": "alee/complex-method-graph",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "src/archy/graph.py",
+    "tests/test_graph.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "16642d671d87",
+  "token_usage": {
+    "input_tokens": 8,
+    "cache_creation_tokens": 31895,
+    "cache_read_tokens": 197047,
+    "output_tokens": 1287,
+    "api_call_count": 4
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-10T01:02:59.577719Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 91,
+    "total_committed": 0,
+    "total_lines_changed": 91,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 198,
+      "user_lines_removed": 91,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "src/archy/graph.py": 150,
+        "tests/test_graph.py": 48
+      },
+      "user_removed_per_file": {
+        "src/archy/graph.py": 91
+      }
+    }
+  ]
+}

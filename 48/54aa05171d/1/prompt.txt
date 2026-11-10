@@ -1,0 +1,1 @@
+lets confirm that outside contributors can create new issues in the archy repo

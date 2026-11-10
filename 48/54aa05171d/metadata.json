@@ -3,21 +3,30 @@
   "checkpoint_id": "4854aa05171d",
   "strategy": "manual-commit",
   "branch": "alee/complex-method-graph",
-  "checkpoints_count": 2,
-  "files_touched": null,
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/archy/graph.py",
+    "tests/test_graph.py"
+  ],
   "sessions": [
     {
       "metadata": "/48/54aa05171d/0/metadata.json",
       "transcript": "/48/54aa05171d/0/full.jsonl",
       "content_hash": "/48/54aa05171d/0/content_hash.txt",
       "prompt": "/48/54aa05171d/0/prompt.txt"
+    },
+    {
+      "metadata": "/48/54aa05171d/1/metadata.json",
+      "transcript": "/48/54aa05171d/1/full.jsonl",
+      "content_hash": "/48/54aa05171d/1/content_hash.txt",
+      "prompt": "/48/54aa05171d/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 1570,
-    "cache_creation_tokens": 1317705,
-    "cache_read_tokens": 306138487,
-    "output_tokens": 648384,
-    "api_call_count": 725
+    "input_tokens": 1578,
+    "cache_creation_tokens": 1349600,
+    "cache_read_tokens": 306335534,
+    "output_tokens": 649671,
+    "api_call_count": 729
   }
 }
