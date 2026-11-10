@@ -126,7 +126,7 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
         raise ValueError(f"top_n must be >= 1; got {top_n}")
     report = compute_conventions(path, **graph_kwargs(path), include_tests=include_tests)
 
-    config, coverage = _brief_coverage(path)
+    config, coverage, coverage_error = _brief_coverage(path)
 
     contracts = run_contracts(path, config_filename=None) if with_contracts else None
     checked, unverifiable_reason = (
@@ -140,23 +140,25 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
     return BriefPayload(
         conventions=_bound_conventions(report, top_n),
         coverage=coverage,
+        coverage_error=coverage_error,
         contracts=contracts,
         transitive_checked=checked,
         transitive_unverified_reason=reason,
     )
 
 
-def _brief_coverage(path: Path) -> tuple[LayerConfig | None, LayerCoverage | None]:
+def _brief_coverage(
+    path: Path,
+) -> tuple[LayerConfig | None, LayerCoverage | None, str | None]:
     config_path = discover_config(path)
     if config_path is None:
-        return None, None
+        return None, None, None
     try:
         config = load_config(config_path)
-        return config, compute_coverage(_build_graph(path, **scan_kwargs(config)), config)
-    except LayerConfigError:
-        # A malformed archy.yaml is `archy_check`'s to report. Here it would
-        # replace the whole briefing with one error.
-        return None, None
+        return config, compute_coverage(_build_graph(path, **scan_kwargs(config)), config), None
+    except LayerConfigError as exc:
+        # Preserve the rest of the briefing, with the reason coverage is absent.
+        return None, None, str(exc)
 
 
 def _unverified_forbid_reason(

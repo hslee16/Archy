@@ -155,6 +155,16 @@ def test_brief_without_a_config_has_no_coverage_and_no_reason(tmp_path: Path):
     assert payload.coverage is None
     assert payload.transitive_checked is False
     assert payload.transitive_unverified_reason is None
+    assert payload.model_dump()["coverage_error"] is None
+
+
+def test_brief_reports_invalid_coverage_in_model_dump(overlapping_layers_project: Path):
+    payload = run_brief(
+        overlapping_layers_project, top_n=8, with_contracts=False, include_tests=False
+    ).model_dump()
+    assert payload["coverage"] is None
+    assert "multiple layers" in payload["coverage_error"]
+    assert payload["conventions"] is not None
 
 
 def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
@@ -163,6 +173,7 @@ def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
     assert payload.coverage is not None
     assert payload.transitive_checked is False
     dumped = payload.model_dump()
+    assert dumped["coverage_error"] is None
     assert "1 forbid rule declared" in dumped["transitive_unverified_reason"]
     assert "archy_brief(contracts=True)" in dumped["transitive_unverified_reason"]
 

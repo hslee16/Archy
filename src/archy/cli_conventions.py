@@ -234,15 +234,17 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
     report = compute_conventions(path, **kw, include_tests=include_tests)
 
     coverage = config = None
+    coverage_error: str | None = None
     config_path = discover_config(path)
     if config_path is not None:
         try:
             config = load_config(config_path)
             coverage = compute_coverage(build_graph(path, **kw), config)
-        except LayerConfigError:
+        except LayerConfigError as exc:
             # Parse failures already exit via `_graph_kwargs_or_exit` above. This
-            # catch only blanks coverage if a late load fails after kwargs succeeded.
+            # catch preserves the briefing if coverage validation fails later.
             coverage = config = None
+            coverage_error = str(exc)
 
     contracts = _run_check_contracts(path, None) if with_contracts else None
 
@@ -250,6 +252,7 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
         payload = {
             "conventions": _conventions_to_dict(report, top_n=top_n),
             "coverage": _coverage_to_json(coverage) if coverage is not None else None,
+            "coverage_error": coverage_error,
             "contracts": (_contracts_outcome_to_dict(contracts) if contracts is not None else None),
             # brief's TEXT output has rendered this handoff from the start; its
             # JSON had not, which left the same clean-pass-says-nothing gap #343
@@ -275,7 +278,11 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
         }
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        click.echo(_brief_to_text(report, coverage, config, contracts, top_n=top_n))
+        click.echo(
+            _brief_to_text(
+                report, coverage, config, contracts, top_n=top_n, coverage_error=coverage_error
+            )
+        )
 
 
 def _require_headers_flags(

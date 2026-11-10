@@ -9,6 +9,25 @@ import pytest
 from archy.layers import ForbidRule, LayerConfig, LayerSpec
 
 
+@pytest.fixture
+def overlapping_layers_project(tmp_path: Path) -> Path:
+    """A config that parses but cannot assign disjoint layer coverage (#790)."""
+    from archy.graph import build_graph
+    from archy.layers import LayerConfigError, compute_coverage, load_config
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("import pkg.b\n")
+    (pkg / "b.py").write_text("X = 1\n")
+    config_path = tmp_path / "archy.yaml"
+    config_path.write_text("layers:\n  hi: {modules: [pkg.**]}\n  lo: {modules: [pkg.b]}\n")
+    config = load_config(config_path)
+    with pytest.raises(LayerConfigError, match="multiple layers"):
+        compute_coverage(build_graph(tmp_path), config)
+    return tmp_path
+
+
 @pytest.fixture(scope="session")
 def _git_test_global_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
     config = tmp_path_factory.mktemp("git-config") / "global.gitconfig"

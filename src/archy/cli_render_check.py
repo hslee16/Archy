@@ -232,7 +232,9 @@ def _coverage_to_text(coverage: LayerCoverage) -> str:
     return line
 
 
-def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
+def _brief_to_text(
+    report, coverage, config, contracts, *, top_n: int, coverage_error: str | None = None
+) -> str:
     """One screen an agent can be handed BEFORE it starts, not a report to browse.
 
     🔴 SIZED FOR INJECTION, WHICH IS AN ECONOMIC CLAIM, NOT AN AESTHETIC ONE.
@@ -257,7 +259,7 @@ def _brief_to_text(report, coverage, config, contracts, *, top_n: int) -> str:
         "",
         *_brief_gate_lines(report, top_n),
         "",
-        *_brief_blind_spot_lines(coverage, config),
+        *_brief_blind_spot_lines(coverage, config, coverage_error=coverage_error),
     ]
     if contracts is not None:
         lines.append("")
@@ -337,8 +339,11 @@ def _brief_gate_lines(report: ConventionsReport, top_n: int) -> list[str]:
     return [header, *(rows or ["  (nothing here fails a build on a finding)"])]
 
 
-def _brief_blind_spot_lines(coverage, config) -> list[str]:
+def _brief_blind_spot_lines(coverage, config, *, coverage_error: str | None = None) -> list[str]:
     lines = ["## what this configuration cannot see"]
+    if coverage_error is not None:
+        lines.append(f"  archy.yaml found but invalid: {coverage_error}")
+        return lines
     if coverage is None:
         lines.append("  (no archy.yaml discovered, so no layer rule governs anything)")
         return lines
