@@ -222,8 +222,18 @@ def parse_project(
     # what actually wedges, and the module count is already known. Any
     # non-positive `max_modules` (0/None, or a negative from a misused library
     # call) disables the guard, preserving direct/library callers.
-    if max_modules and max_modules > 0 and len(modules) > max_modules:
-        raise ScanTooLargeError(len(modules), root, max_modules)
+    limit = _module_limit(max_modules)
+    if limit is not None and len(modules) > limit:
+        raise ScanTooLargeError(len(modules), root, limit)
+    return modules, _parse_modules(modules)
+
+
+def _module_limit(max_modules: int | None) -> int | None:
+    """The enforced limit, or None when the guard is off (0, None or negative)."""
+    return max_modules if max_modules and max_modules > 0 else None
+
+
+def _parse_modules(modules: list[Module]) -> dict[str, ParseResult]:
     parse_results: dict[str, ParseResult] = {}
     for m in modules:
         if _is_extension_or_stub_leaf(m.path):
@@ -239,7 +249,7 @@ def parse_project(
             # rebuilding mid-flight). Skip it; assemble_graph drops modules with
             # no parse result, and the next build picks it up once disk settles.
             continue
-    return modules, parse_results
+    return parse_results
 
 
 def discover_modules(
@@ -511,15 +521,19 @@ def hint_unresolved(
     ordered = list(dict.fromkeys(refs))
     by_file = {h.ref: h for h in suggest_files(graph, ordered, base=base)}
     internal = [n for n, d in graph.nodes(data=True) if not d.get("external")]
-    hints: list[UnresolvedHint] = []
-    for ref in ordered:
-        if ref in by_file:
-            hints.append(by_file[ref])
-        elif not ref.endswith(".py"):
-            found = suggest_modules(internal, ref)
-            if found:
-                hints.append(UnresolvedHint(ref=ref, did_you_mean=tuple(found)))
-    return tuple(hints)
+    hints = (_hint_for(ref, by_file, internal) for ref in ordered)
+    return tuple(h for h in hints if h is not None)
+
+
+def _hint_for(
+    ref: str, by_file: dict[str, UnresolvedHint], internal: list[str]
+) -> UnresolvedHint | None:
+    if ref in by_file:
+        return by_file[ref]
+    if ref.endswith(".py"):
+        return None
+    found = suggest_modules(internal, ref)
+    return UnresolvedHint(ref=ref, did_you_mean=tuple(found)) if found else None
 
 
 def suggest_files(
@@ -706,9 +720,31 @@ def _discover_modules(
     resolve to the leaf rather than collapsing onto the package (#665).
     """
     package_roots = _find_package_roots(root, ignored, extra_roots)
-    modules: list[Module] = []
-    seen: set[str] = set()
+    modules, outside = _package_modules(root, ignored, package_roots)
 
+    # Test files no package root names (an init-less `tests/` beside a `src/`
+    # layout) get their path from the scan root, as a flat layout already gives
+    # them. Only test files: `docs/conf.py`, `noxfile.py` and `examples/` are
+    # scripts nothing imports, and naming them would move module counts and
+    # scores for a reason that has nothing to do with test selection. Last, so a
+    # fallback name that equals a real module is reported by
+    # `_raise_on_qualname_collision` below rather than replacing it (#529, #531).
+    modules.extend(_fallback_test_modules(outside, root))
+
+    _raise_on_qualname_collision(modules, root)
+
+    seen = {m.qualname for m in modules}
+    modules.extend(_leaf_modules(root, ignored, package_roots, seen))
+
+    modules.sort(key=lambda m: m.qualname)
+    return modules
+
+
+def _package_modules(
+    root: Path, ignored: frozenset[str], package_roots: list[Path]
+) -> tuple[list[Module], list[Path]]:
+    """Modules a package root names, and the `.py` files none of them does."""
+    modules: list[Module] = []
     outside: list[Path] = []
     for py_file in _iter_python_files(root, ignored):
         qualname = _qualname_for(py_file, package_roots)
@@ -722,39 +758,30 @@ def _discover_modules(
                 is_package=py_file.name == "__init__.py",
             )
         )
-        seen.add(qualname)
+    return modules, outside
 
-    # Test files no package root names (an init-less `tests/` beside a `src/`
-    # layout) get their path from the scan root, as a flat layout already gives
-    # them. Only test files: `docs/conf.py`, `noxfile.py` and `examples/` are
-    # scripts nothing imports, and naming them would move module counts and
-    # scores for a reason that has nothing to do with test selection. Last, so a
-    # fallback name that equals a real module is reported by
-    # `_raise_on_qualname_collision` below rather than replacing it (#529, #531).
-    for py_file in outside:
-        qualname = _scan_root_qualname(py_file, root)
-        if qualname is None:
-            continue
-        modules.append(Module(qualname=qualname, path=py_file.resolve(), is_package=False))
-        seen.add(qualname)
 
-    _raise_on_qualname_collision(modules, root)
+def _fallback_test_modules(outside: list[Path], root: Path) -> list[Module]:
+    named = ((py_file, _scan_root_qualname(py_file, root)) for py_file in outside)
+    return [
+        Module(qualname=qualname, path=py_file.resolve(), is_package=False)
+        for py_file, qualname in named
+        if qualname is not None
+    ]
 
+
+def _leaf_modules(
+    root: Path, ignored: frozenset[str], package_roots: list[Path], seen: set[str]
+) -> list[Module]:
+    """Extension and stub leaves whose qualname no `.py` module already holds."""
+    leaves: list[Module] = []
     for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored):
         qualname = _qualname_for_stem(leaf_path, stem, package_roots)
         if qualname is None or qualname in seen:
             continue
-        modules.append(
-            Module(
-                qualname=qualname,
-                path=leaf_path.resolve(),
-                is_package=False,
-            )
-        )
+        leaves.append(Module(qualname=qualname, path=leaf_path.resolve(), is_package=False))
         seen.add(qualname)
-
-    modules.sort(key=lambda m: m.qualname)
-    return modules
+    return leaves
 
 
 def _raise_on_qualname_collision(modules: list[Module], root: Path) -> None:
@@ -769,19 +796,20 @@ def _raise_on_qualname_collision(modules: list[Module], root: Path) -> None:
     for m in modules:
         by_name.setdefault(m.qualname, []).append(m.path)
     resolved_root = root.resolve()
-    collisions: dict[str, list[str]] = {}
-    for qualname, paths in by_name.items():
-        if len(set(paths)) < 2:
-            continue
-        shown: list[str] = []
-        for p in sorted(set(paths)):
-            try:
-                shown.append(p.relative_to(resolved_root).as_posix())
-            except ValueError:
-                shown.append(p.as_posix())
-        collisions[qualname] = shown
+    collisions = {
+        qualname: [_display_path(p, resolved_root) for p in sorted(set(paths))]
+        for qualname, paths in by_name.items()
+        if len(set(paths)) >= 2
+    }
     if collisions:
         raise QualnameCollisionError(collisions)
+
+
+def _display_path(path: Path, resolved_root: Path) -> str:
+    try:
+        return path.relative_to(resolved_root).as_posix()
+    except ValueError:
+        return path.as_posix()
 
 
 def _extension_module_stem(filename: str) -> str | None:
@@ -796,16 +824,7 @@ def _extension_module_stem(filename: str) -> str | None:
     return None
 
 
-def _iter_extension_and_stub_leaves(
-    root: Path,
-    ignored: frozenset[str],
-) -> list[tuple[Path, str]]:
-    """Paths that define an internal leaf with no ``.py`` twin.
-
-    Extension binaries win over a sibling ``.pyi`` for the same stem so the
-    module is recorded once. A ``.pyi`` whose ``.py`` twin exists is skipped
-    here; discovery of the ``.py`` already owns that qualname.
-    """
+def _stub_leaves(root: Path, ignored: frozenset[str]) -> dict[tuple[Path, str], Path]:
     chosen: dict[tuple[Path, str], Path] = {}
     for path in sorted(root.rglob("*.pyi")):
         if is_ignored_path(path, ignored, root):
@@ -819,6 +838,11 @@ def _iter_extension_and_stub_leaves(
         if stem == "__init__":
             continue
         chosen.setdefault((path.parent.resolve(), stem), path)
+    return chosen
+
+
+def _extension_leaves(root: Path, ignored: frozenset[str]) -> dict[tuple[Path, str], Path]:
+    chosen: dict[tuple[Path, str], Path] = {}
     # WHY: EXTENSION_SUFFIXES lists only this host's tags, so a Windows .pyd
     # (or non-host .so) would be missed on POSIX without these broad globs.
     for pattern in ("*.so", "*.pyd"):
@@ -829,6 +853,21 @@ def _iter_extension_and_stub_leaves(
             if stem is None:
                 continue
             chosen[(path.parent.resolve(), stem)] = path
+    return chosen
+
+
+def _iter_extension_and_stub_leaves(
+    root: Path,
+    ignored: frozenset[str],
+) -> list[tuple[Path, str]]:
+    """Paths that define an internal leaf with no ``.py`` twin.
+
+    Extension binaries win over a sibling ``.pyi`` for the same stem so the
+    module is recorded once. A ``.pyi`` whose ``.py`` twin exists is skipped
+    here; discovery of the ``.py`` already owns that qualname.
+    """
+    chosen = _stub_leaves(root, ignored)
+    chosen.update(_extension_leaves(root, ignored))
     return sorted(
         ((path, stem) for (_parent, stem), path in chosen.items()),
         key=lambda item: (item[0].as_posix(), item[1]),
@@ -908,32 +947,35 @@ def _is_extension_or_stub_leaf(path: Path) -> bool:
     return _extension_module_stem(name) is not None
 
 
+def _package_dirs(root: Path, ignored: frozenset[str]) -> set[Path]:
+    return {
+        path.parent.resolve()
+        for path in root.rglob("__init__.py")
+        if not is_ignored_path(path, ignored, root)
+    }
+
+
+def _declared_roots(root: Path, extra_roots: tuple[str, ...]) -> set[Path]:
+    candidates = ((root / r).resolve() for r in extra_roots)
+    return {candidate for candidate in candidates if candidate.is_dir()}
+
+
 def _find_package_roots(
     root: Path,
     ignored: frozenset[str],
     extra_roots: tuple[str, ...],
 ) -> list[Path]:
     """Return absolute paths to top-level package directories under root."""
-    package_dirs: set[Path] = set()
-    for path in root.rglob("__init__.py"):
-        if is_ignored_path(path, ignored, root):
-            continue
-        package_dirs.add(path.parent.resolve())
+    package_dirs = _package_dirs(root, ignored)
 
     # User-declared namespace package roots: treat the directory as a package
     # even without __init__.py, so descendants get qualnames rooted there.
     # Adding it to package_dirs also demotes any already-discovered child
     # packages (their parent is now a package_dir, so they stop being roots),
     # which is exactly the nesting we want.
-    for r in extra_roots:
-        candidate = (root / r).resolve()
-        if candidate.is_dir():
-            package_dirs.add(candidate)
+    package_dirs.update(_declared_roots(root, extra_roots))
 
-    roots: list[Path] = []
-    for pkg in package_dirs:
-        if pkg.parent.resolve() not in package_dirs:
-            roots.append(pkg)
+    roots = [pkg for pkg in package_dirs if pkg.parent.resolve() not in package_dirs]
     roots.sort()
     return roots
 
@@ -974,11 +1016,14 @@ def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
         current = None if current is None else current / part
         if part in HARD_IGNORED_DIRS or part in user_ignored:
             return True
-        if part in SOFT_IGNORED_DIRS and (
-            current is None or not (current / "__init__.py").is_file()
-        ):
+        if part in SOFT_IGNORED_DIRS and _holds_no_package(current):
             return True
     return False
+
+
+def _holds_no_package(directory: Path | None) -> bool:
+    """True when `directory` is unknown (no probe possible) or has no `__init__.py`."""
+    return directory is None or not (directory / "__init__.py").is_file()
 
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
@@ -1161,17 +1206,24 @@ def _build_reexport_maps(
         result = parse_results.get(m.qualname)
         if result is None:
             continue
-        pkg_map: dict[str, str] = {}
-        for ref in result.imports:
-            source = _reexport_source(ref, m, internal_qualnames)
-            if source is None:
-                continue
-            for _, local in _local_bindings(ref):
-                pkg_map[local] = source
+        pkg_map = _package_reexports(m, result, internal_qualnames)
         if pkg_map:
             maps[m.qualname] = pkg_map
     _follow_reexport_chains(maps)
     return maps
+
+
+def _package_reexports(
+    package: Module, result: ParseResult, internal_qualnames: set[str]
+) -> dict[str, str]:
+    pkg_map: dict[str, str] = {}
+    for ref in result.imports:
+        source = _reexport_source(ref, package, internal_qualnames)
+        if source is None:
+            continue
+        for _, local in _local_bindings(ref):
+            pkg_map[local] = source
+    return pkg_map
 
 
 def _follow_reexport_chains(maps: dict[str, dict[str, str]], *, max_depth: int = 8) -> None:
@@ -1182,14 +1234,21 @@ def _follow_reexport_chains(maps: dict[str, dict[str, str]], *, max_depth: int =
     # B re-exports from A) cannot loop forever.
     for pkg, name_map in maps.items():
         for name, target in name_map.items():
-            visited: set[str] = {pkg}
-            for _ in range(max_depth):
-                deeper = maps.get(target, {}).get(name)
-                if deeper is None or deeper in visited:
-                    break
-                visited.add(target)
-                target = deeper
-            name_map[name] = target
+            name_map[name] = _final_reexport_target(maps, (pkg, name), target, max_depth)
+
+
+def _final_reexport_target(
+    maps: dict[str, dict[str, str]], origin: tuple[str, str], target: str, max_depth: int
+) -> str:
+    pkg, name = origin
+    visited: set[str] = {pkg}
+    for _ in range(max_depth):
+        deeper = maps.get(target, {}).get(name)
+        if deeper is None or deeper in visited:
+            break
+        visited.add(target)
+        target = deeper
+    return target
 
 
 def _reexport_source(

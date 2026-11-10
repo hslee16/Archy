@@ -1213,3 +1213,51 @@ def test_src_package_import_root_leaves_explicit_src_and_real_packages_alone(tmp
     assert not graph.has_edge("main", "src.infra.cfg")
     assert graph.has_edge("explicit", "src.infra.cfg")
     assert graph.nodes["requests"]["external"] is True
+
+
+def test_a_compiled_extension_wins_over_a_stub_for_the_same_module(tmp_path: Path):
+    """`fast.so` beside `fast.pyi` is one module, and the binary is the file recorded."""
+    from archy.graph import discover_modules
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "fast.pyi").write_text("")
+    (pkg / "fast.so").write_text("")
+
+    modules = {m.qualname: m for m in discover_modules(tmp_path)}
+
+    assert modules["pkg.fast"].path.name == "fast.so"
+    assert [m.qualname for m in modules.values()].count("pkg.fast") == 1
+
+
+def test_a_soft_ignored_name_is_skipped_when_the_path_is_outside_the_scan_root(tmp_path: Path):
+    """No directory can be probed for an `__init__.py` there, so the name decides (`venv`)."""
+    from archy.graph import is_ignored_path
+
+    root = tmp_path / "project"
+    root.mkdir()
+    outside = tmp_path / "elsewhere" / "venv" / "mod.py"
+
+    assert is_ignored_path(outside, DEFAULT_IGNORED_DIRS, root) is True
+
+
+def test_a_declared_root_that_is_not_a_directory_is_not_a_package_root(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+
+    roots = _find_package_roots(tmp_path, DEFAULT_IGNORED_DIRS, ("no_such_dir",))
+
+    assert roots == [pkg.resolve()]
+
+
+def test_a_reexport_cycle_stops_at_the_first_repeat_not_after_a_fixed_number_of_hops():
+    """a -> b -> c -> a for one name: following hops blindly for 8 steps would land on `a`."""
+    from archy.graph import _follow_reexport_chains
+
+    maps = {"a": {"X": "b"}, "b": {"X": "c"}, "c": {"X": "a"}}
+
+    _follow_reexport_chains(maps)
+
+    assert maps["a"]["X"] == "c"
