@@ -30,7 +30,7 @@ agent can consult it before a non-trivial edit. It is not folded into ``archy
 score``'s overall number - that boundary is deliberate (see ``FUTURE.md``).
 
 archy:owns        compute_edit_risk
-archy:mirrored-by compute_edit_risk -> archy.diff_summary, archy.graph,
+archy:mirrored-by compute_edit_risk -> archy.diff_summary, archy.graph_assemble,
                   archy.mcp_runs_check, archy.mcp_runs_graph, archy.refactor
 """
 

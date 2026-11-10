@@ -34,7 +34,7 @@ possible), so they are specced together but can ship independently.
 
 Grounding references, so this spec stays honest about the delta:
 
-- **Edges are already weakly typed.** `graph.py` writes `networkx` edge-attribute
+- **Edges are already weakly typed.** `graph_assemble.py` writes `networkx` edge-attribute
   dicts via `_add_or_extend_edge` (import edges) and `_add_or_extend_call_edge`
   (call edges). Each edge carries a `kinds: tuple[str, ...]` that today holds only
   `"import"` and/or `"call"`, plus `is_relative`, `lines`, `call_lines`,
@@ -106,7 +106,7 @@ Notes:
 
 ### Surfaces to update
 
-1. `graph.py` `_add_or_extend_edge` / `_add_or_extend_call_edge`: populate the
+1. `graph_assemble.py` `_add_or_extend_edge` / `_add_or_extend_call_edge`: populate the
    richer kinds. `graph_to_dict` already emits all edge attrs, so JSON output gets
    it for free.
 2. `mcp_payloads.py` `GraphEdge`: **add `kinds` (and optionally `severity`) to the wire
