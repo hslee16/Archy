@@ -72,14 +72,21 @@ from archy.risk import compute_edit_risk
 #: rationale; overridable per call.
 DEFAULT_MIN_RISK = 0.15
 
+#: Behavioral floor: a module carries the ``hotspot`` lens only when its
+#: CC x churn score is at least this share of the project's maximum. Chosen
+#: from the distribution on archy and eight bench projects (#880): the median
+#: row sits under 3% of the maximum, and 5% labels 4-22 modules per project.
+HOTSPOT_LABEL_FLOOR = 0.05
+
 
 class RefactorPriority(BaseModel):
     """One ranked refactor candidate, fused across both lenses.
 
     ``lenses`` names which signal(s) flagged the module: ``"hotspot"``
     (behavioral CC x churn), ``"edit_risk"`` (structural central+fragile),
-    or both. ``priority`` is the within-project ordering blend (sum of the
-    two lens scores each normalized to the project maximum, so it ranges
+    both, or neither for a row below both floors. ``priority`` is the
+    within-project ordering blend (sum of the two lens scores each
+    normalized to the project maximum, so it ranges
     [0, 2] with 2 meaning "top of both lenses"); it is not comparable
     across projects, and a module strong on a single lens can outscore one
     that is weak on both lenses. The component fields carry the raw absolute
@@ -92,8 +99,8 @@ class RefactorPriority(BaseModel):
     path: str | None
     lenses: tuple[str, ...]
     priority: float
-    # Behavioral lens (CC x churn). Zero when the module is not a hotspot
-    # (or when git history is unavailable).
+    # Raw behavioral signal (CC x churn), retained below the labeling floor.
+    # Zero when there is no hotspot row or git history is unavailable.
     cc_sum: int
     churn: int
     hotspot_score: int
@@ -126,6 +133,11 @@ def _rationale(
             f"low structural edit-risk (risk={edit_risk:.2f}). Refactor for "
             "maintainability; regression danger is contained."
         )
+    if "edit_risk" not in lenses:
+        return (
+            "Below both labeling floors; retained for its relative priority "
+            "from the raw complexity x churn and structural signals."
+        )
     return (
         f"High edit-risk (risk={edit_risk:.2f}: central and fragile) but not a "
         "churn hotspot. Edits here are dangerous out of proportion to how often "
@@ -148,13 +160,21 @@ def compute_refactor_priorities(
     ``min_risk`` is the structural floor below which a module is not surfaced on
     the edit-risk lens.
 
+    The hotspot label requires a CC x churn score of at least
+    ``HOTSPOT_LABEL_FLOOR`` (5%) of the project's maximum (inclusive). This
+    relative cut trims the weak tail without imposing a fixed quota or
+    splitting ties. It is not an absolute quality threshold: a small project
+    still labels its largest signal.
+    Below this floor, rows retain their raw scores, normalized contribution,
+    and rank, but lose the hotspot lens and its rationale sentence. A row below
+    both labeling floors has no lenses and a neutral rationale.
+
     Returns the full ranked candidate list (callers cap with their own
     ``top_n``). An **empty list** is a meaningful result: nothing is both
     complex and churned, and nothing clears ``min_risk`` - there is genuinely
     nothing to prioritize.
     """
-    # Behavioral lens. `compute_hotspots` already filters to files with both
-    # cc_sum > 0 and churn > 0, so every returned row is a real hotspot.
+    # Keep every positive CC x churn row for ranking; labeling has its own floor.
     hotspots = compute_hotspots(graph, churn=churn) if churn is not None else []
     hotspot_by_module = {h.module: h for h in hotspots}
 
@@ -164,8 +184,8 @@ def compute_refactor_priorities(
     instability = compute_instability(graph)
     _, propagation_cost = compute_propagation_cost(graph)
 
-    # Candidate set: all hotspots plus every module clearing the structural
-    # floor. A module may appear via either or both lenses.
+    # Candidate set stays independent of the hotspot labeling floor so low
+    # behavioral scores keep their position in the fused ranking.
     risky = {m for m, r in edit_risk.items() if r >= min_risk}
     candidates = set(hotspot_by_module) | risky
     if not candidates:
@@ -182,7 +202,7 @@ def compute_refactor_priorities(
         risk = edit_risk.get(module, 0.0)
 
         lenses: list[str] = []
-        if hs is not None:
+        if hs is not None and hs.score >= max_hotspot * HOTSPOT_LABEL_FLOOR:
             lenses.append("hotspot")
         if module in risky:
             lenses.append("edit_risk")

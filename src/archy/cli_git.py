@@ -391,6 +391,10 @@ def what_to_refactor_next(
     can still rank first). Without git the behavioral lens is skipped and the
     ranking is structural-only. An empty list is a real answer: nothing is
     both complex+churned and nothing is central+fragile above --min-risk.
+
+    The hotspot label requires at least 5% of the project's maximum CC x
+    churn score. Lower scores keep their rank but lose the hotspot label
+    and rationale; a row below both labeling floors has no lenses.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
     _require(0.0 <= min_risk <= 1.0, "min-risk", "in [0, 1]", min_risk)

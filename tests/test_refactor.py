@@ -4,10 +4,14 @@ import json
 from pathlib import Path
 
 import networkx as nx
+import pytest
 from click.testing import CliRunner
 
+from archy import mcp_runs, mcp_runs_git
 from archy.cli import main
-from archy.refactor import DEFAULT_MIN_RISK, compute_refactor_priorities
+from archy.cli_render import _refactor_to_dict, _refactor_to_text
+from archy.hotspots import compute_hotspots
+from archy.refactor import DEFAULT_MIN_RISK, HOTSPOT_LABEL_FLOOR, compute_refactor_priorities
 
 
 def _g(
@@ -101,7 +105,9 @@ def test_dominant_single_lens_can_outrank_modest_both_lens():
         paths={"m": "/m.py", "n": "/n.py", "big": "/big.py"},
         cc={"m": 4, "n": 2, "big": 60},
     )
-    churn = {"/m.py": 6, "/big.py": 60}
+    # `m` clears the hotspot label floor (200 / 3600 > 5%) while
+    # remaining small enough for the dominant single-lens `big` to win.
+    churn = {"/m.py": 50, "/big.py": 60}
     rows = compute_refactor_priorities(g, churn=churn, min_risk=0.05)
     by_module = {r.module: r for r in rows}
 
@@ -215,6 +221,88 @@ def test_external_predecessors_excluded_from_fan_in():
 def test_default_min_risk_is_the_documented_floor():
     # Guard against the documented default drifting silently.
     assert DEFAULT_MIN_RISK == 0.15
+
+
+def test_hotspot_label_floor_is_the_documented_share():
+    assert HOTSPOT_LABEL_FLOOR == 0.05
+
+
+def _hotspot_tail_graph() -> tuple[nx.DiGraph, dict[str, int]]:
+    # All are sink-importers, so their structural risk is zero. The tiny
+    # rows reproduce #880's cc_sum/churn pairs (7/4 and 5/2).
+    cc = {"hot": 100, "risk": 7, "registry": 5, "tiny": 1}
+    g = _g(*((name, "dep") for name in cc), paths={n: f"/{n}.py" for n in cc}, cc=cc)
+    return g, {"/hot.py": 10, "/risk.py": 4, "/registry.py": 2, "/tiny.py": 1}
+
+
+def test_hotspot_floor_removes_tail_labels_without_changing_rank():
+    g, churn = _hotspot_tail_graph()
+    # Establish that the upstream primitive really returns the trivial rows.
+    assert [(r.module, r.score) for r in compute_hotspots(g, churn=churn)] == [
+        ("hot", 1000),
+        ("risk", 28),
+        ("registry", 10),
+        ("tiny", 1),
+    ]
+    rows = compute_refactor_priorities(g, churn=churn)
+    assert [r.module for r in rows] == ["hot", "risk", "registry", "tiny"]
+    assert [r.priority for r in rows] == [1.0, 0.028, 0.01, 0.001]
+    assert rows[0].lenses == ("hotspot",)
+    assert "A complexity x churn hotspot" in rows[0].rationale
+    for row in rows[1:]:
+        assert row.edit_risk == 0
+        assert row.lenses == ()
+        assert "hotspot" not in row.rationale
+        assert "High edit-risk" not in row.rationale
+
+
+@pytest.mark.parametrize("score,qualifies", [(49, False), (50, True), (51, True)])
+def test_hotspot_floor_is_inclusive(score: int, qualifies: bool):
+    g, churn = _hotspot_tail_graph()
+    g.nodes["risk"]["cc_sum"] = score
+    churn["/risk.py"] = 1
+    row = next(r for r in compute_refactor_priorities(g, churn=churn) if r.module == "risk")
+    assert ("hotspot" in row.lenses) is qualifies
+
+
+def test_hotspot_floor_keeps_structural_lens():
+    g = _central_volatile_graph()
+    rows = compute_refactor_priorities(g, churn={"/repo/x.py": 100, "/repo/m.py": 1})
+    m = next(r for r in rows if r.module == "m")
+    assert m.hotspot_score == 8
+    assert m.edit_risk >= DEFAULT_MIN_RISK
+    assert m.lenses == ("edit_risk",)
+    assert m.rationale.startswith("High edit-risk")
+    assert "A complexity x churn hotspot" not in m.rationale
+
+
+def test_hotspot_floor_on_text_json_and_mcp(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    g, churn = _hotspot_tail_graph()
+    rows = compute_refactor_priorities(g, churn=churn)
+    text = _refactor_to_text(rows, top_n=10, min_risk=DEFAULT_MIN_RISK, git_available=True)
+    assert "hot  [hotspot]" in text
+    assert "risk  []" in text
+    assert text.count("A complexity x churn hotspot") == 1
+    payload = _refactor_to_dict(
+        rows, top_n=10, since=None, min_risk=DEFAULT_MIN_RISK, git_available=True
+    )
+    json_rows = json.loads(json.dumps(payload))["priorities"]
+    assert [r["lenses"] for r in json_rows] == [["hotspot"], [], [], []]
+    assert all("hotspot" not in r["rationale"] for r in json_rows[1:])
+
+    monkeypatch.setattr(mcp_runs_git, "_load_graph", lambda *a, **kw: g)
+    monkeypatch.setattr(mcp_runs_git, "_refactor_churn", lambda *a, **kw: (churn, False))
+    fused = mcp_runs.run_what_to_refactor_next(
+        tmp_path, top_n=10, since=None, min_risk=DEFAULT_MIN_RISK
+    ).model_dump()
+    assert [r["lenses"] for r in fused["priorities"]] == [("hotspot",), (), (), ()]
+    assert all("hotspot" not in r["rationale"] for r in fused["priorities"][1:])
+    assert fused["note"] is None
+    behavioral = mcp_runs.run_what_to_refactor_next(
+        tmp_path, lens="behavioral", top_n=10, since=None, min_risk=DEFAULT_MIN_RISK
+    ).model_dump()
+    assert [r["module"] for r in behavioral["priorities"]] == ["hot"]
+    assert behavioral["note"] is None
 
 
 # --- CLI surface -----------------------------------------------------------
