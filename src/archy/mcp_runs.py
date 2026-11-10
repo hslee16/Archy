@@ -1000,13 +1000,7 @@ def run_duplicates(
     copies never co-change (issue #242); best-effort (no git -> unchanged). When
     `near_miss`, adds a lower-confidence Type-3 tier via token overlap (#246).
     """
-    _validate_response_format(response_format)
-    if min_nodes < 1:
-        raise ValueError(f"min_nodes must be >= 1; got {min_nodes}")
-    if top_n < 1:
-        raise ValueError(f"top_n must be >= 1; got {top_n}")
-    if members < 2:
-        raise ValueError(f"members must be >= 2; got {members}")
+    _validate_duplicates_args(response_format, min_nodes, top_n, members)
     modules, results = _parse_project(
         path, max_modules=resolve_max_modules(path), **graph_kwargs(path)
     )
@@ -1029,17 +1023,6 @@ def run_duplicates(
             return tuple(top)
         return tuple(_summarize_duplicate_group(g) for g in top)
 
-    note: str | None = None
-    if not dups:
-        note = (
-            f"No likely-duplicate function bodies of >= {min_nodes} normalized "
-            "nodes found; lower min_nodes to widen the search."
-        )
-        if variants:
-            note += (
-                f" ({len(variants)} likely-intentional variant(s) were found but demoted: "
-                "same-class / boilerplate / test / vendored / independent.)"
-            )
     return DuplicatesPayload(
         min_nodes=min_nodes,
         total=len(dups),
@@ -1051,8 +1034,35 @@ def run_duplicates(
         duplicates=_shape(dups),
         variants=_shape(variants),
         near_miss=_shape(near),
-        note=note,
+        note=_duplicates_note(len(dups), len(variants), min_nodes),
     )
+
+
+def _validate_duplicates_args(
+    response_format: str, min_nodes: int, top_n: int, members: int
+) -> None:
+    _validate_response_format(response_format)
+    if min_nodes < 1:
+        raise ValueError(f"min_nodes must be >= 1; got {min_nodes}")
+    if top_n < 1:
+        raise ValueError(f"top_n must be >= 1; got {top_n}")
+    if members < 2:
+        raise ValueError(f"members must be >= 2; got {members}")
+
+
+def _duplicates_note(dup_count: int, variant_count: int, min_nodes: int) -> str | None:
+    if dup_count:
+        return None
+    note = (
+        f"No likely-duplicate function bodies of >= {min_nodes} normalized "
+        "nodes found; lower min_nodes to widen the search."
+    )
+    if variant_count:
+        note += (
+            f" ({variant_count} likely-intentional variant(s) were found but demoted: "
+            "same-class / boilerplate / test / vendored / independent.)"
+        )
+    return note
 
 
 def _empty_subgraph(graph):
@@ -1137,6 +1147,11 @@ def _refactor_note(
             f"No commits in the --since window ({since}). "
             "Widen the window or omit --since to use full history."
         )
+    return _empty_lens_note(lens, git_available, missing_git, min_risk)
+
+
+def _empty_lens_note(lens: str, git_available: bool, missing_git: str, min_risk: float) -> str:
+    """The note for a lens that surfaced nothing, worded per lens and per git state."""
     if lens == "behavioral":
         if not git_available:
             return (
@@ -1174,9 +1189,9 @@ def _refactor_note(
     )
 
 
-def run_what_to_refactor_next(
-    path: Path, *, lens: str = "fused", top_n: int, since: str | None, min_risk: float
-) -> WhatToRefactorPayload:
+def _validate_refactor_args(
+    path: Path, lens: str, top_n: int, since: str | None, min_risk: float
+) -> None:
     _validate_refactor_lens(lens)
     if top_n <= 0:
         raise ValueError(f"top_n must be >= 1; got {top_n}")
@@ -1189,33 +1204,46 @@ def run_what_to_refactor_next(
         if repo is not None:
             resolve_since_log_args(repo, since)
 
-    graph = _load_graph(path, internal_only=True)
-    # The behavioral lens needs git; the structural lens never does, so skip the
-    # git call entirely for structural (since is irrelevant there). A repo with
-    # zero commits degrades the same way but gets its own note wording.
-    no_commits = False
+
+def _refactor_churn(path: Path, lens: str, since: str | None):
+    """Per-file churn and whether the repo has no commits at all.
+
+    The behavioral lens needs git; the structural lens never does, so skip the
+    git call entirely for structural (since is irrelevant there). A repo with
+    zero commits degrades the same way but gets its own note wording.
+    """
     if lens == "structural":
-        churn = None
-    else:
-        try:
-            churn = git_churn(path, since=since)
-        except NoCommitsError:
-            churn = None
-            no_commits = True
+        return None, False
+    try:
+        return git_churn(path, since=since), False
+    except NoCommitsError:
+        return None, True
+
+
+def _rows_for_lens(rows: list, lens: str) -> list:
+    if lens != "behavioral":
+        # structural: churn=None already restricts rows to the edit_risk lens, sorted
+        # by priority (== normalized edit_risk), matching the old high-risk ranking.
+        return rows
+    # Keep only rows the behavioral lens fired on and restore the pure
+    # CC x churn ranking (the fused `priority` would let a both-lens module
+    # outrank a bigger pure hotspot).
+    return sorted(
+        (r for r in rows if "hotspot" in r.lenses),
+        key=lambda r: (-r.hotspot_score, r.module),
+    )
+
+
+def run_what_to_refactor_next(
+    path: Path, *, lens: str = "fused", top_n: int, since: str | None, min_risk: float
+) -> WhatToRefactorPayload:
+    _validate_refactor_args(path, lens, top_n, since, min_risk)
+
+    graph = _load_graph(path, internal_only=True)
+    churn, no_commits = _refactor_churn(path, lens, since)
     git_available = churn is not None
 
-    rows = compute_refactor_priorities(graph, churn=churn, min_risk=min_risk)
-    if lens == "behavioral":
-        # Keep only rows the behavioral lens fired on and restore the pure
-        # CC x churn ranking (the fused `priority` would let a both-lens module
-        # outrank a bigger pure hotspot).
-        rows = sorted(
-            (r for r in rows if "hotspot" in r.lenses),
-            key=lambda r: (-r.hotspot_score, r.module),
-        )
-    # structural: churn=None already restricts rows to the edit_risk lens, sorted
-    # by priority (== normalized edit_risk), matching the old high-risk ranking.
-
+    rows = _rows_for_lens(compute_refactor_priorities(graph, churn=churn, min_risk=min_risk), lens)
     shown = rows[:top_n]
     entries = tuple(
         RefactorPriorityEntry(

@@ -961,6 +961,34 @@ def test_run_duplicates_refuses_below_two_and_takes_two(acyclic_project: Path):
     assert run(2).duplicates == ()
 
 
+def test_run_duplicates_says_why_it_found_nothing(acyclic_project: Path):
+    """An empty result names the threshold to lower, so it is not read as a clean bill."""
+    payload = run_duplicates(
+        acyclic_project, response_format="summary", min_nodes=20, top_n=20, members=2
+    )
+
+    assert payload.total == 0
+    assert payload.note == (
+        "No likely-duplicate function bodies of >= 20 normalized nodes found; "
+        "lower min_nodes to widen the search."
+    )
+
+
+def test_duplicates_note_mentions_demoted_variants_and_is_silent_when_there_are_duplicates():
+    from archy.mcp_runs import _duplicates_note
+
+    quiet = _duplicates_note(0, 0, 20)
+    with_variants = _duplicates_note(0, 2, 20)
+
+    assert quiet is not None
+    assert "variant" not in quiet
+    assert with_variants == (
+        quiet + " (2 likely-intentional variant(s) were found but demoted: "
+        "same-class / boilerplate / test / vendored / independent.)"
+    )
+    assert _duplicates_note(1, 1, 20) is None
+
+
 def test_archy_impact_rejects_max_chains_zero(acyclic_project: Path):
     """MCP archy_impact must reject max_chains=0 the way the CLI does (#640).
 
