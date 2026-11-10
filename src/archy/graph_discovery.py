@@ -45,10 +45,11 @@ def _relative_paths(root: Path, modules: list[Module]) -> dict[str, str]:
     otherwise never match. A module outside the root is left out, and a finding
     for it prints as before.
 
-    Graph-level, not a per-node attribute, for the reason the `entrypoints` block
-    below gives: a node attribute would reach every node of `archy graph --format
-    json`. It also keeps `cycles` and `layers` free of an import of this module,
-    which would deepen every chain through them.
+    Graph-level, not a per-node attribute, for the reason `assemble_graph` gives
+    for its `entrypoints` entry (in `archy.graph_assemble`): a node attribute would
+    reach every node of `archy graph --format json`. It also keeps `cycles` and
+    `layers` free of an import of `archy.graph`, which would deepen every chain
+    through them.
     """
     resolved_root = root.resolve()
     paths: dict[str, str] = {}
