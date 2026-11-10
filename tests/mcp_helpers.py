@@ -1,6 +1,6 @@
 """Shared helper for tests that call an MCP tool in-process.
 
-Lives in its own module, not in `tests/test_mcp.py`, so that a test file never
+Lives in its own module, not in a `tests/test_mcp_*.py` module, so that a test file never
 imports another test file: importing a test module from a test module couples
 them and puts the importer one step deeper in archy's own import graph.
 """
@@ -129,7 +129,8 @@ def _schema_properties_named(schema: dict[str, object], model_name: str) -> set[
 # Extra arguments each tool needs besides `path`. The set must match the
 # registered tools: a new tool that forgets `_project_dir` has to land here
 # or `test_project_path_guard_covers_every_registered_tool` fails, and then
-# the parametrized call below fails if the guard is not actually used.
+# the parametrized test in `tests/test_mcp_surface.py` fails if the guard is not
+# actually used.
 _PROJECT_PATH_ARGS: dict[str, dict] = {
     "archy_score": {},
     "archy_cycles": {},
@@ -323,7 +324,7 @@ def _git(repo: Path, *args: str, env: dict[str, str] | None = None) -> None:
 def _init_git_repo(repo: Path) -> None:
     # Bare git init + the three configs every hotspot test needs (identity
     # so commits don't fail, and gpgsign=false so the CI runner without a
-    # signing key still completes). Shared by every test in this file that
+    # signing key still completes). Shared by every test module that
     # touches git history.
     _git(repo, "init", "-q", "-b", "main")
     _git(repo, "config", "user.email", "t@t.t")

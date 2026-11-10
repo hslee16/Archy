@@ -38,7 +38,7 @@ def test_all_tools_declare_output_schema():
     # Schema) from each tool's return annotation. Assert every tool declares
     # one and it is an object schema, since `structuredContent` must be a JSON
     # object (sequence/union returns are wrapped under a `result` key to honor
-    # this -- see the module docstring).
+    # this -- see the `archy.mcp` module docstring).
     server = create_server()
     tools = _list_tools(server)
     for tool in tools:
@@ -223,3 +223,57 @@ def test_cold_fallback_keeps_the_scan_size_guard(
     assert manager_attempts, "the cache was never tried, so the cold path was not exercised"
     assert caught.value.limit == 2
     assert caught.value.count > 2
+
+
+# The tool set is pinned exactly: adding or removing a tool without a deliberate decision
+# fails here. Folded tools live behind mode/view/param switches on the survivors (see the
+# `archy.mcp` module docstring).
+_EXPECTED_TOOLS = frozenset(
+    {
+        "archy_score",
+        "archy_cycles",
+        "archy_check",
+        "archy_impact",
+        "archy_snapshot",
+        "archy_diff",
+        "archy_graph",
+        "archy_what_to_refactor_next",
+        "archy_dsm",
+        "archy_simulate",
+        "archy_duplicates",
+        # `archy_conventions` reports a project's derived house style (naming
+        # families, mirrored surfaces, gate inventory, model census) so an
+        # agent stops re-deriving conventions by reading source.
+        "archy_conventions",
+        # `archy_module_view` is the same census as a LOOKUP on one module,
+        # complete and unranked. Kept a separate tool rather than a
+        # parameter on `archy_conventions` because a union return type makes
+        # FastMCP wrap every payload under a `result` key, which would change
+        # the released tool's wire format for consumers that never asked for
+        # this feature.
+        "archy_module_view",
+        # `archy_brief` composes conventions + coverage + contracts into one
+        # call. It was CLI-only until a usage signal appeared (#427).
+        "archy_brief",
+    }
+)
+
+
+def test_create_server_registers_expected_tools():
+    server = create_server()
+    tools = _list_tools(server)
+    names = {t.name for t in tools}
+    assert names == _EXPECTED_TOOLS
+    assert len(names) == 14
+
+
+@pytest.mark.parametrize(
+    "tool_name",
+    sorted(_EXPECTED_TOOLS),
+)
+def test_all_tools_forbid_additional_properties(tool_name: str):
+    """Every advertised inputSchema must reject undeclared properties (#662)."""
+    server = create_server()
+    tool = next(t for t in _list_tools(server) if t.name == tool_name)
+    schema = tool.model_dump(by_alias=True)["inputSchema"]
+    assert schema.get("additionalProperties") is False

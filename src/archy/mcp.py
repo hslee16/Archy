@@ -55,7 +55,7 @@ Two wrapping rules worth knowing:
 One benign edge: an *empty* sequence return yields `structuredContent`
 `{"result": []}` with no accompanying `TextContent` block (the SDK emits one
 content block per element). The structured form is unambiguous, so this is
-not a correctness gap. tests/test_mcp.py locks the whole contract.
+not a correctness gap. tests/test_mcp_*.py lock the whole contract.
 
 ## Error model
 
@@ -89,7 +89,7 @@ with one convention, so an agent has a single recovery contract:
      honest-null empty result with a `note`.
 
 The de-facto marker an agent can key on: a tier-3 "no usable result" variant is
-a payload with an `error` field and no success data. tests/test_mcp.py asserts
+a payload with an `error` field and no success data. tests/test_mcp_*.py assert
 tier-2 conditions surface as `isError` and tier-3 conditions return in-band.
 
 archy:owns        create_server

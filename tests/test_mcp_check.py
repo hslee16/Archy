@@ -18,7 +18,6 @@ from archy.mcp_runs import (
     run_simulate,
 )
 from tests.mcp_helpers import (
-    _list_tools,
     _make_sdp_violating_project,
     _myapp_core_cli,
     _transitive_project,
@@ -62,43 +61,6 @@ def test_check_passed_respects_the_layer_presence_floor(tmp_path: Path):
     assert dumped["min_layers_present"] == 2
     assert dumped["coverage"]["layers_present"] == 0
     assert sorted(dumped["coverage"]["empty_layers"]) == ["routes", "services"]
-
-
-def test_create_server_registers_expected_tools():
-    server = create_server()
-    tools = _list_tools(server)
-    names = {t.name for t in tools}
-    # The tool set is pinned exactly: adding or removing a tool without a
-    # deliberate decision fails here. Folded tools live behind mode/view/param
-    # switches on the survivors; see the module docstring.
-    assert names == {
-        "archy_score",
-        "archy_cycles",
-        "archy_check",
-        "archy_impact",
-        "archy_snapshot",
-        "archy_diff",
-        "archy_graph",
-        "archy_what_to_refactor_next",
-        "archy_dsm",
-        "archy_simulate",
-        "archy_duplicates",
-        # `archy_conventions` reports a project's derived house style (naming
-        # families, mirrored surfaces, gate inventory, model census) so an
-        # agent stops re-deriving conventions by reading source.
-        "archy_conventions",
-        # `archy_module_view` is the same census as a LOOKUP on one module,
-        # complete and unranked. Kept a separate tool rather than a
-        # parameter on `archy_conventions` because a union return type makes
-        # FastMCP wrap every payload under a `result` key, which would change
-        # the released tool's wire format for consumers that never asked for
-        # this feature.
-        "archy_module_view",
-        # `archy_brief` composes conventions + coverage + contracts into one
-        # call. It was CLI-only until a usage signal appeared (#427).
-        "archy_brief",
-    }
-    assert len(names) == 14
 
 
 @pytest.mark.parametrize("relative", [True, False], ids=["relative", "absolute"])
@@ -518,32 +480,3 @@ def test_score_gate_passes_at_exactly_the_tolerance_and_fails_just_past_it(tmp_p
     assert at_tolerance.delta == -0.25
     assert at_tolerance.passed is True
     assert past_tolerance.passed is False
-
-
-@pytest.mark.parametrize(
-    "tool_name",
-    sorted(
-        {
-            "archy_score",
-            "archy_cycles",
-            "archy_check",
-            "archy_impact",
-            "archy_snapshot",
-            "archy_diff",
-            "archy_graph",
-            "archy_what_to_refactor_next",
-            "archy_dsm",
-            "archy_simulate",
-            "archy_duplicates",
-            "archy_conventions",
-            "archy_module_view",
-            "archy_brief",
-        }
-    ),
-)
-def test_all_tools_forbid_additional_properties(tool_name: str):
-    """Every advertised inputSchema must reject undeclared properties (#662)."""
-    server = create_server()
-    tool = next(t for t in _list_tools(server) if t.name == tool_name)
-    schema = tool.model_dump(by_alias=True)["inputSchema"]
-    assert schema.get("additionalProperties") is False

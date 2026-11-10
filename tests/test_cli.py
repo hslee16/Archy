@@ -583,7 +583,7 @@ def test_simulate_lists_required_reach_violations_outside_the_ranked_summary(tmp
 
 
 def _make_sdp_violating_project(tmp_path: Path) -> Path:
-    # See test_run_check_reports_sdp_violations_when_enabled in test_mcp.py
+    # See test_run_check_reports_sdp_violations_when_enabled in test_mcp_check.py
     # for the I calculation; the a -> b edge is the SDP violation.
     pkg = tmp_path / "myapp"
     pkg.mkdir()

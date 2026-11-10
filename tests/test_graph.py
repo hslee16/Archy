@@ -840,7 +840,7 @@ def test_graph_to_dict_shape_is_pinned_by_hand():
     """The wire shape as a literal, because every other test of it is relative.
 
     `archy graph --format json` and `mcp_runs._graph_payload_from` BOTH call this
-    function, so the cross-surface parity test in `tests/test_mcp.py` cannot
+    function, so the cross-surface parity test in `tests/test_mcp_graph.py` cannot
     catch a consistent regression here: dropping a field or renaming a key moves
     both sides together and that test still passes (#439). Nothing else pins the
     JSON contract that external consumers actually read.

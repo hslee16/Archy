@@ -79,7 +79,7 @@ dev = [
     "ruff>=0.6",
     "ty>=0.0.1a1",
     "import-linter>=2.11,<2.16",
-    # Used by tests/test_mcp.py to validate each tool's returned
+    # Used by tests/test_mcp_*.py to validate each tool's returned
     # `structuredContent` against its declared `outputSchema` (the 2025-06-18
     # MCP structured-output contract). Ships transitively with `mcp` already;
     # declared here so the test's direct use is honest, not relying on a
@@ -96,7 +96,7 @@ dev = [
     "syrupy>=4.0",
 ]
 # Optional group that pulls in numpy/scipy so the PageRank parity test in
-# tests/test_mcp.py can compare our hand-rolled `_pagerank` against
+# tests/test_mcp_graph.py can compare our hand-rolled `_pagerank` against
 # `nx.pagerank`. Kept separate from `dev` so the default install stays
 # scientific-stack free. Run with: `uv sync --group parity`.
 parity = [

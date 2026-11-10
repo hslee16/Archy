@@ -16,7 +16,7 @@ So this drives an actual client over stdio: initialize, list, call. It passes on
 whichever major is installed, which is what makes it the check that catches a
 2.x divergence the alias cannot -- run it under both to clear a ceiling bump.
 
-Kept out of `test_mcp.py` deliberately: these spawn a subprocess and take
+Kept out of the in-process `test_mcp_*.py` modules deliberately: these spawn a subprocess and take
 seconds rather than milliseconds, and they fail for a different reason (the
 transport, not the payload).
 """
