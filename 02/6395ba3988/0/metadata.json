@@ -1,0 +1,87 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "026395ba3988",
+  "session_id": "2baa2158-73fd-4a98-bed1-d7f35235506f",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-10T01:11:43.402109Z",
+  "branch": "alee/split-graph",
+  "checkpoints_count": 2,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "c3b8fb939381",
+  "token_usage": {
+    "input_tokens": 1600,
+    "cache_creation_tokens": 1342371,
+    "cache_read_tokens": 312060731,
+    "output_tokens": 660684,
+    "api_call_count": 739
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01HxNwQmxLGxSYmMkssMXvKx",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "c3b8fb939381",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 124,
+        "end": 125,
+        "entry_ids": [
+          "cdbd5c63-20d3-450d-b80c-aca9aa9ef277"
+        ],
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01HxNwQmxLGxSYmMkssMXvKx"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 25
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 1585,
+      "user_lines_removed": 1415,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "archy.yaml": 5,
+        "src/archy/complexity.py": 2,
+        "src/archy/graph.py": 77,
+        "src/archy/graph_assemble.py": 327,
+        "src/archy/graph_discovery.py": 390,
+        "src/archy/graph_hints.py": 229,
+        "src/archy/graph_models.py": 151,
+        "src/archy/graph_resolve.py": 397,
+        "src/archy/instability.py": 1,
+        "src/archy/parser.py": 5,
+        "src/archy/risk.py": 1
+      },
+      "user_removed_per_file": {
+        "src/archy/complexity.py": 1,
+        "src/archy/graph.py": 1410,
+        "src/archy/instability.py": 1,
+        "src/archy/parser.py": 2,
+        "src/archy/risk.py": 1
+      }
+    }
+  ]
+}
