@@ -2077,6 +2077,25 @@ def test_refactor_structural_lens_skips_git(tmp_path: Path):
     assert all(e.lenses == ("edit_risk",) for e in payload.priorities)
 
 
+def test_refactor_refuses_a_garbage_since_even_for_the_structural_lens(tmp_path: Path):
+    """The structural lens never reads git, but a typo in `since` must still be refused.
+
+    Otherwise `since="2025-O1-01"` reads as "nothing to prioritize" instead of as a
+    mistake. The refusal needs a repository: with none there is no ref to resolve.
+    """
+    from archy.gitlog import InvalidSinceError
+
+    _hub_project(tmp_path, spokes=1)
+    _init_git_repo(tmp_path)
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+
+    with pytest.raises(InvalidSinceError):
+        run_what_to_refactor_next(
+            tmp_path, lens="structural", top_n=5, since="not-a-date-or-ref", min_risk=0.0
+        )
+
+
 def test_refactor_structural_lens_top_n_caps_results(tmp_path: Path):
     _hub_project(tmp_path, spokes=4)
 

@@ -1,9 +1,11 @@
 """The work behind each MCP tool, independent of the MCP framework.
 
-Every ``run_*`` function here takes plain arguments and returns a payload from
+This module is a facade. The ``run_*`` functions live in ``archy.mcp_runs_check``,
+``archy.mcp_runs_git`` and ``archy.mcp_runs_graph``, and the warm-index plumbing
+(``_manager_for`` and friends) in ``archy.mcp_runs_core``; importing from here keeps
+working. Every ``run_*`` function takes plain arguments and returns a payload from
 ``archy.mcp_payloads``; ``archy.mcp`` only registers them as tools and maps
-expected refusals onto ``ToolError``. The warm-index plumbing (``_manager_for``
-and friends) lives here too, because the ``run_*`` bodies are its only callers.
+expected refusals onto ``ToolError``.
 
 archy:owns        contracts_verdict, resolve_against, run_affected, run_brief,
                   run_check, run_contracts, run_conventions, run_cycles, run_diff,

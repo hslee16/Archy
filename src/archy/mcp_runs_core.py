@@ -37,7 +37,7 @@ def _rank_desc(pairs: Iterable[tuple[str, float]]) -> list[tuple[str, float]]:
     """`(name, value)` pairs ranked by value descending, ties by name ascending.
 
     The tie-break is part of the wire contract: summary lists must be stable
-    across runs, and every ranked list in this module has to order ties the same
+    across runs, and every ranked list in the `archy.mcp_runs_*` modules has to order ties the same
     way. One definition, so a change cannot land at one site and miss the others
     (#500).
     """
@@ -153,7 +153,9 @@ def _build_graph(path: Path, *, max_modules: int | None = None, **kwargs):
     A `ScanTooLargeError` from the guard is NOT a cache failure, so it propagates
     rather than being retried by the cold path (which would re-raise anyway).
     """
-    return _warm_or_cold(path, max_modules, kwargs, IndexManager.build_graph, build_graph)
+    return _warm_or_cold(
+        path, {**kwargs, "max_modules": max_modules}, IndexManager.build_graph, build_graph
+    )
 
 
 def _parse_project(path: Path, *, max_modules: int | None = None, **kwargs):
@@ -162,7 +164,9 @@ def _parse_project(path: Path, *, max_modules: int | None = None, **kwargs):
     The same warm-then-cold routing as `_build_graph`, through the manager's
     `parse_map` and falling back to `graph.parse_project`.
     """
-    return _warm_or_cold(path, max_modules, kwargs, IndexManager.parse_map, parse_project)
+    return _warm_or_cold(
+        path, {**kwargs, "max_modules": max_modules}, IndexManager.parse_map, parse_project
+    )
 
 
 _T = TypeVar("_T")
@@ -170,21 +174,22 @@ _T = TypeVar("_T")
 
 def _warm_or_cold(
     path: Path,
-    max_modules: int | None,
     kwargs: dict,
     warm: Callable[[IndexManager], _T],
     cold: Callable[..., _T],
 ) -> _T:
     """`warm(manager)` via the per-root IndexManager, else `cold(path, ...)`.
 
+    `kwargs` carries `max_modules` and the scan options to both routes.
+
     Only a cache failure (`sqlite3.Error`, `OSError`) takes the cold path. A
     `ScanTooLargeError` from the guard is not one, so it propagates rather than
     being retried by a cold scan that would raise it again.
     """
     try:
-        return warm(_manager_for(path, max_modules=max_modules, **kwargs))
+        return warm(_manager_for(path, **kwargs))
     except (sqlite3.Error, OSError):
-        return cold(path, max_modules=max_modules, **kwargs)
+        return cold(path, **kwargs)
 
 
 def _load_graph(path: Path, *, internal_only: bool):

@@ -185,17 +185,25 @@ def _pagerank(graph, *, damping: float = 0.85, iterations: int = 50, tol: float 
     pr = dict.fromkeys(nodes, 1.0 / n)
     teleport = (1.0 - damping) / n
     for _ in range(iterations):
-        dangling_mass = damping * sum(pr[v] for v in nodes if out_degree[v] == 0) / n
-        new_pr = {v: teleport + dangling_mass for v in nodes}
-        for u in nodes:
-            if out_degree[u]:
-                share = damping * pr[u] / out_degree[u]
-                for v in graph.successors(u):
-                    new_pr[v] += share
+        new_pr = _pagerank_step(graph, pr, out_degree, damping, teleport)
         if sum(abs(new_pr[v] - pr[v]) for v in nodes) < tol:
             return new_pr
         pr = new_pr
     return pr
+
+
+def _pagerank_step(graph, pr: dict, out_degree: dict, damping: float, teleport: float) -> dict:
+    """One power-iteration step: teleport, redistributed dangling mass, then each
+    node's damped share along its out-edges."""
+    n = len(pr)
+    dangling_mass = damping * sum(pr[v] for v in pr if out_degree[v] == 0) / n
+    new_pr = {v: teleport + dangling_mass for v in pr}
+    for u in pr:
+        if out_degree[u]:
+            share = damping * pr[u] / out_degree[u]
+            for v in graph.successors(u):
+                new_pr[v] += share
+    return new_pr
 
 
 def run_graph_summary(path: Path, *, top_n: int) -> GraphSummaryPayload:

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pydantic import BaseModel, ConfigDict
+
 from archy.coupling import (
     git_cochange,
 )
@@ -142,42 +144,49 @@ def _duplicates_note(dup_count: int, variant_count: int, min_nodes: int) -> str 
     return note
 
 
-def _refactor_note(
-    *,
-    lens: str,
-    rows: list,
-    git_available: bool,
-    path: Path,
-    min_risk: float,
-    no_commits: bool = False,
-    empty_window: bool = False,
-    since: str | None = None,
-) -> str | None:
+class _RefactorNoteInputs(BaseModel):
+    """What `_refactor_note` words its note from: the lens, what ran, what was found."""
+
+    model_config = ConfigDict(frozen=True)
+
+    lens: str
+    has_rows: bool
+    git_available: bool
+    min_risk: float
+    missing_git: str
+    # Set only when git ran and the --since window held no commits at all.
+    empty_window_since: str | None = None
+
+
+def _missing_git_phrase(path: Path, no_commits: bool) -> str:
+    return (
+        f"{path} has no commit history yet"
+        if no_commits
+        else f"{path} is not inside a git repository (or git is unavailable)"
+    )
+
+
+def _refactor_note(note: _RefactorNoteInputs) -> str | None:
     """Lens-aware empty/degraded note for archy_what_to_refactor_next.
 
     behavioral needs git; structural never does; fused runs both and degrades
     to structural-only off git. A non-empty single-lens result needs no note.
     An empty --since window is named so it is not mistaken for a calm codebase.
     """
-    missing_git = (
-        f"{path} has no commit history yet"
-        if no_commits
-        else f"{path} is not inside a git repository (or git is unavailable)"
-    )
-    if rows:
-        if lens == "fused" and not git_available:
+    if note.has_rows:
+        if note.lens == "fused" and not note.git_available:
             return (
-                f"{missing_git}; "
+                f"{note.missing_git}; "
                 "the CC x churn behavioral lens was skipped and this ranking is "
                 "structural-only (edit-risk). Run inside git for the fused view."
             )
         return None
-    if empty_window and since and git_available:
+    if note.empty_window_since:
         return (
-            f"No commits in the --since window ({since}). "
+            f"No commits in the --since window ({note.empty_window_since}). "
             "Widen the window or omit --since to use full history."
         )
-    return _empty_lens_note(lens, git_available, missing_git, min_risk)
+    return _empty_lens_note(note.lens, note.git_available, note.missing_git, note.min_risk)
 
 
 def _empty_lens_note(lens: str, git_available: bool, missing_git: str, min_risk: float) -> str:
@@ -219,14 +228,15 @@ def _empty_lens_note(lens: str, git_available: bool, missing_git: str, min_risk:
     )
 
 
-def _validate_refactor_args(
-    path: Path, lens: str, top_n: int, since: str | None, min_risk: float
-) -> None:
+def _validate_refactor_bounds(lens: str, top_n: int, min_risk: float) -> None:
     _validate_refactor_lens(lens)
     if top_n <= 0:
         raise ValueError(f"top_n must be >= 1; got {top_n}")
     if not 0.0 <= min_risk <= 1.0:
         raise ValueError(f"min_risk must be in [0, 1]; got {min_risk}")
+
+
+def _validate_since(path: Path, since: str | None) -> None:
     # Refuse a garbage `since` even when lens='structural' skips the git call,
     # so a typo cannot silently look like "nothing to prioritize".
     if since is not None:
@@ -267,7 +277,8 @@ def _rows_for_lens(rows: list, lens: str) -> list:
 def run_what_to_refactor_next(
     path: Path, *, lens: str = "fused", top_n: int, since: str | None, min_risk: float
 ) -> WhatToRefactorPayload:
-    _validate_refactor_args(path, lens, top_n, since, min_risk)
+    _validate_refactor_bounds(lens, top_n, min_risk)
+    _validate_since(path, since)
 
     graph = _load_graph(path, internal_only=True)
     churn, no_commits = _refactor_churn(path, lens, since)
@@ -299,14 +310,14 @@ def run_what_to_refactor_next(
         if repo is not None:
             empty_window = since_window_empty(repo, since)
     note = _refactor_note(
-        lens=lens,
-        rows=rows,
-        git_available=git_available,
-        path=path,
-        min_risk=min_risk,
-        no_commits=no_commits,
-        empty_window=empty_window,
-        since=since,
+        _RefactorNoteInputs(
+            lens=lens,
+            has_rows=bool(rows),
+            git_available=git_available,
+            min_risk=min_risk,
+            missing_git=_missing_git_phrase(path, no_commits),
+            empty_window_since=since if empty_window else None,
+        )
     )
 
     return WhatToRefactorPayload(
