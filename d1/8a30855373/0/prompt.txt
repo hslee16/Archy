@@ -5442,3 +5442,36 @@ I traced each changed docstring and comment against the code:
 - **Tests:** `uv run pytest tests/test_duplicates.py` gave 72 passed.</result>
 <usage><subagent_tokens>25762</subagent_tokens><tool_uses>5</tool_uses><duration_ms>67172</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>a61e639e9d771348d</task-id>
+<tool-use-id>toolu_0195hV2B2hDgaNdgeUkotcT3</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a61e639e9d771348d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No findings. `/Users/hosanglee/archy/tests/test_duplicates.py` has zero U+2014 characters, so I marked the review as passed.</result>
+<usage><subagent_tokens>18524</subagent_tokens><tool_uses>3</tool_uses><duration_ms>8708</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2a69a32dadaf8812</task-id>
+<tool-use-id>toolu_01E2x1WhWWN33ySeuibXMQxP</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/2baa2158-73fd-4a98-bed1-d7f35235506f/tasks/a2a69a32dadaf8812.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python_code_review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>`tests/test_duplicates.py` passes the review with no violations, and I marked review `python_code_review--tests-test_duplicates.py--d2f8a1104a20` as passed.
+
+- **Future import and typing:** `from __future__ import annotations` is at the top, and the file uses PEP 604 and builtin generics only.
+- **Naming and value objects:** Names follow the snake_case, PascalCase and underscore-prefix rules. The file defines no value objects, so the pydantic rule has nothing to apply to.
+- **Paths and imports:** It uses `pathlib` throughout, and the imports are grouped correctly.
+- **Line length:** No line is over 100 characters (checked with `awk`).
+- **Duplication:** I found no copy-pasted block that should be a shared helper.
+- **Comments:** The comments I read explain a constraint, a decision or the reason for an assertion, rather than restating the code.</result>
+<usage><subagent_tokens>35724</subagent_tokens><tool_uses>3</tool_uses><duration_ms>13482</duration_ms></usage>
+</task-notification>
