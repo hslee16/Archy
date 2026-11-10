@@ -90,6 +90,7 @@ layers:
       - "archy.cli_render_history"
       - "archy.mcp"
       - "archy.mcp_prompts"
+      - "archy.mcp_tool_descriptions"
       - "archy.mcp_tools_check"
       - "archy.mcp_tools_common"
       - "archy.mcp_tools_conventions"

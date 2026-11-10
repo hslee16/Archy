@@ -69,7 +69,7 @@ Python architecture analysis: import graph, cycles, layer rules, five-axis score
 > structure that exists. The tool count was corrected from 14 to 11 (the
 > [#265](https://github.com/hslee16/archy/issues/265) consolidation folded
 > `archy_trend`, `archy_status`, and `archy_contracts` into other tools);
-> `grep -c "@server.tool(" src/archy/mcp.py` is the check.
+> `cat src/archy/mcp_tools_*.py | grep -c "@server.tool("` is the check.
 
 ### Long description
 archy watches a Python codebase, builds a live module-dependency graph, and surfaces drift through a single trended score plus a handful of actionable sub-metrics. Designed to run in CI, in pre-commit, and as an MCP server (`archy mcp`) so coding agents (Claude Code, Cursor, Codex, opencode, Continue, any MCP client) can read their own architectural impact before committing. A persistent parse cache kept warm by a background file watcher keeps tool calls fast (low seconds even on 10k+ module repos), and `archy install` auto-wires the server into any supported agent. Tree-sitter powered, so robust to in-flight edits and partial files.
