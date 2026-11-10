@@ -300,7 +300,7 @@ def test_graph_dump_matches_cli_json(acyclic_project: Path):
     It does NOT make the SERIALIZATION independent, because `cli.graph` and
     `mcp_runs._graph_payload_from` both still call `graph_to_dict`, so a consistent
     regression inside that function moves both sides together and passes here.
-    `tests/test_graph.py::test_graph_to_dict_shape_is_pinned_by_hand` is what
+    `tests/test_graph_serialize.py::test_graph_to_dict_shape_is_pinned_by_hand` is what
     covers that, against a dict written out by hand.
     """
     cli = subprocess.run(

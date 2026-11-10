@@ -296,7 +296,7 @@ def find_reach_violations(graph: nx.DiGraph, config: LayerConfig) -> list[ReachV
     # depth axis is what caught it, and archy's own `LayerConfig.max_modules`
     # comment already recorded the intent that policy not depend on graph.
     # A function-local import would NOT have helped: archy records function-local
-    # imports as graph edges (tests/test_graph.py pins that), so the edge and the
+    # imports as graph edges (tests/test_graph_build.py pins that), so the edge and the
     # depth cost are identical either way.
     from archy.reach import with_package_init_edges
 
