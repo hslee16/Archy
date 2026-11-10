@@ -17,12 +17,14 @@ browsing a dashboard.
 archy:owns        DSM, DSMCell, DSMDiff, DSMGroup, DSMGroupSummary, DSMSummary,
                   build_dsm, diff_dsm, dsm_from_dict, read_dsm, render_ascii,
                   render_diff_text, render_json, summarize_dsm, write_dsm
-archy:mirrored-by DSM -> archy.mcp, archy.mcp_runs, archy.render, DSMDiff -> archy.mcp,
-                  archy.mcp_runs, DSMSummary -> archy.mcp, archy.mcp_runs,
-                  build_dsm -> archy.cli_graph, archy.mcp_runs, archy.simulate,
-                  bench.simulate_oracle, diff_dsm -> archy.cli_graph, archy.mcp_runs,
-                  archy.simulate, bench.simulate_oracle, read_dsm -> archy.cli_graph,
-                  archy.mcp_runs, summarize_dsm -> archy.mcp_runs, archy.render
+archy:mirrored-by DSM -> archy.mcp, archy.mcp_runs_graph, archy.render,
+                  DSMDiff -> archy.mcp, archy.mcp_runs_graph, DSMSummary -> archy.mcp,
+                  archy.mcp_runs_graph, build_dsm -> archy.cli_graph,
+                  archy.mcp_runs_graph, archy.simulate, bench.simulate_oracle,
+                  diff_dsm -> archy.cli_graph, archy.mcp_runs_graph, archy.simulate,
+                  bench.simulate_oracle, read_dsm -> archy.cli_graph,
+                  archy.mcp_runs_graph, summarize_dsm -> archy.mcp_runs_graph,
+                  archy.render
 """
 
 from __future__ import annotations

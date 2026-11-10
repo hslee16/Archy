@@ -662,7 +662,7 @@ def test_dsm_summary_localizes_back_edges(tmp_path: Path):
 def test_dsm_full_oversized_returns_too_large(tmp_path: Path, monkeypatch):
     # The full matrix is capped; over the ceiling it refuses with an explicit
     # indicator pointing at the summary / focus / package escape hatches.
-    monkeypatch.setattr("archy.mcp_runs.DEFAULT_MAX_DSM_CELLS", 2)
+    monkeypatch.setattr("archy.mcp_runs_graph.DEFAULT_MAX_DSM_CELLS", 2)
     project = _fan_out_project(tmp_path, fan=5)  # 5 cells > cap of 2
     result = _dsm(project, response_format="full")
     assert isinstance(result, DSMTooLargePayload)
@@ -1144,7 +1144,7 @@ def test_archy_dsm_rejects_an_unknown_group_by_or_weight_before_scanning(
     def boom(*args, **kwargs):
         raise AssertionError(f"{name} must be validated before the project is scanned")
 
-    monkeypatch.setattr("archy.mcp_runs._load_graph", boom)
+    monkeypatch.setattr("archy.mcp_runs_graph._load_graph", boom)
 
     # Kept str-only (group_by/weight/response_format) so `**base` unifies to
     # `dict[str, str]`; mixing in the None/int fields below would widen that
@@ -2077,6 +2077,25 @@ def test_refactor_structural_lens_skips_git(tmp_path: Path):
     assert all(e.lenses == ("edit_risk",) for e in payload.priorities)
 
 
+def test_refactor_refuses_a_garbage_since_even_for_the_structural_lens(tmp_path: Path):
+    """The structural lens never reads git, but a typo in `since` must still be refused.
+
+    Otherwise `since="2025-O1-01"` reads as "nothing to prioritize" instead of as a
+    mistake. The refusal needs a repository: with none there is no ref to resolve.
+    """
+    from archy.gitlog import InvalidSinceError
+
+    _hub_project(tmp_path, spokes=1)
+    _init_git_repo(tmp_path)
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+
+    with pytest.raises(InvalidSinceError):
+        run_what_to_refactor_next(
+            tmp_path, lens="structural", top_n=5, since="not-a-date-or-ref", min_risk=0.0
+        )
+
+
 def test_refactor_structural_lens_top_n_caps_results(tmp_path: Path):
     _hub_project(tmp_path, spokes=4)
 
@@ -2569,7 +2588,7 @@ def test_warm_paths_fall_back_cold_when_the_cache_fails(
 ):
     # The index is an optimization, never a dependency: a cache that cannot open
     # (read-only filesystem, locked database) must still yield an answer (#395).
-    import archy.mcp_runs as mcp_module
+    import archy.mcp_runs_core as mcp_module
 
     pkg = tmp_path / "pkg"
     pkg.mkdir()
@@ -2900,7 +2919,7 @@ def test_cold_fallback_keeps_the_scan_size_guard(
     an unbounded scan of a vendored tree, the #216 failure mode. Dropping
     `max_modules` from the cold call passed the whole suite before this test.
     """
-    import archy.mcp_runs as mcp_module
+    import archy.mcp_runs_core as mcp_module
     from archy.graph import ScanTooLargeError
 
     pkg = tmp_path / "myapp"
@@ -3380,6 +3399,42 @@ def test_brief_without_a_config_has_no_coverage_and_no_reason(tmp_path: Path):
     assert payload.transitive_unverified_reason is None
 
 
+def test_score_gate_passes_at_exactly_the_tolerance_and_fails_just_past_it(tmp_path: Path):
+    """Previous 0.75 to current 0.5 is a drop of exactly 0.25 (all three are binary fractions)."""
+    from archy.history import HistoryRow
+    from archy.history import append as append_history
+    from archy.mcp_runs_check import _score_gate
+
+    history = tmp_path / ".archy" / "history.jsonl"
+    append_history(
+        history,
+        HistoryRow(
+            timestamp="2026-01-01T00:00:00Z",
+            commit="abc",
+            branch="main",
+            overall=0.75,
+            modularity=0.5,
+            acyclicity=1.0,
+            depth=0.5,
+            equality=0.5,
+            complexity=0.5,
+            module_count=3,
+            edge_count=2,
+            cycle_count=0,
+            tangle_ratio=0.0,
+            max_depth=2,
+            community_count=1,
+        ),
+    )
+
+    at_tolerance = _score_gate(history, 0.5, 0.25)
+    past_tolerance = _score_gate(history, 0.5, 0.125)
+
+    assert at_tolerance.delta == -0.25
+    assert at_tolerance.passed is True
+    assert past_tolerance.passed is False
+
+
 def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
     project = _write_brief_project(tmp_path, with_config=True)
     payload = run_brief(project, top_n=8, with_contracts=False, include_tests=False)
@@ -3401,7 +3456,7 @@ def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
 def test_brief_reads_the_contracts_verdict(
     tmp_path: Path, monkeypatch, contracts: ContractsPayload, checked: bool, reason_has
 ):
-    monkeypatch.setattr("archy.mcp_runs.run_contracts", lambda *a, **k: contracts)
+    monkeypatch.setattr("archy.mcp_runs_check.run_contracts", lambda *a, **k: contracts)
     project = _write_brief_project(tmp_path, with_config=True)
     payload = run_brief(project, top_n=8, with_contracts=True, include_tests=False)
     assert payload.transitive_checked is checked

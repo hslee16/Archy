@@ -12,18 +12,18 @@ archy:owns        Module, QualnameCollisionError, ScanTooLargeError, UnresolvedH
                   suggest_files, suggest_modules, zero_modules_reason
 archy:mirrored-by Module -> archy.conventions_collect, archy.duplicates, archy.headers,
                   archy.index, UnresolvedHint -> archy.impact, archy.mcp_payloads,
-                  archy.mcp_runs, archy.simulate, assemble_graph -> archy.index,
+                  archy.mcp_runs_graph, archy.simulate, assemble_graph -> archy.index,
                   archy.watcher, bench.pattern_detection,
-                  graph_to_dict -> archy.cli_graph, archy.mcp_runs,
-                  hint_unresolved -> archy.mcp_runs, archy.simulate,
-                  internal_module_count -> archy.cli_history, archy.mcp_runs,
-                  internal_subgraph -> archy.cli_app, archy.mcp_runs,
-                  parse_project -> archy.cli_git, archy.mcp_runs,
+                  graph_to_dict -> archy.cli_graph, archy.mcp_runs_graph,
+                  hint_unresolved -> archy.mcp_runs_graph, archy.simulate,
+                  internal_module_count -> archy.cli_history, archy.mcp_runs_check,
+                  internal_subgraph -> archy.cli_app, archy.mcp_runs_core,
+                  parse_project -> archy.cli_git, archy.mcp_runs_core,
                   bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
-                  bench.pattern_detection, resolve_modules -> archy.mcp_runs,
+                  bench.pattern_detection, resolve_modules -> archy.mcp_runs_graph,
                   archy.simulate, suggest_modules -> archy.affected, archy.cli_graph,
-                  archy.conventions, archy.mcp_runs,
-                  zero_modules_reason -> archy.cli_history, archy.mcp_runs
+                  archy.conventions, archy.mcp_runs_graph,
+                  zero_modules_reason -> archy.cli_history, archy.mcp_runs_check
 """
 
 from __future__ import annotations

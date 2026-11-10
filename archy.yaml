@@ -87,6 +87,10 @@ layers:
       - "archy.mcp_compat"
       - "archy.mcp_payloads"
       - "archy.mcp_runs"
+      - "archy.mcp_runs_check"
+      - "archy.mcp_runs_core"
+      - "archy.mcp_runs_git"
+      - "archy.mcp_runs_graph"
       - "archy.render"
       - "archy.scan_config"
   install:

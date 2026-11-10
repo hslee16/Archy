@@ -6,7 +6,7 @@ archy:owns        BaseFamily, ConventionsReport, DocGap, ExportGap, Gate, ModelC
 archy:mirrored-by BaseFamily -> archy.conventions_docs, archy.conventions_families,
                   Gate -> archy.cli_render_common, archy.conventions,
                   archy.conventions_gates, ModuleView -> archy.cli_render_conventions,
-                  archy.conventions, archy.mcp, archy.mcp_runs,
+                  archy.conventions, archy.mcp, archy.mcp_runs_check,
                   NamingFamily -> archy.conventions, archy.conventions_families,
                   RegistryEntry -> archy.conventions_docs, archy.conventions_families,
                   camel_suffix -> archy.conventions, archy.conventions_families

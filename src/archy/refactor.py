@@ -54,7 +54,7 @@ modules on a typical project, but dense graphs push many modules above it
 it empty. Tune it per call when a project's risk distribution warrants it.
 
 archy:owns        RefactorPriority, compute_refactor_priorities
-archy:mirrored-by compute_refactor_priorities -> archy.cli_git, archy.mcp_runs
+archy:mirrored-by compute_refactor_priorities -> archy.cli_git, archy.mcp_runs_git
 """
 
 from __future__ import annotations

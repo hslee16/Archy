@@ -36,7 +36,7 @@ def _isolate_git_config(
 def _stop_mcp_index_managers() -> Iterator[None]:
     """Stop every IndexManager an MCP tool call started, once the test is over (#699).
 
-    ``archy.mcp_runs._MANAGERS`` caches one manager per (project root, config): an
+    ``archy.mcp_runs_core._MANAGERS`` caches one manager per (project root, config): an
     open sqlite connection plus a watchdog observer. Every tool call on a fresh
     ``tmp_path`` project adds one and nothing stops it, so a full run ended with
     about 2,600 open file descriptors, past the 1023 that ``select.select``
@@ -44,7 +44,7 @@ def _stop_mcp_index_managers() -> Iterator[None]:
     ``sys.modules`` so a test that never imports the MCP layer pays nothing.
     """
     yield
-    runs = sys.modules.get("archy.mcp_runs")
+    runs = sys.modules.get("archy.mcp_runs_core")
     if runs is None:
         return
     with runs._MANAGERS_LOCK:

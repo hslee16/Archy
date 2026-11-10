@@ -5,11 +5,12 @@ archy:owns        check_external_patterns, compute_coverage, contracts_unverifie
                   governed_roots
 archy:mirrored-by check_external_patterns -> archy.contracts, archy.layers,
                   compute_coverage -> archy.cli_check, archy.cli_conventions,
-                  archy.layers, archy.mcp_runs, bench.greenfield_eval,
+                  archy.layers, archy.mcp_runs_check, bench.greenfield_eval,
                   contracts_unverified -> archy.cli_render_check, archy.layers,
-                  archy.mcp_runs, find_reach_violations -> archy.cli_check, archy.diff,
-                  archy.layers, archy.mcp_runs, find_sdp_violations -> archy.cli_check,
-                  archy.diff, archy.layers, archy.mcp_runs
+                  archy.mcp_runs_check, find_reach_violations -> archy.cli_check,
+                  archy.diff, archy.layers, archy.mcp_runs_check,
+                  find_sdp_violations -> archy.cli_check, archy.diff, archy.layers,
+                  archy.mcp_runs_check
 """
 
 from __future__ import annotations
