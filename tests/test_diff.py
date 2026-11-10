@@ -423,3 +423,18 @@ def test_cycle_diff_identity_is_the_module_set_not_the_rotation():
     diff = _cycle_set_diff(baseline, current)
     assert [set(c.modules) for c in diff.added] == [{"p", "q"}]
     assert [set(c.modules) for c in diff.resolved] == [{"x", "y"}]
+
+
+def test_findings_only_rows_for_required_reach_drop_the_prose_detail_and_sort():
+    """`detail` can embed an absolute path or a derived reason, so a committed baseline omits it."""
+    from archy.diff import _required_rows_without_detail
+
+    rows = [
+        {"source": "b", "must_reach": "x", "module": "b.m", "detail": "/abs/path says why"},
+        {"source": "a", "must_reach": "x", "module": "a.m", "detail": "another reason"},
+    ]
+
+    assert _required_rows_without_detail(rows) == [
+        {"source": "a", "must_reach": "x", "module": "a.m"},
+        {"source": "b", "must_reach": "x", "module": "b.m"},
+    ]
