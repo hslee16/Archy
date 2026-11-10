@@ -166,6 +166,22 @@ def test_brief_is_advisory_and_never_gates(tmp_path: Path):
     assert CliRunner().invoke(main, ["brief", str(root)]).exit_code == 0
 
 
+def test_brief_reports_invalid_coverage_in_text(overlapping_layers_project: Path):
+    result = CliRunner().invoke(main, ["brief", str(overlapping_layers_project)])
+    assert result.exit_code == 0, result.output
+    assert "found but invalid" in result.output
+    assert "multiple layers" in result.output
+    assert "no archy.yaml discovered" not in result.output
+    assert "what kind of thing" in result.output
+
+
+def test_brief_reports_invalid_coverage_in_json(overlapping_layers_project: Path):
+    payload = _invoke_json(["brief", str(overlapping_layers_project), "--format", "json"])
+    assert payload["coverage"] is None
+    assert "multiple layers" in payload["coverage_error"]
+    assert payload["conventions"] is not None
+
+
 def test_check_contracts_says_why_it_has_no_verdict_on_every_surface(tmp_path: Path, monkeypatch):
     """A verdict without a reason is not actionable. When import-linter is
     absent, `contracts` missing from the JSON entirely is indistinguishable from
@@ -225,6 +241,7 @@ def test_brief_json_says_whether_it_looked_transitively(tmp_path: Path):
 
     assert payload["transitive_checked"] is False
     assert "forbid rule" in payload["transitive_unverified_reason"]
+    assert payload["coverage_error"] is None
 
 
 def test_brief_json_reason_is_absent_without_an_archy_yaml(tmp_path: Path):
@@ -238,3 +255,4 @@ def test_brief_json_reason_is_absent_without_an_archy_yaml(tmp_path: Path):
 
     assert payload["transitive_checked"] is False
     assert payload["transitive_unverified_reason"] is None
+    assert payload["coverage_error"] is None

@@ -201,6 +201,8 @@ class BriefPayload(BaseModel):
     # None when there is no usable archy.yaml: brief tolerates a missing or
     # malformed config and still reports, where `archy_check` cannot.
     coverage: LayerCoverage | None = None
+    # A discovered config failed coverage validation; absent/valid configs have no error.
+    coverage_error: str | None = None
     # Nested only when archy_brief(contracts=True) ran import-linter.
     contracts: ContractsPayload | None = None
     # What this run actually looked at; `passed`-style silence would hide that
