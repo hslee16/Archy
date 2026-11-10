@@ -258,7 +258,7 @@ def _seed_score_history(project: Path, overall: float) -> None:
 
 
 def _write_registry_project(tmp_path: Path, *, bootstrap: str) -> Path:
-    """The reported incident, reduced. See test_cli.py::_make_registry_project."""
+    """The reported incident, reduced. See tests/cli_helpers.py::_make_registry_project."""
     app = tmp_path / "app"
     (app / "core").mkdir(parents=True)
     (app / "commands").mkdir(parents=True)
