@@ -322,10 +322,24 @@ def compute_near_duplicates(
     silently truncating.
     """
     sized = list(_sized_functions(modules, parse_results, min_size))
-    shape_counts: Counter[str] = Counter(fn.shape_hash for _, _, fn in sized)
+    items = _near_miss_candidates(sized)
+    components, edge_weight = _cluster_by_similarity(items, min_similarity, max_comparisons)
 
-    # Candidates: singleton-shaped functions (exact-hash already surfaces the
-    # rest). Attach each one's token bag, re-parsing each file at most once.
+    groups = [
+        _near_miss_group(items, members_idx, edge_weight, min_similarity)
+        for members_idx in components.values()
+        if len(members_idx) >= DEFAULT_MIN_MEMBERS
+    ]
+    groups.sort(key=lambda g: (-(g.similarity or 0.0), -g.redundancy, -g.size))
+    return groups
+
+
+def _near_miss_candidates(sized: list[tuple[str, str, FunctionComplexity]]) -> list[_Candidate]:
+    """Singleton-shaped functions with their token bags, sorted by size.
+
+    Exact-hash already surfaces the rest. Each file is re-parsed at most once.
+    """
+    shape_counts: Counter[str] = Counter(fn.shape_hash for _, _, fn in sized)
     bags_by_path: dict[str, dict[int, Counter[str]]] = {}
     items: list[_Candidate] = []
     for qual, path, fn in sized:
@@ -334,8 +348,17 @@ def compute_near_duplicates(
         bag = _read_cached(bags_by_path, path, extract_token_bags).get(fn.line)
         if bag:
             items.append(_Candidate(qual, path, fn, bag))
-
     items.sort(key=lambda it: it.fn.size)
+    return items
+
+
+def _cluster_by_similarity(
+    items: list[_Candidate], min_similarity: float, max_comparisons: int
+) -> tuple[dict[int, list[int]], dict[frozenset[int], float]]:
+    """Connected components of the pairs at or above `min_similarity`, and each edge's weight.
+
+    Warns, rather than silently truncating, when the comparison budget runs out.
+    """
     parent = list(range(len(items)))
 
     def find(x: int) -> int:
@@ -348,8 +371,7 @@ def compute_near_duplicates(
     budget = max_comparisons
     truncated = False
     for i in range(len(items)):
-        size_i = items[i].fn.size
-        limit = size_i / min_similarity  # sizes above this cannot reach the floor
+        limit = items[i].fn.size / min_similarity  # sizes above this cannot reach the floor
         for j in range(i + 1, len(items)):
             if items[j].fn.size > limit:
                 break  # sorted ascending: no later j is in band either
@@ -367,43 +389,43 @@ def compute_near_duplicates(
         warnings.warn(
             f"near-miss: hit the {max_comparisons} token-comparison budget; results "
             "may be incomplete. Raise max_comparisons or min_similarity to widen.",
-            stacklevel=2,
+            stacklevel=3,
         )
 
     components: dict[int, list[int]] = {}
     for idx in range(len(items)):
         components.setdefault(find(idx), []).append(idx)
+    return components, edge_weight
 
-    groups: list[DuplicateGroup] = []
-    for members_idx in components.values():
-        if len(members_idx) < DEFAULT_MIN_MEMBERS:
-            continue
-        member_set = set(members_idx)
-        sims = [w for key, w in edge_weight.items() if key <= member_set]
-        similarity = min(sims) if sims else min_similarity
-        # A near-miss group's members differ in size (unlike an exact cluster's
-        # one shared size), so use the median as the representative for ranking.
-        sizes = sorted(items[k].fn.size for k in members_idx)
-        rep_size = sizes[len(sizes) // 2]
-        members = tuple(
-            sorted(
-                (_member(items[k].qual, items[k].path, items[k].fn) for k in members_idx),
-                key=_member_sort_key,
-            )
+
+def _near_miss_group(
+    items: list[_Candidate],
+    members_idx: list[int],
+    edge_weight: dict[frozenset[int], float],
+    min_similarity: float,
+) -> DuplicateGroup:
+    member_set = set(members_idx)
+    sims = [w for key, w in edge_weight.items() if key <= member_set]
+    similarity = min(sims) if sims else min_similarity
+    # A near-miss group's members differ in size (unlike an exact cluster's
+    # one shared size), so use the median as the representative for ranking.
+    sizes = sorted(items[k].fn.size for k in members_idx)
+    rep_size = sizes[len(sizes) // 2]
+    members = tuple(
+        sorted(
+            (_member(items[k].qual, items[k].path, items[k].fn) for k in members_idx),
+            key=_member_sort_key,
         )
-        groups.append(
-            DuplicateGroup(
-                shape_hash="",
-                size=rep_size,
-                member_count=len(members),
-                redundancy=rep_size * (len(members) - 1),
-                members=members,
-                category="near_miss",
-                similarity=similarity,
-            )
-        )
-    groups.sort(key=lambda g: (-(g.similarity or 0.0), -g.redundancy, -g.size))
-    return groups
+    )
+    return DuplicateGroup(
+        shape_hash="",
+        size=rep_size,
+        member_count=len(members),
+        redundancy=rep_size * (len(members) - 1),
+        members=members,
+        category="near_miss",
+        similarity=similarity,
+    )
 
 
 def _same_class(members: tuple[DuplicateMember, ...]) -> bool:
@@ -493,19 +515,32 @@ def demote_independent(
         # matching `pair_support`'s sorted keys. confidence = support / the rarer
         # file's commit count (same metric as `coupling`, inlined to avoid the
         # import cycle). One co-changing pair is enough to call the copies coupled.
-        co_changes = any(
-            (support := pair_support.get((a, b), 0)) >= min_support
-            and (denom := min(counts.get(a, 0), counts.get(b, 0))) > 0
-            and support / denom >= min_confidence
-            for a, b in combinations(distinct, 2)
-        )
-        if co_changes:
+        if _any_pair_co_changes(distinct, counts, pair_support, (min_support, min_confidence)):
             out.append(group)
         else:
             out.append(
                 group.model_copy(update={"category": "variant", "variant_reason": "independent"})
             )
     return out
+
+
+def _any_pair_co_changes(
+    distinct: list[str],
+    counts: dict[str, int],
+    pair_support: dict[tuple[str, str], int],
+    floor: tuple[int, float],
+) -> bool:
+    """Whether any two of `distinct` (sorted) co-change at or above `floor`.
+
+    `floor` is `(min_support, min_confidence)`.
+    """
+    min_support, min_confidence = floor
+    return any(
+        (support := pair_support.get((a, b), 0)) >= min_support
+        and (denom := min(counts.get(a, 0), counts.get(b, 0))) > 0
+        and support / denom >= min_confidence
+        for a, b in combinations(distinct, 2)
+    )
 
 
 def _is_exact(feats: list[FunctionFeatures | None]) -> bool:
@@ -576,20 +611,58 @@ def _variant_reason(group: DuplicateGroup, feats: list[FunctionFeatures | None])
     surface is expanded uniformly, a copy-paste usually is not).
     """
     present = [f for f in feats if f is not None]
-    if present and all(_has_decorator(f, "overload") for f in feats):
-        return "overload"
-    if (
-        present
+    for reason, holds in _VARIANT_SIGNALS:
+        if holds(group, feats, present):
+            return reason
+    return None
+
+
+def _all_overloads(
+    group: DuplicateGroup, feats: list[FunctionFeatures | None], present: list[FunctionFeatures]
+) -> bool:
+    return bool(present) and all(_has_decorator(f, "overload") for f in feats)
+
+
+def _all_trivial_properties(
+    group: DuplicateGroup, feats: list[FunctionFeatures | None], present: list[FunctionFeatures]
+) -> bool:
+    return (
+        bool(present)
         and all(_has_decorator(f, "property") for f in feats)
         and all(f.is_trivial for f in present)
-    ):
-        return "property"
-    if all(_is_vendored_path(m.path) for m in group.members):
-        return "vendored"
-    if all(is_test_path(m.path) for m in group.members):
-        return "test"
-    if present and all(f.is_trivial for f in present):
-        return "trivial"
-    if group.same_class:
-        return "same_class"
-    return None
+    )
+
+
+def _all_vendored(
+    group: DuplicateGroup, feats: list[FunctionFeatures | None], present: list[FunctionFeatures]
+) -> bool:
+    return all(_is_vendored_path(m.path) for m in group.members)
+
+
+def _all_in_tests(
+    group: DuplicateGroup, feats: list[FunctionFeatures | None], present: list[FunctionFeatures]
+) -> bool:
+    return all(is_test_path(m.path) for m in group.members)
+
+
+def _all_trivial(
+    group: DuplicateGroup, feats: list[FunctionFeatures | None], present: list[FunctionFeatures]
+) -> bool:
+    return bool(present) and all(f.is_trivial for f in present)
+
+
+def _is_same_class_group(
+    group: DuplicateGroup, feats: list[FunctionFeatures | None], present: list[FunctionFeatures]
+) -> bool:
+    return group.same_class
+
+
+# Order is the precedence: overload -> property -> vendored -> test -> trivial -> same_class.
+_VARIANT_SIGNALS = (
+    ("overload", _all_overloads),
+    ("property", _all_trivial_properties),
+    ("vendored", _all_vendored),
+    ("test", _all_in_tests),
+    ("trivial", _all_trivial),
+    ("same_class", _is_same_class_group),
+)
