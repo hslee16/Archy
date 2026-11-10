@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d18a30855373",
+  "strategy": "manual-commit",
+  "branch": "alee/complex-method-families-dups",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "tests/test_duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d1/8a30855373/0/metadata.json",
+      "transcript": "/d1/8a30855373/0/full.jsonl",
+      "content_hash": "/d1/8a30855373/0/content_hash.txt",
+      "prompt": "/d1/8a30855373/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1960,
+    "cache_creation_tokens": 1736284,
+    "cache_read_tokens": 411752019,
+    "output_tokens": 808276,
+    "api_call_count": 914
+  }
+}
