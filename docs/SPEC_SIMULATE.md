@@ -272,7 +272,7 @@ project's usage-signal-over-capability prioritization).
 
 - New MCP tool `archy_simulate` → tool count **17 → 18**. This triggers the
   known tool-count ripple: README "17 tools" table + count prose, install
-  `TOOL_NAMES`, `tests/test_mcp.py` tool-surface set, plugin README rationale,
+  `TOOL_NAMES`, `tests/test_mcp_check.py` tool-surface set, plugin README rationale,
   `docs/LEARNINGS.md` count, install snapshots. (Budget for it; this is the
   first new *tool* since `archy_status`.)
 - New CLI subcommand `archy simulate`.
