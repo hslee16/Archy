@@ -3399,6 +3399,42 @@ def test_brief_without_a_config_has_no_coverage_and_no_reason(tmp_path: Path):
     assert payload.transitive_unverified_reason is None
 
 
+def test_score_gate_passes_at_exactly_the_tolerance_and_fails_just_past_it(tmp_path: Path):
+    """Previous 0.75 to current 0.5 is a drop of exactly 0.25 (all three are binary fractions)."""
+    from archy.history import HistoryRow
+    from archy.history import append as append_history
+    from archy.mcp_runs_check import _score_gate
+
+    history = tmp_path / ".archy" / "history.jsonl"
+    append_history(
+        history,
+        HistoryRow(
+            timestamp="2026-01-01T00:00:00Z",
+            commit="abc",
+            branch="main",
+            overall=0.75,
+            modularity=0.5,
+            acyclicity=1.0,
+            depth=0.5,
+            equality=0.5,
+            complexity=0.5,
+            module_count=3,
+            edge_count=2,
+            cycle_count=0,
+            tangle_ratio=0.0,
+            max_depth=2,
+            community_count=1,
+        ),
+    )
+
+    at_tolerance = _score_gate(history, 0.5, 0.25)
+    past_tolerance = _score_gate(history, 0.5, 0.125)
+
+    assert at_tolerance.delta == -0.25
+    assert at_tolerance.passed is True
+    assert past_tolerance.passed is False
+
+
 def test_brief_says_why_an_unrun_forbid_rule_is_unverified(tmp_path: Path):
     project = _write_brief_project(tmp_path, with_config=True)
     payload = run_brief(project, top_n=8, with_contracts=False, include_tests=False)

@@ -44,6 +44,7 @@ from archy.history import append as append_history
 from archy.history import git_metadata, row_from_score
 from archy.history import read as read_history
 from archy.layers import (
+    LayerConfig,
     LayerConfigError,
     LayerCoverage,
     SdpViolation,
@@ -122,17 +123,7 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
         raise ValueError(f"top_n must be >= 1; got {top_n}")
     report = compute_conventions(path, **graph_kwargs(path), include_tests=include_tests)
 
-    coverage: LayerCoverage | None = None
-    config = None
-    config_path = discover_config(path)
-    if config_path is not None:
-        try:
-            config = load_config(config_path)
-            coverage = compute_coverage(_build_graph(path, **scan_kwargs(config)), config)
-        except LayerConfigError:
-            # A malformed archy.yaml is `archy_check`'s to report. Here it would
-            # replace the whole briefing with one error.
-            config = coverage = None
+    config, coverage = _brief_coverage(path)
 
     contracts = run_contracts(path, config_filename=None) if with_contracts else None
     checked, unverifiable_reason = (
@@ -141,22 +132,7 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
 
     reason: str | None = None
     if config is not None and coverage is not None and not checked:
-        if unverifiable_reason:
-            reason = unverifiable_reason
-        elif contracts_unverified(config, coverage, []):
-            n = len(config.forbid)
-            stem = f"{n} forbid {'rule' if n == 1 else 'rules'} declared"
-            if contracts is not None:
-                reason = (
-                    f"{stem} and still unverified: archy_brief(contracts=True) "
-                    f"produced no transitive verdict ({contracts.error})."
-                )
-            else:
-                reason = (
-                    f"{stem}, but this brief runs no direct-edge check and the layers "
-                    "govern too little of the graph to verify them; "
-                    "archy_brief(contracts=True) evaluates them transitively via import-linter."
-                )
+        reason = unverifiable_reason or _unverified_forbid_reason(config, coverage, contracts)
 
     return BriefPayload(
         conventions=_bound_conventions(report, top_n),
@@ -164,6 +140,38 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
         contracts=contracts,
         transitive_checked=checked,
         transitive_unverified_reason=reason,
+    )
+
+
+def _brief_coverage(path: Path) -> tuple[LayerConfig | None, LayerCoverage | None]:
+    config_path = discover_config(path)
+    if config_path is None:
+        return None, None
+    try:
+        config = load_config(config_path)
+        return config, compute_coverage(_build_graph(path, **scan_kwargs(config)), config)
+    except LayerConfigError:
+        # A malformed archy.yaml is `archy_check`'s to report. Here it would
+        # replace the whole briefing with one error.
+        return None, None
+
+
+def _unverified_forbid_reason(
+    config: LayerConfig, coverage: LayerCoverage, contracts: ContractsPayload | None
+) -> str | None:
+    if not contracts_unverified(config, coverage, []):
+        return None
+    n = len(config.forbid)
+    stem = f"{n} forbid {'rule' if n == 1 else 'rules'} declared"
+    if contracts is not None:
+        return (
+            f"{stem} and still unverified: archy_brief(contracts=True) "
+            f"produced no transitive verdict ({contracts.error})."
+        )
+    return (
+        f"{stem}, but this brief runs no direct-edge check and the layers "
+        "govern too little of the graph to verify them; "
+        "archy_brief(contracts=True) evaluates them transitively via import-linter."
     )
 
 
@@ -215,29 +223,7 @@ def run_score(
         )
     history_path = path / ".archy" / "history.jsonl"
 
-    gate: ScoreGate | None = None
-    if strict:
-        rows = read_history(history_path)
-        if rows:
-            previous = rows[-1]
-            delta = score.overall - previous.overall
-            gate = ScoreGate(
-                previous=previous.overall,
-                previous_commit=previous.commit,
-                previous_timestamp=previous.timestamp,
-                current=score.overall,
-                delta=delta,
-                tolerance=strict_tolerance,
-                passed=delta >= -strict_tolerance,
-            )
-        else:
-            gate = ScoreGate(
-                previous=None,
-                current=score.overall,
-                delta=None,
-                tolerance=strict_tolerance,
-                passed=True,
-            )
+    gate = _score_gate(history_path, score.overall, strict_tolerance) if strict else None
 
     if record:
         commit, branch = git_metadata(path)
@@ -248,6 +234,26 @@ def run_score(
         components=score_components(score),
         inputs=score.inputs,
         gate=gate,
+    )
+
+
+def _score_gate(history_path: Path, current: float, tolerance: float) -> ScoreGate:
+    """The strict gate against the last recorded score; a first run has nothing to fail."""
+    rows = read_history(history_path)
+    if not rows:
+        return ScoreGate(
+            previous=None, current=current, delta=None, tolerance=tolerance, passed=True
+        )
+    previous = rows[-1]
+    delta = current - previous.overall
+    return ScoreGate(
+        previous=previous.overall,
+        previous_commit=previous.commit,
+        previous_timestamp=previous.timestamp,
+        current=current,
+        delta=delta,
+        tolerance=tolerance,
+        passed=delta >= -tolerance,
     )
 
 
