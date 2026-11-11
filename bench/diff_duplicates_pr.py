@@ -13,7 +13,7 @@ pyarrow is NOT an archy dependency. Run the sampling with
 `uv run --with pyarrow python bench/diff_duplicates_precision.py ...`.
 
 archy:owns        PoolPR, Resolved, SampleSpec, Unresolvable, draw_main, draw_pilot,
-                  load_pool, resolve
+                  load_pool, resolve, take_shard
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ import json
 import random
 import subprocess
 import urllib.request
+import zlib
 from collections.abc import Iterator
 from itertools import islice
 from pathlib import Path
@@ -131,6 +132,16 @@ def _main_stream(pool: list[PoolPR], spec: SampleSpec) -> Iterator[PoolPR]:
             continue
         taken[pr.repo] = taken.get(pr.repo, 0) + 1
         yield pr
+
+
+def take_shard(prs: list[PoolPR], index: int, count: int) -> list[PoolPR]:
+    """The PRs whose REPOSITORY hashes to shard `index` of `count`.
+
+    Sharding by repository, not by PR, keeps every repo's PRs in one worker so two
+    workers never clone or check out the same directory at once. The draw itself is
+    unchanged: sharding only partitions the already-drawn sample.
+    """
+    return [p for p in prs if zlib.crc32(p.repo.encode()) % count == index]
 
 
 def _run(*cmd: str, cwd: Path | None = None) -> str:

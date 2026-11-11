@@ -15,6 +15,7 @@ The pilot reports counts only. It reads no firing's contents: the pilot measures
 firing rate and harness bugs, and the pre-registration forbids reading labels.
 
 archy:owns        main, process_pr, run_loop, summarize
+archy:gates       non-zero exit (hardcoded)
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from diff_duplicates_pr import (  # ty: ignore[unresolved-import]
     draw_pilot,
     load_pool,
     resolve,
+    take_shard,
 )
 from diff_duplicates_precision import (  # ty: ignore[unresolved-import]
     analyze_checkout,
@@ -57,12 +59,15 @@ def run_loop(
     prs: Iterable[PoolPR],
     ledger: Ledger,
     process: Callable[[PoolPR], dict] = process_pr,
+    skip_keys: frozenset[str] = frozenset(),
 ) -> int:
-    """Process every PR the ledger does not already hold as `ok`. Returns the exit code."""
+    """Process every PR the ledger (or `skip_keys`, done elsewhere) does not hold as `ok`.
+
+    Returns the exit code."""
     try:
         for pr in prs:
             key = str(pr.id)
-            if ledger.is_done(key):
+            if ledger.is_done(key) or key in skip_keys:
                 continue
             _one(pr, key, ledger, process)
     except KeyboardInterrupt:
@@ -107,9 +112,12 @@ def _mean(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
-def summarize(ledger_path: Path) -> dict:
-    """Counts from the ledger's `ok` rows. Drops leave the denominator. No firing content."""
-    rows = _ok_rows(ledger_path)
+def summarize(*ledger_paths: Path) -> dict:
+    """Counts from the `ok` rows of one or more ledgers (shards). Drops leave the
+    denominator. No firing content."""
+    rows: dict[str, dict] = {}
+    for path in ledger_paths:
+        rows.update(_ok_rows(path))
     dropped = Counter(r["dropped"].split(":")[0] for r in rows.values() if "dropped" in r)
     measured = [r for r in rows.values() if "dropped" not in r]
     firing_prs = [r for r in measured if r.get("firings")]
@@ -130,23 +138,43 @@ def _parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--pilot", action="store_true", help="run the 20-PR pilot")
     mode.add_argument("--run", type=int, metavar="N", help="run the main sample of N PRs")
-    mode.add_argument("--summary", type=Path, metavar="LEDGER", help="print counts and exit")
+    mode.add_argument(
+        "--summary", type=Path, nargs="+", metavar="LEDGER", help="print counts and exit"
+    )
+    parser.add_argument("--shard", metavar="K/M", help="with --run: worker K of M, by repository")
+    parser.add_argument(
+        "--skip-ledger", type=Path, action="append", default=[], help="keys already done there"
+    )
     return parser
+
+
+def _shard(spec: str | None) -> tuple[int, int] | None:
+    if spec is None:
+        return None
+    index, count = (int(x) for x in spec.split("/"))
+    if not 0 <= index < count:
+        raise SystemExit(f"--shard K/M needs 0 <= K < M; got {spec}")
+    return index, count
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.summary:
-        print(json.dumps(summarize(args.summary), indent=2))
+        print(json.dumps(summarize(*args.summary), indent=2))
         return 0
     failures = canary()
     if failures:
         print("CANARY FAILED, refusing to run:\n" + "\n".join(failures))
         return 1
     pool = load_pool()
+    shard = _shard(args.shard)
     ledger_path = PILOT_LEDGER if args.pilot else MAIN_LEDGER
     prs = draw_pilot(pool) if args.pilot else draw_main(pool, args.run)
-    code = run_loop(prs, Ledger(ledger_path))
+    if shard:
+        prs = take_shard(prs, *shard)
+        ledger_path = ledger_path.with_suffix(f".shard{shard[0]}of{shard[1]}.jsonl")
+    skip = frozenset(k for p in args.skip_ledger for k in _ok_rows(p))
+    code = run_loop(prs, Ledger(ledger_path), skip_keys=skip)
     print(json.dumps(summarize(ledger_path), indent=2))
     return code
 

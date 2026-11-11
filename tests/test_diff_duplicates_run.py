@@ -110,3 +110,30 @@ def test_summary_excludes_drops_from_the_denominator(tmp_path: Path) -> None:
     assert s["firing_rate"] == pytest.approx(0.5)
     assert s["dropped"] == {"scan too large": 1}
     assert s["mean_seconds_per_pr"] == pytest.approx(3.0)
+
+
+def test_shards_partition_the_sample_and_never_split_a_repo() -> None:
+    pool = _pool({f"o/r{i}": 4 for i in range(30)})
+    shards = [pr_mod.take_shard(pool, k, 4) for k in range(4)]
+    assert sum(len(s) for s in shards) == len(pool)  # nothing lost, nothing doubled
+    assert len({p.id for s in shards for p in s}) == len(pool)
+    assert sum(bool(s) for s in shards) > 1  # the fixture really spreads over shards
+    for s in shards:
+        for repo in {p.repo for p in s}:
+            assert sum(p.repo == repo for p in s) == 4  # all 4 PRs of a repo in one shard
+
+
+def test_skip_keys_are_not_rerun_and_summary_merges_ledgers(tmp_path: Path) -> None:
+    prs = _pool({"o/a": 3})
+    seen: list[int] = []
+
+    def process(p: pr_mod.PoolPR) -> dict:
+        seen.append(p.id)
+        return {"firings": []}
+
+    run_mod.run_loop(prs, _ledger(tmp_path), process, skip_keys=frozenset({"2"}))
+    assert seen == [1, 3]  # 2 was done in another ledger
+
+    other = tmp_path / "other.jsonl"
+    other.write_text(json.dumps({"key": "9", "status": "ok", "repo": "o/z", "firings": []}) + "\n")
+    assert run_mod.summarize(tmp_path / "l.jsonl", other)["measured"] == 3
