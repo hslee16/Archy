@@ -137,3 +137,37 @@ def test_skip_keys_are_not_rerun_and_summary_merges_ledgers(tmp_path: Path) -> N
     other = tmp_path / "other.jsonl"
     other.write_text(json.dumps({"key": "9", "status": "ok", "repo": "o/z", "firings": []}) + "\n")
     assert run_mod.summarize(tmp_path / "l.jsonl", other)["measured"] == 3
+
+
+def _resolved(tmp_path: Path) -> pr_mod.Resolved:
+    return pr_mod.Resolved(repo_dir=tmp_path, base="b", head="h")
+
+
+def test_analysis_timeout_is_a_drop_not_a_clean_pr(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from _supervise import WallTimeout  # ty: ignore[unresolved-import]
+
+    def hang(*args: object, **kwargs: object) -> object:
+        raise WallTimeout("exceeded wall")
+
+    monkeypatch.setattr(run_mod, "run_supervised", hang)
+    got = run_mod._analyze_supervised(_resolved(tmp_path))
+    assert got["dropped"].startswith("analysis timeout")
+    assert "firings" not in got  # never scored as a clean PR
+
+
+def test_analysis_child_failure_is_retryable_and_success_is_parsed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Done:
+        def __init__(self, code: int, out: str) -> None:
+            self.returncode, self.stdout, self.stderr = code, out, "boom"
+
+    monkeypatch.setattr(run_mod, "run_supervised", lambda *a, **k: Done(1, ""))
+    with pytest.raises(RuntimeError, match="analysis exited 1"):
+        run_mod._analyze_supervised(_resolved(tmp_path))
+
+    payload = '{"firings": [], "added_files": ["a.py"]}'
+    monkeypatch.setattr(run_mod, "run_supervised", lambda *a, **k: Done(0, "noise\n" + payload))
+    assert run_mod._analyze_supervised(_resolved(tmp_path))["added_files"] == ["a.py"]

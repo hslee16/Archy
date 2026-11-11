@@ -9,6 +9,7 @@ thing under test before asserting the outcome.
 
 from __future__ import annotations
 
+import json
 import sys
 import warnings
 from pathlib import Path
@@ -149,3 +150,17 @@ def test_near_miss_budget_hit_is_flagged_not_hidden(
 
     monkeypatch.setattr(ddp, "compute_near_duplicates", short)
     assert ddp.analyze_checkout(repo, base, head)["near_miss_budget_hit"] is True
+
+
+def test_analyze_mode_prints_the_same_payload_as_analyze_checkout(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The supervised child must hand the parent exactly what analyze_checkout returns."""
+    repo = _repo(tmp_path)
+    base = ddp._commit_fixture(repo, {"pkg/__init__.py": "", "pkg/a.py": ddp._ORIGINAL}, "base")
+    head = ddp._commit_fixture(repo, {"pkg/b.py": _copy("again")}, "copy")
+    direct = ddp.analyze_checkout(repo, base, head)
+    assert direct["firings"]  # the fixture fires, so the comparison is not of two empties
+
+    assert ddp.main(["--analyze", str(repo), base, head]) == 0
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == direct

@@ -28,10 +28,16 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 
-from _supervise import Ledger  # ty: ignore[unresolved-import]  (bench/ is sys.path[0])
+from _supervise import (  # ty: ignore[unresolved-import]  (bench/ is sys.path[0])
+    Ledger,
+    StallTimeout,
+    WallTimeout,
+    run_supervised,
+)
 from diff_duplicates_pr import (  # ty: ignore[unresolved-import]
     REPO_ROOT,
     PoolPR,
+    Resolved,
     Unresolvable,
     draw_main,
     draw_pilot,
@@ -39,20 +45,47 @@ from diff_duplicates_pr import (  # ty: ignore[unresolved-import]
     resolve,
     take_shard,
 )
-from diff_duplicates_precision import (  # ty: ignore[unresolved-import]
-    analyze_checkout,
-    canary,
-)
+from diff_duplicates_precision import canary  # ty: ignore[unresolved-import]
 
 PILOT_LEDGER = REPO_ROOT / "bench" / "diff_duplicates_pilot.jsonl"
 MAIN_LEDGER = REPO_ROOT / "bench" / "diff_duplicates_precision.jsonl"
 
 
+ANALYSIS_MAX_WALL = 1800.0  # 30 min; one PR's analysis past this is dropped, not awaited
+
+
+def _analyze_supervised(resolved: Resolved) -> dict:
+    """`analyze_checkout` in a supervised child so a pathological repository cannot
+    hang the run (found live: `git log -M` on a blobless clone of a very large
+    repository fetched blobs for over 20 minutes). A timeout is a drop with its own
+    reason, counted in the dropped-Python-PR bound, never a clean PR; any other child
+    failure raises and becomes a retryable `error` row."""
+    cmd = [
+        sys.executable,
+        str(Path(__file__).with_name("diff_duplicates_precision.py")),
+        "--analyze",
+        str(resolved.repo_dir),
+        resolved.base,
+        resolved.head,
+    ]
+    try:
+        done = run_supervised(
+            cmd,
+            cwd=REPO_ROOT,
+            progress_paths=[resolved.repo_dir / ".git"],
+            max_wall=ANALYSIS_MAX_WALL,
+        )
+    except (StallTimeout, WallTimeout) as exc:
+        return {"dropped": f"analysis timeout: {type(exc).__name__}"}
+    if done.returncode != 0:
+        raise RuntimeError(f"analysis exited {done.returncode}: {done.stderr[-300:]}")
+    return json.loads(done.stdout.strip().splitlines()[-1])
+
+
 def process_pr(pr: PoolPR) -> dict:
     """Resolve, check out and analyze one PR; the payload for its ledger row."""
     resolved = resolve(pr)
-    result = analyze_checkout(resolved.repo_dir, resolved.base, resolved.head)
-    return {"base": resolved.base, "head": resolved.head, **result}
+    return {"base": resolved.base, "head": resolved.head, **_analyze_supervised(resolved)}
 
 
 def run_loop(

@@ -53,8 +53,10 @@ archy:owns        Ledger, StallTimeout, SupervisedResult, WallTimeout, run_super
                   with_retries
 archy:mirrored-by Ledger -> bench.contract_decay, bench.contract_prevalence,
                   bench.diff_duplicates_run, bench.greenfield_run, bench.q1b_run,
-                  run_supervised -> bench.greenfield_run, bench.q1b_run,
-                  with_retries -> bench.greenfield_run, bench.q1b_run
+                  StallTimeout -> bench.diff_duplicates_run, bench.q1b_run,
+                  WallTimeout -> bench.diff_duplicates_run, bench.q1b_run,
+                  run_supervised -> bench.diff_duplicates_run, bench.greenfield_run,
+                  bench.q1b_run, with_retries -> bench.greenfield_run, bench.q1b_run
 """
 
 from __future__ import annotations

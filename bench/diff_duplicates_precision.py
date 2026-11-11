@@ -25,6 +25,7 @@ archy:owns        added_line_ranges, analyze_checkout, canary, detect_clusters,
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -272,7 +273,17 @@ def canary() -> list[str]:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--canary", action="store_true", help="run the canary and exit")
+    parser.add_argument(
+        "--analyze",
+        nargs=3,
+        metavar=("ROOT", "BASE", "HEAD"),
+        help="analyze one checkout and print its ledger payload as JSON (run supervised)",
+    )
     args = parser.parse_args(argv)
+    if args.analyze:
+        root, base, head = args.analyze
+        print(json.dumps(analyze_checkout(Path(root), base, head)))
+        return 0
     if args.canary:
         failures = canary()
         for f in failures:
