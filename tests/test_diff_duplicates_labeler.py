@@ -19,6 +19,8 @@ import diff_duplicates_precision as ddp  # ty: ignore[unresolved-import]  (added
 from _supervise import Ledger  # ty: ignore[unresolved-import]  (added to sys.path above)
 from q1b_run import RateLimited  # ty: ignore[unresolved-import]  (added to sys.path above)
 
+ONE = lb.LabelOptions(workers=1)
+
 
 def _packets(tmp_path: Path, ids: list[str]) -> Path:
     out = tmp_path / "labels"
@@ -51,7 +53,7 @@ def test_resume_skips_ok_rows_and_retries_errors(tmp_path: Path) -> None:
         seen.append(packet["id"])
         return _ok(packet, head)
 
-    assert lb.label_all(out, label=label, workers=1) == 0
+    assert lb.label_all(out, label=label, options=ONE) == 0
     assert sorted(seen) == ["2:0", "3:0"]  # the ok row is not re-labeled; the error is retried
 
 
@@ -63,7 +65,7 @@ def test_a_crash_in_one_firing_does_not_end_the_run(tmp_path: Path) -> None:
             raise ValueError("unparseable labeler answer")
         return _ok(packet, head)
 
-    lb.label_all(out, label=label, workers=1)
+    lb.label_all(out, label=label, options=ONE)
     by_id = {r["id"]: r for r in _rows(out)}
     assert by_id["1:0"]["status"] == by_id["3:0"]["status"] == "ok"
     assert by_id["2:0"]["status"] == "error"
@@ -78,12 +80,12 @@ def test_pause_stops_new_work_and_resume_finishes(tmp_path: Path) -> None:
         (out / "PAUSE").write_text("")  # an operator pauses after the first firing
         return _ok(packet, head)
 
-    assert lb.label_all(out, label=label, workers=1) == 0
+    assert lb.label_all(out, label=label, options=ONE) == 0
     assert calls == ["1:0"]  # no new firing started after PAUSE appeared
     assert [r["id"] for r in _rows(out)] == ["1:0"]  # and what finished is checkpointed
 
     (out / "PAUSE").unlink()
-    lb.label_all(out, label=_ok, workers=1)
+    lb.label_all(out, label=_ok, options=ONE)
     assert sorted(r["id"] for r in _rows(out)) == ["1:0", "2:0", "3:0"]
 
 
@@ -98,7 +100,9 @@ def test_usage_limit_is_waited_out_not_recorded(tmp_path: Path) -> None:
             raise RateLimited("usage limit reached")
         return _ok(packet, head)
 
-    lb.label_all(out, label=label, workers=1, sleep=lambda exc, n: waits.append(n))
+    lb.label_all(
+        out, label=label, options=lb.LabelOptions(workers=1, sleep=lambda exc, n: waits.append(n))
+    )
     assert waits == [0] and len(attempts) == 2
     rows = _rows(out)
     assert [r["status"] for r in rows] == ["ok"]  # the limit left no error row behind
@@ -110,7 +114,7 @@ def test_limit_bound_is_recorded_as_retryable_error(tmp_path: Path) -> None:
     def label(packet: dict, head: str) -> dict:
         raise RateLimited("usage limit reached")
 
-    lb.label_all(out, label=label, workers=1, sleep=lambda exc, n: None)
+    lb.label_all(out, label=label, options=lb.LabelOptions(workers=1, sleep=lambda exc, n: None))
     assert [r["status"] for r in _rows(out)] == ["error"]  # retried on resume, never a label
 
 

@@ -21,7 +21,8 @@ Checkpoint and resume, with the same discipline as the other benches:
 The ledger rows carry `{"id", "label"}`, so the file is directly the labels file
 `diff_duplicates_score.py` reads.
 
-archy:owns        build_prompt, export_context, label_all, label_one, main, parse_answer
+archy:owns        LabelOptions, build_prompt, export_context, label_all, label_one,
+                  main, parse_answer
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ import threading
 import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 from _supervise import (  # ty: ignore[unresolved-import]  (bench/ is sys.path[0])
@@ -179,52 +181,84 @@ def _wait_out(exc: RateLimited, attempt: int) -> None:
     time.sleep(wait)
 
 
+@dataclass(frozen=True)
+class LabelOptions:
+    """Per-invocation knobs, bundled so `label_all` stays narrow."""
+
+    workers: int = 3
+    limit: int | None = None
+    sleep: Callable[[RateLimited, int], None] = _wait_out
+
+
+DEFAULT_OPTIONS = LabelOptions()
+MAX_LIMIT_WAITS = 8
+
+
+def _attempt(
+    packet: dict, head: str, label: Callable[[dict, str], dict], sleep: Callable
+) -> dict | None:
+    """The row for one firing, waiting out usage limits on the SAME firing (a limit is a
+    fact about the account, not a verdict). None if the limit never lifted; any other
+    exception propagates to the caller, which records it as a retryable error."""
+    for attempt in range(MAX_LIMIT_WAITS):
+        try:
+            return {"id": packet["id"], **label(packet, head)}
+        except RateLimited as exc:
+            sleep(exc, attempt)
+    return None
+
+
+class _Run:
+    """One labeling invocation over a packets directory."""
+
+    def __init__(self, out: Path, label: Callable[[dict, str], dict], options: LabelOptions):
+        self.out, self.label, self.options = out, label, options
+        self.key = json.loads((out / "key.json").read_text(encoding="utf-8"))
+        self.ledger = Ledger(out / "labels_B.jsonl")
+        self.lock = threading.Lock()
+        self.pause = out / "PAUSE"
+
+    def pending(self) -> list[Path]:
+        paths = sorted((self.out / "packets").glob("*.json"))
+        todo = [p for p in paths if not self.ledger.is_done(_id(p))]
+        return todo if self.options.limit is None else todo[: self.options.limit]
+
+    def record(self, packet_id: str, payload: dict, status: str = "ok") -> None:
+        with self.lock:
+            self.ledger.record(packet_id, {"id": packet_id, **payload}, status=status)
+
+    def one(self, path: Path) -> None:
+        if self.pause.exists():
+            return
+        packet = json.loads(path.read_text(encoding="utf-8"))
+        head = self.key[packet["id"]]["head"]
+        try:
+            row = _attempt(packet, head, self.label, self.options.sleep)
+        except Exception as exc:  # one bad firing must not end the run
+            self.record(packet["id"], {"error": str(exc)[:300]}, status="error")
+            return
+        if row is None:  # never got through the usage limit: retry on resume
+            self.record(packet["id"], {"error": "rate limited"}, status="error")
+        else:
+            self.record(packet["id"], row)
+
+
 def label_all(
     out: Path,
     *,
     label: Callable[[dict, str], dict],
-    workers: int = 3,
-    limit: int | None = None,
-    sleep: Callable[[RateLimited, int], None] = _wait_out,
+    options: LabelOptions = DEFAULT_OPTIONS,
 ) -> int:
     """Label every undone packet in `out`. Returns 0 (finished or paused) or 130 (Ctrl-C)."""
-    key = json.loads((out / "key.json").read_text(encoding="utf-8"))
-    ledger, lock, pause = Ledger(out / "labels_B.jsonl"), threading.Lock(), out / "PAUSE"
-    todo = [p for p in sorted((out / "packets").glob("*.json")) if not ledger.is_done(_id(p))]
-    if limit is not None:
-        todo = todo[:limit]
-
-    def work(path: Path) -> None:
-        if pause.exists():
-            return
-        packet = json.loads(path.read_text(encoding="utf-8"))
-        row: dict | None = None
-        for attempt in range(8):
-            try:
-                row = {"id": packet["id"], **label(packet, key[packet["id"]]["head"])}
-                break
-            except RateLimited as exc:
-                sleep(exc, attempt)  # not a result: wait, retry the SAME firing
-            except Exception as exc:  # one bad firing must not end the run
-                with lock:
-                    ledger.record(packet["id"], {"id": packet["id"], "error": str(exc)[:300]},
-                                  status="error")  # fmt: skip
-                return
-        with lock:
-            if row is None:  # never got through the usage limit: retry on resume
-                ledger.record(packet["id"], {"id": packet["id"], "error": "rate limited"},
-                              status="error")  # fmt: skip
-            else:
-                ledger.record(packet["id"], row)
-
+    run = _Run(out, label, options)
     try:
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            list(pool.map(work, todo))
+        with ThreadPoolExecutor(max_workers=options.workers) as pool:
+            list(pool.map(run.one, run.pending()))
     except KeyboardInterrupt:
         print("interrupted; labels written are kept. Rerun the same command to resume.")
         return 130
-    if pause.exists():
-        print(f"paused (remove {pause} and rerun the same command to resume)")
+    if run.pause.exists():
+        print(f"paused (remove {run.pause} and rerun the same command to resume)")
     return 0
 
 
@@ -242,8 +276,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return label_all(
         args.packets,
         label=lambda packet, head: label_one(packet, head, args.model),
-        workers=args.workers,
-        limit=args.max,
+        options=LabelOptions(workers=args.workers, limit=args.max),
     )
 
 
