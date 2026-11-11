@@ -10,8 +10,8 @@ the packet and that surrounding code, and nothing the pre-registration hides.
 
 Checkpoint and resume, with the same discipline as the other benches:
 
-- One ledger row per firing (`PACKETS_DIR/labels_B.jsonl`), appended in one write by
-  `bench/_supervise.Ledger`. Only `status="ok"` is done; an `error` row (a stall, an
+- One ledger row per firing (`PACKETS_DIR/labels_<name>.jsonl`, B by default), appended in
+  one write by `bench/_supervise.Ledger`. Only `status="ok"` is done; an `error` row (a stall, an
   unparseable answer) is retried on the next run.
 - A usage limit is not a result: the run waits and retries the SAME firing.
 - To PAUSE: `touch PACKETS_DIR/PAUSE`. Workers finish the firing in hand, no new one
@@ -188,6 +188,7 @@ class LabelOptions:
     workers: int = 3
     limit: int | None = None
     sleep: Callable[[RateLimited, int], None] = _wait_out
+    name: str = "B"  # which labeler: its ledger is `labels_<name>.jsonl`
 
 
 DEFAULT_OPTIONS = LabelOptions()
@@ -214,7 +215,7 @@ class _Run:
     def __init__(self, out: Path, label: Callable[[dict, str], dict], options: LabelOptions):
         self.out, self.label, self.options = out, label, options
         self.key = json.loads((out / "key.json").read_text(encoding="utf-8"))
-        self.ledger = Ledger(out / "labels_B.jsonl")
+        self.ledger = Ledger(out / f"labels_{options.name}.jsonl")
         self.lock = threading.Lock()
         self.pause = out / "PAUSE"
 
@@ -272,11 +273,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--max", type=int, default=None, help="label at most N this invocation")
     parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument(
+        "--name", default="B", help="labeler name; writes PACKETS_DIR/labels_<name>.jsonl"
+    )
     args = parser.parse_args(argv)
     return label_all(
         args.packets,
         label=lambda packet, head: label_one(packet, head, args.model),
-        options=LabelOptions(workers=args.workers, limit=args.max),
+        options=LabelOptions(workers=args.workers, limit=args.max, name=args.name),
     )
 
 
