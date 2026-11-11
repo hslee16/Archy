@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "a147fb699ebb",
+  "strategy": "manual-commit",
+  "branch": "alee/diff-duplicates-harness-548",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "bench/diff_duplicates_precision.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a1/47fb699ebb/0/metadata.json",
+      "transcript": "/a1/47fb699ebb/0/full.jsonl",
+      "content_hash": "/a1/47fb699ebb/0/content_hash.txt",
+      "prompt": "/a1/47fb699ebb/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 110,
+    "cache_creation_tokens": 117667,
+    "cache_read_tokens": 4834055,
+    "output_tokens": 34467,
+    "api_call_count": 47
+  }
+}
