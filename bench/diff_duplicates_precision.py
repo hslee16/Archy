@@ -30,6 +30,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -46,6 +47,7 @@ from archy.duplicates import (
 from archy.graph import ScanTooLargeError, parse_project
 from archy.scan_config import resolve_max_modules
 
+_BUDGET_WARNING = "token-comparison budget"
 MIN_NODES = 30  # shipped `archy duplicates --min-nodes` default
 
 AddedRanges = dict[str, list[tuple[int, int]]]
@@ -153,7 +155,9 @@ def analyze_checkout(root: Path, base: str, head: str) -> dict:
     if not added:
         return {"dropped": "no added python lines"}
     try:
-        clusters = detect_clusters(root)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            clusters = detect_clusters(root)
     except ScanTooLargeError:
         return {"dropped": "scan too large"}
     except Exception as exc:  # a parse crash is a drop, not a clean PR
@@ -177,7 +181,13 @@ def analyze_checkout(root: Path, base: str, head: str) -> dict:
         for g in clusters
         if is_firing(g, added, root)
     ]
-    return {"firings": firings, "added_files": sorted(added)}
+    return {
+        "firings": firings,
+        "added_files": sorted(added),
+        # The shipped near-miss pass stops at its comparison budget and warns; the PR is
+        # still measured (exact tier is complete) but its near-miss result may be short.
+        "near_miss_budget_hit": any(_BUDGET_WARNING in str(w.message) for w in caught),
+    }
 
 
 def _git(root: Path, *args: str) -> str:

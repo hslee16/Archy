@@ -52,7 +52,7 @@ observable as absence of progress over time.
 archy:owns        Ledger, StallTimeout, SupervisedResult, WallTimeout, run_supervised,
                   with_retries
 archy:mirrored-by Ledger -> bench.contract_decay, bench.contract_prevalence,
-                  bench.greenfield_run, bench.q1b_run,
+                  bench.diff_duplicates_run, bench.greenfield_run, bench.q1b_run,
                   run_supervised -> bench.greenfield_run, bench.q1b_run,
                   with_retries -> bench.greenfield_run, bench.q1b_run
 """
