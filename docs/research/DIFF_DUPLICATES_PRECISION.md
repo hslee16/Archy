@@ -211,4 +211,38 @@ in-loop tool that exists today.
 
 ## Addenda
 
-None yet.
+### 2026-11-11, after the 20-PR pilot (no label read, no firing content read)
+
+Thresholds, the firing definition and the rubric are unchanged. What the pilot fixed or
+revealed:
+
+- **Pilot result (counts only).** 20 PRs drawn, 7 measured, 9 had no added Python lines
+  (dropped), 4 were dropped on `QualnameCollisionError`. 1 firing in 7 measured. As the
+  plan said, this cannot estimate a rate near 2%; it is a plumbing test. Mean wall time was
+  54 s per measured PR including cold clones. The pilot ledger is
+  `bench/diff_duplicates_pilot.jsonl`; the pilot PRs are excluded from the main sample.
+- **N = 2000.** The main sample is the 2000 PRs that follow the pilot in the seed-548
+  shuffle, at most 25 per repository in draw order. About a third of draws are measurable
+  in the pilot, so expect roughly 700 measured PRs; that expectation is an estimate from 20
+  PRs and is not a commitment. The sample is not extended.
+- **Pool is a proxy, the diff decides.** The draw pool is closed AIDev PRs in repositories
+  whose AIDev `language` is Python (57,517 PRs in 4,255 repositories). A PR is a "Python
+  PR" only if its own diff adds a `.py` line; the rest are dropped and recorded.
+- **Diff base.** The base is `merge-base(PR base sha, PR head)`, the three-dot diff GitHub
+  shows, so a PR branched long ago is not charged with unrelated base-branch changes. The
+  head is the PR's `pull/N/head` ref.
+- **Module-name collisions are dropped, not worked around.** 4 of the pilot's 11 Python PRs
+  (prefect, mlflow, nexus and one more) hit `QualnameCollisionError`: archy refuses a tree
+  where two files share a module name (#531), and the shipped CLI would refuse the same
+  repositories. These are dropped and reported by reason, and the headroom rate is also
+  reported with drops counted as non-firing. The results state plainly that this attrition
+  falls on larger repositories, so the measured population leans toward smaller, cleaner
+  ones. No fallback that ignores the colliding paths is added, since it would be a detector
+  configuration the shipped CLI does not use.
+- **Near-miss budget hits are flagged, not dropped.** The shipped near-miss pass stops at
+  its 5,000,000-comparison budget and warns; at least one pilot repository hit it. A PR that
+  hits it is still measured (the exact tier is complete) and its ledger row carries
+  `near_miss_budget_hit`. The results report near-miss firings split by that flag, since a
+  PR whose near-miss result may be short is not a clean negative for that tier.
+- **Labelers.** Labeler A is the maintainer; labeler B is a fresh-context LLM given only
+  the rubric and the two functions. Identities are recorded in the results.

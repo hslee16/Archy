@@ -10,6 +10,7 @@ thing under test before asserting the outcome.
 from __future__ import annotations
 
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -127,3 +128,24 @@ def test_cross_tier_cluster_with_a_test_member_does_not_fire(tmp_path: Path) -> 
     assert any(len(g.members) == 2 for g in raw)
 
     assert ddp.analyze_checkout(repo, base, head)["firings"] == []
+
+
+def test_near_miss_budget_hit_is_flagged_not_hidden(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shipped near-miss pass warns when it runs out of budget; that must reach the
+    ledger row, because a PR whose near-miss result may be short is not a clean one."""
+    repo = _repo(tmp_path)
+    base = ddp._commit_fixture(repo, {"pkg/__init__.py": "", "pkg/a.py": ddp._ORIGINAL}, "base")
+    head = ddp._commit_fixture(repo, {"pkg/b.py": _copy("again")}, "copy")
+
+    assert ddp.analyze_checkout(repo, base, head)["near_miss_budget_hit"] is False
+
+    real = ddp.compute_near_duplicates
+
+    def short(*args, **kwargs):
+        warnings.warn("near-miss: hit the 5000000 token-comparison budget", stacklevel=2)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(ddp, "compute_near_duplicates", short)
+    assert ddp.analyze_checkout(repo, base, head)["near_miss_budget_hit"] is True
