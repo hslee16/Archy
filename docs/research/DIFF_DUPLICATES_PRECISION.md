@@ -246,3 +246,36 @@ revealed:
   PR whose near-miss result may be short is not a clean negative for that tier.
 - **Labelers.** Labeler A is the maintainer; labeler B is a fresh-context LLM given only
   the rubric and the two functions. Identities are recorded in the results.
+
+### 2026-11-11, during the main run and before any label was read
+
+Thresholds, the firing definition and the rubric are unchanged. Operational facts and two
+clarifications, recorded before the results exist:
+
+- **Analysis timeout is a drop.** One PR's analysis is run in a supervised child with a
+  30 minute wall ceiling. The ceiling was added mid-run after a shard sat for 22 minutes on
+  `git log -M` (the co-change layer) over a blobless clone of a very large repository. A PR
+  that hits it is dropped with the reason `analysis timeout`, counted among the dropped
+  Python PRs in the second headroom figure (drops counted as clean), and never as a clean
+  PR. The affected shards were restarted on that code and resumed from their ledgers.
+- **The run was sharded by repository** (8 workers), after the first 87 PRs ran in one
+  process. The draw is unchanged and a PR's result does not depend on its shard.
+- **Labeler B reads more than the packet.** It is a fresh-context `claude -p` run per
+  firing, with the packet (repository, the new and existing functions, the frozen rubric)
+  plus a read-only export of the directories holding the two functions at the head commit,
+  with read-only tools and no settings, memory or MCP. The export has no `.git`, so the
+  labeler cannot read history or the PR outcome. This is the prereg's "repository, bodies,
+  surrounding file" minus history. The model is `claude-opus-5-5`.
+- **120-firing draw.** If more than 120 firings exist, 120 are drawn by seeded sample
+  (seed 548) over firing ids alone, before any packet is built.
+- **Git oracle, clarified.** Firings are computed at the PR's final head, so the ticket's
+  "later PR revision" arm cannot apply by construction (the copy is present at head). Only
+  the 6-month arm is measured, as the last default-branch commit within 183 days of the
+  merge. A deleted or renamed file is `unscorable`, never counted as removed, so the oracle
+  stays biased against the feature. Unmerged PRs are `unscorable`. It is reported and never
+  decisive.
+- **Sonar comparison is a proxy.** A firing counts as one Sonar would also fail only if it is
+  an `exact` copy of at least 10 lines in a PR whose added functions in kept clusters exceed
+  3% of the lines it added to Python files. This is not Sonar's 100-token detector.
+- **Disk.** After the run, clones of repositories with no firings were deleted to free
+  space. The ledger rows already carry everything the headroom figures need.
