@@ -69,13 +69,22 @@ def added_line_ranges(diff: str) -> AddedRanges:
         if m:
             path = m.group(1)
             continue
-        h = _HUNK.match(line)
-        if h and path is not None:
-            start = int(h.group(1))
-            count = int(h.group(2)) if h.group(2) is not None else 1
-            if count > 0:
-                ranges.setdefault(path, []).append((start, start + count - 1))
+        added = _hunk_added_range(line)
+        if added is None or path is None:
+            continue
+        ranges.setdefault(path, []).append(added)
     return ranges
+
+
+def _hunk_added_range(line: str) -> tuple[int, int] | None:
+    """The added `(first, last)` of a `@@` hunk header, or None (not a header, or a
+    pure deletion `+N,0` that adds nothing)."""
+    h = _HUNK.match(line)
+    if h is None:
+        return None
+    start = int(h.group(1))
+    count = int(h.group(2)) if h.group(2) is not None else 1
+    return (start, start + count - 1) if count > 0 else None
 
 
 def _in_added(path: str, line: int, added: AddedRanges) -> bool:
