@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4a5341439546",
+  "strategy": "manual-commit",
+  "branch": "alee/diff-duplicates-prereg-548",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/research/DIFF_DUPLICATES_PRECISION.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4a/5341439546/0/metadata.json",
+      "transcript": "/4a/5341439546/0/full.jsonl",
+      "content_hash": "/4a/5341439546/0/content_hash.txt",
+      "prompt": "/4a/5341439546/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 53944,
+    "cache_read_tokens": 488171,
+    "output_tokens": 10065,
+    "api_call_count": 8
+  }
+}

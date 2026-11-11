@@ -1,0 +1,43 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "4a5341439546",
+  "session_id": "95c2187f-1dc8-467f-9042-7b3df4d3cef0",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-11T15:19:31.404037Z",
+  "branch": "alee/diff-duplicates-prereg-548",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "docs/research/DIFF_DUPLICATES_PRECISION.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "c1e5527e4194",
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 53944,
+    "cache_read_tokens": 488171,
+    "output_tokens": 10065,
+    "api_call_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-11T15:19:31.384432Z",
+    "agent_lines": 214,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 214,
+    "total_lines_changed": 214,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
