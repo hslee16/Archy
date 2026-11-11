@@ -115,22 +115,23 @@ def _in_new_file(row: dict, firing: dict) -> bool:
     return probe.returncode != 0
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--ledgers", type=Path, nargs="+", required=True)
-    parser.add_argument("--labels-a", type=Path)
-    parser.add_argument("--labels-b", type=Path)
-    parser.add_argument("--key", type=Path)
-    args = parser.parse_args(argv)
+def _load_rows(paths: Sequence[Path]) -> dict[str, dict]:
     rows: dict[str, dict] = {}
-    for path in args.ledgers:
+    for path in paths:
         rows.update(_ok_rows(path))
-    head = headroom(rows)
-    scored = None
-    if args.labels_a and args.labels_b and args.key:
-        key = json.loads(args.key.read_text(encoding="utf-8"))
-        scored = score_labels(args.labels_a, args.labels_b, {k: v["repo"] for k, v in key.items()})
-    firings = [
+    return rows
+
+
+def _scored(args: argparse.Namespace) -> dict | None:
+    """The labeler scores, or None until both labelers' files and the key are given."""
+    if not all([args.labels_a, args.labels_b, args.key]):
+        return None
+    key = json.loads(args.key.read_text(encoding="utf-8"))
+    return score_labels(args.labels_a, args.labels_b, {k: v["repo"] for k, v in key.items()})
+
+
+def _firing_rows(rows: dict[str, dict]) -> list[dict]:
+    return [
         {
             "exact": f["exact"],
             "category": f["category"],
@@ -140,7 +141,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         for r in rows.values()
         for f in r.get("firings") or []
     ]
-    print(render(head, firings, scored))
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--ledgers", type=Path, nargs="+", required=True)
+    parser.add_argument("--labels-a", type=Path)
+    parser.add_argument("--labels-b", type=Path)
+    parser.add_argument("--key", type=Path)
+    args = parser.parse_args(argv)
+    rows = _load_rows(args.ledgers)
+    print(render(headroom(rows), _firing_rows(rows), _scored(args)))
     return 0
 
 

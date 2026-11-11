@@ -84,3 +84,12 @@ def test_strict_decides_when_strict_and_lenient_straddle_a_threshold() -> None:
     }
     assert scored["precision_lenient"] >= 0.60 > scored["precision_strict"]  # they straddle
     assert "## Verdict: null" in rep.render(head, [], scored)
+
+
+def test_scores_need_both_labelers_and_the_key() -> None:
+    import argparse
+
+    none = argparse.Namespace(labels_a=None, labels_b=None, key=None)
+    assert rep._scored(none) is None
+    partial = argparse.Namespace(labels_a=Path("a"), labels_b=None, key=Path("k"))
+    assert rep._scored(partial) is None  # one labeler is not enough to score
