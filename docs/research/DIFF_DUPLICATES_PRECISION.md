@@ -246,3 +246,57 @@ revealed:
   PR whose near-miss result may be short is not a clean negative for that tier.
 - **Labelers.** Labeler A is the maintainer; labeler B is a fresh-context LLM given only
   the rubric and the two functions. Identities are recorded in the results.
+
+### 2026-11-11, during the main run and before any label was read
+
+Thresholds, the firing definition and the rubric are unchanged. Operational facts and two
+clarifications, recorded before the results exist:
+
+- **Analysis timeout is a drop.** One PR's analysis is run in a supervised child with a
+  30 minute wall ceiling. The ceiling was added mid-run after a shard sat for 22 minutes on
+  `git log -M` (the co-change layer) over a blobless clone of a very large repository. A PR
+  that hits it is dropped with the reason `analysis timeout`, counted among the dropped
+  Python PRs in the second headroom figure (drops counted as clean), and never as a clean
+  PR. The affected shards were restarted on that code and resumed from their ledgers.
+- **The run was sharded by repository** (8 workers), after the first 87 PRs ran in one
+  process. The draw is unchanged and a PR's result does not depend on its shard.
+- **Labeler B reads more than the packet.** It is a fresh-context `claude -p` run per
+  firing, with the packet (repository, the new and existing functions, the frozen rubric)
+  plus a read-only export of the directories holding the two functions at the head commit,
+  with read-only tools and no settings, memory or MCP. The export has no `.git`, so the
+  labeler cannot read history or the PR outcome. This is the prereg's "repository, bodies,
+  surrounding file" minus history. The model is `claude-opus-5-5`.
+- **120-firing draw.** If more than 120 firings exist, 120 are drawn by seeded sample
+  (seed 548) over firing ids alone, before any packet is built.
+- **Git oracle, clarified.** Firings are computed at the PR's final head, so the ticket's
+  "later PR revision" arm cannot apply by construction (the copy is present at head). Only
+  the 6-month arm is measured, as the last default-branch commit within 183 days of the
+  merge. A deleted or renamed file is `unscorable`, never counted as removed, so the oracle
+  stays biased against the feature. Unmerged PRs are `unscorable`. It is reported and never
+  decisive.
+- **Sonar comparison is a proxy.** A firing counts as one Sonar would also fail only if it is
+  an `exact` copy of at least 10 lines in a PR whose added functions in kept clusters exceed
+  3% of the lines it added to Python files. This is not Sonar's 100-token detector.
+- **Disk.** After the run, clones of repositories with no firings were deleted to free
+  space. The ledger rows already carry everything the headroom figures need.
+
+### 2026-11-11, labeler A changed before the second labeler ran (tracked in #959)
+
+Thresholds, the firing definition, the rubric and the strict reading (both labelers TRUE)
+are unchanged. One deviation from the pre-registered labeler pair, decided by the
+maintainer and recorded here before the second labeler has run:
+
+- **Labeler A is a second fresh-context LLM, not the maintainer.** The pre-registration
+  and its first addendum name the maintainer. The maintainer chose instead to run a second
+  fresh-context LLM, `claude-sonnet-5-5`, as labeler A, on the same blind packets, with the
+  same read-only export, tools and frozen rubric as labeler B (`claude-opus-5-5`). It has no
+  access to labeler B's labels. **No human label exists for the primary oracle.**
+- **What that weakens.** Two models from one vendor share training lineage, so shared blind
+  spots are likelier than between a person and a model, and Cohen's kappa measures
+  model-to-model agreement only. The results state this beside the headline number, and a
+  pass is not described as human-validated.
+- **Disclosure.** Three of labeler B's 119 labels were printed during an end-to-end check of
+  the labeler, before this decision. They were not used to choose the second labeler, the
+  model, or any threshold.
+- **Optional spot-check.** A human label of a seeded subset may be added later, reported
+  separately and never decisive. It would change no threshold.
