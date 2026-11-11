@@ -18,8 +18,9 @@ archy:owns        FunctionComplexity, FunctionFeatures, compute_function_complex
                   extract_function_features, extract_token_bags, walk_functions
 archy:mirrored-by FunctionComplexity -> archy.duplicates, archy.graph_assemble,
                   archy.parser,
-                  compute_function_complexity -> bench.duplicates_recall_experiment,
-                  bench.health_repro, extract_token_bags -> archy.duplicates,
+                  compute_function_complexity -> bench.diff_duplicates_oracles,
+                  bench.duplicates_recall_experiment, bench.health_repro,
+                  extract_token_bags -> archy.duplicates,
                   bench.duplicates_recall_experiment
 """
 
