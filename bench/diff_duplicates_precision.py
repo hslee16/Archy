@@ -36,6 +36,7 @@ from pathlib import Path
 from archy.coupling import git_cochange
 from archy.duplicates import (
     DuplicateGroup,
+    _is_vendored_path,
     classify_variants,
     compute_duplicates,
     compute_near_duplicates,
@@ -95,19 +96,20 @@ def _rel(path: str, root: Path) -> str:
         return p.as_posix()
 
 
-def _source_only(groups: list[DuplicateGroup]) -> list[DuplicateGroup]:
-    """Drop near-miss groups with any member in test or vendored code (#247).
+def _path_excluded(rel: str) -> bool:
+    """Test or vendored path, judged on the path RELATIVE to the checkout."""
+    return is_test_path(rel) or _is_vendored_path(rel)
 
-    Near-miss groups carry no variant tier of their own, so run them through
-    `classify_variants` (public) and read only its path-based reasons; the other
-    reasons are left alone because the CLI does not apply them to near-miss either.
+
+def _source_only(groups: list[DuplicateGroup], root: Path) -> list[DuplicateGroup]:
+    """Drop any cluster with ANY member in test or vendored code, as pre-registered.
+
+    Stricter than the shipped `classify_variants`, which demotes only clusters lying
+    WHOLLY in test or vendored code and keeps cross-tier ones (a source function that
+    copies isolated code). The pre-registration drops those too, for exact and
+    near-miss alike, so a cross-tier cluster never reaches the labelers.
     """
-    probed = classify_variants(groups)
-    return [
-        g
-        for g, p in zip(groups, probed, strict=True)
-        if p.variant_reason not in ("test", "vendored")
-    ]
+    return [g for g in groups if not any(_path_excluded(_rel(m.path, root)) for m in g.members)]
 
 
 def detect_clusters(root: Path) -> list[DuplicateGroup]:
@@ -118,8 +120,8 @@ def detect_clusters(root: Path) -> list[DuplicateGroup]:
     if cochange is not None:
         rows = demote_independent(rows, counts=cochange.counts, pair_support=cochange.pair_support)
     exact = [g for g in rows if g.category == "duplicate"]
-    near = _source_only(compute_near_duplicates(modules, parse_results, min_size=MIN_NODES))
-    return exact + near
+    near = compute_near_duplicates(modules, parse_results, min_size=MIN_NODES)
+    return _source_only(exact + near, root)
 
 
 def analyze_checkout(root: Path, base: str, head: str) -> dict:

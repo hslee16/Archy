@@ -108,3 +108,22 @@ def test_editing_an_existing_function_does_not_fire(tmp_path: Path) -> None:
 
 def test_canary_passes() -> None:
     assert ddp.canary() == []
+
+
+def test_cross_tier_cluster_with_a_test_member_does_not_fire(tmp_path: Path) -> None:
+    """The pre-registration drops a cluster with ANY test member, not only a wholly
+    test one: a new source copy of a function that already lives in tests/ is out."""
+    repo = _repo(tmp_path)
+    base = ddp._commit_fixture(
+        repo,
+        {"pkg/__init__.py": "", "tests/helpers.py": _copy("one")},
+        "base with a test-side function",
+    )
+    head = ddp._commit_fixture(repo, {"pkg/b.py": _copy("two")}, "source copy")
+
+    # The shipped detector keeps this cluster (cross-tier stays primary) and the
+    # diff makes it a firing by A and B, so only the path filter can stop it.
+    raw = ddp.compute_duplicates(*ddp.parse_project(repo), min_size=ddp.MIN_NODES)
+    assert any(len(g.members) == 2 for g in raw)
+
+    assert ddp.analyze_checkout(repo, base, head)["firings"] == []
