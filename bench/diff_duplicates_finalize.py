@@ -102,6 +102,60 @@ def _md_counter(title: str, counts: Counter) -> str:
     return "\n".join(lines)
 
 
+def _scorable(a: dict[str, dict], b: dict[str, dict]) -> tuple[list[str], set[str], set[str]]:
+    """Firings both labelers scored (none UNSCORABLE), then the strict and lenient TRUE sets."""
+    both = set(a) & set(b)
+    scorable = sorted(i for i in both if "UNSCORABLE" not in (a[i]["label"], b[i]["label"]))
+    strict = {i for i in scorable if a[i]["label"] == "TRUE" and b[i]["label"] == "TRUE"}
+    lenient = {i for i in scorable if "TRUE" in (a[i]["label"], b[i]["label"])}
+    return scorable, strict, lenient
+
+
+def _groups(firings: dict[str, tuple[dict, dict]], scorable: list[str]) -> dict[str, dict]:
+    def tier(i: str) -> str:
+        f = firings[i][1]
+        return "exact" if f["exact"] else f["category"]
+
+    return {
+        "tier": {i: tier(i) for i in scorable},
+        "file": {i: "new file" if _in_new_file(*firings[i]) else "existing file" for i in scorable},
+    }
+
+
+def _subgroup_section(groups: dict[str, dict], strict: set[str], lenient: set[str]) -> list[str]:
+    out = ["## Precision by subgroup (reported in full, never results)"]
+    header = "| group | strict TRUE | lenient TRUE | firings |\n| --- | --- | --- | --- |"
+    for title, group_of in groups.items():
+        out.append(f"**by {title}**\n\n{header}")
+        out += [
+            f"| {g} | {s} | {le} | {n} |"
+            for g, (s, le, n) in subgroup_precision(group_of, strict, lenient).items()
+        ]
+        out.append("")
+    return out
+
+
+def _git_section(
+    firings: dict[str, tuple[dict, dict]], scorable: list[str], strict: set[str], parquet: Path
+) -> list[str]:
+    merged_at = _merged_at(parquet)
+    git = {i: _git_outcome(i, *firings[i], merged_at) for i in scorable}
+    out = ["## Git oracle (secondary, never decisive)"]
+    out += [_md_counter(name, c) for name, c in oracle_vs_primary(git, strict).items()]
+    return out
+
+
+def _sonar_section(firings: dict[str, tuple[dict, dict]], strict: set[str]) -> list[str]:
+    sonar = {i: _sonar(i, *firings[i]) for i in sorted(strict)}
+    failing = [i for i, s in sonar.items() if s["fails"]]
+    return [
+        "",
+        "## Sonar proxy over the strict-TRUE firings (a proxy, never decisive)",
+        f"- strict-TRUE firings: {len(sonar)}; would also fail Sonar's 3% gate: {len(failing)}; "
+        f"only archy would add: {len(sonar) - len(failing)}",
+    ]
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--ledgers", type=Path, nargs="+", required=True)
@@ -117,47 +171,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         rows.update(_ok_rows(path))
     firings = flatten_firings(rows)
     a, b = _labels(args.labels_a), _labels(args.labels_b)
-    scorable = sorted(
-        i for i in set(a) & set(b) if "UNSCORABLE" not in (a[i]["label"], b[i]["label"])
-    )
-    strict = {i for i in scorable if a[i]["label"] == "TRUE" and b[i]["label"] == "TRUE"}
-    lenient = {i for i in scorable if "TRUE" in (a[i]["label"], b[i]["label"])}
-
-    def tier(i: str) -> str:
-        f = firings[i][1]
-        return "exact" if f["exact"] else f["category"]
-
-    groups = {
-        "tier": {i: tier(i) for i in scorable},
-        "file": {i: "new file" if _in_new_file(*firings[i]) else "existing file" for i in scorable},
-    }
-    merged_at = _merged_at(args.pull_requests)
-    git = {i: _git_outcome(i, *firings[i], merged_at) for i in scorable}
+    scorable, strict, lenient = _scorable(a, b)
     out = [
         "## FALSE reasons (per labeler)",
         _md_counter("labeler A", reason_tally(a)),
         _md_counter("labeler B", reason_tally(b)),
         "",
-        "## Precision by subgroup (reported in full, never results)",
-    ]
-    for title, group_of in groups.items():
-        header = "| group | strict TRUE | lenient TRUE | firings |\n| --- | --- | --- | --- |"
-        out.append(f"**by {title}**\n\n{header}")
-        out += [
-            f"| {g} | {s} | {le} | {n} |"
-            for g, (s, le, n) in subgroup_precision(group_of, strict, lenient).items()
-        ]
-        out.append("")
-    out.append("## Git oracle (secondary, never decisive)")
-    for name, counts in oracle_vs_primary(git, strict).items():
-        out.append(_md_counter(name, counts))
-    sonar = {i: _sonar(i, *firings[i]) for i in sorted(strict)}
-    failing = [i for i, s in sonar.items() if s["fails"]]
-    out += [
-        "",
-        "## Sonar proxy over the strict-TRUE firings (a proxy, never decisive)",
-        f"- strict-TRUE firings: {len(sonar)}; would also fail Sonar's 3% gate: {len(failing)}; "
-        f"only archy would add: {len(sonar) - len(failing)}",
+        *_subgroup_section(_groups(firings, scorable), strict, lenient),
+        *_git_section(firings, scorable, strict, args.pull_requests),
+        *_sonar_section(firings, strict),
     ]
     print("\n".join(out))
     return 0

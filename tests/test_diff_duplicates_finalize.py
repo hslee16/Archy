@@ -36,3 +36,20 @@ def test_oracle_outcomes_split_by_the_primary_verdict() -> None:
     got = fin.oracle_vs_primary(outcomes, {"1"})
     assert got["primary TRUE"] == {"removed": 1}
     assert got["primary FALSE"] == {"unchanged": 1, "removed": 1}
+
+
+def test_scorable_drops_unscorable_and_splits_strict_from_lenient() -> None:
+    """Firing 1 both TRUE (strict and lenient), 2 one TRUE (lenient only), 3 both FALSE,
+    4 UNSCORABLE for one labeler (dropped), 5 only labeled by A (not scored)."""
+    a = {
+        i: {"label": v}
+        for i, v in {"1": "TRUE", "2": "TRUE", "3": "FALSE", "4": "TRUE", "5": "TRUE"}.items()
+    }
+    b = {
+        i: {"label": v}
+        for i, v in {"1": "TRUE", "2": "FALSE", "3": "FALSE", "4": "UNSCORABLE"}.items()
+    }
+    scorable, strict, lenient = fin._scorable(a, b)
+    assert scorable == ["1", "2", "3"]
+    assert strict == {"1"}
+    assert lenient == {"1", "2"}
