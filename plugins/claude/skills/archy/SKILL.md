@@ -40,7 +40,7 @@ If the `archy_*` tools are not visible (a directory install such as `npx skills 
 | `archy_impact` | `archy impact . --file F --format json` | `mode="affected"`: `archy affected . F --json` |
 | `archy_simulate` | `archy simulate . --add SRC:DST --format json` | `--remove SRC:DST` |
 | `archy_graph` | `archy graph . --format json` | no `focus`; for a neighborhood use `archy dsm . --focus M --format json` |
-| `archy_what_to_refactor_next` | `archy what-to-refactor-next . --format json` | `lens="behavioral"`: `archy hotspots . --format json` |
+| `archy_what_to_refactor_next` | `archy what-to-refactor-next . --format json` | `lens="behavioral"`: `archy hotspots . --format json` (the CLI lists every positive score; the MCP lens keeps only rows at or above 5% of the maximum) |
 | `archy_check` | `archy check . --format json` | `contracts=True`: add `--contracts` |
 | `archy_cycles` | `archy cycles . --format json` | `--min-size N`, `--strict` |
 | `archy_score` | `archy score . --format json` | `view="history"`: `archy trend . --format json` |
@@ -156,6 +156,8 @@ For refactor priority across the whole codebase, the behavioral lens ranks files
 ```
 archy_what_to_refactor_next(path=".", lens="behavioral", top_n=20, since=None)
 ```
+
+The hotspot label requires at least 5% of the project's maximum CC x churn score. The behavioral MCP view returns only those qualifying rows. The standalone `archy hotspots` CLI command returns all positive scores. In the fused ranking, lower scores keep their rank but lose the hotspot lens and its rationale; a row below both labeling floors has empty `lenses` and a neutral rationale.
 
 The top of the list is where refactoring effort pays back the most. `since` is passed straight to `git log --since`; use it for "what should I refactor right now" recency-weighted views. Off git, the behavioral lens cannot run (its `note` points at `lens="structural"` as the git-free alternative).
 
