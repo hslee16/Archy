@@ -279,3 +279,24 @@ clarifications, recorded before the results exist:
   3% of the lines it added to Python files. This is not Sonar's 100-token detector.
 - **Disk.** After the run, clones of repositories with no firings were deleted to free
   space. The ledger rows already carry everything the headroom figures need.
+
+### 2026-11-11, labeler A changed before the second labeler ran (tracked in #959)
+
+Thresholds, the firing definition, the rubric and the strict reading (both labelers TRUE)
+are unchanged. One deviation from the pre-registered labeler pair, decided by the
+maintainer and recorded here before the second labeler has run:
+
+- **Labeler A is a second fresh-context LLM, not the maintainer.** The pre-registration
+  and its first addendum name the maintainer. The maintainer chose instead to run a second
+  fresh-context LLM, `claude-sonnet-5-5`, as labeler A, on the same blind packets, with the
+  same read-only export, tools and frozen rubric as labeler B (`claude-opus-5-5`). It has no
+  access to labeler B's labels. **No human label exists for the primary oracle.**
+- **What that weakens.** Two models from one vendor share training lineage, so shared blind
+  spots are likelier than between a person and a model, and Cohen's kappa measures
+  model-to-model agreement only. The results state this beside the headline number, and a
+  pass is not described as human-validated.
+- **Disclosure.** Three of labeler B's 119 labels were printed during an end-to-end check of
+  the labeler, before this decision. They were not used to choose the second labeler, the
+  model, or any threshold.
+- **Optional spot-check.** A human label of a seeded subset may be added later, reported
+  separately and never decisive. It would change no threshold.
