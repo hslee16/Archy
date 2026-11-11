@@ -90,8 +90,8 @@ def _one(pr: PoolPR, key: str, ledger: Ledger, process: Callable[[PoolPR], dict]
     ledger.record(key, {**meta, **payload, "seconds": round(time.monotonic() - started, 1)})
 
 
-def summarize(ledger_path: Path) -> dict:
-    """Counts from the ledger's `ok` rows (last row per key wins). No firing content."""
+def _ok_rows(ledger_path: Path) -> dict[str, dict]:
+    """The ledger's `ok` rows, the last row per key winning; torn lines are skipped."""
     rows: dict[str, dict] = {}
     for raw in ledger_path.read_text(encoding="utf-8").splitlines():
         try:
@@ -100,10 +100,19 @@ def summarize(ledger_path: Path) -> dict:
             continue
         if row.get("status") == "ok":
             rows[row["key"]] = row
+    return rows
+
+
+def _mean(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def summarize(ledger_path: Path) -> dict:
+    """Counts from the ledger's `ok` rows. Drops leave the denominator. No firing content."""
+    rows = _ok_rows(ledger_path)
     dropped = Counter(r["dropped"].split(":")[0] for r in rows.values() if "dropped" in r)
     measured = [r for r in rows.values() if "dropped" not in r]
     firing_prs = [r for r in measured if r.get("firings")]
-    secs = [r["seconds"] for r in measured if "seconds" in r]
     return {
         "rows_ok": len(rows),
         "measured": len(measured),
@@ -112,7 +121,7 @@ def summarize(ledger_path: Path) -> dict:
         "firings": sum(len(r["firings"]) for r in firing_prs),
         "repos_with_firing": len({r["repo"] for r in firing_prs}),
         "firing_rate": len(firing_prs) / len(measured) if measured else None,
-        "mean_seconds_per_pr": sum(secs) / len(secs) if secs else None,
+        "mean_seconds_per_pr": _mean([r["seconds"] for r in measured if "seconds" in r]),
     }
 
 
