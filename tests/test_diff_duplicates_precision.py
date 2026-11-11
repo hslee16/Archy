@@ -10,6 +10,7 @@ thing under test before asserting the outcome.
 from __future__ import annotations
 
 import sys
+import warnings
 from pathlib import Path
 
 import pytest
@@ -134,8 +135,6 @@ def test_near_miss_budget_hit_is_flagged_not_hidden(
 ) -> None:
     """The shipped near-miss pass warns when it runs out of budget; that must reach the
     ledger row, because a PR whose near-miss result may be short is not a clean one."""
-    import warnings
-
     repo = _repo(tmp_path)
     base = ddp._commit_fixture(repo, {"pkg/__init__.py": "", "pkg/a.py": ddp._ORIGINAL}, "base")
     head = ddp._commit_fixture(repo, {"pkg/b.py": _copy("again")}, "copy")
