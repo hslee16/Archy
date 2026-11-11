@@ -187,6 +187,7 @@ into the next task.
 
 archy:owns        ArmSummary, Verdict, main, newcombe_diff_ci, render, summarize_rows,
                   verdict, wilson
+archy:mirrored-by Verdict also in bench.diff_duplicates_score
 """
 
 from __future__ import annotations
