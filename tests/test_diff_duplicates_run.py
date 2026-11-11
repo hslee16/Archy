@@ -33,21 +33,21 @@ def _pool(repos: dict[str, int]) -> list[pr_mod.PoolPR]:
 
 def test_pilot_and_main_are_disjoint_and_deterministic() -> None:
     pool = _pool({"o/a": 40, "o/b": 40, "o/c": 40})
-    pilot = pr_mod.draw_pilot(pool, n=20)
-    main = pr_mod.draw_main(pool, 100, pilot_n=20, cap=100)
+    pilot = pr_mod.draw_pilot(pool, pr_mod.SampleSpec(pilot_n=20))
+    main = pr_mod.draw_main(pool, 100, pr_mod.SampleSpec(pilot_n=20, cap=100))
     assert len(pilot) == 20
     assert len(main) == 100  # the fixture is big enough to reach the branch
     assert {p.id for p in pilot}.isdisjoint({p.id for p in main})
-    assert pilot == pr_mod.draw_pilot(pool, n=20)
-    assert main == pr_mod.draw_main(pool, 100, pilot_n=20, cap=100)
+    assert pilot == pr_mod.draw_pilot(pool, pr_mod.SampleSpec(pilot_n=20))
+    assert main == pr_mod.draw_main(pool, 100, pr_mod.SampleSpec(pilot_n=20, cap=100))
 
 
 def test_repo_cap_binds_in_draw_order() -> None:
     pool = _pool({"o/big": 200, "o/small": 3})
-    uncapped = pr_mod.draw_main(pool, 500, pilot_n=0, cap=10_000)
+    uncapped = pr_mod.draw_main(pool, 500, pr_mod.SampleSpec(pilot_n=0, cap=10_000))
     assert sum(p.repo == "o/big" for p in uncapped) > 5  # the cap has something to bind on
 
-    capped = pr_mod.draw_main(pool, 500, pilot_n=0, cap=5)
+    capped = pr_mod.draw_main(pool, 500, pr_mod.SampleSpec(pilot_n=0, cap=5))
     assert sum(p.repo == "o/big" for p in capped) == 5
     # draw order: the capped sample is the uncapped stream with later big-repo PRs skipped
     first_big = [p for p in uncapped if p.repo == "o/big"][:5]

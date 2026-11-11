@@ -116,13 +116,17 @@ def summarize(ledger_path: Path) -> dict:
     }
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--pilot", action="store_true", help="run the 20-PR pilot")
     mode.add_argument("--run", type=int, metavar="N", help="run the main sample of N PRs")
     mode.add_argument("--summary", type=Path, metavar="LEDGER", help="print counts and exit")
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
     if args.summary:
         print(json.dumps(summarize(args.summary), indent=2))
         return 0
@@ -131,10 +135,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("CANARY FAILED, refusing to run:\n" + "\n".join(failures))
         return 1
     pool = load_pool()
-    if args.pilot:
-        ledger_path, prs = PILOT_LEDGER, draw_pilot(pool)
-    else:
-        ledger_path, prs = MAIN_LEDGER, draw_main(pool, args.run)
+    ledger_path = PILOT_LEDGER if args.pilot else MAIN_LEDGER
+    prs = draw_pilot(pool) if args.pilot else draw_main(pool, args.run)
     code = run_loop(prs, Ledger(ledger_path))
     print(json.dumps(summarize(ledger_path), indent=2))
     return code
