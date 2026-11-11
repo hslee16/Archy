@@ -54,16 +54,15 @@ archy:owns        DuplicateGroup, DuplicateMember, classify_variants,
                   compute_duplicates, compute_near_duplicates, demote_independent,
                   is_test_path
 archy:mirrored-by DuplicateGroup -> archy.cli_render_git, archy.mcp_payloads,
-                  archy.mcp_runs_git, classify_variants -> archy.cli_git,
-                  archy.mcp_runs_git, bench.duplicates_cochange_sweep,
+                  archy.mcp_runs_git, bench.diff_duplicates_precision,
+                  classify_variants -> archy.cli_git, archy.mcp_runs_git,
+                  bench.diff_duplicates_precision, bench.duplicates_cochange_sweep,
                   compute_duplicates -> archy.cli_git, archy.mcp_runs_git,
-                  bench.duplicates_cochange_sweep,
+                  bench.diff_duplicates_precision, bench.duplicates_cochange_sweep,
                   compute_near_duplicates -> archy.cli_git, archy.mcp_runs_git,
-                  bench.near_duplicates_sweep, demote_independent -> archy.cli_git,
-                  archy.mcp_runs_git, bench.duplicates_cochange_sweep,
-                  is_test_path -> archy.cli_git, archy.mcp_runs_graph,
-                  bench.coupling_sweep, bench.duplicates_cochange_sweep,
-                  bench.reach_asymmetry_precision
+                  bench.diff_duplicates_precision, bench.near_duplicates_sweep,
+                  demote_independent -> archy.cli_git, archy.mcp_runs_git,
+                  bench.diff_duplicates_precision, bench.duplicates_cochange_sweep
 """
 
 from __future__ import annotations

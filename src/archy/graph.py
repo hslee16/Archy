@@ -5,9 +5,6 @@ root. External imports (stdlib, third-party) appear as nodes with
 `external=True` so callers can filter them.
 
 archy:owns        build_graph, parse_project
-archy:mirrored-by parse_project -> archy.cli_git, archy.mcp_runs_core,
-                  bench.duplicates_cochange_sweep, bench.near_duplicates_sweep,
-                  bench.pattern_detection
 """
 
 from __future__ import annotations
