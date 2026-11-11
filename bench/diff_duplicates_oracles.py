@@ -22,7 +22,8 @@ needs 100 successive tokens over 10 lines with identifiers kept, so a firing cou
 only if it is `exact` (byte-identical body) and at least 10 lines; density is the lines
 of the PR's added functions in kept clusters over all lines the PR added to `.py` files.
 
-archy:owns        classify_git, pr_density, ref_after_merge, sonar_would_fail
+archy:owns        classify_git, function_lines, pr_density, ref_after_merge,
+                  sonar_would_fail
 """
 
 from __future__ import annotations
@@ -89,7 +90,7 @@ def _added_lines(repo_dir: Path, base: str, head: str) -> int:
     return sum(int(line.split("\t")[0]) for line in shown.stdout.splitlines() if line[:1].isdigit())
 
 
-def _function_lines(repo_dir: Path, head: str, member: dict) -> int:
+def function_lines(repo_dir: Path, head: str, member: dict) -> int:
     shown = _git(repo_dir, "show", f"{head}:{member['path']}")
     source = function_source(shown.stdout, member["line"]) if shown.returncode == 0 else None
     return len(source.splitlines()) if source else 0
@@ -104,7 +105,7 @@ def pr_density(repo_dir: Path, row: dict) -> float:
         for m in firing["members"]:
             if m["new"] and (m["path"], m["line"]) not in seen:
                 seen.add((m["path"], m["line"]))
-                duplicated += _function_lines(repo_dir, row["head"], m)
+                duplicated += function_lines(repo_dir, row["head"], m)
     return duplicated / added if added else 0.0
 
 
