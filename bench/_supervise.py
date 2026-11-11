@@ -51,8 +51,10 @@ observable as absence of progress over time.
 
 archy:owns        Ledger, StallTimeout, SupervisedResult, WallTimeout, run_supervised,
                   with_retries
-archy:mirrored-by run_supervised -> bench.diff_duplicates_labeler,
-                  bench.greenfield_run, bench.q1b_run,
+archy:mirrored-by StallTimeout -> bench.diff_duplicates_run, bench.q1b_run,
+                  WallTimeout -> bench.diff_duplicates_run, bench.q1b_run,
+                  run_supervised -> bench.diff_duplicates_labeler,
+                  bench.diff_duplicates_run, bench.greenfield_run, bench.q1b_run,
                   with_retries -> bench.diff_duplicates_labeler, bench.greenfield_run,
                   bench.q1b_run
 """
