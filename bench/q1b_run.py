@@ -69,6 +69,11 @@ archy:owns        RateLimited, agent_env, changed_files, hit_rate_limit,
                   layer_violations, main, parse_reset_at, problem_statements,
                   project_slug, reset_worktree, resolve_package, run_agent, run_task,
                   run_with_limit_backoff, save_transcript, summarize, worktree_at
+archy:mirrored-by RateLimited -> bench.diff_duplicates_labeler, bench.greenfield_run,
+                  agent_env -> bench.diff_duplicates_labeler, bench.greenfield_run,
+                  hit_rate_limit -> bench.diff_duplicates_labeler,
+                  bench.greenfield_run,
+                  parse_reset_at -> bench.diff_duplicates_labeler, bench.greenfield_run
 """
 
 from __future__ import annotations

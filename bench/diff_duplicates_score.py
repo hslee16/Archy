@@ -72,8 +72,11 @@ def cohen_kappa(a: list[str], b: list[str]) -> float | None:
 def _read_labels(path: Path) -> dict[str, str]:
     labels: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
-        if raw.strip():
-            row = json.loads(raw)
+        if not raw.strip():
+            continue
+        row = json.loads(raw)
+        # A labeler ledger also holds `error` rows; only a recorded verdict is a label.
+        if row.get("status", "ok") == "ok" and "label" in row:
             labels[row["id"]] = row["label"]
     return labels
 
