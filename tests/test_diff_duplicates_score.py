@@ -83,3 +83,16 @@ def test_strict_needs_both_lenient_needs_either_and_unscorable_is_dropped(
     assert got["lenient_true"] == 2  # firings 1 and 2
     assert got["precision_strict"] == pytest.approx(1 / 3)
     assert got["repos"] == 3
+
+
+def test_error_rows_in_a_labeler_ledger_are_not_labels(tmp_path: Path) -> None:
+    a = _write(tmp_path / "a", {"1": "TRUE", "2": "TRUE"})
+    b = tmp_path / "b"
+    b.write_text(
+        json.dumps({"id": "1", "status": "ok", "label": "TRUE"})
+        + "\n"
+        + json.dumps({"id": "2", "status": "error", "error": "stalled"})
+        + "\n"
+    )
+    got = sc.score_labels(a, b, {"1": "o/x", "2": "o/y"})
+    assert got["labelled_by_both"] == 1  # firing 2 has no verdict from B yet
