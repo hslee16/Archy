@@ -15,6 +15,8 @@ The pilot reports counts only. It reads no firing's contents: the pilot measures
 firing rate and harness bugs, and the pre-registration forbids reading labels.
 
 archy:owns        main, process_pr, run_loop, summarize
+archy:mirrored-by _ok_rows -> bench.diff_duplicates_packets,
+                  bench.diff_duplicates_report
 archy:gates       non-zero exit (hardcoded)
 """
 
