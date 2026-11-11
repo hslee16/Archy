@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "2d38b1939e65",
+  "strategy": "manual-commit",
+  "branch": "alee/diff-duplicates-pilot-548",
+  "checkpoints_count": 12,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/2d/38b1939e65/0/metadata.json",
+      "transcript": "/2d/38b1939e65/0/full.jsonl",
+      "content_hash": "/2d/38b1939e65/0/content_hash.txt",
+      "prompt": "/2d/38b1939e65/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 204,
+    "cache_creation_tokens": 151854,
+    "cache_read_tokens": 10190261,
+    "output_tokens": 57598,
+    "api_call_count": 80
+  }
+}
