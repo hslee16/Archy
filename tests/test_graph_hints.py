@@ -10,6 +10,7 @@ from archy.graph import (
     build_graph,
     hint_unresolved,
     resolve_modules,
+    suggest_files,
     suggest_modules,
 )
 from tests.graph_helpers import _KNOWN
@@ -163,3 +164,50 @@ def test_hint_unresolved_does_not_offer_external_modules(tmp_path: Path):
     graph = build_graph(tmp_path)
     assert graph.nodes["requests"]["external"]  # the near miss exists, as an external
     assert hint_unresolved(graph, ["requestz"]) == ()
+
+
+def test_suggest_modules_floor_drops_a_three_quarter_match():
+    """`pkg.abcd` and `pkg.abxy` share `pkg.ab` (6 matched of 8 + 8), ratio
+    12/16 = 0.75: close, but under the 0.8 floor, so nothing is offered. A
+    floor of 0.7 would let it through, which is what makes this a pin."""
+    assert suggest_modules(["pkg.abxy"], "pkg.abcd") == []
+
+
+def test_suggest_modules_floor_is_inclusive():
+    """`abcde` and `abcdx` share `abcd` (4 matched of 5 + 5), ratio 8/10 = 0.8,
+    exactly the floor. The floor is inclusive (`>=`), so the name is offered;
+    a `>` comparison would drop it."""
+    assert suggest_modules(["abcdx"], "abcde") == ["abcdx"]
+
+
+def test_suggest_modules_keeps_a_near_second_within_the_margin():
+    """`pkg.abcde` scores 16/18 = 0.889 against `pkg.abcdf` and 16/19 = 0.842
+    against `pkg.abcdaa`. The second is within the 0.1 margin of the winner,
+    so both are kept, winner first even though `pkg.abcdaa` sorts first by
+    name. A margin of 0 would keep only the winner."""
+    assert suggest_modules(["pkg.abcdaa", "pkg.abcdf"], "pkg.abcde") == [
+        "pkg.abcdf",
+        "pkg.abcdaa",
+    ]
+
+
+def test_suggest_modules_default_limit_is_five():
+    """Seven names contain `x`; with no explicit limit the default caps the
+    answer at five, in name order. A default of 50 would return all seven."""
+    known = [f"p.x{i}" for i in range(7)]
+    assert suggest_modules(known, "x") == ["p.x0", "p.x1", "p.x2", "p.x3", "p.x4"]
+
+
+def test_suggest_files_suggests_the_package_for_a_mistyped_init_path(tmp_path: Path):
+    """A mistyped `__init__.py` path is compared as the package it names:
+    `app.scoer` against `app.score` scores 16/18 = 0.89. Comparing the full
+    `app.scoer.__init__` instead scores 0.59 and would find nothing."""
+    pkg = tmp_path / "app"
+    (pkg / "score").mkdir(parents=True)
+    (pkg / "__init__.py").write_text("")
+    (pkg / "score" / "__init__.py").write_text("")
+    graph = build_graph(tmp_path)
+    hints = suggest_files(graph, ["app/scoer/__init__.py"], base=tmp_path)
+    assert [(h.ref, h.did_you_mean) for h in hints] == [
+        ("app/scoer/__init__.py", ("app/score/__init__.py",)),
+    ]
