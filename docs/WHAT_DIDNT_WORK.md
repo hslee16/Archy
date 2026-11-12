@@ -663,6 +663,47 @@ records that a module reaches something, not why.
 A sensor limited to packages of declared entrypoints is a different hypothesis
 and would need its own pre-registration. The declared half of #387 stands.
 
+## Study 10: would a diff-scoped "you re-implemented an existing function" finding be right?
+
+[`archy duplicates`](../README.md) reports the duplication backlog of a whole tree. A
+reviewer asks something narrower at change time: did this diff add a function that
+already exists? Keeping only the clusters with one member in the diff's added lines and
+one that already existed at base would turn the report into that check
+([#548](https://github.com/hslee16/archy/issues/548)). Two earlier detectors that looked
+obviously useful had missed their precision bars (Study 7 at 0.024 against 0.70, Study 9
+at 0.215 against 0.40), so this one was measured before anything was built.
+
+**Pre-registered before the harness existed**
+([`research/DIFF_DUPLICATES_PRECISION.md`](research/DIFF_DUPLICATES_PRECISION.md)):
+a headroom kill below 1 firing per 50 Python agent PRs or below 30 scorable firings from
+10 repos; precision pass at 0.60 and kill below 0.40 under two blind labelers; and no
+post-hoc subgroup rescue of a null or a kill.
+
+**Headroom passed. Precision did not.** Over 2,000 sampled AIDev PRs, 1,049 were
+measurable Python PRs and 177 of them (16.9%) produced a firing, 557 firings in 134
+repos. Of 119 firings labeled blind by two models, **19 were true under the strict
+reading (both labelers), 0.160, and 33 under the lenient one, 0.277**, both below the
+0.40 kill line. The finding is not built.
+
+The false firings are mostly not bugs in the detector so much as the wall Studies 7 and
+9 hit: shape does not say why. The reasons the labelers gave were short functions that
+clear 30 nodes, a shape repeated so widely that there is no single "existing one" to
+reuse, and per-backend or per-format siblings. Near-miss (the Type-3 tier) supplied 348
+of the 557 firings and was the least precise, 10 of 76. The exact tier was 4 of 10, which
+is a subgroup on ten firings, reported and not counted.
+
+Three things to hold next to the number. **No human labeled:** the second labeler was
+changed from me to a second model before it ran, recorded in an addendum and
+a ticket, so kappa 0.66 is model-to-model agreement and this is not human-validated. **Type-4
+(semantic) redundancy, the kind the agent-PR literature measures, is not measured here**,
+because this detector misses it by design. And **module-name collisions dropped 22% of
+the Python PRs**, so the measured population may lean toward cleaner repositories; I did
+not measure that.
+
+Full results, including the git oracle (which could not confirm the labelers) and the
+SonarQube-gate comparison, are in
+[`../bench/diff_duplicates_precision_results.md`](../bench/diff_duplicates_precision_results.md).
+
 ## What survived, and why archy still exists
 
 Two nulls on agent-side benefit, one retracted premise, a study saying the
