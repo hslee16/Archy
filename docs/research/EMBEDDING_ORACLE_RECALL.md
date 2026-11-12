@@ -75,11 +75,13 @@ are not discovered afterwards:
   share, so the results report the share with and without them.
   - **A is expanded to pairs.** A firing is a cluster; the labeled item for both generators is
     a (PR, new function, existing function) **pair**. An A firing contributes one pair per
-    member that is new in the diff, each paired with the first existing member, in sorted
-    (path, qualified name) order, that exists at both base and head. A firing with no such
-    member is dropped as unscorable. The ledger holds 557 firings and 1,309 such new members
-    over 1,049 PRs, with one PR holding 703 and one firing holding 181; the cap below exists
-    for that reason.
+    member that is new in the diff, each paired with the existing member of its cluster that
+    has the highest token overlap with it (archy's near-miss token scorer, ties by sorted path
+    then qualified name) and that exists at both base and head. A firing with no such member
+    is dropped as unscorable. The ledger holds 557 firings and 1,309 such new members over
+    1,049 PRs, with one PR holding 703 and one firing holding 181; the cap below exists for
+    that reason. **A's pair-level precision is a different quantity from #548's 0.160**, which
+    was per cluster, and the results report it as such, never as a replication.
 - **B (embedding oracle, offline only):** for each function whose `def` line falls inside an
   added hunk of the diff, clears the same 30-node floor, and is not in a test or vendored path,
   embed its source text. Embed every function of the same repository that **existed at base
@@ -93,9 +95,13 @@ are not discovered afterwards:
     name. A function the PR deleted, renamed or moved is not a valid neighbour (a move would
     pair at similarity near 1.0 and be the refactor itself). Candidates lost to this are
     reported as their own drop reason. Packets read the existing function at head.
-  - **Per-PR cap, both generators:** at most K = 10 pairs per PR, keeping the new functions
-    with the most AST nodes (ties by path, then qualified name). It is applied to A's expanded
-    pairs and to B's candidates alike, before the cutoff is calibrated.
+  - **Per-PR cap, both generators:** at most K = 10 pairs per PR, keeping the pairs whose new
+    function has the most AST nodes (ties by path, then qualified name). For B the cap is
+    applied **after** the similarity cutoff, to the pairs that pass it; B scores every eligible
+    new function. For A it is applied to the expanded pairs.
+  - **Exact-tier predicate, for both generators:** a pair is exact-tier if the new function's
+    AST shape hash equals the existing function's, computed by archy's own hasher, whatever
+    either generator emitted.
   - The embedded text is the function's verbatim source from `def` through its last line,
     docstring included. No identifier folding. Inputs beyond the model's context are truncated
     from the end and the truncation count is reported.
@@ -110,7 +116,8 @@ are not discovered afterwards:
 - **Sensitivity model, reported and never decisive:** `jinaai/jina-code-embeddings-0.5b`
   (`cc-by-nc-4.0`, bench-only). Its role is to say whether a stronger embedder would change the
   verdict. It runs with its own cutoff, calibrated the same way, and its candidates that are not
-  already in the primary pool are labeled in a separate pass, reported separately.
+  already in the primary pool are labeled in a separate pass of at most 100 pairs, reported
+  separately.
 - Qodo-Embed-1-1.5B is out of scope (licence `other`, unverified).
 
 ## Cutoff: fixed before any label, at equal volume
@@ -122,16 +129,22 @@ Replaced here, before anything ran, by:
 - **Unit of equality: capped pairs per measured PR.** A's expanded pairs, after the K = 10
   cap, summed over the 1,049 measured PRs and divided by 1,049, is the target. (Uncapped it is
   1,309 / 1,049 = 1.25; the earlier idea of 0.531 was firings, a different unit, and is not
-  used.) The capped figure is computed from the ledger as a count, with no label involved,
-  and recorded in the post-pilot addendum before calibration runs.
+  used.) From the ledger alone, capping by new-member count gives 536 pairs, **0.511 per PR**,
+  with 177 of the 1,049 PRs holding any pair. That figure is provisional: the ledger has no
+  per-member node counts and no base-and-head existence flags, so the final target is
+  recomputed by re-parsing the PRs that hit the cap and checking existence, counts only, and
+  recorded in the post-pilot addendum before calibration runs.
 - **Calibration subset:** 40 measured PRs, at most 5 per repository, drawn first, with
   `random.Random(587)` over the sorted PR keys. The evaluation subset is then drawn from the
   remaining measured PRs, same generator and key order, so the two cannot overlap. B's
-  similarity scores are computed on the calibration subset and the cutoff is the **highest
-  similarity at which the median PR-level count of B pairs is at least the median of A's
-  capped pairs per PR on the same subset, and the mean is at least the target**. Both
-  conditions must hold. A's firings in the subset are used only for those counts, never their
-  labels. The cutoff is frozen in the post-pilot addendum before the evaluation subset runs.
+  similarity scores are computed on the calibration subset and the cutoff is the **largest
+  observed similarity t such that the mean capped count of B pairs at or above t, per PR over
+  the subset, is at least the target**. Pairs tied at t are all included. If no observed t
+  reaches the target the cutoff is the lowest observed similarity, and that is recorded. The
+  median is not used: A has no pair in 83% of PRs, so its median is 0 and would not bind. The
+  share of PRs with at least one B pair is reported beside A's 17%. A's labels are never read
+  for calibration. The cutoff is frozen in the post-pilot addendum before the evaluation
+  subset runs.
 - Pairs at similarity exactly 1.0 are counted and reported. They count toward calibration
   volume, since the shipped tier would emit them.
 - The sensitivity model gets its own cutoff by the same rule.
@@ -174,11 +187,13 @@ Replaced here, before anything ran, by:
   one labeled pair attached to it is TRUE under the strict reading. A unit is **found by A** if
   an A pair for it is TRUE, **found by B** if a B pair for it is TRUE, and **only by B** if
   found by B and not by A. A pair is not TRUE merely because a generator emitted it.
-- **The headline share excludes exact-tier pairs.** Pairs whose bodies are byte-identical or
-  shape-identical to an A exact-tier cluster are trivially top-1 for any embedder, so
-  "found by both" is inflated by construction on them. The headline "only by B" share is
-  computed over the TRUE pool without them. The share with them is reported beside it and is
-  not decisive.
+- **The headline share excludes exact-tier pairs**, by the pair-level predicate above.
+  Such pairs are trivially top-1 for any embedder, so "found by both" is inflated by
+  construction on them. The headline "only by B" share is computed over the TRUE pool without
+  them. The share with them is reported beside it and is not decisive. The headline therefore
+  leaves out A's most precise tier (4 of 10 strict in #548), a bias toward B that the results
+  state next to the number. B's precision is measured over all labeled B pairs, exact-tier
+  included, and reported again without them.
 - **Relabel, do not reuse.** #548's 119 labels are not reused, since they were produced under
   a different packet mix. They are compared with the new labels on the overlap as a
   consistency check, reported and never decisive.
@@ -196,21 +211,27 @@ Fixed here, not moved by the pilot or by anything read afterwards.
   Below it the result is "not measurable at this sample", reported as such, and the line is
   not extended.
 - **TRUE-pool floor (added here):** the strict TRUE pool, A and B together and excluding
-  exact-tier pairs, must hold at least 40 units from at least 15 repositories and at least 20
-  PRs. One A firing with many new members is one label's worth of evidence, so units are
-  counted by distinct (PR, existing function) pairs for the floor. Below it the share is "not
-  measurable at this sample" and no pass or kill on the share is declared, though B's
-  precision is still reported against its own bars.
+  exact-tier pairs, must hold at least 40 (PR, new function) units from at least 15
+  repositories and at least 20 PRs. Below it the share is "not measurable at this sample" and
+  no pass or kill on the share is declared. A floor failure does not override B's precision
+  bars: a precision kill or pass stands if the scorable floor above is met. The minimum M in
+  the post-pilot addendum is computed in labeled pairs after the 300-pair draw, with the
+  expected TRUE pool at the affordable M. If that is under 40, "not measurable" is recorded
+  before the run, not after it.
 - **Pass (an embedding tier is worth a feature ticket):** B precision at least 0.60 under the
   primary oracle AND at least 30% of the strict TRUE pool found only by B.
 - **Kill:** B precision below 0.40, OR fewer than 10% of the TRUE pool found only by B.
-  **A kill is a kill at A's operating point** (about 1.25 pairs per PR before the cap), and the
-  line is closed only as far as that point measures. It is not a claim about an embedder at a
+  **A kill is a kill at A's operating point** (about 0.51 capped pairs per PR, 1.25 uncapped
+  and dominated by one PR), and the line is closed only as far as that point measures. It is not a claim about an embedder at a
   stricter cutoff.
 - **Between:** null, not shipped.
 - **Wilson 95% intervals decide ties.** Thresholds are applied to the point estimate only when
   the interval does not straddle the bar it would cross. When it does, the verdict is **null**,
-  whichever side the point estimate is on. Intervals are reported beside every proportion.
+  whichever side the point estimate is on. Intervals are reported beside every proportion:
+  Wilson on units for the share, and a bootstrap clustered by PR for pair precision, since up
+  to 10 pairs share a PR. This makes a pass hard and a share kill nearly unreachable (about 0
+  of 40 only-by-B), so a kill will in practice come through B's precision. That is accepted
+  and stated here.
 - **Secondary, never decisive:** a second, stricter cutoff, chosen by the same rule at one
   third of the target volume, is reported with its precision. It adds no threshold.
 - **No post-hoc subgroup rescue.** The sensitivity model, per-agent, per-tier and similarity
