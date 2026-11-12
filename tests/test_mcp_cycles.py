@@ -114,7 +114,7 @@ def test_archy_cycles_exclude_type_checking_reports_the_excluded_edge(tmp_path: 
     )
     assert excluded is not None
     payload = excluded.get("result", excluded)
-    assert payload == {"cycles": [], "excluded_type_checking_edges": 1}
+    assert payload == {"cycles": [], "excluded_type_checking_edges": 1, "namespace_gaps": []}
 
 
 def test_archy_cycles_follows_the_archy_yaml_key_and_the_argument_overrides_it(tmp_path: Path):

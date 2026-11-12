@@ -37,6 +37,7 @@ layers:
       - "archy.graph_discovery"
       - "archy.graph_hints"
       - "archy.graph_models"
+      - "archy.graph_namespace"
       - "archy.graph_resolve"
       - "archy.cycles"
       - "archy.score"

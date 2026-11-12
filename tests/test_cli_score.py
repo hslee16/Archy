@@ -435,7 +435,7 @@ def test_cycles_exclude_type_checking_json_is_an_object_with_the_count(tmp_path:
     project = _make_guarded_project(tmp_path)
     args = ["cycles", str(project), "--format", "json", "--exclude-type-checking"]
     payload = json.loads(CliRunner().invoke(main, args).output)
-    assert payload == {"cycles": [], "excluded_type_checking_edges": 1}
+    assert payload == {"cycles": [], "excluded_type_checking_edges": 1, "namespace_gaps": []}
 
 
 def test_cycles_archy_yaml_key_turns_exclusion_on_and_the_flag_overrides_it(tmp_path: Path):
