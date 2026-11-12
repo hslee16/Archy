@@ -51,6 +51,7 @@ from archy.layers import (
     discover_config,
     load_config,
 )
+from archy.scan_config import graph_kwargs
 
 
 @main.command()
@@ -230,7 +231,14 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
     field names in its payload as `--format json` here.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
-    kw = _graph_kwargs_or_exit(path)
+    try:
+        kw = graph_kwargs(path)
+    except LayerConfigError:
+        # brief tolerates a malformed archy.yaml (#929), unlike the other
+        # commands: the census runs on the default scan arguments and the
+        # load error surfaces below as the reason coverage is absent, the
+        # same shape the MCP payload carries.
+        kw = {}
     report = compute_conventions(path, **kw, include_tests=include_tests)
 
     coverage = config = None
@@ -241,8 +249,9 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
             config = load_config(config_path)
             coverage = compute_coverage(build_graph(path, **kw), config)
         except LayerConfigError as exc:
-            # Parse failures already exit via `_graph_kwargs_or_exit` above. This
-            # catch preserves the briefing if coverage validation fails later.
+            # Reached for a parse failure now that the scan above tolerates
+            # one, and for a coverage validation failure after a clean parse.
+            # Either way the briefing survives, with the reason attached.
             coverage = config = None
             coverage_error = str(exc)
 
