@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "45bafe734445",
+  "session_id": "9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-12T19:51:53.265664Z",
+  "branch": "alee/namespace-gap-warning-586",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "src/archy/graph_namespace.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "ad59c9c6bef0",
+  "checkpoint_transcript_start": 999,
+  "transcript_lines_at_start": 999,
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 6831,
+    "cache_read_tokens": 1300901,
+    "output_tokens": 3327,
+    "api_call_count": 6
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01LE7pzEQNf3TsyYvjvR3SD9",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "ad59c9c6bef0",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 177,
+        "end": 178,
+        "entry_ids": [
+          "4a9d91c0-5d83-48b4-9f63-ed73e9dd96f6"
+        ],
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-12T19:51:53.211358Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 20,
+    "total_committed": 0,
+    "total_lines_changed": 20,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 114,
+      "user_lines_removed": 20,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "bench/diff_duplicates_precision.jsonl": 87,
+        "src/archy/graph_namespace.py": 27
+      },
+      "user_removed_per_file": {
+        "src/archy/graph_namespace.py": 20
+      }
+    }
+  ]
+}

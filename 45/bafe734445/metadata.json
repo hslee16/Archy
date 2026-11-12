@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "45bafe734445",
+  "strategy": "manual-commit",
+  "branch": "alee/namespace-gap-warning-586",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "src/archy/graph_namespace.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/45/bafe734445/0/metadata.json",
+      "transcript": "/45/bafe734445/0/full.jsonl",
+      "content_hash": "/45/bafe734445/0/content_hash.txt",
+      "prompt": "/45/bafe734445/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 6831,
+    "cache_read_tokens": 1300901,
+    "output_tokens": 3327,
+    "api_call_count": 6
+  }
+}
