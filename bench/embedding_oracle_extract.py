@@ -24,13 +24,17 @@ Shard contract with the embedding job (text in, vectors out):
         and a top-level "ok" that is false when the #548 reproduction or the parity check
         found a mismatch.
     bench/cache/emb587/<shard>.units.jsonl
-        STAYS ON THE MAC. One row per function per tree. The join key is
+        STAYS ON THE MAC. One row per FLOOR-CLEARING function per tree. The join key is
         (pr, side, path, qualname, occurrence): `occurrence` numbers same-named functions
-        of one file by line, so the key is unique. Head rows that were not added carry an id
-        that is NOT in the shard (their text is not shipped), so join by the key, never by
-        id. `counterpart` says a function with the same path and qualified name exists in
-        the other tree at ANY size, so "exists at base and head" can be tested even for a
-        function that shrank below the floor.
+        of one file by line, within ONE tree, so the key is unique but base occurrence k
+        is not head occurrence k. Head rows that were not added are not shipped as head
+        text: their id is in the shard only when the same text exists at base (an unchanged
+        function) or is shipped elsewhere, so join by the key, never by id, and treat an
+        id with no vector as "not shipped". `counterpart` says a function with the same
+        path and qualified name exists in the other tree at ANY size, so "exists at base
+        and head" can be tested even for a function that shrank below the floor. A name
+        that occurs more than once in a file is ambiguous: a consumer must not pair such a
+        function by name, and must exclude self-pairs by (path, qualname), never by id.
 
 `normalise` is the single definition of the embedded text. A text that occurs more than
 once is shipped once.
@@ -444,26 +448,51 @@ def _measure(row: dict) -> dict:
         return {"dropped": _drop_reason(exc)}
 
 
-def _load_cached(path: Path) -> dict | None:
-    """The cached result, or None when it is missing, torn, or from another extractor version."""
+def _load_cached(path: Path, row: dict) -> dict | None:
+    """The cached result, or None when it cannot be trusted for THIS row.
+
+    Refused: a missing or torn file, a malformed entry, another extractor version, an entry
+    made on a `+dirty` tree (not reproducible), and an entry for another base or head commit
+    of the same PR key.
+    """
     try:
         entry = json.loads(path.read_text())
-    except (OSError, ValueError):
+        trusted = (
+            entry["version"] == EXTRACT_VERSION
+            and not str(entry["extractor_git_sha"]).endswith("+dirty")
+            and (entry["base"], entry["head"]) == (row["base"], row["head"])
+        )
+        return entry["result"] if trusted else None
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
-    return entry["result"] if entry.get("version") == EXTRACT_VERSION else None
 
 
 def pr_result(work: Path, row: dict, sha: str) -> dict:
     """The PR's result from the cache, or measured now (and cached when it is final)."""
     path = work / f"{row['key']}.json"
-    cached = _load_cached(path)
+    cached = _load_cached(path, row)
     if cached is not None:
         return cached
     result = _measure(row)
     if is_final(result):
-        entry = {"version": EXTRACT_VERSION, "extractor_git_sha": sha, "result": result}
+        entry = {
+            "version": EXTRACT_VERSION,
+            "extractor_git_sha": sha,
+            "base": row["base"],
+            "head": row["head"],
+            "result": result,
+        }
         _atomic_write(path, json.dumps(entry).encode("utf-8"))
     return result
+
+
+def _ledger_members(row: dict) -> list[tuple[str, str, int, bool]]:
+    """`(path, qualified name, def line, new)` of every member of every #548 firing of `row`."""
+    return [
+        (m["path"], m["qualified_name"], m["line"], bool(m["new"]))
+        for firing in row.get("firings", [])
+        for m in firing["members"]
+    ]
 
 
 def parity_mismatches(row: dict, result: dict) -> list[str]:
@@ -472,16 +501,18 @@ def parity_mismatches(row: dict, result: dict) -> list[str]:
     #548's firings were computed at the head tree: a NEW member is a head function whose def
     line is added, an old one is a head function that is not. Both must be among the rows
     this extractor wrote, or generator A and generator B disagree on which functions exist.
+    A PR with firings and NO extractor rows (it was dropped, or no new function cleared the
+    floor) is the clearest disagreement, so every member is reported there.
+
+    One direction only: this never tests the extractor's functions against the ledger, and it
+    can only compare the PRs that have a firing (see `parity_checked` in the manifest).
     """
-    if "fns" not in result:
-        return []
+    wanted = _ledger_members(row)
     head = {
         (f["path"], f["qualname"], f["line"], bool(f["in_added"]))
-        for f in result["fns"]
+        for f in result.get("fns", [])
         if f["side"] == "head"
     }
-    members = [m for firing in row.get("firings", []) for m in firing["members"]]
-    wanted = [(m["path"], m["qualified_name"], m["line"], bool(m["new"])) for m in members]
     return [f"{p}:{q}@{ln} new={n}" for p, q, ln, n in wanted if (p, q, ln, n) not in head]
 
 
@@ -517,6 +548,7 @@ def run_shard(name: str, rows: Sequence[dict]) -> dict:
         for k, (r, res) in results.items()
     }
     parity = {k: m for k, (r, res) in results.items() if (m := parity_mismatches(r, res))}
+    checked = [len(_ledger_members(r)) for r, _ in results.values() if r.get("firings")]
     return {
         **info,
         "extractor_version": EXTRACT_VERSION,
@@ -529,6 +561,7 @@ def run_shard(name: str, rows: Sequence[dict]) -> dict:
             k: v for k, v in reproduction.items() if v["ledger"] != v["mine"]
         },
         "parity_mismatches": parity,
+        "parity_checked": {"prs_with_firings": len(checked), "members": sum(checked)},
     }
 
 
@@ -548,29 +581,51 @@ def _rows(names: Sequence[str]) -> dict[str, list[dict]]:
     return {n: all_rows[n] for n in names}
 
 
-def _write_manifest(shards: Mapping[str, dict]) -> bool:
-    """Merge `shards` into SHARDS.json, atomically; True when no mismatch was found.
-
-    Top-level keys this module does not own (for example a `sample_repos` block added by a
-    consumer) are kept. The old top-level `extractor_git_sha` is dropped: the sha is now
-    recorded per shard, since a later run of one shard must not relabel the other.
-    """
+def _load_manifest() -> dict:
     manifest = OUT / "SHARDS.json"
-    prior = json.loads(manifest.read_text()) if manifest.exists() else {}
+    return json.loads(manifest.read_text()) if manifest.exists() else {}
+
+
+def _write_manifest(shards: Mapping[str, dict]) -> bool:
+    """Merge `shards` into SHARDS.json, atomically; True when the manifest is `ok`.
+
+    `ok` needs every shard entry, including one kept from an earlier run, to be at this
+    EXTRACT_VERSION with no #548 class mismatch and no parity mismatch: a manifest that mixes
+    versions or hides a mismatch is not good. Top-level keys this module does not own (for
+    example a `sample_repos` block added by a consumer) are kept; the old top-level
+    `extractor_git_sha` is dropped, since the sha is recorded per shard.
+    """
+    prior = _load_manifest()
     prior.pop("extractor_git_sha", None)
     merged = {**prior.get("shards", {}), **shards}
-    ok = not any(
-        s.get("reproduction_mismatches") or s.get("parity_mismatches") for s in merged.values()
+    ok = all(
+        e.get("extractor_version") == EXTRACT_VERSION
+        and not e.get("reproduction_mismatches")
+        and not e.get("parity_mismatches")
+        for e in merged.values()
     )
     body = json.dumps({**prior, "ok": ok, "shards": merged}, indent=2, sort_keys=True)
-    _atomic_write(manifest, body.encode("utf-8"))
+    _atomic_write(OUT / "SHARDS.json", body.encode("utf-8"))
     return ok
+
+
+def _invalidate_manifest() -> None:
+    """Mark an existing manifest not `ok` BEFORE a shard's files are replaced, so a run that is
+    interrupted between that write and the manifest write is never read as good. Called before
+    every shard: recording one shard recomputes `ok`, which would otherwise undo it."""
+    if (OUT / "SHARDS.json").exists():
+        body = json.dumps({**_load_manifest(), "ok": False}, indent=2, sort_keys=True)
+        _atomic_write(OUT / "SHARDS.json", body.encode("utf-8"))
 
 
 def _run_all(rows: Mapping[str, list[dict]]) -> dict[str, dict] | None:
     """Every shard's result, or None after an interrupt (finished PRs stay cached)."""
+    shards: dict[str, dict] = {}
     try:
-        return {name: run_shard(name, rs) for name, rs in rows.items()}
+        for name, rs in rows.items():
+            _invalidate_manifest()  # before THIS shard's files are replaced, every time
+            shards[name] = run_shard(name, rs)
+            _write_manifest({name: shards[name]})  # each shard is recorded as soon as it audits
     except KeyboardInterrupt:
         print(
             f"interrupted. Finished PRs are cached under {OUT / 'work'}; "
@@ -578,6 +633,7 @@ def _run_all(rows: Mapping[str, list[dict]]) -> dict[str, dict] | None:
             file=sys.stderr,
         )
         return None
+    return shards
 
 
 def _report_mismatches(shards: Mapping[str, dict]) -> None:

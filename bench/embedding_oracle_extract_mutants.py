@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TARGET = ROOT / "bench" / "embedding_oracle_extract.py"
-TEST = "tests/test_embedding_oracle_extract.py"
+TESTS = ("tests/test_embedding_oracle_extract.py", "tests/test_embedding_oracle_extract_run.py")
 
 MUTANTS: list[tuple[str, str, str]] = [
     ("floor made exclusive", "f.nodes >= MIN_NODES", "f.nodes > MIN_NODES"),
@@ -54,7 +54,16 @@ MUTANTS: list[tuple[str, str, str]] = [
         "for f in head_fns}",
     ),
     ("mismatch ignored by main", "if _write_manifest(shards):", "if True:"),
-    ("manifest ok ignores mismatches", "ok = not any(", "ok = True or not any("),
+    (
+        "manifest ok ignores class mismatches",
+        '\n        and not e.get("reproduction_mismatches")',
+        "",
+    ),
+    (
+        "manifest ok ignores parity mismatches",
+        '\n        and not e.get("parity_mismatches")',
+        "",
+    ),
     ("pilot drop reason not compared", 'if v["ledger"] != v["mine"]', "if False"),
     ("untracked files count as dirty", '"--untracked-files=no",', '"--untracked-files=all",'),
     ("no-new-function PR kept", "if not any(f.in_added for f in head_fns):", "if False:"),
@@ -76,19 +85,19 @@ MUTANTS: list[tuple[str, str, str]] = [
         "names.update((rel, f.qualname) for f in functions if _clears_floor(f))",
     ),
     ("transient drops are cached", "if is_final(result):", "if True:"),
-    ("stale cache accepted", 'entry.get("version") == EXTRACT_VERSION', "True"),
-    ("torn cache crashes", "except (OSError, ValueError):", "except OSError:"),
+    ("stale cache accepted", 'entry["version"] == EXTRACT_VERSION', "True"),
+    (
+        "torn cache crashes",
+        "except (OSError, ValueError, KeyError, TypeError, AttributeError):",
+        "except OSError:",
+    ),
     (
         "one PR's failure ends the run",
         'return extract_pr(target, row["base"], row["head"])\n    except Exception as exc:',
         'return extract_pr(target, row["base"], row["head"])\n    except ZeroDivisionError as exc:',
     ),
     ("parity ignores newness", 'bool(m["new"]))', "False)"),
-    (
-        "parity compares nothing",
-        'members = [m for firing in row.get("firings", []) for m in firing["members"]]',
-        "members = []",
-    ),
+    ("parity compares nothing", "wanted = _ledger_members(row)", "wanted = []"),
     ("write is not atomic", "os.replace(tmp, path)", "path.write_bytes(data)"),
     (
         "shard rows not ASCII",
@@ -106,16 +115,59 @@ MUTANTS: list[tuple[str, str, str]] = [
         'prior.pop("extractor_git_sha", None)',
         "pass",
     ),
+    # --- review round 2
+    (
+        "dirty-tree cache entry trusted",
+        'and not str(entry["extractor_git_sha"]).endswith("+dirty")',
+        "",
+    ),
+    (
+        "cache ignores the PR's base and head",
+        'and (entry["base"], entry["head"]) == (row["base"], row["head"])',
+        "",
+    ),
+    ("parity skips PRs with no rows", 'for f in result.get("fns", [])', 'for f in result["fns"]'),
+    (
+        "manifest ok ignores stale versions",
+        'e.get("extractor_version") == EXTRACT_VERSION\n        and ',
+        "",
+    ),
+    (
+        "manifest drops the other shard",
+        'merged = {**prior.get("shards", {}), **shards}',
+        "merged = dict(shards)",
+    ),
+    (
+        "manifest not invalidated per shard",
+        "_invalidate_manifest()  # before THIS shard's files are replaced, every time",
+        "pass",
+    ),
+    (
+        "shard not recorded when it audits",
+        "_write_manifest({name: shards[name]})  # each shard is recorded as soon as it audits",
+        "pass",
+    ),
+    (
+        "parity coverage miscounted",
+        'if r.get("firings")]',
+        'if r.get("firings") is not None]',
+    ),
+    (
+        "deterministic drop treated as transient",
+        "or reason in DETERMINISTIC_DROPS",
+        "or False",
+    ),
 ]
 
 
 def _suite_exit_code() -> int:
     """pytest's exit code: 0 all passed, 1 some test FAILED, anything else is not a verdict
     (2 interrupted or a collection error, 3 internal error, 4 usage, 5 nothing collected)."""
-    for cache in ROOT.rglob("__pycache__"):
-        shutil.rmtree(cache, ignore_errors=True)
+    for top in ("bench", "src", "tests"):  # not the whole tree: that would walk `.venv`
+        for cache in (ROOT / top).rglob("__pycache__"):
+            shutil.rmtree(cache, ignore_errors=True)
     run = subprocess.run(
-        ["uv", "run", "pytest", TEST, "-x", "-q", "-p", "no:cacheprovider"],
+        ["uv", "run", "pytest", *TESTS, "-x", "-q", "-p", "no:cacheprovider"],
         cwd=ROOT,
         capture_output=True,
         text=True,
