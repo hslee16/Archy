@@ -1,0 +1,180 @@
+run the review
+
+---
+
+<task-notification>
+<task-id>a37707f4749badc2e</task-id>
+<tool-use-id>toolu_01EUK1FLqUVqywjBZyqrTk4f</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a37707f4749badc2e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings. `/Users/hosanglee/archy/docs/research/EMBEDDING_ORACLE_RECALL.md` has no U+2014 characters, checked with a `grep` for that byte sequence. I marked review `no_em_dashes--docs-research-EMBEDDING_ORACLE_RECALL.md--f11e51b14331` as passed.</result>
+<usage><subagent_tokens>18761</subagent_tokens><tool_uses>3</tool_uses><duration_ms>7165</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac2390ee679d1eff2</task-id>
+<tool-use-id>toolu_01SaDHGcGVR5oEpDrH73MVqw</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/ac2390ee679d1eff2.output</output-file>
+<status>completed</status>
+<summary>Agent "Review suggest_new_reviews" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No new rules warranted. I did not open either file, so the verdict rests on the default-pass criterion. I marked the review as passed.</result>
+<usage><subagent_tokens>18977</subagent_tokens><tool_uses>2</tool_uses><duration_ms>5886</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a4cadec40a35f368c</task-id>
+<tool-use-id>toolu_01GjnLzRREcMTVocfTE4H2LQ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a4cadec40a35f368c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+The branch changes only `docs/research/EMBEDDING_ORACLE_RECALL.md`, a new pre-registration, and touches no source files. The figures it quotes from the earlier duplicate-detection study (#548) match `bench/diff_duplicates_precision_results.md`:
+- 557 firings
+- 1,049 measured Python PRs
+- 119 scorable firings
+- 0.160 strict precision
+- 22% of Python PRs dropped
+- the 0.40 kill line
+
+The derived rate of 0.531 candidates per PR is correct (557 / 1,049).
+
+I did not check the doc's `MIN_NODES = 30` claim against `src`. A grep for `MIN_NODES *=` in `src` found no definition.</result>
+<usage><subagent_tokens>30350</subagent_tokens><tool_uses>5</tool_uses><duration_ms>13134</duration_ms></usage>
+</task-notification>
+
+---
+
+run it
+
+---
+
+<task-notification>
+<task-id>a62e6ace54adf2a67</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a62e6ace54adf2a67.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial prereg review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Review of `docs/research/EMBEDDING_ORACLE_RECALL.md` (#587): ranked findings**
+
+I did not run the harness or the cutoff arithmetic against real embeddings. The unit and packet findings below come from the #548 ledger and `bench/diff_duplicates_packets.py`. The calibration and operating-point findings are reasoned from the design text.
+
+Checked against the files and true: 557 firings, 1,049 measured PRs, 557/1049 = 0.531, 119 labels, and the pilot's 7 measured PRs with 1 firing. The ledger carries `near_miss_budget_hit` per PR, and members carry `new`, `path`, `line` and `qualified_name`.
+
+### 1. The volume target is in the wrong unit (should be fixed by edit before merge)
+
+- **Quote:** "Target volume: 557 A firings ... 0.531 candidates per measured PR." B is defined as "One candidate is one (PR, new function) pair."
+- **What the ledger shows:** 557 firings contain 1,308 distinct new-function units, about 2.3 units per firing. Firings are clusters, and 82 of the 557 have two or more new members.
+- **Failure scenario:** B emits per new function and A emits per cluster, so cutoff matching 557 against 1,308 equates different things. B sits at roughly 0.4 times A's unit volume in one reading, or A's per-firing volume is understated by 2.3x in the other. "Equal volume" is not what is claimed, and B's precision is read at an operating point nobody chose deliberately. Cutting B's cutoff to hit 0.531 units per PR could also push B to a looser threshold than A's real unit volume (1.25 units per PR).
+- **Fix:** State the equality unit explicitly. For example: "Target 1,308 / 1,049 = 1.247 A units per measured PR, B candidates per PR", or keep 0.531 but define A's count as firings and B's as distinct (PR, existing function) clusters. Pick one and justify it. Also report B's realised volume per PR on the evaluation subset next to A's.
+
+### 2. Heavy tails: one PR can dominate every count (should be fixed by edit before merge)
+
+- **Quote:** "at most 25 per repository", "highest similarity at which B emits at least 0.531 candidates per PR averaged over the subset."
+- **Evidence:** the A units per PR include a single PR with 703 units, then 49, 24, 22 and 19. A firing with 181 or 183 new members exists, so an A cluster can attach hundreds of units to one label.
+- **Failure scenarios:**
+  - If a 700-function PR (a generated or initial-commit PR) lands in the 40-PR calibration set, the mean-volume rule yields a cutoff set by that one PR. B then emits far too few or far too many candidates on the evaluation subset.
+  - If it lands in the evaluation subset, A's units from one 181-member cluster, labeled once, can swamp the TRUE pool. A single strict-TRUE cluster label could then satisfy the 20-unit floor by itself.
+  - The mean is also unstable on 40 PRs. A target of 0.531 times 40 is about 22 candidates, so the cutoff is the 22nd-highest top-1 similarity, set by a handful of PRs.
+- **Fix:** Pre-register all of the following:
+  - a per-PR cap on B candidates and on A units, applied to both generators (for example the top K by size);
+  - the calibration rule as a PR-level or median statistic rather than the mean;
+  - reporting of realised B volume against target on the evaluation subset;
+  - cluster-level units for A (one unit per firing, with new members counted once), or per-member units that carry a per-firing weight of 1.
+
+### 3. Unit, packet and label are not aligned (should be fixed by edit before merge)
+
+- **Quote:** "An A firing contributes one unit per member of its cluster that is new in the diff. A unit is TRUE if at least one candidate attached to it is labeled TRUE."
+- **Evidence:** #548's packets are per firing, show all new and all existing members, and were labeled once per cluster. A B candidate is one new function and one existing function. The doc does not say whether a multi-new-member A cluster is labeled once (so one label fans out to N units) or once per (new, existing) pair, or which existing function an A candidate pairs a unit with when the cluster has 198 existing members.
+- **Failure scenarios:**
+  - The A TRUE-unit count is inflated by correlated fan-out from one label, while B's units are independent. That deflates "only by B".
+  - The 300-cap draw is "over unit ids alone before any packet is built". With fan-out, the labeled item count is not the unit count, and drawing units then building cluster packets either duplicates packets or breaks the draw.
+  - A B candidate pairs the new function with Y while A's cluster for it contains X and Y. The unit is "found by A" if A's cluster label is TRUE even though the labeled packet never isolated the (new, Y) pairing.
+- **Fix:** Define the labeled item as one (PR, new function, existing function) pair for both generators. Expand A clusters into pairs with a fixed rule, for example the highest similarity existing member or the nearest by path. Define a unit as TRUE if any labeled pair for it is TRUE. State that the packet builder is the same code for both. State that the cap draws items rather than units.
+
+### 4. Packets may leak the generator (should be fixed by edit before merge)
+
+- **Quote:** "Packets for A and B candidates are built by the same code path and are shuffled together."
+- **Evidence:** the #548 builder includes decorators in `function_source`, shows all members of a cluster, and reads existing members at `head`. A firings are clusters, so packets have 1 to N members, and exact tier clusters show byte-identical bodies. B packets are always 1:1.
+- **Failure scenario:** packet shape (a cluster with 3+ members, byte-identical bodies) gives away that it is an A firing. Labelers' priors differ by generator (A packets are 0.160 precise). Blindness is then claimed but not achieved, and "same code path" does not equal "same distribution of packet shapes".
+- **Fix:** Require 1:1 pair packets for both generators (see 3). Add a pre-registered leak check: a classifier or the labelers guess the generator, reported, with a chance-level target. A cheaper alternative is to report B and A precision separately by packet shape.
+
+### 5. B's candidates include things the PR deleted or moved, and this is silent (should be fixed by edit before merge)
+
+- **Quote:** "Embed every function of the same repository that existed at base outside the added hunks." Unscorable: "the existing member cannot be opened at base."
+- **Evidence:** #548's packet builder reads existing members at head, and A only sees head. A function that existed at base but was renamed, moved or deleted by the PR is in B's pool and not in A's.
+- **Failure scenarios:**
+  - A move or rename refactor, where the "new" function is byte-identical to a base function the PR removed, is a top-1 neighbour at similarity of about 1.0. That is the refactor itself, not redundancy. The labelers may call it TRUE, or the packet may be unscorable (a drop that is asymmetric by generator).
+  - The doc says "at base" in one place and the existing builder opens members at head, so which commit the reader of an existing function uses is undefined.
+  - The `line` in the ledger is a head line, and B's base line is different, so the mapping from a base function to its head file location is unspecified.
+- **Fix:** Require the existing function to exist at both base and head (matched by path and qualified name, and unchanged or found by the same extraction code). State which commit packets read. Report B candidates dropped for "deleted or moved by the PR" as their own drop reason.
+
+### 6. B restates the exact tier, so "only by B" depends on the exact-tier share (should be addressed by edit before merge)
+
+- **Evidence:** 72 of 557 firings are exact, and exact is 4 of 10 strict-TRUE in #548. Byte-identical pairs will be top-1 with similarity 1.0 and clear any cutoff.
+- **Failure scenario:** B trivially rediscovers A's exact tier, so "found by both" is inflated by construction. Conversely, the same duplicated content hashed under two names yields many pairs at exactly 1.0, which the audit line mentions only as a post-hoc check.
+- **Fix:** Pre-register reporting of "only by B" separately for pairs whose bodies are not byte-identical or shape-identical to A's exact tier. Pre-register that the share headline is computed with exact-tier pairs excluded or reported both ways.
+
+### 7. The kill bar is nearly mechanical, and it closes the line from one operating point (should be addressed by edit before merge)
+
+- **Quote:** "Kill: B precision below 0.40, OR fewer than 10% of the TRUE pool found only by B", and "Kill: record it in `docs/WHAT_DIDNT_WORK.md` and close the line."
+- **Failure scenario:** at 1.25 candidates per PR (or 0.53) the cutoff will sit where sibling and same-shape code dominates, which is #548's main FALSE reasons (sibling, widespread-name, short). The precision kill is likely to fire on precision alone, with the share never mattering. The doc itself says B is read at A's operating point, not its own best. Closing the whole line on one operating point is an over-claim.
+- **Fix:** Narrow the kill wording to "kill at A's operating point; the line is closed only as far as this operating point measures". Optionally pre-register a second, stricter cutoff (for example the top-0.1 candidates per PR) reported as a secondary result, never decisive.
+
+### 8. TRUE-pool floor and cap interplay (should be addressed by edit before merge)
+
+- **Evidence:** A's strict precision is 0.160. On an evaluation subset of roughly 150 PRs, the expected A TRUE firings are around 13, and strict TRUE units would be about 20 only if B contributes substantially or fan-out inflates A.
+- **Failure scenarios:**
+  - The floor of 20 can be met almost entirely by one fan-out cluster (see 2), a mechanical clearance of the floor.
+  - Below the floor the share is "not measurable". With M tied to the pilot's wall time, a likely outcome is "not measurable at this sample", spending a run to learn nothing.
+  - The share bar of 30% and kill of 10% sit on a base of about 20 units: one unit is 5 points, so the verdict can flip on one unit.
+  - The Wilson rule says point estimates are applied but intervals are reported. With about 20 units the interval straddles both bars almost surely, so any pass or kill is effectively a coin flip described as straddling.
+- **Fix:** Raise the TRUE-pool floor (for example 40 units from at least 15 repositories and at least 20 PRs), or pre-register a minimum M so the expected pool is at least that. State that when an interval straddles a bar the verdict is "null", not the point estimate's side. Count the floor in distinct (PR, existing function) pairs from at least N repositories, not units.
+
+### 9. M is fixed from a 7-PR pilot's wall time (note, or fix by edit)
+
+- **Quote:** "M is fixed in the post-pilot addendum from the pilot's measured wall time per PR, and only from that."
+- **Failure scenario:** the pilot measured 7 PRs, and the repos that drop for collisions are the large ones. Embedding all base functions of a large repo (tens of thousands of functions) on CPU can cost hours per repo, and the pilot's 54 s per PR is archy only, not embedding. M may be set far too high or too low. With the 25-per-repo cap, many evaluation PRs share one repo and can reuse the content-hash cache, but the pilot may not show that.
+- **Fix:** State the embedding cost model separately (functions per PR, throughput) and the minimum M. Pre-register a rule if wall time makes the minimum unaffordable: report "not measurable", do not shrink the floors.
+
+### 10. Feasibility details that can silently fail (should be fixed by edit before merge)
+
+- **Function definition:** the doc says "function whose def line falls inside an added hunk" and "30-node floor", but does not say B uses archy's extraction code, so methods, nested defs, async defs, decorated defs (def line versus decorator line) and lambdas can diverge from A's units. A's `qualified_name` and B's extraction may then disagree on which functions exist.
+- **Truncation:** "Inputs beyond the model's context are truncated from the end and the truncation count is reported." Report the count by generator and by band, and pre-register that candidates whose input was truncated are not dropped, and are or are not part of precision. At the 0.5b model the context differs, so say so.
+- **`trust_remote_code`:** "pinned revision is the code that runs and no other." Also pin the Python packages and the tokenizer revision, and record `transformers` version. A remote-code model run can fetch code on load, so say the revision hash is passed on every load and that offline mode is enforced after the first fetch.
+- **Cache key:** content hash plus model id plus revision is stated. Also include the truncation length and the input text normalisation (line endings, trailing whitespace).
+- **Duplicate hashes:** the audit item "similarity exactly 1.0 for many pairs" is listed only as a post-hoc audit. Pre-register that exact-1.0 pairs are reported by count and excluded from or included in the cutoff calibration, because they eat calibration volume.
+
+### 11. Overlap with #548's labeled firings and draw order (note for an addendum, minor)
+
+- **Quote:** "Relabel, do not reuse." "40 measured PRs drawn with seed 587 ... containing no PR from the evaluation subset."
+- **Issue:** the 120 firings #548 labeled sit in the measured set, and A's ledger firings for the evaluation subset are consulted to build the pool. Nothing is chosen after seeing labels, since A's firings are read from a ledger not from labels, and #548's labels are read only for the consistency check. But the calibration subset and evaluation subset both use "seed 587", so the order of the draws (calibration first, then evaluation from the remainder) must be fixed in one sentence, or the two "disjoint" claims can be satisfied by different orderings. Also state whether #548's labeled PRs are over-represented, since the consistency check is only possible on the overlap.
+- **Fix:** One sentence: "Calibration is drawn first, then the evaluation subset is drawn from the remaining measured PRs, both with `random.Random(587)` over sorted PR keys."
+
+### 12. The near-miss budget caveat points the wrong way as worded (note)
+
+- **Quote:** "A may be short on those PRs, which can only inflate B's share, so the results report the share with and without them."
+- **Issue:** 62 of 1,049 measured PRs carry `near_miss_budget_hit`, which is a PR-level flag where the results file says "16 firings are in PRs where the shipped near-miss pass hit its budget", so the doc should quote a number from the ledger. The direction is right. State the count.
+
+### Sound as written
+
+- Reusing the rubric byte for byte with a drift test, the strict reading, and the LLM-only labeler disclosure.
+- "Recall is relative to the pooled set" and the A operating point disclaimer.
+- Dropping unscorable candidates by reason and generator.
+- Not extending the sample, and no subgroup rescue.
+- The canary and mutation list, though add one mutation: swap the unit key from (PR, new function) to PR only.
+
+### Suggested merge decision
+
+Address findings 1, 2, 3, 4, 5, 6, 7, 8 and 10 by edit before merge. Finding 9 and the remainder can go in an addendum before the pilot runs.</result>
+<usage><subagent_tokens>77813</subagent_tokens><tool_uses>6</tool_uses><duration_ms>96220</duration_ms></usage>
+</task-notification>
