@@ -161,3 +161,23 @@ def test_export_context_is_the_member_directories_without_git(tmp_path: Path) ->
     assert (dest / "pkg" / "a.py").exists() and (dest / "pkg" / "helper.py").exists()
     assert not (dest / "other").exists()  # only the member directories
     assert not (dest / ".git").exists()  # no history to read the outcome from
+
+
+def test_a_second_labeler_has_its_own_ledger_and_never_reads_the_first(tmp_path: Path) -> None:
+    """Labeler A must be independent of B: its own file, and B's finished rows must not
+    make A skip a firing."""
+    out = _packets(tmp_path, ["1:0", "2:0"])
+    lb.label_all(out, label=_ok, options=lb.LabelOptions(workers=1))  # labeler B, default
+    assert (out / "labels_B.jsonl").exists()
+
+    seen: list[str] = []
+
+    def label(packet: dict, head: str) -> dict:
+        seen.append(packet["id"])
+        return _ok(packet, head)
+
+    lb.label_all(out, label=label, options=lb.LabelOptions(workers=1, name="A"))
+    assert sorted(seen) == ["1:0", "2:0"]  # B's rows did not mark A's work as done
+    rows_a = [json.loads(x) for x in (out / "labels_A.jsonl").read_text().splitlines()]
+    assert sorted(r["id"] for r in rows_a) == ["1:0", "2:0"]
+    assert len((out / "labels_B.jsonl").read_text().splitlines()) == 2  # B untouched
