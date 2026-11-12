@@ -691,6 +691,17 @@ roots:
 
 A root names the package directory itself, not the directory that contains it: `src/service` makes `service.db`, while `src` would name `src.service.db`. This is the opposite of how `PYTHONPATH` entries work.
 
+In a uv workspace several distributions contribute to one namespace, so every directory that is named like the import needs a root, and the parent `src` directories are the wrong answer:
+
+```yaml
+roots: [packages/core/src]   # wrong: modules become `src.acme.core.*`, silently
+roots:                       # right: modules become `acme.core.*` and `acme.web.*`
+  - packages/core/src/acme
+  - packages/web/src/acme
+```
+
+When a scanned module imports a top-level name that is a directory with no `__init__.py` holding scanned packages, `cycles` and `score` (text, JSON and the MCP tools) print a warning naming the directories to set. Without it, a cycle between `acme.core` and `acme.web` is invisible and the result reads as clean. It is a warning, not a failure, and archy does not guess the roots for you.
+
 Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
 
 **Layer presence (`min_layers_present:`).** Forbidding edges *between* layers says nothing about whether the layers exist. A codebase that collapsed four layers into one module satisfies every `forbid` rule by having no cross-layer edges at all, and passes silently. Set a floor to catch that:

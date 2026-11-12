@@ -23,6 +23,7 @@ from archy.complexity import FunctionComplexity
 from archy.entrypoints import derive_entrypoints
 from archy.graph_discovery import _relative_paths
 from archy.graph_models import Module
+from archy.graph_namespace import find_namespace_gaps
 from archy.graph_resolve import (
     _build_alias_table,
     _build_reexport_maps,
@@ -81,6 +82,7 @@ def assemble_graph(
     )
     graph.graph["entrypoints"] = entrypoints
     graph.graph["entrypoint_errors"] = entrypoint_errors
+    graph.graph["namespace_gaps"] = find_namespace_gaps(graph)
     return graph
 
 

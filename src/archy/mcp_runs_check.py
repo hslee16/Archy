@@ -239,6 +239,7 @@ def run_score(
         components=score_components(score),
         inputs=score.inputs,
         gate=gate,
+        namespace_gaps=tuple(graph.graph.get("namespace_gaps", ())),
     )
 
 
@@ -284,7 +285,7 @@ def run_cycles(
         raise ValueError(zero_modules_reason(path, "checked"))
     exclude = resolve_exclude_type_checking(path, exclude_type_checking)
     scan = scan_cycles(graph, min_size=min_size, exclude_type_checking=exclude)
-    return scan if exclude else list(scan.cycles)
+    return scan if exclude or scan.namespace_gaps else list(scan.cycles)
 
 
 def run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckErrorPayload:
