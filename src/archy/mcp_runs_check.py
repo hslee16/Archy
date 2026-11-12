@@ -329,6 +329,7 @@ def run_check(path: Path, *, config_path: Path | None) -> CheckPayload | CheckEr
         coverage=coverage,
         presence_fails=presence_fails,
         min_layers_present=config.min_layers_present,
+        namespace_gaps=tuple(graph.graph.get("namespace_gaps", ())),
         transitive_checked=False,
         transitive_unverified_reason=(
             (

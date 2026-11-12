@@ -20,7 +20,7 @@ from archy.cycles import CycleScan
 from archy.graph import build_graph
 from archy.graph_namespace import find_namespace_gaps
 from archy.mcp import create_server
-from archy.mcp_runs import run_cycles, run_score
+from archy.mcp_runs import run_check, run_cycles, run_score
 from tests.mcp_helpers import call_tool
 
 NAMESPACE_DIRS = ["packages/core/src/acme", "packages/web/src/acme"]
@@ -169,3 +169,51 @@ def test_a_nested_regular_package_sharing_a_name_with_a_third_party_import_is_no
     assert graph.nodes["yaml"]["external"] is True  # the import reaches the branch
     assert "tests.yaml" in graph.nodes  # a nested package of that name exists
     assert find_namespace_gaps(graph) == ()
+
+
+NO_ROOTS_CONFIG = (
+    "layers:\n"
+    "  core: {modules: ['core.**']}\n"
+    "  web: {modules: ['web.**']}\n"
+    "forbid:\n"
+    "  - {from: core, to: web}\n"
+)
+
+
+def test_check_passes_but_says_the_graph_was_not_joined(workspace: Path):
+    (workspace / "archy.yaml").write_text(NO_ROOTS_CONFIG)
+    result = CliRunner().invoke(main, ["check", str(workspace)])
+    assert result.exit_code == 0, result.output
+    assert "# warning: 2 modules import `acme`" in result.output
+    as_json = CliRunner().invoke(main, ["check", str(workspace), "--format", "json"])
+    assert json.loads(as_json.stdout)["namespace_gaps"][0]["name"] == "acme"
+
+
+def test_check_with_the_advised_roots_fires_the_rule_the_gap_hid(workspace: Path):
+    """The ticket's end state: with roots, `forbid: core -> web` fires and the warning is gone."""
+    (workspace / "archy.yaml").write_text(
+        "roots:\n"
+        + "".join(f"  - {d}\n" for d in NAMESPACE_DIRS)
+        + "layers:\n  core: {modules: ['acme.core.**']}\n  web: {modules: ['acme.web.**']}\n"
+        "forbid:\n  - {from: core, to: web}\n"
+    )
+    result = CliRunner().invoke(main, ["check", str(workspace)])
+    assert result.exit_code == 1, result.output
+    assert "acme.core.leak" in result.output
+    assert "# warning:" not in result.output
+
+
+def test_check_payload_model_dump_carries_the_gap(workspace: Path):
+    (workspace / "archy.yaml").write_text(NO_ROOTS_CONFIG)
+    payload = run_check(workspace, config_path=None).model_dump()
+    assert payload["passed"] is True
+    assert payload["namespace_gaps"][0]["name"] == "acme"
+
+
+def test_check_over_a_joined_graph_has_no_gap(tmp_path: Path):
+    _write(tmp_path, "pkg/__init__.py")
+    _write(tmp_path, "pkg/a.py", "import requests\n")
+    (tmp_path / "archy.yaml").write_text("layers:\n  pkg: {modules: ['pkg.**']}\nforbid: []\n")
+    out = CliRunner().invoke(main, ["check", str(tmp_path)]).output
+    assert "# warning:" not in out
+    assert run_check(tmp_path, config_path=None).model_dump()["namespace_gaps"] == ()

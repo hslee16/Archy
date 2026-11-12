@@ -700,7 +700,7 @@ roots:                       # right: modules become `acme.core.*` and `acme.web
   - packages/web/src/acme
 ```
 
-When a scanned module imports a top-level name that is a directory with no `__init__.py` holding scanned packages, `cycles` and `score` (text, JSON and the MCP tools) print a warning naming the directories to set. Without it, a cycle between `acme.core` and `acme.web` is invisible and the result reads as clean. It is a warning, not a failure, and archy does not guess the roots for you.
+When a scanned module imports a top-level name that is a directory with no `__init__.py` holding scanned packages, `cycles`, `score` and `check` (text, JSON and the MCP tools) print a warning naming the directories to set. Without it, a cycle between `acme.core` and `acme.web` is invisible and the result reads as clean. It is a warning, not a failure, and archy does not guess the roots for you.
 
 Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
 

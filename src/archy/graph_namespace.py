@@ -13,8 +13,8 @@ themselves, which is what `roots:` expects (a root names the package directory,
 not the directory that contains it).
 
 archy:owns        NamespaceGap, find_namespace_gaps, namespace_gap_reason
-archy:mirrored-by NamespaceGap -> archy.cli_render_history, archy.cycles,
-                  archy.mcp_payloads
+archy:mirrored-by NamespaceGap -> archy.cli_check, archy.cli_render_history,
+                  archy.cycles, archy.mcp_payloads
 """
 
 from __future__ import annotations
