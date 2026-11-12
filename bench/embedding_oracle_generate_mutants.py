@@ -218,8 +218,8 @@ MUTANTS: list[tuple[str, str, str, str]] = [
     (
         B + "embedding_oracle_units.py",
         "units read with splitlines",
-        '.split("\\n")  # never',
-        ".splitlines()  # never",
+        'lines = path.read_text(encoding="utf-8").split("\\n")',
+        'lines = path.read_text(encoding="utf-8").splitlines()',
     ),
     (
         B + "embedding_oracle_units.py",
@@ -238,6 +238,30 @@ MUTANTS: list[tuple[str, str, str, str]] = [
         "new = any head row",
         'r["side"] == "head" and r["in_added"] is True',
         'r["side"] == "head"',
+    ),
+    (
+        B + "embedding_oracle_generate.py",
+        "an unshipped neighbour is not skipped",
+        "existing = [e for e in units.existing if vs.has(e.id)]",
+        "existing = list(units.existing)",
+    ),
+    (
+        B + "embedding_oracle_generate.py",
+        "an unshipped new function is not skipped",
+        "new_fns = [n for n in units.new if vs.has(n.id)]",
+        "new_fns = list(units.new)",
+    ),
+    (
+        B + "embedding_oracle_generate.py",
+        "unshipped ids are not counted",
+        "unshipped = len(units.existing) - len(existing) + len(units.new) - len(new_fns)",
+        "unshipped = 0",
+    ),
+    (
+        B + "embedding_oracle_generate.py",
+        "an unshipped new function is counted as a miss",
+        "len(new_fns) - len(got),",
+        "len(units.new) - len(got),",
     ),
     (
         B + "embedding_oracle_generate.py",

@@ -14,7 +14,10 @@ pre-registration live here and nowhere else:
 
 Pure logic over rows; no model, no clone, no label.
 
-archy:owns        PrUnits, UnitFn, UnitIndexError, check_schema, group_by_pr, load_units, split_pr
+archy:owns        PrUnits, UnitFn, UnitIndexError, check_schema, group_by_pr,
+                  load_units, split_pr
+archy:mirrored-by UnitFn -> bench.embedding_oracle_generate,
+                  bench.embedding_oracle_generate_run
 """
 
 from __future__ import annotations
@@ -83,9 +86,8 @@ def group_by_pr(rows: Iterable[dict[str, object]]) -> dict[str, list[dict[str, o
 
 def load_units(path: Path) -> dict[str, list[dict[str, object]]]:
     """The unit index of one shard, grouped by PR key."""
-    lines = path.read_text(encoding="utf-8").split(
-        "\n"
-    )  # never splitlines(): U+2028 and form feed split rows
+    # never splitlines(): U+2028 and form feed split rows
+    lines = path.read_text(encoding="utf-8").split("\n")
     return group_by_pr(json.loads(line) for line in lines if line)
 
 

@@ -16,7 +16,8 @@ the largest new functions. A PR under the cap keeps its ledger count, which can 
 high (existence and de-duplication only remove pairs), so the recount is an UPPER bound for
 those PRs; `--reparse all` removes that caveat at the price of cloning every firing PR.
 
-archy:owns        FileInfo, PrRecount, a_target, ledger_count, main, recount_pr
+archy:owns        FileInfo, PrRecount, a_target, git_info_at, ledger_count,
+                  ledger_rows, main, new_members, recount_pr
 """
 
 from __future__ import annotations

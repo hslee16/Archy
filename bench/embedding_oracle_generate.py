@@ -18,8 +18,8 @@ calibration denominator is an AMBIGUITY of the pre-registration, so it is a name
 
 The cap (K = 10 per PR, largest new function first) is applied AFTER the cutoff.
 
-archy:owns        DENOMINATORS, CutoffResult, PrScores, Scored, b_pairs, calibrate,
-                  calibration_scores, mean_capped, score_pr
+archy:owns        CutoffResult, PrScores, Scored, b_pairs, calibrate,
+                  calibration_scores, mean_capped, score_pr, to_pair, volume_report
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from dataclasses import dataclass
 import numpy as np  # ty: ignore[unresolved-import]  (bench-only: `uv run --with numpy`)
 from embedding_oracle_pairs import K, Pair, calibrate_cutoff, cap_pairs
 from embedding_oracle_units import PrUnits, UnitFn
-from embedding_oracle_vectors import VectorError, VectorSet
+from embedding_oracle_vectors import VectorSet
 
 DENOMINATORS = ("all-measured", "scored-only")
 IDENTICAL = 1.0 - 1e-6  # similarity reported as "1.0": float32 cannot say exactly 1.0
@@ -55,6 +55,7 @@ class PrScores:
     scored: tuple[Scored, ...]
     no_neighbour: int
     lost_not_at_head: int
+    unshipped: int = 0
 
 
 @dataclass(frozen=True)
@@ -64,41 +65,46 @@ class CutoffResult:
     mean_at_cutoff: float
 
 
-def _vec(vs: VectorSet, fn: UnitFn) -> np.ndarray:
-    if not vs.has(fn.id):
-        raise VectorError(f"no vector for {fn.path}:{fn.qualname} (id {fn.id[:12]})")
-    return vs.get(fn.id)
-
-
 def _best(sims: np.ndarray, existing: Sequence[UnitFn]) -> int:
     tied = np.flatnonzero(sims == sims.max())
     return int(min(tied, key=lambda i: existing[i].name_key))
 
 
+def _score_one(
+    new: UnitFn, existing: Sequence[UnitFn], mat: np.ndarray, vs: VectorSet
+) -> Scored | None:
+    sims = mat @ vs.get(new.id)
+    for i, e in enumerate(existing):
+        if e.name_key == new.name_key:
+            sims[i] = -np.inf  # never itself
+    if np.isinf(sims.max()):
+        return None
+    j = _best(sims, existing)
+    return Scored(new, existing[j], float(sims[j]))
+
+
 def score_pr(units: PrUnits, vs: VectorSet) -> PrScores:
-    """Top-1 neighbour of every new function in the PR."""
-    if not units.existing:
-        return PrScores(
-            units.pr, units.repo, len(units.new), (), len(units.new), units.lost_not_at_head
-        )
-    mat = np.stack([_vec(vs, e) for e in units.existing])
-    scored: list[Scored] = []
-    for new in units.new:
-        sims = mat @ _vec(vs, new)
-        for i, e in enumerate(units.existing):
-            if e.name_key == new.name_key:
-                sims[i] = -np.inf  # never itself
-        if np.isinf(sims.max()):
-            continue
-        j = _best(sims, units.existing)
-        scored.append(Scored(new, units.existing[j], float(sims[j])))
+    """Top-1 neighbour of every new function in the PR.
+
+    An id with no vector was never shipped (the loader proves the vectors cover the whole
+    shard): such a function is skipped and COUNTED in `unshipped`, never an error and never a
+    miss. A base neighbour and a new head function are always shipped, so the count is zero on
+    a healthy index and a stale one shows up in the report.
+    """
+    existing = [e for e in units.existing if vs.has(e.id)]
+    new_fns = [n for n in units.new if vs.has(n.id)]
+    unshipped = len(units.existing) - len(existing) + len(units.new) - len(new_fns)
+    mat = np.stack([vs.get(e.id) for e in existing]) if existing else None
+    scored = [] if mat is None else [_score_one(n, existing, mat, vs) for n in new_fns]
+    got = tuple(s for s in scored if s is not None)
     return PrScores(
         units.pr,
         units.repo,
         len(units.new),
-        tuple(scored),
-        len(units.new) - len(scored),
+        got,
+        len(new_fns) - len(got),
         units.lost_not_at_head,
+        unshipped,
     )
 
 
@@ -161,4 +167,5 @@ def volume_report(prs: Sequence[PrScores]) -> dict[str, int]:
         "similarity_at_one": sum(s.sim >= IDENTICAL for s in scored),
         "no_neighbour": sum(ps.no_neighbour for ps in prs),
         "lost_not_at_head": sum(ps.lost_not_at_head for ps in prs),
+        "unshipped": sum(ps.unshipped for ps in prs),
     }

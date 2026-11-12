@@ -96,21 +96,15 @@ def write_vectors(
     return man
 
 
-def unit(
-    pr: str,
-    side: str,
-    path: str,
-    qualname: str,
-    fid: str,
-    in_added: bool | None = None,
-    counterpart: bool = False,
-    occurrence: int = 0,
-) -> dict[str, object]:
+def unit(key: str, fid: str, **flags: bool | int | None) -> dict[str, object]:
+    """A unit row. `key` is "pr/side/path:qualname"; flags: in_added, counterpart, occurrence."""
+    pr, side, rest = key.split("/", 2)
+    path, qualname = rest.rsplit(":", 1)
     return {
-        "counterpart": counterpart,
-        "occurrence": occurrence,
+        "counterpart": flags.get("counterpart", False),
+        "occurrence": flags.get("occurrence", 0),
         "id": fid,
-        "in_added": in_added,
+        "in_added": flags.get("in_added"),
         "line": 1,
         "nodes": 40,
         "path": path,

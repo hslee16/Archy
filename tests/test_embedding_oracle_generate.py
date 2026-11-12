@@ -30,15 +30,14 @@ from embedding_oracle_generate import (  # ty: ignore[unresolved-import]
     score_pr,
     volume_report,
 )
-from embedding_oracle_units import PrUnits, UnitFn  # ty: ignore[unresolved-import]
-from embedding_oracle_vectors import VectorError  # ty: ignore[unresolved-import]
+from embedding_oracle_units import PrUnits, UnitFn, split_pr  # ty: ignore[unresolved-import]
 
 from tests.emb587_helpers import sha, unit, vector_set, write_meta, write_shard, write_vectors
 
 
-def fn(fid: str, path: str = "a.py", qual: str = "f", nodes: int = 40, pr: str = "1") -> UnitFn:
+def fn(fid: str, path: str = "a.py", qual: str = "f", nodes: int = 40) -> UnitFn:
     return UnitFn(
-        id=fid, pr=pr, repo="o/r", path=path, qualname=qual, nodes=nodes, shape=f"s-{fid}"
+        id=fid, pr="1", repo="o/r", path=path, qualname=qual, nodes=nodes, shape=f"s-{fid}"
     )
 
 
@@ -109,10 +108,30 @@ def test_no_existing_function_means_no_neighbour_and_lost_is_carried() -> None:
     assert ps.no_neighbour == 1 and ps.lost_not_at_head == 3 and ps.n_new == 1
 
 
-def test_a_missing_vector_is_an_error_not_a_silent_skip() -> None:
+def test_an_id_with_no_vector_is_skipped_and_counted_never_an_error_or_a_miss() -> None:
     vs = vector_set(VECS)
-    with pytest.raises(VectorError, match="no vector"):
-        score_pr(units([fn("q", qual="n")], [fn("absent", qual="x")]), vs)
+    ps = score_pr(units([fn("q", qual="n")], [fn("absent", qual="x"), fn("mid", qual="m")]), vs)
+    assert ps.scored[0].existing.id == "mid"  # reached: the shipped neighbour was used
+    assert ps.unshipped == 1 and ps.no_neighbour == 0
+    lone = score_pr(units([fn("absent", qual="n")], [fn("mid", qual="m")]), vs)
+    assert lone.scored == () and lone.unshipped == 1
+    assert lone.no_neighbour == 0  # not shipped is not "no neighbour"
+
+
+def test_an_unchanged_head_function_resolves_to_its_base_twin_vector() -> None:
+    """Its head row carries the base twin's id (same text); only the base row is looked up."""
+    rows = [
+        unit("1/base/a.py:f", "twin", counterpart=True),
+        unit("1/head/a.py:f", "twin", in_added=False, counterpart=True),
+        unit("1/head/a.py:n", "q", in_added=True),
+    ]
+    split = split_pr("1", rows)
+    assert [f.id for f in split.existing] == ["twin"]  # one neighbour, not two
+    vs = vector_set(
+        {"q": (1.0, 0.0), "twin": (4.0, 3.0)}
+    )  # a vector for the twin id and nothing else
+    ps = score_pr(split, vs)
+    assert ps.scored[0].existing.id == "twin" and ps.unshipped == 0
 
 
 def test_calibration_denominators_differ_and_unknown_is_refused() -> None:
@@ -176,6 +195,7 @@ def test_volume_report_counts_identical_text_and_unit_similarity() -> None:
         "similarity_at_one": 1,
         "no_neighbour": 1,
         "lost_not_at_head": 2,
+        "unshipped": 0,
     }
 
 
@@ -203,17 +223,17 @@ def build(tmp: Path) -> Path:
     )
     rows = {
         "calibration": [
-            unit("10", "base", "a.py", "b1", sha(B1), counterpart=True),
-            unit("10", "base", "a.py", "b2", sha(B2), counterpart=True),
-            unit("10", "head", "a.py", "b1", "not-in-shard-1", False, counterpart=True),
-            unit("10", "head", "a.py", "b2", "not-in-shard-2", False, counterpart=True),
-            unit("10", "head", "a.py", "n1", sha(N1), True),
-            unit("10", "head", "a.py", "n2", sha(N2), True),
+            unit("10/base/a.py:b1", sha(B1), counterpart=True),
+            unit("10/base/a.py:b2", sha(B2), counterpart=True),
+            unit("10/head/a.py:b1", "not-in-shard-1", in_added=False, counterpart=True),
+            unit("10/head/a.py:b2", "not-in-shard-2", in_added=False, counterpart=True),
+            unit("10/head/a.py:n1", sha(N1), in_added=True),
+            unit("10/head/a.py:n2", sha(N2), in_added=True),
         ],
         "pilot": [
-            unit("20", "base", "a.py", "b1", sha(B1), counterpart=True),
-            unit("20", "head", "a.py", "b1", "not-in-shard-3", False, counterpart=True),
-            unit("20", "head", "a.py", "n1", sha(N1), True),
+            unit("20/base/a.py:b1", sha(B1), counterpart=True),
+            unit("20/head/a.py:b1", "not-in-shard-3", in_added=False, counterpart=True),
+            unit("20/head/a.py:n1", sha(N1), in_added=True),
         ],
     }
     for shard, ids in (("calibration", cal_ids), ("pilot", pil_ids)):
