@@ -23,6 +23,8 @@ from archy.cli_render import (
     _contracts_to_text,
     _coverage_to_json,
     _coverage_to_text,
+    _namespace_gap_lines,
+    _namespace_gaps_to_json,
     _pattern_hints_to_text,
     _presence_to_text,
     _reach_violations_to_json,
@@ -42,6 +44,7 @@ from archy.graph import (
     ScanTooLargeError,
     build_graph,
 )
+from archy.graph_namespace import NamespaceGap
 from archy.layers import (
     LayerConfig,
     LayerConfigError,
@@ -149,6 +152,9 @@ class _CheckRun(BaseModel):
     sdp_violations: tuple[SdpViolation, ...]
     presence_fails: bool
     contracts: ContractsOutcome | None = None
+    # Namespace directories imports point at that no root names (#586): a clean
+    # verdict beside one is a graph that was never joined.
+    namespace_gaps: tuple[NamespaceGap, ...] = ()
 
 
 def _check_config(path: Path, config_path: Path | None) -> tuple[Path, LayerConfig]:
@@ -194,6 +200,7 @@ def _check_scan(path: Path, config_path: Path, config: LayerConfig) -> _CheckRun
         reach_violations=tuple(reach_violations),
         sdp_violations=sdp_violations,
         presence_fails=presence_fails,
+        namespace_gaps=tuple(g.graph.get("namespace_gaps", ())),
     )
 
 
@@ -207,6 +214,7 @@ def _check_payload(run: _CheckRun) -> dict:
         "coverage": _coverage_to_json(run.coverage),
         "min_layers_present": run.config.min_layers_present,
         "presence_fails": run.presence_fails,
+        "namespace_gaps": _namespace_gaps_to_json(run.namespace_gaps),
         # A clean verdict has to say what it looked at. The text output has
         # carried this since v0.46 and the JSON did not, so a machine reader
         # could not tell "checked transitively and clean" from "never
@@ -235,6 +243,8 @@ def _echo_check_text(run: _CheckRun, *, show_unlayered: bool) -> None:
     if config.required:
         click.echo(_reach_violations_to_text(list(run.reach_violations), config.required))
     click.echo(_coverage_to_text(coverage))
+    for line in _namespace_gap_lines(run.namespace_gaps):
+        click.echo(line)
     hints = _pattern_hints_to_text(coverage)
     if hints:
         click.echo(hints)

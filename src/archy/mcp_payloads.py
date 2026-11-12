@@ -140,6 +140,9 @@ class CheckPayload(BaseModel):
     # its own output needs the reason, not just the verdict.
     presence_fails: bool = False
     min_layers_present: int | None = None
+    # Namespace directories imports point at that no root names (#586); passed=true
+    # next to one is a verdict over a graph that was never joined.
+    namespace_gaps: tuple[NamespaceGap, ...] = ()
     # Nested only when archy_check(contracts=True) additionally runs
     # import-linter (#268): the transitive contract results that used to be the
     # separate archy_contracts tool. None when contracts were not requested.

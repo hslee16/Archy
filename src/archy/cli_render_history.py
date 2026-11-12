@@ -4,6 +4,8 @@ archy:mirrored-by _cycle_scan_to_dict -> archy.cli_history, archy.cli_render,
                   _cycles_to_json -> archy.cli_history, archy.cli_render,
                   _cycles_to_text -> archy.cli_history, archy.cli_render,
                   _diff_to_text -> archy.cli, archy.cli_history, archy.cli_render,
+                  _namespace_gap_lines -> archy.cli_check, archy.cli_render,
+                  _namespace_gaps_to_json -> archy.cli_check, archy.cli_render,
                   _score_to_text -> archy.cli_history, archy.cli_render,
                   _simulate_to_text -> archy.cli, archy.cli_history, archy.cli_render,
                   _snapshot_to_text -> archy.cli_history, archy.cli_render
