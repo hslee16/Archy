@@ -386,6 +386,5 @@ def _holds_no_package(directory: Path | None) -> bool:
 
 def _qualname_for(py_file: Path, package_roots: list[Path]) -> str | None:
     """Dotted qualname for a ``.py`` file; delegates to ``_qualname_under_roots``."""
-    # __init__.py names the package (empty leaf); other files contribute stem.
     leaf: list[str] = [] if py_file.name == "__init__.py" else [py_file.stem]
     return _qualname_under_roots(py_file, leaf, package_roots)
