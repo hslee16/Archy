@@ -1,0 +1,17 @@
+tell me the implications of The embedding layer: model revision pins and the content-hash cache
+
+---
+
+1. Check the local data repo. Can we potentially leverage the spark for this work? If so, file tickets in data repo. Do not mentioned in archy tickets as spark is private to me. It is not publicly accessible
+
+2. If we still need jina, sure. But lets bias towards using our own model or a model from huggingface we can fine tune/train
+
+3. yes run it now. Is there another model that we can run on spark as per #1?
+
+---
+
+yes, write that addendum. What are we actually using jina for?
+
+---
+
+perhaps we should keep jina as the bench model?

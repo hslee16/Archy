@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "8fce203f2ac0",
+  "strategy": "manual-commit",
+  "branch": "alee/embedding-oracle-addendum-587",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "docs/research/EMBEDDING_ORACLE_RECALL.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/8f/ce203f2ac0/0/metadata.json",
+      "transcript": "/8f/ce203f2ac0/0/full.jsonl",
+      "content_hash": "/8f/ce203f2ac0/0/content_hash.txt",
+      "prompt": "/8f/ce203f2ac0/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 49478,
+    "cache_read_tokens": 5440026,
+    "output_tokens": 33761,
+    "api_call_count": 16
+  }
+}
