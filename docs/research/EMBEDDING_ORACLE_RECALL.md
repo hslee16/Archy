@@ -324,7 +324,7 @@ the first embedding exists.
   license while the file headers carry the Apache-2.0 notice; the model repository declares
   apache-2.0. `BAAI/bge-code-v1`
   needs one in-repo tokenizer file, `tokenization_qwen.py`, named in its tokenizer config. The
-  other four arms need none. Both remote files are pinned and hashed like any other.
+  other five arms need none. Both remote files are pinned and hashed like any other.
 - **What was scanned.** On 2026-11-12 the two code-repository files were read for imports and
   scanned for these patterns: `requests`, `urllib`, `socket`, `subprocess`, `os.system`,
   `eval(`, `exec(`, `pickle`, `__import__`, `importlib`, `open(`, `http`, `download`,
@@ -342,12 +342,13 @@ the first embedding exists.
 
 **Sensitivity arms, reported and never decisive**
 
-The pre-registration names one sensitivity model; it is extended to five. Each is calibrated by
+The pre-registration names one sensitivity model; it is extended to six. Each is calibrated by
 the same equal-volume rule on its own similarities.
 
 | Model | License | Revision | Pooling |
 |---|---|---|---|
 | `jinaai/jina-code-embeddings-0.5b` (as pre-registered; bench only) | cc-by-nc-4.0 | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` | last token |
+| `jinaai/jina-code-embeddings-1.5b` (the strongest Jina code model, same family and recipe as the 0.5b; bench only) | cc-by-nc-4.0 | `39aeb4fb9b60f930934c78ae5d749a46287c248a` | last token |
 | `Qwen/Qwen3-Embedding-0.6B` | apache-2.0 | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` | last token |
 | `Qwen/Qwen3-Embedding-8B` (the "would a much stronger embedder change the verdict" arm) | apache-2.0 | `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af` | last token |
 | `microsoft/unixcoder-base` (context 1,026 tokens, so long functions truncate; counts reported) | apache-2.0 | `5604afdc964f6c53782a6813140ade5216b99006` | mean over the attention mask |
@@ -368,9 +369,9 @@ asserts that a text embedded alone and inside a mixed batch gives the same vecto
 - **What an arm may and may not claim.** Arm results are labeled `sensitivity`. A pass or kill
   is computed only from the primary: no arm number appears in the verdict line, in the headline
   of the results or in the `docs/WHAT_DIDNT_WORK.md` entry's headline, and no arm enters the
-  headline share, the TRUE-pool floor or the primary precision. All six models are reported in
-  one table, each with its interval. With six models reported in full, about one in six will
-  look best by chance, and the study makes no claim that any non-primary arm would or would not
+  headline share, the TRUE-pool floor or the primary precision. All seven models, the primary and
+  the six arms, are reported in one table, each with its interval. With seven models reported
+  in full, about one in seven will look best by chance, and the study makes no claim that any non-primary arm would or would not
   pass. A kill is a kill for the primary at A's operating point. If a sensitivity arm would
   have cleared the bars, the results say so and recommend a new pre-registration instead of
   closing the line.
@@ -391,7 +392,7 @@ primary's cap of 300 in "Sample" is unchanged and is drawn first.
   primary precision. An arm pair that is already in the labeled primary pool uses that label.
 - Each arm draws at most 100 pairs independently with `random.Random(587)` over sorted pair
   ids. The union is labeled once under the same rubric and packet format, and packets carry no
-  arm tag. Five arms of 100 is a ceiling of 500 only when no pair is shared; the cap binds only
+  arm tag. Six arms of 100 is a ceiling of 600 only when no pair is shared; the cap binds only
   then.
 
 **Numerics and what is recorded**
