@@ -1,0 +1,78 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "91a833df0df1",
+  "session_id": "9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-12T20:51:32.732251Z",
+  "branch": "alee/embedding-oracle-logic-587",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "bench/embedding_oracle_pairs.py",
+    "bench/embedding_oracle_score.py",
+    "bench/embedding_oracle_share.py",
+    "bench/embedding_oracle_stats.py",
+    "tests/test_embedding_oracle_pairs.py",
+    "tests/test_embedding_oracle_score.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "fbd64a7842ec",
+  "checkpoint_transcript_start": 1423,
+  "transcript_lines_at_start": 1423,
+  "token_usage": {
+    "input_tokens": 24,
+    "cache_creation_tokens": 28693,
+    "cache_read_tokens": 3522034,
+    "output_tokens": 19500,
+    "api_call_count": 12
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01LE7pzEQNf3TsyYvjvR3SD9",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "fbd64a7842ec",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 177,
+        "end": 178,
+        "entry_ids": [
+          "4a9d91c0-5d83-48b4-9f63-ed73e9dd96f6"
+        ],
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 14
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-12T20:51:32.660473Z",
+    "agent_lines": 280,
+    "agent_removed": 201,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 280,
+    "total_lines_changed": 481,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}
