@@ -1,6 +1,6 @@
 """Mutation check for the #587 extractor: does any test notice each deliberate break?
 
-Each mutant replaces one exact line of `bench/embedding_oracle_extract.py`. The helper
+Each mutant replaces one exact fragment of `bench/embedding_oracle_extract.py`. The helper
 exits non-zero if a match is missing or ambiguous (a mutation that did not apply proves
 nothing), if the unmutated suite is not green first, or if any mutant SURVIVES (the test
 file still passes). `__pycache__` is cleared before every run and the source is restored
@@ -23,12 +23,12 @@ TARGET = ROOT / "bench" / "embedding_oracle_extract.py"
 TEST = "tests/test_embedding_oracle_extract.py"
 
 MUTANTS: list[tuple[str, str, str]] = [
-    ("floor made exclusive", "f.size >= MIN_NODES", "f.size > MIN_NODES"),
-    ("floor dropped", "f.shape_hash and f.size >= MIN_NODES", "f.shape_hash"),
+    ("floor made exclusive", "f.nodes >= MIN_NODES", "f.nodes > MIN_NODES"),
+    ("floor dropped", "bool(f.shape) and f.nodes >= MIN_NODES", "bool(f.shape)"),
     (
         "source-only filter off",
-        "if _path_excluded(rel):",
-        "if False:",
+        "if _path_excluded(rel) or not result.functions:",
+        "if not result.functions:",
     ),
     ("CRLF not normalised", 'text.replace("\\r\\n", "\\n").replace("\\r", "\\n")', "text"),
     ("trailing newlines kept", '.rstrip("\\n")', ""),
@@ -53,14 +53,65 @@ MUTANTS: list[tuple[str, str, str]] = [
         "for f in head_fns if f.in_added}",
         "for f in head_fns}",
     ),
-    ("reproduction mismatch ignored", "if clashes:", "if False:"),
+    ("mismatch ignored by main", "if _write_manifest(shards):", "if True:"),
+    ("manifest ok ignores mismatches", "ok = not any(", "ok = True or not any("),
     ("pilot drop reason not compared", 'if v["ledger"] != v["mine"]', "if False"),
     ("untracked files count as dirty", '"--untracked-files=no",', '"--untracked-files=all",'),
     ("no-new-function PR kept", "if not any(f.in_added for f in head_fns):", "if False:"),
+    # --- review fixes
+    (
+        "lines split like str.splitlines",
+        'lines = source.split(b"\\n")',
+        'lines = [x.encode() for x in source.decode("utf-8", "replace").splitlines()]',
+    ),
+    ("occurrence never counted", "occurrence = seen[(rel, f.qualname)]", "occurrence = 0"),
+    (
+        "counterpart always false",
+        '"counterpart": (f.path, f.qualname) in other',
+        '"counterpart": False',
+    ),
+    (
+        "counterpart ignores small functions",
+        "names.update((rel, f.qualname) for f in functions)",
+        "names.update((rel, f.qualname) for f in functions if _clears_floor(f))",
+    ),
+    ("transient drops are cached", "if is_final(result):", "if True:"),
+    ("stale cache accepted", 'entry.get("version") == EXTRACT_VERSION', "True"),
+    ("torn cache crashes", "except (OSError, ValueError):", "except OSError:"),
+    (
+        "one PR's failure ends the run",
+        'return extract_pr(target, row["base"], row["head"])\n    except Exception as exc:',
+        'return extract_pr(target, row["base"], row["head"])\n    except ZeroDivisionError as exc:',
+    ),
+    ("parity ignores newness", 'bool(m["new"]))', "False)"),
+    (
+        "parity compares nothing",
+        'members = [m for firing in row.get("firings", []) for m in firing["members"]]',
+        "members = []",
+    ),
+    ("write is not atomic", "os.replace(tmp, path)", "path.write_bytes(data)"),
+    (
+        "shard rows not ASCII",
+        'json.dumps({"id": k, "text": texts[k]})',
+        'json.dumps({"id": k, "text": texts[k]}, ensure_ascii=False)',
+    ),
+    ("no resume message", "run the same command again to resume", "interrupted"),
+    (
+        "manifest drops foreign keys",
+        'json.dumps({**prior, "ok": ok, "shards": merged}',
+        'json.dumps({"ok": ok, "shards": merged}',
+    ),
+    (
+        "legacy sha kept",
+        'prior.pop("extractor_git_sha", None)',
+        "pass",
+    ),
 ]
 
 
-def _suite_passes() -> bool:
+def _suite_exit_code() -> int:
+    """pytest's exit code: 0 all passed, 1 some test FAILED, anything else is not a verdict
+    (2 interrupted or a collection error, 3 internal error, 4 usage, 5 nothing collected)."""
     for cache in ROOT.rglob("__pycache__"):
         shutil.rmtree(cache, ignore_errors=True)
     run = subprocess.run(
@@ -69,12 +120,12 @@ def _suite_passes() -> bool:
         capture_output=True,
         text=True,
     )
-    return run.returncode == 0
+    return run.returncode
 
 
 def main() -> int:
     original = TARGET.read_text()
-    if not _suite_passes():
+    if _suite_exit_code() != 0:
         print("the unmutated suite is not green; nothing to prove")
         return 2
     survivors: list[str] = []
@@ -84,9 +135,14 @@ def main() -> int:
                 print(f"NO MATCH ({original.count(old)}x): {name}: {old!r}")
                 return 1
             TARGET.write_text(original.replace(old, new))
-            killed = not _suite_passes()
-            print(("killed   " if killed else "SURVIVED ") + name)
-            if not killed:
+            code = _suite_exit_code()
+            if code not in (0, 1):
+                print(
+                    f"BROKEN   {name}: pytest exited {code}, which is neither killed nor survived"
+                )
+                return 1
+            print(("killed   " if code == 1 else "SURVIVED ") + name)
+            if code == 0:
                 survivors.append(name)
     finally:
         TARGET.write_text(original)
