@@ -9,7 +9,9 @@ generators. A is expanded from #548's clusters; B emits one pair per new functio
 Both are capped at K per PR before the cutoff is calibrated, so one PR holding 703
 new functions counts for at most K pairs on either side.
 
-archy:owns        Member, Pair, calibrate_cutoff, cap_pairs, expand_a_firing, pool_pairs
+archy:owns        Member, Pair, PrRef, calibrate_cutoff, cap_pairs, expand_a_firing,
+                  pool_pairs
+archy:mirrored-by Pair -> bench.embedding_oracle_score, bench.embedding_oracle_share
 """
 
 from __future__ import annotations
@@ -85,9 +87,17 @@ def cap_pairs(pairs: Sequence[Pair], k: int = K) -> list[Pair]:
     return kept
 
 
+class PrRef(BaseModel):
+    """Which PR and repository a cluster came from."""
+
+    model_config = ConfigDict(frozen=True)
+
+    pr: str
+    repo: str
+
+
 def expand_a_firing(
-    pr: str,
-    repo: str,
+    ref: PrRef,
     members: Sequence[Member],
     *,
     overlap: Callable[[Member, Member], float],
@@ -101,29 +111,20 @@ def expand_a_firing(
     caller reports it instead of scoring it clean.
     """
     old = [m for m in members if not m.is_new and exists_at_both(m)]
-    pairs: list[Pair] = []
-    dropped = 0
-    for new in (m for m in members if m.is_new):
-        if not old:
-            dropped += 1
-            continue
-        partner = min(old, key=lambda o: (-overlap(new, o), o.path, o.qualname))
-        pairs.append(_pair(pr, repo, new, partner, generators=("A",)))
-    return pairs, dropped
+    new_members = [m for m in members if m.is_new]
+    if not old:
+        return [], len(new_members)
+    pairs = [
+        _pair(ref, new, min(old, key=lambda o: (-overlap(new, o), o.path, o.qualname)), ("A",))
+        for new in new_members
+    ]
+    return pairs, 0
 
 
-def _pair(
-    pr: str,
-    repo: str,
-    new: Member,
-    old: Member,
-    *,
-    generators: tuple[str, ...],
-    similarity: float | None = None,
-) -> Pair:
+def _pair(ref: PrRef, new: Member, old: Member, generators: tuple[str, ...]) -> Pair:
     return Pair(
-        pr=pr,
-        repo=repo,
+        pr=ref.pr,
+        repo=ref.repo,
         new_path=new.path,
         new_qualname=new.qualname,
         new_nodes=new.nodes,
@@ -131,7 +132,6 @@ def _pair(
         existing_path=old.path,
         existing_qualname=old.qualname,
         existing_shape=old.shape,
-        similarity=similarity,
         generators=generators,
     )
 
@@ -145,16 +145,25 @@ def calibrate_cutoff(scores: Mapping[str, Sequence[float]], target: float, k: in
     no observed similarity reaches the target the lowest one is returned, which keeps
     every candidate; the caller records that this happened.
     """
+    observed = _observed_descending(scores)
+    for t in observed:
+        if _mean_capped(scores, t, k) >= target:
+            return t
+    return observed[-1]
+
+
+def _observed_descending(scores: Mapping[str, Sequence[float]]) -> list[float]:
     if not scores:
         raise ValueError("calibration subset is empty; there is no volume to match")
     observed = sorted({s for per_pr in scores.values() for s in per_pr}, reverse=True)
     if not observed:
         raise ValueError("calibration subset has no scored function; the cutoff is undefined")
-    for t in observed:
-        mean = sum(min(k, sum(s >= t for s in per_pr)) for per_pr in scores.values()) / len(scores)
-        if mean >= target:
-            return t
-    return observed[-1]
+    return observed
+
+
+def _mean_capped(scores: Mapping[str, Sequence[float]], t: float, k: int) -> float:
+    """Mean over every PR of how many scores reach `t`, a PR counting at most `k`."""
+    return sum(min(k, sum(s >= t for s in per_pr)) for per_pr in scores.values()) / len(scores)
 
 
 def pool_pairs(a_pairs: Sequence[Pair], b_pairs: Sequence[Pair]) -> list[Pair]:

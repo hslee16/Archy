@@ -17,42 +17,53 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 
 import embedding_oracle_score as sc  # ty: ignore[unresolved-import]  (added to sys.path above)
+import embedding_oracle_share as sh  # ty: ignore[unresolved-import]  (same)
+import embedding_oracle_stats as st  # ty: ignore[unresolved-import]  (same)
 from embedding_oracle_pairs import Pair  # ty: ignore[unresolved-import]  (same)
 
 
-def pair(pr, new, old, gens, *, repo=None, exact=False) -> Pair:
+def pair(pr: str, new: str, old: str, gens: tuple[str, ...]) -> Pair:
     return Pair(
         pr=pr,
-        repo=repo or f"r/{pr}",
+        repo=f"r/{pr}",
         new_path=f"{new}.py",
         new_qualname=new,
         new_nodes=40,
-        new_shape="s" if exact else "a",
+        new_shape="a",
         existing_path=f"{old}.py",
         existing_qualname=old,
-        existing_shape="s" if exact else "b",
+        existing_shape="b",
         generators=gens,
     )
+
+
+def exact(p: Pair) -> Pair:
+    """The same pair with identical shapes, so archy's hasher would call it exact-tier."""
+    return p.model_copy(update={"new_shape": "s", "existing_shape": "s"})
+
+
+def in_repo(p: Pair, repo: str) -> Pair:
+    return p.model_copy(update={"repo": repo})
 
 
 def test_resolve_labels_is_strict_and_drops_unscorable():
     a = {"p1": "TRUE", "p2": "TRUE", "p3": "FALSE", "p4": "UNSCORABLE", "p5": "TRUE"}
     b = {"p1": "TRUE", "p2": "FALSE", "p3": "FALSE", "p4": "TRUE", "p5": "UNSCORABLE"}
     # p1 both TRUE; p2 split (FALSE for the headline); p3 both FALSE; p4 and p5 dropped.
-    assert sc.resolve_labels(a, b) == {"p1": True, "p2": False, "p3": False}
+    assert sh.resolve_labels(a, b) == {"p1": True, "p2": False, "p3": False}
 
 
 def test_resolve_labels_refuses_when_the_labelers_saw_different_pairs():
     with pytest.raises(ValueError, match="different pairs"):
-        sc.resolve_labels({"p1": "TRUE"}, {"p1": "TRUE", "p2": "TRUE"})
+        sh.resolve_labels({"p1": "TRUE"}, {"p1": "TRUE", "p2": "TRUE"})
 
 
 def test_wilson_matches_the_hand_worked_interval():
     """5 of 10: centre 0.5, half-width 0.2634 -> (0.2366, 0.7634). n=0 is the whole range."""
-    low, high = sc.wilson(5, 10)
+    low, high = st.wilson(5, 10)
     assert low == pytest.approx(0.2366, abs=1e-3)
     assert high == pytest.approx(0.7634, abs=1e-3)
-    assert sc.wilson(0, 0) == (0.0, 1.0)
+    assert st.wilson(0, 0) == (0.0, 1.0)
 
 
 def test_share_counts_units_by_generator_and_drops_exact_tier_before_forming_them():
@@ -61,13 +72,13 @@ def test_share_counts_units_by_generator_and_drops_exact_tier_before_forming_the
         pair("2", "n.b", "o.b", ("B",)),  # unit u2: only B found it
         pair("3", "n.c", "o.c", ("A",)),  # unit u3: A's pair...
         pair("3", "n.c", "o.d", ("B",)),  # ...and B's different pair, same unit: both
-        pair("4", "n.e", "o.e", ("B",), exact=True),  # TRUE but exact-tier: excluded
+        exact(pair("4", "n.e", "o.e", ("B",))),  # TRUE but exact-tier: excluded
         pair("5", "n.f", "o.f", ("B",)),  # labeled FALSE: not in the pool
     ]
     truth = {p.pair_id: True for p in pairs}
     truth[pairs[5].pair_id] = False
     assert pairs[4].exact_tier and truth[pairs[4].pair_id]  # the exclusion is exercised
-    got = sc.share(pairs, truth)
+    got = sh.share(pairs, truth)
     # Three TRUE units remain: only A 1, only B 1, both 1. The exact-tier unit is gone.
     assert (got.true_units, got.only_a, got.only_b, got.both) == (3, 1, 1, 1)
     assert got.point == pytest.approx(1 / 3)
@@ -79,7 +90,7 @@ def _pool(n_units: int, only_b: int, *, repos: int, prs: int) -> tuple[list[Pair
     for i in range(n_units):
         gens = ("B",) if i < only_b else ("A",)
         pr = str(i % prs)
-        pairs.append(pair(pr, f"n.f{i}", f"o.f{i}", gens, repo=f"r/{i % repos}"))
+        pairs.append(in_repo(pair(pr, f"n.f{i}", f"o.f{i}", gens), f"r/{i % repos}"))
     return pairs, {p.pair_id: True for p in pairs}
 
 
@@ -94,7 +105,7 @@ def _pool(n_units: int, only_b: int, *, repos: int, prs: int) -> tuple[list[Pair
 )
 def test_share_floors_are_exact(units, repos, prs, measurable):
     pairs, truth = _pool(units, 12, repos=repos, prs=prs)
-    got = sc.share(pairs, truth)
+    got = sh.share(pairs, truth)
     assert (got.repos, got.prs) == (min(repos, units), min(prs, units))  # fixture reaches it
     assert got.measurable is measurable
     assert got.only_b == 12  # 12 of the units are B-only by construction
@@ -102,11 +113,11 @@ def test_share_floors_are_exact(units, repos, prs, measurable):
 
 def test_b_precision_is_over_every_labeled_b_pair_with_a_deterministic_interval():
     pairs = [
-        pair("1", "n.a", "o.a", ("B",), repo="r/1"),
-        pair("1", "n.b", "o.b", ("B",), repo="r/1"),
-        pair("2", "n.c", "o.c", ("B",), repo="r/2"),
-        pair("2", "n.d", "o.d", ("B", "A"), repo="r/2"),
-        pair("3", "n.e", "o.e", ("A",), repo="r/3"),  # A only: not B's
+        pair("1", "n.a", "o.a", ("B",)),
+        pair("1", "n.b", "o.b", ("B",)),
+        pair("2", "n.c", "o.c", ("B",)),
+        pair("2", "n.d", "o.d", ("B", "A")),
+        pair("3", "n.e", "o.e", ("A",)),  # A only: not B's
     ]
     truth = {p.pair_id: t for p, t in zip(pairs, [True, False, True, False, True], strict=True)}
     got = sc.b_precision(pairs, truth)
@@ -122,19 +133,19 @@ def test_b_precision_interval_collapses_when_every_pair_is_true():
     assert (got.point, got.low, got.high) == (1.0, 1.0, 1.0)
 
 
-def prec(point, low, high, *, scorable=30, repos=10) -> sc.BPrecision:
+def prec(point, low, high) -> sc.BPrecision:
+    """B precision at the pre-registered floors (30 pairs, 10 repos) unless `counts` says so."""
     return sc.BPrecision(
-        scorable=scorable,
-        repos=repos,
-        true=round(point * scorable),
-        point=point,
-        low=low,
-        high=high,
+        scorable=30, repos=10, true=round(point * 30), point=point, low=low, high=high
     )
 
 
-def headline(point, low, high, *, measurable=True) -> sc.Share:
-    return sc.Share(
+def counts(p: sc.BPrecision, scorable: int, repos: int) -> sc.BPrecision:
+    return p.model_copy(update={"scorable": scorable, "repos": repos})
+
+
+def headline(point, low, high, *, measurable=True) -> sh.Share:
+    return sh.Share(
         true_units=40,
         only_b=round(point * 40),
         only_a=0,
@@ -180,5 +191,5 @@ def test_an_unmeasurable_share_can_never_pass_and_a_precision_kill_still_stands(
 
 @pytest.mark.parametrize(("scorable", "repos"), [(29, 10), (30, 9)])
 def test_below_b_floors_nothing_is_decided_even_a_would_be_kill(scorable, repos):
-    got = sc.verdict(prec(0.1, 0.0, 0.2, scorable=scorable, repos=repos), headline(0.5, 0.4, 0.6))
+    got = sc.verdict(counts(prec(0.1, 0.0, 0.2), scorable, repos), headline(0.5, 0.4, 0.6))
     assert got.outcome == "not_measurable"

@@ -1,30 +1,21 @@
-"""Labels in, pre-registered verdict out, for #587.
+"""B precision and the pre-registered verdict for #587.
 
-The rules are the ones in `docs/research/EMBEDDING_ORACLE_RECALL.md`, each in one
-small function so a boundary cannot drift:
+The rules are the ones in `docs/research/EMBEDDING_ORACLE_RECALL.md`:
 
-- A pair is TRUE only if BOTH labelers say TRUE (strict); either labeler's UNSCORABLE
-  drops it, never scores it FALSE.
-- A (PR, new function) unit is TRUE if any labeled pair for it is TRUE; found by A or B
-  by which generator emitted a TRUE pair; only by B if found by B and not by A.
-- The headline share drops exact-tier pairs BEFORE units are formed.
 - B precision is over all labeled B pairs; its interval is a bootstrap clustered by PR.
 - A bar is applied to the point estimate only when its interval does not straddle it;
   otherwise the verdict is null.
 
-Recall here is relative to the pooled set, never absolute.
-
-archy:owns        BPrecision, OracleVerdict, Share, b_precision, resolve_labels, share,
-                  verdict, wilson
+archy:owns        BPrecision, OracleVerdict, b_precision, verdict
 """
 
 from __future__ import annotations
 
-import math
-import random
 from collections.abc import Mapping, Sequence
 
 from embedding_oracle_pairs import Pair  # ty: ignore[unresolved-import]  (bench/ is sys.path[0])
+from embedding_oracle_share import Share  # ty: ignore[unresolved-import]  (same)
+from embedding_oracle_stats import cluster_bootstrap, ratio  # ty: ignore[unresolved-import]  (same)
 from pydantic import BaseModel, ConfigDict
 
 PASS_PRECISION = 0.60
@@ -33,87 +24,6 @@ PASS_SHARE = 0.30
 KILL_SHARE = 0.10
 MIN_B_SCORABLE = 30
 MIN_B_REPOS = 10
-MIN_TRUE_UNITS = 40
-MIN_TRUE_REPOS = 15
-MIN_TRUE_PRS = 20
-BOOTSTRAP_RESAMPLES = 2000
-BOOTSTRAP_SEED = 587
-Z95 = 1.959963984540054
-
-
-def resolve_labels(a: Mapping[str, str], b: Mapping[str, str]) -> dict[str, bool]:
-    """Strict truth per pair id: both TRUE. A pair either labeler calls UNSCORABLE is absent.
-
-    The labelers must have seen the same pairs; a mismatch is a refusal, since a pair one
-    of them never saw would otherwise be silently scored as the other's answer.
-    """
-    if set(a) != set(b):
-        raise ValueError(f"labelers saw different pairs: {len(set(a) ^ set(b))} ids differ")
-    out: dict[str, bool] = {}
-    for pid in sorted(a):
-        if "UNSCORABLE" in (a[pid], b[pid]):
-            continue
-        out[pid] = a[pid] == "TRUE" and b[pid] == "TRUE"
-    return out
-
-
-def wilson(k: int, n: int) -> tuple[float, float]:
-    """Wilson 95% interval for k of n; the whole unit interval when n is 0."""
-    if n == 0:
-        return 0.0, 1.0
-    p = k / n
-    denom = 1 + Z95**2 / n
-    centre = (p + Z95**2 / (2 * n)) / denom
-    half = Z95 * math.sqrt(p * (1 - p) / n + Z95**2 / (4 * n**2)) / denom
-    return max(0.0, centre - half), min(1.0, centre + half)
-
-
-class Share(BaseModel):
-    """The headline: how much of the strict TRUE pool only B found (exact-tier excluded)."""
-
-    model_config = ConfigDict(frozen=True)
-
-    true_units: int
-    only_b: int
-    only_a: int
-    both: int
-    repos: int
-    prs: int
-    measurable: bool
-    point: float | None
-    low: float | None
-    high: float | None
-
-
-def share(pairs: Sequence[Pair], truth: Mapping[str, bool]) -> Share:
-    """Units from labeled, non-exact pairs; the floors decide whether the share is measurable."""
-    labeled = [p for p in pairs if p.pair_id in truth and not p.exact_tier]
-    units: dict[str, dict[str, set[str]]] = {}
-    for p in labeled:
-        if truth[p.pair_id]:
-            slot = units.setdefault(p.unit_id, {"gens": set(), "repos": set(), "prs": set()})
-            slot["gens"].update(p.generators)
-            slot["repos"].add(p.repo)
-            slot["prs"].add(p.pr)
-    only_b = sum(s["gens"] == {"B"} for s in units.values())
-    only_a = sum(s["gens"] == {"A"} for s in units.values())
-    n = len(units)
-    repos = len({r for s in units.values() for r in s["repos"]})
-    prs = len({r for s in units.values() for r in s["prs"]})
-    measurable = n >= MIN_TRUE_UNITS and repos >= MIN_TRUE_REPOS and prs >= MIN_TRUE_PRS
-    low, high = wilson(only_b, n) if n else (None, None)
-    return Share(
-        true_units=n,
-        only_b=only_b,
-        only_a=only_a,
-        both=n - only_b - only_a,
-        repos=repos,
-        prs=prs,
-        measurable=measurable,
-        point=only_b / n if n else None,
-        low=low,
-        high=high,
-    )
 
 
 class BPrecision(BaseModel):
@@ -135,30 +45,15 @@ def b_precision(pairs: Sequence[Pair], truth: Mapping[str, bool]) -> BPrecision:
         clusters.setdefault(p.pr, []).append(truth[p.pair_id])
     n = len(scored)
     k = sum(truth[p.pair_id] for p in scored)
-    low, high = _cluster_bootstrap(list(clusters.values()))
+    low, high = cluster_bootstrap(list(clusters.values()))
     return BPrecision(
         scorable=n,
         repos=len({p.repo for p in scored}),
         true=k,
-        point=k / n if n else None,
+        point=ratio(k, n),
         low=low,
         high=high,
     )
-
-
-def _cluster_bootstrap(clusters: Sequence[Sequence[bool]]) -> tuple[float | None, float | None]:
-    """Percentile interval of precision, resampling whole PRs with a fixed seed."""
-    if not clusters:
-        return None, None
-    rng = random.Random(BOOTSTRAP_SEED)
-    stats: list[float] = []
-    for _ in range(BOOTSTRAP_RESAMPLES):
-        draw = [clusters[rng.randrange(len(clusters))] for _ in clusters]
-        total = sum(len(c) for c in draw)
-        if total:
-            stats.append(sum(sum(c) for c in draw) / total)
-    stats.sort()
-    return stats[int(0.025 * len(stats))], stats[min(len(stats) - 1, int(0.975 * len(stats)))]
 
 
 class OracleVerdict(BaseModel):
@@ -172,9 +67,15 @@ def _definite_kill(prec: BPrecision, headline: Share) -> str | None:
     """Why a bar is crossed with its whole interval on the kill side, or None."""
     if prec.high is not None and prec.high < KILL_PRECISION:
         return f"B precision {prec.point:.3f}, interval top {prec.high:.3f} < 0.40"
-    if headline.measurable and headline.high is not None and headline.high < KILL_SHARE:
-        return f"only-by-B share {headline.point:.3f}, interval top {headline.high:.3f} < 0.10"
-    return None
+    return _share_kill(headline)
+
+
+def _share_kill(headline: Share) -> str | None:
+    if not headline.measurable or headline.high is None:
+        return None
+    if headline.high >= KILL_SHARE:
+        return None
+    return f"only-by-B share {headline.point:.3f}, interval top {headline.high:.3f} < 0.10"
 
 
 def _definite_pass(prec: BPrecision, headline: Share) -> bool:

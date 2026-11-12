@@ -20,6 +20,7 @@ from embedding_oracle_pairs import (  # ty: ignore[unresolved-import]  (added to
     K,
     Member,
     Pair,
+    PrRef,
     calibrate_cutoff,
     cap_pairs,
     expand_a_firing,
@@ -27,44 +28,43 @@ from embedding_oracle_pairs import (  # ty: ignore[unresolved-import]  (added to
 )
 
 
-def member(qual: str, *, new: bool, nodes: int = 40, path: str | None = None, shape="s") -> Member:
+def member(qual: str, *, new: bool, nodes: int = 40) -> Member:
     return Member(
-        path=path or f"{qual.replace('.', '/')}.py",
-        qualname=qual,
-        is_new=new,
-        nodes=nodes,
-        shape=shape,
+        path=f"{qual.replace('.', '/')}.py", qualname=qual, is_new=new, nodes=nodes, shape="s"
     )
 
 
-def pair(pr="1", new="n.f", old="o.f", *, nodes=40, path=None, gens=("A",), sim=None, **kw) -> Pair:
+def pair(pr: str, new: str, old: str, gens: tuple[str, ...] = ("A",)) -> Pair:
     return Pair(
         pr=pr,
-        repo=kw.get("repo", "r/x"),
-        new_path=path or f"{new.replace('.', '/')}.py",
+        repo="r/x",
+        new_path=f"{new.replace('.', '/')}.py",
         new_qualname=new,
-        new_nodes=nodes,
-        new_shape=kw.get("new_shape", "a"),
+        new_nodes=40,
+        new_shape="a",
         existing_path=f"{old.replace('.', '/')}.py",
         existing_qualname=old,
-        existing_shape=kw.get("old_shape", "b"),
-        similarity=sim,
+        existing_shape="b",
         generators=gens,
     )
 
 
+def with_(p: Pair, **fields) -> Pair:
+    return p.model_copy(update=fields)
+
+
 def test_pair_model_dump_carries_the_computed_ids_and_exact_tier():
     """Assert the serialized form: a plain property would be dropped."""
-    p = pair(pr="7", new="a.f", old="b.g", new_shape="x", old_shape="x").model_dump()
-    assert p["pair_id"] == "7|a.f|b.g"
-    assert p["unit_id"] == "7|a.f"
-    assert p["exact_tier"] is True
-    assert pair(new_shape="x", old_shape="y").exact_tier is False
+    same = with_(pair("7", "a.f", "b.g"), new_shape="x", existing_shape="x")
+    assert same.model_dump()["pair_id"] == "7|a.f|b.g"
+    assert same.model_dump()["unit_id"] == "7|a.f"
+    assert same.model_dump()["exact_tier"] is True
+    assert with_(pair("1", "n.f", "o.f"), new_shape="x", existing_shape="y").exact_tier is False
 
 
 def test_cap_keeps_the_largest_new_functions_per_pr_and_leaves_small_prs_alone():
-    big = [pair(pr="big", new=f"n.f{i}", nodes=30 + i) for i in range(12)]
-    small = [pair(pr="small", new=f"n.g{i}", nodes=31) for i in range(3)]
+    big = [with_(pair("big", f"n.f{i}", "o.f"), new_nodes=30 + i) for i in range(12)]
+    small = [with_(pair("small", f"n.g{i}", "o.f"), new_nodes=31) for i in range(3)]
     assert len(big) > K and len(small) < K  # the cap binds on one PR and not the other
     kept = cap_pairs([*big, *small])
     big_kept = sorted(p.new_nodes for p in kept if p.pr == "big")
@@ -75,9 +75,9 @@ def test_cap_keeps_the_largest_new_functions_per_pr_and_leaves_small_prs_alone()
 
 def test_cap_ties_break_on_path_then_qualname_whatever_the_input_order():
     tied = [
-        pair(pr="t", new="z.f", nodes=50, path="b/z.py"),
-        pair(pr="t", new="a.f", nodes=50, path="b/a.py"),
-        pair(pr="t", new="m.f", nodes=50, path="a/m.py"),
+        with_(pair("t", "z.f", "o.f"), new_nodes=50, new_path="b/z.py"),
+        with_(pair("t", "a.f", "o.f"), new_nodes=50, new_path="b/a.py"),
+        with_(pair("t", "m.f", "o.f"), new_nodes=50, new_path="a/m.py"),
     ]
     for _ in range(5):
         random.shuffle(tied)
@@ -95,8 +95,7 @@ def test_expand_pairs_each_new_member_with_its_highest_overlap_existing_partner(
     ]
     overlaps = {("n.one", "o.low"): 0.5, ("n.one", "o.high"): 0.9}
     pairs, dropped = expand_a_firing(
-        "9",
-        "r/x",
+        PrRef(pr="9", repo="r/x"),
         members,
         overlap=lambda n, o: overlaps.get((n.qualname, o.qualname), 0.0),
         exists_at_both=lambda m: True,
@@ -114,16 +113,16 @@ def test_expand_skips_a_partner_that_does_not_exist_at_both_and_counts_drops():
     overlap = {"o.best": 0.9, "o.ok": 0.1}
     # The best partner by overlap is gone at head: the fixture must reach that branch.
     assert overlap["o.best"] > overlap["o.ok"]
+    ref = PrRef(pr="9", repo="r/x")
     pairs, dropped = expand_a_firing(
-        "9",
-        "r/x",
+        ref,
         members,
         overlap=lambda n, o: overlap[o.qualname],
         exists_at_both=lambda m: m.qualname != "o.best",
     )
     assert [p.existing_qualname for p in pairs] == ["o.ok"] and dropped == 0
     none, dropped = expand_a_firing(
-        "9", "r/x", members, overlap=lambda n, o: 0.0, exists_at_both=lambda m: False
+        ref, members, overlap=lambda n, o: 0.0, exists_at_both=lambda m: False
     )
     assert none == [] and dropped == 1  # one new member, no partner: dropped, never scored
 
@@ -156,8 +155,11 @@ def test_calibrate_refuses_when_there_is_nothing_to_match(scores):
 
 
 def test_pool_merges_a_pair_both_generators_found_and_keeps_the_rest():
-    a = [pair(new="n.f", old="o.f", gens=("A",)), pair(new="n.g", old="o.g", gens=("A",))]
-    b = [pair(new="n.f", old="o.f", gens=("B",), sim=0.91), pair(new="n.h", old="o.h", gens=("B",))]
+    a = [pair("1", "n.f", "o.f"), pair("1", "n.g", "o.g")]
+    b = [
+        with_(pair("1", "n.f", "o.f", ("B",)), similarity=0.91),
+        pair("1", "n.h", "o.h", ("B",)),
+    ]
     assert {p.pair_id for p in a} & {p.pair_id for p in b}  # one pair is in both
     pooled = pool_pairs(a, b)
     by_id = {p.pair_id: p for p in pooled}
