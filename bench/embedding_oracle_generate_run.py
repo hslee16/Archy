@@ -15,7 +15,8 @@ The shard choices are `pilot` and `calibration`; the evaluation shard cannot be 
 
 Exit: 0 done | 5 refused (vectors, config, incomplete ledger) | 6 a PR errored | 130 interrupted.
 
-archy:owns        cmd_calibrate, cmd_emit, cmd_score, main, run_prs
+archy:owns        cmd_calibrate, cmd_emit, cmd_score, main, run_prs, universe
+archy:gates       exit 130 (hardcoded)
 """
 
 from __future__ import annotations
@@ -79,6 +80,7 @@ def _payload(ps: PrScores) -> dict[str, object]:
         "n_new": ps.n_new,
         "no_neighbour": ps.no_neighbour,
         "lost_not_at_head": ps.lost_not_at_head,
+        "unshipped": ps.unshipped,
         "scored": [
             {"new": asdict(s.new), "existing": asdict(s.existing), "sim": s.sim} for s in ps.scored
         ],
@@ -90,7 +92,13 @@ def _scores_from(row: dict[str, object]) -> PrScores:
         Scored(UnitFn(**s["new"]), UnitFn(**s["existing"]), s["sim"]) for s in row["scored"]
     )
     return PrScores(
-        row["pr"], row["repo"], row["n_new"], scored, row["no_neighbour"], row["lost_not_at_head"]
+        row["pr"],
+        row["repo"],
+        row["n_new"],
+        scored,
+        row["no_neighbour"],
+        row["lost_not_at_head"],
+        row["unshipped"],
     )
 
 
@@ -139,9 +147,12 @@ def cmd_score(model: str, shard: str) -> int:
         lambda pr: _payload(score_pr(split_pr(pr, units[pr]), vs)),
         ledger,
     )
+    rows = [ledger.get(_key(model, shard, pr)) for pr in shipped]
+    unshipped = sum(r["unshipped"] for r in rows if r)  # type: ignore[index]
+    note = f"; WARNING {unshipped} ids had no vector (not shipped)" if unshipped else ""
     print(
         f"{model} {shard}: {ledger.completed}/{len(shipped)} PRs scored, {errors} errored, "
-        f"{len(dropped)} unmeasurable"
+        f"{len(dropped)} unmeasurable{note}"
     )
     return 6 if errors else 0
 
@@ -187,20 +198,26 @@ def cmd_calibrate(model: str, target: float, source: str, denominator: str) -> i
     return 0
 
 
+def _checked_cutoff(model: str, shard: str) -> dict[str, object]:
+    """The cutoff file, once this shard's vectors match the configuration behind it."""
+    cut = json.loads((ROOT / f"cutoff.{model}.json").read_text(encoding="utf-8"))
+    vs = load_vectors(ROOT, model, shard)
+    if json.loads(json.dumps(vs.config)) != cut["config"]:
+        raise VectorError(
+            "this shard's vectors are from a different configuration than the one that "
+            "calibrated the cutoff"
+        )
+    require_same_config(vs, load_vectors(ROOT, model, "calibration"))
+    if _meta()["shards"][shard]["extractor_version"] != cut["extractor_version"]:
+        raise VectorError(
+            "this shard was written by a different extractor version than the calibration shard"
+        )
+    return cut
+
+
 def cmd_emit(model: str, shard: str) -> int:
     try:
-        cut = json.loads((ROOT / f"cutoff.{model}.json").read_text(encoding="utf-8"))
-        vs = load_vectors(ROOT, model, shard)
-        if json.loads(json.dumps(vs.config)) != cut["config"]:
-            raise VectorError(
-                "this shard's vectors are from a different configuration than the one that "
-                "calibrated the cutoff"
-            )
-        require_same_config(vs, load_vectors(ROOT, model, "calibration"))
-        if _meta()["shards"][shard]["extractor_version"] != cut["extractor_version"]:
-            raise VectorError(
-                "this shard was written by a different extractor version than the calibration shard"
-            )
+        cut = _checked_cutoff(model, shard)
     except (VectorError, FileNotFoundError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 5
@@ -210,11 +227,10 @@ def cmd_emit(model: str, shard: str) -> int:
             "REFUSED: the ledger for this shard is incomplete; run `score` first", file=sys.stderr
         )
         return 5
-    pairs = b_pairs([_scores_from(r) for r in rows.values()], cut["cutoff"])
+    pairs = b_pairs([_scores_from(r) for r in rows.values()], float(cut["cutoff"]))  # type: ignore[arg-type]
     dest = ROOT / f"pairs.{model}.{shard}.jsonl"
-    dest.write_text(
-        "".join(json.dumps(p.model_dump(), sort_keys=True) + "\n" for p in pairs), encoding="utf-8"
-    )
+    body = "".join(json.dumps(p.model_dump(), sort_keys=True) + "\n" for p in pairs)
+    dest.write_text(body, encoding="utf-8")
     print(f"{model} {shard}: {len(pairs)} capped B pairs at cutoff {cut['cutoff']:.6f}")
     return 0
 

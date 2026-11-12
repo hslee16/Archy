@@ -15,8 +15,9 @@ Layout this module reads (all gitignored, under `bench/cache/emb587/`):
 
 Vectors are raw pooled; this module L2-normalises them, so a dot product is a cosine.
 
-archy:owns        PINS, POOLING, VectorError, VectorSet, check_manifest, check_shards_meta,
-                  config_key, load_vectors, read_shards_meta, require_same_config
+archy:owns        VectorError, VectorSet, check_manifest, check_shards_meta,
+                  config_key, load_vectors, read_shards_meta, require_same_config,
+                  shard_ids
 """
 
 from __future__ import annotations
@@ -167,11 +168,11 @@ def load_vectors(root: Path, model: str, shard: str) -> VectorSet:
     _require(_sha256(npy) == man.get("vectors_sha256"), "vectors differ from the manifest's sha256")
     arr = np.load(npy, allow_pickle=False)
     ids = shard_ids(shard_file)
-    return _build(model, shard, ids, arr, man)
+    return _build((model, shard), ids, arr, man)
 
 
 def _build(
-    model: str, shard: str, ids: list[str], arr: np.ndarray, man: dict[str, object]
+    which: tuple[str, str], ids: list[str], arr: np.ndarray, man: dict[str, object]
 ) -> VectorSet:
     _require(arr.dtype == np.float32 and arr.ndim == 2, "vectors are not a float32 matrix")
     _require(arr.shape[0] == len(ids), f"{arr.shape[0]} vectors for {len(ids)} ids")
@@ -180,6 +181,7 @@ def _build(
     norms = np.linalg.norm(arr, axis=1, keepdims=True)
     _require(bool((norms > 0).all()), "a vector has zero norm")
     index = {t: i for i, t in enumerate(ids)}
+    model, shard = which
     return VectorSet(model, shard, index, (arr / norms).astype(np.float32), config_key(man))
 
 

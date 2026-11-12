@@ -11,7 +11,11 @@ new functions counts for at most K pairs on either side.
 
 archy:owns        Member, Pair, PrRef, calibrate_cutoff, cap_pairs, expand_a_firing,
                   pool_pairs
-archy:mirrored-by Pair -> bench.embedding_oracle_score, bench.embedding_oracle_share
+archy:mirrored-by Pair -> bench.embedding_oracle_a_target,
+                  bench.embedding_oracle_generate, bench.embedding_oracle_score,
+                  bench.embedding_oracle_share,
+                  cap_pairs -> bench.embedding_oracle_a_target,
+                  bench.embedding_oracle_generate
 """
 
 from __future__ import annotations
