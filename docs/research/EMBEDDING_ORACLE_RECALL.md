@@ -299,4 +299,67 @@ All of AGENTS.md "Measurement and benches" applies. In particular:
 
 ## Addenda
 
-None yet.
+### 2026-11-12, before any embedding was computed and before any label was read
+
+Thresholds, the pair and unit definitions, the rubric, the cap, the cutoff rule and the
+strict reading are unchanged. The primary model is unchanged: it stays
+`jinaai/jina-embeddings-v2-base-code`. What this addendum fixes, all before the first
+embedding exists:
+
+- **Pins, including the code that runs.** The primary needs `trust_remote_code`, and its
+  `auto_map` points at a second repository, `jinaai/jina-bert-v2-qk-post-norm`, so pinning the
+  model repository alone would not pin what executes. Both are pinned by commit:
+  `jinaai/jina-embeddings-v2-base-code` at `516f4baf13dec4ddddda8631e019b5737c8bc250` and
+  `jinaai/jina-bert-v2-qk-post-norm` at `3baf9e3ac750e76e8edd3019170176884695fb94` (last
+  modified 2024-05-07). The code repository holds two files, `modeling_bert.py` (2,312 lines)
+  and `configuration_bert.py` (177 lines), and the harness records their sha256 and refuses to
+  load if either differs. The files were read for imports and scanned for network, process,
+  `eval`, `exec` and pickle use on 2026-11-12: they import only `torch`, `transformers`,
+  `numpy` and the standard library, and the scan found none of those patterns. That is a scan
+  and not a full audit, and it is stated as such.
+- **Safetensors only.** The model repository also ships a pickle-based `pytorch_model.bin`.
+  Loads pass `use_safetensors=True`, so no pickle is ever deserialised.
+- **Library versions are pinned and recorded.** Remote modeling code written in 2024 can fail
+  on a newer `transformers`. The versions of `transformers`, `torch` and `sentence-transformers`
+  that load it are fixed by the canary and recorded in every manifest row. Models run offline
+  after the first fetch.
+- **Sensitivity arms, reported and never decisive.** The pre-registration names one sensitivity
+  model; it is extended to five, each calibrated by the same equal-volume rule on its own
+  similarities, none able to change the verdict:
+
+  | Model | License | Revision |
+  |---|---|---|
+  | `jinaai/jina-code-embeddings-0.5b` (as pre-registered; bench only) | cc-by-nc-4.0 | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` |
+  | `Qwen/Qwen3-Embedding-0.6B` | apache-2.0 | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` |
+  | `Qwen/Qwen3-Embedding-8B` (the "would a much stronger embedder change the verdict" arm) | apache-2.0 | `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af` |
+  | `microsoft/unixcoder-base` (context 1,026 tokens, so long functions truncate; counts reported) | apache-2.0 | `5604afdc964f6c53782a6813140ade5216b99006` |
+  | `BAAI/bge-code-v1` | apache-2.0 | `bd67852057c5d7ddcc7b8234d9d6c410117ed851` |
+
+  Licences and revisions were read from the Hugging Face API on 2026-11-12. None of the five
+  needs remote code. Every arm, the primary included, is run with no instruction prefix on
+  either side and with the model's published pooling at the pinned revision, then
+  L2-normalised. Two of them (the Qwen and bge-code families) are instruction-aware, so a null
+  from them at this default is not evidence about instructed use.
+- **Labeling budget for the arms.** The sensitivity pass labels at most 100 pairs per arm that
+  are not already in the primary pool, drawn with seed 587 over pair ids alone before any
+  packet is built. A pair two arms share is labeled once, and the pass is capped at 500 pairs
+  in total. This replaces the single cap of 100 in "Sample".
+- **Numerics.** All embeddings come from one CUDA GPU host with one fixed dtype (float32) and
+  one fixed device, with batches ordered by token length then pair id. Vectors from different
+  devices or dtypes are never merged: the cutoff is a threshold on cosine similarity, and
+  mixed numerics can move a pair across it. The cache key gains the device, the dtype and the
+  library versions. The results name the hardware only as "a single CUDA GPU host".
+- **Pipeline split, no change to any definition.** Function texts are extracted on the
+  analysis machine with archy's own parser and keyed by the sha256 of the normalised text. The
+  embedding is a text-in, vectors-out job on the GPU host, with a manifest per shard. Top-1
+  cosine, the cutoff and all scoring run on the analysis machine, from the returned vectors.
+- **Bootstrap constants.** The PR-clustered bootstrap for pair precision uses 2,000 resamples
+  and seed 587, as in `bench/embedding_oracle_stats.py` (#973). The remaining post-pilot
+  quantities (M, the cutoffs, the capped A target) are still to be fixed in the post-pilot
+  addendum.
+- **A fine-tuned model is not part of this study.** Using one would need its own dated
+  addendum before its weights are used, with training data disjoint from every repository in
+  this study's sample and never the study's labels.
+- **How the primary was kept.** It was pre-registered before anything ran, and keeping it
+  makes this study carry no deviation in its primary instrument. The cost accepted is the
+  remote-code pin above, and the canary still has to pass for it before any real run.
