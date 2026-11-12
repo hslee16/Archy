@@ -167,7 +167,7 @@ To get both refactor-priority lenses fused in one call instead of running the be
 archy_what_to_refactor_next(path=".", top_n=10, since=None, min_risk=0.15)
 ```
 
-Sums the behavioral lens (CC x churn hotspots) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal, like a giant hotspot at the import-graph leaves, can still rank first). Each entry lists which `lenses` fired and a one-line `rationale`. Without git, the fused ranking is structural-only (`git_available=false`). An empty `priorities` plus a `note` is a real answer: nothing is both complex+churned and nothing is central+fragile above `min_risk`, so there is nothing for these two lenses to prioritize.
+Sums the behavioral lens (CC x churn hotspots) and the structural lens (edit-risk: central+fragile) into a `priority`, so a module flagged by *both* generally outranks a comparable single-lens one (a dominant single-lens signal, like a giant hotspot at the import-graph leaves, can still rank first). Each entry lists which `lenses` fired and a one-line `rationale`. Without git, the fused ranking is structural-only (`git_available=false`). With `lens="structural"`, `git_available`, `cc_sum`, `churn`, and `hotspot_score` are `null`: git history was not consulted. An empty `priorities` plus a `note` is a real answer: nothing is both complex+churned and nothing is central+fragile above `min_risk`, so there is nothing for these two lenses to prioritize.
 
 ### 3. Edit the code
 

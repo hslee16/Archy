@@ -366,13 +366,13 @@ def test_refactor_structural_lens_ranks_central_volatile_first(tmp_path: Path):
 
 def test_refactor_structural_lens_skips_git(tmp_path: Path):
     # The structural lens never consults git, so it works (and reports
-    # git_available=False) even with no repository present.
+    # git_available=None) even with no repository present.
     _hub_project(tmp_path, spokes=1)
 
     payload = run_what_to_refactor_next(
         tmp_path, lens="structural", top_n=5, since="2025-01-01", min_risk=0.0
     )
-    assert payload.git_available is False
+    assert payload.git_available is None
     assert payload.priorities
     assert all(e.lenses == ("edit_risk",) for e in payload.priorities)
 

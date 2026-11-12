@@ -393,15 +393,17 @@ class GraphSummaryPayload(BaseModel):
 
 
 class RefactorPriorityEntry(BaseModel):
+    """One priority; `cc_sum`, `churn` and `hotspot_score` are None for the structural-only lens."""
+
     model_config = ConfigDict(frozen=True)
 
     module: str
     path: str | None
     lenses: tuple[str, ...]
     priority: float
-    cc_sum: int
-    churn: int
-    hotspot_score: int
+    cc_sum: int | None
+    churn: int | None
+    hotspot_score: int | None
     edit_risk: float
     propagation_cost: float
     instability: float
@@ -417,13 +419,16 @@ class WhatToRefactorPayload(BaseModel):
     complex and churned and nothing is central+fragile above `min_risk`, so
     there is genuinely nothing to prioritize. `git_available` is False when
     the project is not under git (or has no commits yet) - the behavioral
-    lens is then skipped and the ranking is structural-only."""
+    lens is then skipped and the ranking is structural-only. It is None for
+    lens='structural': git history was not consulted, and each entry's
+    `cc_sum`, `churn` and `hotspot_score` are None rather than measured
+    zeros."""
 
     model_config = ConfigDict(frozen=True)
 
     since: str | None
     min_risk: float
-    git_available: bool
+    git_available: bool | None
     total: int
     shown: int
     priorities: tuple[RefactorPriorityEntry, ...]

@@ -151,7 +151,7 @@ class _RefactorNoteInputs(BaseModel):
 
     lens: str
     has_rows: bool
-    git_available: bool
+    git_available: bool | None
     min_risk: float
     missing_git: str
     # Set only when git ran and the --since window held no commits at all.
@@ -189,7 +189,9 @@ def _refactor_note(note: _RefactorNoteInputs) -> str | None:
     return _empty_lens_note(note.lens, note.git_available, note.missing_git, note.min_risk)
 
 
-def _empty_lens_note(lens: str, git_available: bool, missing_git: str, min_risk: float) -> str:
+def _empty_lens_note(
+    lens: str, git_available: bool | None, missing_git: str, min_risk: float
+) -> str:
     """The note for a lens that surfaced nothing, worded per lens and per git state."""
     if lens == "behavioral":
         if not git_available:
@@ -282,7 +284,7 @@ def run_what_to_refactor_next(
 
     graph = _load_graph(path, internal_only=True)
     churn, no_commits = _refactor_churn(path, lens, since)
-    git_available = churn is not None
+    git_available = None if lens == "structural" else churn is not None
 
     rows = _rows_for_lens(compute_refactor_priorities(graph, churn=churn, min_risk=min_risk), lens)
     shown = rows[:top_n]
@@ -292,9 +294,9 @@ def run_what_to_refactor_next(
             path=r.path,
             lenses=r.lenses,
             priority=r.priority,
-            cc_sum=r.cc_sum,
-            churn=r.churn,
-            hotspot_score=r.hotspot_score,
+            cc_sum=None if lens == "structural" else r.cc_sum,
+            churn=None if lens == "structural" else r.churn,
+            hotspot_score=None if lens == "structural" else r.hotspot_score,
             edit_risk=r.edit_risk,
             propagation_cost=r.propagation_cost,
             instability=r.instability,
