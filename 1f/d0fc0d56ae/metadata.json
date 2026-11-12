@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "1fd0fc0d56ae",
+  "strategy": "manual-commit",
+  "branch": "alee/emb587-extractor",
+  "checkpoints_count": 4,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/1f/d0fc0d56ae/0/metadata.json",
+      "transcript": "/1f/d0fc0d56ae/0/full.jsonl",
+      "content_hash": "/1f/d0fc0d56ae/0/content_hash.txt",
+      "prompt": "/1f/d0fc0d56ae/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 702,
+    "cache_creation_tokens": 665914,
+    "cache_read_tokens": 103691502,
+    "output_tokens": 370180,
+    "api_call_count": 307
+  }
+}
