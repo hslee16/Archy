@@ -61,6 +61,8 @@ from collections import Counter
 from collections.abc import Iterable
 from pathlib import Path
 
+import networkx as nx
+
 from archy.conventions_collect import (
     _classify_module,
     _collect_all,
@@ -88,7 +90,9 @@ from archy.conventions_models import (
 )
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
+    Module,
     discover_modules,
+    suggest_files,
     suggest_modules,
 )
 
@@ -186,6 +190,14 @@ def compute_module_view(
     modules = list(discover_modules(root, ignored_dirs=ignored_dirs, extra_roots=extra_roots))
     shadows = _shadow_roots(m.qualname for m in modules)
 
+    if _looks_like_path(module) and module not in {m.qualname for m in modules}:
+        # Callers think in file paths, and the graph surfaces resolve them
+        # (`archy_graph(focus=["myapp/core.py"])` finds `myapp.core`), so a
+        # path naming a discovered file resolves here too. An unresolved
+        # path falls through with its spelling intact, so the refusal below
+        # can answer it with file hints instead of a bare no.
+        module = _resolve_module_path(root, modules, module) or module
+
     collected, skipped = _collect_all(modules, root)
     facts = {f.qualname: f for f in collected}
     unparsed = tuple(skipped)
@@ -210,7 +222,13 @@ def compute_module_view(
                 census_complete=False,
                 unparsed_modules=(miss,),
             )
-        near = suggest_modules(facts, module)
+        if _looks_like_path(module):
+            # `suggest_modules` compares dotted names; a mistyped path is
+            # answered by the file hints, whose answer is translated back
+            # to the qualname this refusal speaks in.
+            near = _suggest_module_path(root, modules, module)
+        else:
+            near = suggest_modules(facts, module)
         # Also suggest unparsed names: an agent asking for pkg.cache after a
         # SyntaxError skip must not be told the module does not exist.
         near_unparsed = [u.module for u in unparsed if module.split(".")[-1] in u.module]
@@ -244,3 +262,65 @@ def compute_module_view(
         census_complete=not unparsed,
         unparsed_modules=unparsed,
     )
+
+
+def _looks_like_path(module: str) -> bool:
+    """A module argument spelled as a file path rather than a dotted name."""
+    return module.endswith(".py") or "/" in module
+
+
+def _module_rel_paths(root: Path, modules: list[Module]) -> dict[str, str]:
+    """`{qualname: POSIX path relative to root}` for the modules under `root`."""
+    resolved_root = root.resolve()
+    rel_paths: dict[str, str] = {}
+    for m in modules:
+        try:
+            rel_paths[m.qualname] = m.path.relative_to(resolved_root).as_posix()
+        except ValueError:
+            continue
+    return rel_paths
+
+
+def _resolve_module_path(root: Path, modules: list[Module], typed: str) -> str | None:
+    """The qualname a file path names, or None when it names none or several.
+
+    The path may be absolute, relative to the root, or carry extra leading
+    directories (a checkout prefix, or a `src/` the caller left on): a
+    discovered file matches when its path is the typed one, ends with it, or
+    is ended by it. Only an unambiguous match resolves; several matches
+    would be a guess, and a lookup that guesses breaks the refusal contract
+    the same way resolving a bare name would.
+    """
+    typed_posix = typed.replace("\\", "/").removeprefix("./")
+    rel_paths = _module_rel_paths(root, modules)
+    matches = {
+        m.qualname
+        for m in modules
+        if str(m.path) == typed
+        or rel_paths.get(m.qualname) == typed_posix
+        or rel_paths.get(m.qualname, "").endswith("/" + typed_posix)
+        or typed_posix.endswith("/" + rel_paths.get(m.qualname, "\0"))
+    }
+    return matches.pop() if len(matches) == 1 else None
+
+
+def _suggest_module_path(root: Path, modules: list[Module], typed: str) -> list[str]:
+    """Qualnames a mistyped file path was probably meant to name, best first.
+
+    `suggest_files` answers in the caller's form (paths); this refusal
+    speaks in qualnames like every other module-view refusal, so the paths
+    it returns are mapped back through the module list. The graph built
+    here carries only the nodes `suggest_files` reads (module paths under
+    a root); no edges are needed to compare file names.
+    """
+    graph = nx.DiGraph()
+    graph.graph["root"] = str(root)
+    for m in modules:
+        graph.add_node(m.qualname, path=str(m.path))
+    hints = suggest_files(graph, [typed], base=root)
+    if not hints:
+        return []
+    by_form: dict[str, str] = {str(m.path): m.qualname for m in modules}
+    for qualname, rel in _module_rel_paths(root, modules).items():
+        by_form[rel] = qualname
+    return [by_form[form] for form in hints[0].did_you_mean if form in by_form]
