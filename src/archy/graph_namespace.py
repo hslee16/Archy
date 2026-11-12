@@ -61,32 +61,16 @@ def find_namespace_gaps(graph: nx.DiGraph) -> tuple[NamespaceGap, ...]:
     `__init__.py`. A third-party import that no scanned directory shares a name
     with never qualifies, however it is spelled.
     """
-    root = Path(graph.graph.get("root") or ".")
     # An external node exists only because something imports it, and it has no
     # outgoing edges, so its in-degree is its number of importers.
     importers = {n: graph.in_degree(n) for n, d in graph.nodes(data=True) if d.get("external")}
     if not importers:
         return ()
-
-    # directory (root-relative posix) -> names directly under it that hold scanned modules
-    found: dict[str, set[str]] = {}
-    for _, data in graph.nodes(data=True):
-        if data.get("external") or not data.get("path"):
-            continue
-        rel = _relative(Path(data["path"]), root)
-        parts = rel.parts
-        for i, part in enumerate(parts[:-1]):
-            if part in importers:
-                found.setdefault(PurePosixPath(*parts[: i + 1]).as_posix(), set()).add(
-                    PurePosixPath(parts[i + 1]).stem
-                )
-
+    root = Path(graph.graph.get("root") or ".")
     by_name: dict[str, dict[str, set[str]]] = {}
-    for directory, below in found.items():
-        if (root / directory / "__init__.py").exists():
-            continue
-        by_name.setdefault(PurePosixPath(directory).name, {})[directory] = below
-
+    for directory, below in _directories_holding_modules(graph, root, set(importers)).items():
+        if not (root / directory / "__init__.py").exists():
+            by_name.setdefault(PurePosixPath(directory).name, {})[directory] = below
     return tuple(
         NamespaceGap(
             name=name,
@@ -96,6 +80,29 @@ def find_namespace_gaps(graph: nx.DiGraph) -> tuple[NamespaceGap, ...]:
         )
         for name, dirs in sorted(by_name.items())
     )
+
+
+def _directories_holding_modules(
+    graph: nx.DiGraph, root: Path, names: set[str]
+) -> dict[str, set[str]]:
+    """Each directory named in `names` above a scanned module, with the names directly under it.
+
+    Keys are root-relative posix paths; values are the entries one level down that
+    hold scanned modules (a package directory, or a module's stem).
+    """
+    found: dict[str, set[str]] = {}
+    for _, data in graph.nodes(data=True):
+        if data.get("external") or not data.get("path"):
+            continue
+        parts = _relative(Path(data["path"]), root).parts
+        for i in _indexes_named(parts[:-1], names):
+            directory = PurePosixPath(*parts[: i + 1]).as_posix()
+            found.setdefault(directory, set()).add(PurePosixPath(parts[i + 1]).stem)
+    return found
+
+
+def _indexes_named(parts: tuple[str, ...], names: set[str]) -> list[int]:
+    return [i for i, part in enumerate(parts) if part in names]
 
 
 def _relative(path: Path, root: Path) -> PurePosixPath:
