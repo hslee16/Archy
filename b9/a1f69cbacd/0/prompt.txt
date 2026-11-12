@@ -1,0 +1,122 @@
+create fix commit to the same PR
+
+---
+
+<task-notification>
+<task-id>a7a61f7ae85e68488</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a7a61f7ae85e68488.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed. `/Users/hosanglee/archy/docs/research/EMBEDDING_ORACLE_RECALL.md` has no U+2014 characters, so there were no findings. I marked review `no_em_dashes--docs-research-EMBEDDING_ORACLE_RECALL.md--37ea25d43a1d` as passed.</result>
+<usage><subagent_tokens>18747</subagent_tokens><tool_uses>3</tool_uses><duration_ms>7460</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a459ff5b0380e2ad8</task-id>
+<tool-use-id>toolu_01P5X2Y7Ch1ERYzG6iuudZ3E</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a459ff5b0380e2ad8.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+The branch changes only `docs/research/EMBEDDING_ORACLE_RECALL.md`, a new pre-registration. No `src/archy/` file or `pyproject.toml` changed.
+
+I checked the numbers it quotes from #548 against `bench/diff_duplicates_precision_results.md` and the ledger files in `bench/diff_duplicates_data/`:
+- **Strict precision:** 0.160 (19 of 119) matches.
+- **Measured PRs, firings, labels:** 1,049 measured PRs, 557 firings and 119 labels match.
+- **Near-miss budget hits:** 62 PRs match when I counted them from the ledger.
+- **Module-name collisions:** the 22% matches.
+- **Reference:** arXiv 2601.21276 is cited consistently with `docs/research/DIFF_DUPLICATES_PRECISION.md`.
+
+I did not recompute the 1,309 new members, the 703-member PR or the 181-member firing. I also did not re-check the 30-node floor (`MIN_NODES`) against the code.</result>
+<usage><subagent_tokens>35165</subagent_tokens><tool_uses>7</tool_uses><duration_ms>19003</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ace75e5c7e8018bce</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/ace75e5c7e8018bce.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial prereg review round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Round 2 review of `docs/research/EMBEDDING_ORACLE_RECALL.md`. I recomputed the numbers from the 1,049 measured ledger rows (those with a `firings` key). The ledger has per-firing `size` and per-member `path`, `line`, `qualified_name` and `new`, and nothing else. It has no per-member node counts and no base/head existence flags. Soundness verdicts are at the end.
+
+**Ledger facts used below**
+- A's capped pairs: 536 over 1,049 PRs, so the target is 0.511 per PR, not 1.25.
+- Of the 1,309 new members, only 536 sit in firings that also have an existing member. The other 773 (59%) are intra-diff or all-new clusters, and the doc's own rule drops them.
+- Only 177 PRs (17%) have any A pair. Of 1,049 PRs, 1,823 of the 2,000 rows have none, so the **median capped A count per PR is 0**.
+- 83 of the 536 pairs are exact tier.
+- 134 of 551 repos have any firing.
+
+**1. Median condition is vacuous or degenerate (blocks merge)**
+- Quote: "highest similarity at which the median PR-level count of B pairs is at least the median of A's capped pairs per PR on the same subset, and the mean is at least the target".
+- Scenario: on a 40-PR subset, A's median is 0 with near certainty, since 83% of PRs have none. "B median at least 0" holds at every cutoff, so the median clause never binds and the mean clause alone decides.
+- A second problem: the mean clause compares the subset's B mean to the global target of 0.511. A's own mean on the 40 PRs is about 0.51 × 40 ≈ 20 pairs. One 10-pair PR moves the subset mean by 0.25, so a subset can sit far from the global target.
+- "Highest similarity such that mean ≥ target" is also not well-defined when ties at 1.0 make the count jump. Say how ties are resolved.
+- Wording: drop the median clause, or replace it with a PR-coverage condition such as "fraction of PRs with at least one B pair ≥ A's fraction (0.17)". Define the cutoff as the largest t, over distinct observed similarity values, with mean count at least 0.511, ties included at t. State how the cutoff is chosen if no subset-observed t reaches the target.
+
+**2. The cap order for B is ambiguous, and A's cap rule cannot be computed (blocks merge)**
+- Quote: "keeping the new functions with the most AST nodes ... applied to A's expanded pairs and to B's candidates alike, before the cutoff is calibrated".
+- Scenario one: for B, is the cap applied to all new functions before the similarity cutoff, or to the pairs that pass the cutoff? These give different pools. Capping before the cutoff means B only ever sees the 10 largest new functions. Capping after it is biased toward large functions.
+- Scenario two: the ledger has only the firing `size` and no per-member node counts, so A's cap ("most AST nodes") cannot be computed from the ledger as the doc claims ("computed from the ledger as a count"). It needs a re-parse of 9+ capped PRs. 9 PRs hit the cap exactly (the `10` bucket).
+- "Exists at both base and head" for A's existing member also cannot be checked from the ledger. It needs checkouts, so A's target 0.511 may drop once those filters are applied.
+- Wording: "B: apply the cutoff first, then keep the K=10 pairs whose new function has most nodes. A: recompute node counts by re-parse, then the 0.511 figure is recomputed and recorded in the addendum, and the ledger-only 536 is labelled provisional."
+
+**3. Kill-scope sentence cites the wrong operating point (edit before merge)**
+- Quote: "A's operating point (about 1.25 pairs per PR before the cap)".
+- The calibrated point is 0.511 per PR, and 1.25 is dominated by one PR with 703 new members. Anyone reading the kill scope will misjudge it.
+- Wording: "about 0.51 capped pairs per PR (1.25 uncapped, dominated by one PR)".
+
+**4. Exact-tier exclusion is not operational and is asymmetric (edit before merge)**
+- Quote: "byte-identical or shape-identical to an A exact-tier cluster".
+- It does not say whether the test is on the pair or the function. Take a 3-member exact cluster {n, o1, o2}. B pairs n with o2 and A pairs n with o1. Both are shape-identical to the cluster, but the pair is not the A pair.
+- It is also unclear whether a B pair whose bodies are byte-identical, but which A missed through the budget hit or the cap, is excluded. B's exact-like pairs that A did not emit would then stay in as only-B.
+- Asymmetry: A's exact-tier firings were the best A tier (4 of 10 strict TRUE in #548, per the results file). Dropping them from the denominator removes A's strongest evidence and inflates "only by B". The labeled data show 6 strict-TRUE firings in exact tiers; one is a duplicate-tier exact. The doc does say the with-exact share is reported beside the headline, but it should also say which direction the headline bias runs.
+- Wording: "A pair is exact-tier if the new function's AST shape hash equals the existing function's shape hash (computed by archy's own hasher). Exclusion is by this predicate on the pair, for both generators, independent of what A emitted. Report the share both ways, and state that the headline excludes A's most precise tier."
+
+**5. Pair expansion biases A downward against its #548 labels (edit before merge)**
+- Quote: "each paired with the first existing member, in sorted (path, qualified name) order".
+- Of the 19 strict-TRUE labeled firings, 9 have more than one existing member or more than one new member. 8 of the 19 TRUE (and 19 of the 100 FALSE) are multi-old or multi-new.
+- For a multi-old cluster, "first in sorted order" may not be the real duplicate. The pair can then be FALSE where #548 labeled the cluster TRUE, so A's pair-level precision understates #548's 0.160-based picture.
+- A multi-new cluster also becomes several units sharing the same old function, so A gets several draws. On the other hand B emits one pair per new function with its single top-1 neighbour, so B pairs always pick the nearest partner and A's rule has no such selection.
+- The labeled #548 sample had no all-new clusters, so 59% of A's new members are in a class #548 never labeled. A's pair-level precision is not comparable to the 0.160 figure.
+- Wording: "choose A's partner as the existing member with the highest token overlap with the new function (fixed rule from the near-miss scorer), or emit all existing members. Report A's pair-level precision beside the 0.160 and state that the two are not the same quantity."
+
+**6. TRUE-pool floor and "not measurable" risk (edit before merge)**
+- Rough expected TRUE pool per PR: A non-exact pairs are 453/1049 = 0.43 per PR at roughly 0.16 precision, giving about 0.07. B at equal volume 0.51 per PR with an assumed precision of 0.2 to 0.4 gives 0.10 to 0.20.
+- Total is about 0.17 to 0.27 TRUE units per PR, so the 40-unit floor needs M ≈ 150 to 250 PRs. The 20 PRs and 15 repos floors are easily met (at most 25 per repo gives hundreds of repos). Only the 40 floor binds, and it is reachable.
+- The real constraint is the 300-pair labeling budget: M=250 gives about 250 × 1.0 ≈ 255 pairs, near the cap. If M is larger the sampled labeling cuts the TRUE pool back. Also, the B-side 30 scorable candidates from 10 repos is easy.
+- Risk: at precision 0.1 for B the floor needs M ≈ 400 and the labeling draw truncates. State M's minimum in terms of labeled pairs, not pairs generated.
+- Wording: "the minimum-M computation in the addendum must use labeled (post-draw) pairs. If expected labeled TRUE units at the affordable M is under 40, record 'not measurable' before running, not after."
+- Also the sentence "counted by distinct (PR, existing function) pairs for the floor" contradicts "40 units", since units are (PR, new function). Pick one.
+
+**7. Wilson-straddle rule makes kill on the share almost unreachable (edit before merge)**
+- Kill on the share needs the upper bound below 0.10. With 40 units, even 1 of 40 only-B gives an upper bound of about 0.13, so only 0 of 40 kills. At 100 units, about 2 or fewer.
+- Pass needs both a precision lower bound of at least 0.60 and a share lower bound of at least 0.30. The latter needs roughly 12 of 40 with a point estimate of 0.5 or more, and precision 0.60 lower bound needs about 0.75 at n=40.
+- The precision kill (upper bound below 0.40) is reachable, so the OR keeps the kill live. The result is that pass is hard and kill is almost only through B's precision. That is probably acceptable but should be stated.
+- Pair-level Wilson treats up to 10 pairs per PR as independent, so the intervals are too narrow. Use a PR-clustered (bootstrap by PR) interval.
+- Also unspecified: whether B precision is measured on pairs or units, and on which pairs (all labeled, or excluding exact-tier).
+- Wording: "Intervals are Wilson on units for the share and PR-cluster bootstrap for pair precision. State precision as pairs, B only, all tiers."
+
+**8. Verdict gaps and internal contradictions (addendum note)**
+- "Below it the share is 'not measurable' and no pass or kill on the share is declared, though B's precision is still reported against its own bars" conflicts with "Kill: B precision below 0.40 OR ...". A precision kill can fire while the floor fails. Say whether a floor failure overrides a precision kill.
+- Calibration draw: "40 measured PRs, at most 5 per repository" versus a stratum where only 177 PRs have any A pair. Expect the subset to have about 7 PRs with A pairs, so A's per-subset numbers are noisy.
+- "Pilot excluded from everything" with "calibration subset drawn first, evaluation from remaining" is consistent. The calibration PRs get embedded and then excluded, which is fine.
+- B's sensitivity model: "its candidates not in the primary pool are labeled in a separate pass" adds labeling cost outside the 300 budget. State a cap.
+
+**Sound areas**
+- Provenance, drop rules, no label reuse, and relative-recall disclaimer: sound.
+- Leak check by byte-identical bodies: sound.
+- Mutation list and canary: sound.
+- Exact-pair counting and the near-miss budget flag: sound.
+
+Priority: items 1 and 2 block merge. Items 3 to 7 need edits before merge. Item 8 can go in an addendum.</result>
+<usage><subagent_tokens>68546</subagent_tokens><tool_uses>5</tool_uses><duration_ms>78111</duration_ms></usage>
+</task-notification>
