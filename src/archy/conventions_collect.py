@@ -1,10 +1,10 @@
 """Reading a project's modules into the facts every census works from.
 
 archy:owns        censused_modules
-archy:mirrored-by _ModuleFacts -> archy.conventions_docs, archy.conventions_families,
-                  archy.conventions_gates, _dotted -> archy.conventions_families,
-                  archy.conventions_gates, censused_modules -> archy.conventions,
-                  archy.headers
+archy:mirrored-by _ModuleFacts -> archy.conventions, archy.conventions_docs,
+                  archy.conventions_families, archy.conventions_gates,
+                  _dotted -> archy.conventions_families, archy.conventions_gates,
+                  censused_modules -> archy.conventions, archy.headers
 """
 
 from __future__ import annotations

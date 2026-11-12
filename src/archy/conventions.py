@@ -66,6 +66,7 @@ import networkx as nx
 from archy.conventions_collect import (
     _classify_module,
     _collect_all,
+    _ModuleFacts,
     _reexport_maps,
     _resolved_imports,
     _shadow_roots,
@@ -86,6 +87,7 @@ from archy.conventions_models import (
     ModulePartition,
     ModuleView,
     NamingFamily,
+    UnparsedModule,
     camel_suffix,
 )
 from archy.graph import (
@@ -203,39 +205,8 @@ def compute_module_view(
     unparsed = tuple(skipped)
 
     if module not in facts:
-        miss = next((u for u in unparsed if u.module == module), None)
-        if miss is not None:
-            # The module exists on disk but this interpreter cannot census it.
-            # Returning a view (not LookupError) keeps the negative answerable:
-            # the lists are empty because parsing failed, not because the name
-            # is unknown (#666).
-            return ModuleView(
-                module=module,
-                status=(f"could not be parsed (Python {miss.python}): {miss.reason} ({miss.path})"),
-                classes=(),
-                functions=(),
-                imports_internal=(),
-                imported_by=(),
-                exports=None,
-                suffix_families=(),
-                gates=(),
-                census_complete=False,
-                unparsed_modules=(miss,),
-            )
-        if _looks_like_path(module):
-            # `suggest_modules` compares dotted names; a mistyped path is
-            # answered by the file hints, whose answer is translated back
-            # to the qualname this refusal speaks in.
-            near = _suggest_module_path(root, modules, module)
-        else:
-            near = suggest_modules(facts, module)
-        # Also suggest unparsed names: an agent asking for pkg.cache after a
-        # SyntaxError skip must not be told the module does not exist.
-        near_unparsed = [u.module for u in unparsed if module.split(".")[-1] in u.module]
-        suggestions = list(dict.fromkeys([*near, *near_unparsed]))
-        raise LookupError(
-            f"no module {module!r} under {root}"
-            + (f"; did you mean {', '.join(suggestions[:5])}?" if suggestions else "")
+        return _missing_module_view(
+            module, root=root, modules=modules, facts=facts, unparsed=unparsed
         )
 
     f = facts[module]
@@ -261,6 +232,57 @@ def compute_module_view(
         gates=tuple(gates) + tuple(errors),
         census_complete=not unparsed,
         unparsed_modules=unparsed,
+    )
+
+
+def _missing_module_view(
+    module: str,
+    *,
+    root: Path,
+    modules: list[Module],
+    facts: dict[str, _ModuleFacts],
+    unparsed: tuple[UnparsedModule, ...],
+) -> ModuleView:
+    """The answer for a module the census did not collect.
+
+    Split out of `compute_module_view`: the collected path there is a
+    straight line, and this detour is where the branching lives — a view
+    for a module that exists but did not parse, a refusal for one that
+    does not exist.
+    """
+    miss = next((u for u in unparsed if u.module == module), None)
+    if miss is not None:
+        # The module exists on disk but this interpreter cannot census it.
+        # Returning a view (not LookupError) keeps the negative answerable:
+        # the lists are empty because parsing failed, not because the name
+        # is unknown (#666).
+        return ModuleView(
+            module=module,
+            status=(f"could not be parsed (Python {miss.python}): {miss.reason} ({miss.path})"),
+            classes=(),
+            functions=(),
+            imports_internal=(),
+            imported_by=(),
+            exports=None,
+            suffix_families=(),
+            gates=(),
+            census_complete=False,
+            unparsed_modules=(miss,),
+        )
+    if _looks_like_path(module):
+        # `suggest_modules` compares dotted names; a mistyped path is
+        # answered by the file hints, whose answer is translated back
+        # to the qualname this refusal speaks in.
+        near = _suggest_module_path(root, modules, module)
+    else:
+        near = suggest_modules(facts, module)
+    # Also suggest unparsed names: an agent asking for pkg.cache after a
+    # SyntaxError skip must not be told the module does not exist.
+    near_unparsed = [u.module for u in unparsed if module.split(".")[-1] in u.module]
+    suggestions = list(dict.fromkeys([*near, *near_unparsed]))
+    raise LookupError(
+        f"no module {module!r} under {root}"
+        + (f"; did you mean {', '.join(suggestions[:5])}?" if suggestions else "")
     )
 
 
