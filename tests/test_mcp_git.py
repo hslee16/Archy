@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -92,6 +93,69 @@ def test_duplicates_note_mentions_demoted_variants_and_is_silent_when_there_are_
     assert _duplicates_note(1, 1, 20) is None
 
 
+def test_refactor_structural_lens_reports_unconsulted_signals(tmp_path: Path):
+    """Two commits touch a.py; one branch gives CC 2, so fused measures (2, 2)."""
+    from click.testing import CliRunner
+
+    from archy.cli import main
+
+    _init_git_repo(tmp_path)
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    a = pkg / "a.py"
+    a.write_text("from pkg import b\n\ndef f(x):\n    if x: return 1\n    return 0\n")
+    (pkg / "b.py").write_text("")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    a.write_text(a.read_text() + "\n# tweak\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "touch a")
+
+    fused = run_what_to_refactor_next(tmp_path, top_n=20, since=None, min_risk=0.0)
+    assert fused.git_available is True
+    measured = next(e for e in fused.priorities if e.module == "pkg.a")
+    assert measured.cc_sum == 2
+    assert measured.churn == 2
+    assert measured.hotspot_score == 4
+
+    structural = run_what_to_refactor_next(
+        tmp_path, lens="structural", top_n=20, since=None, min_risk=0.0
+    ).model_dump()
+    assert structural["git_available"] is None
+    unmeasured = next(e for e in structural["priorities"] if e["module"] == "pkg.a")
+    assert unmeasured["cc_sum"] is None
+    assert unmeasured["churn"] is None
+    assert unmeasured["hotspot_score"] is None
+
+    _content, wire = _call_tool(
+        create_server(),
+        "archy_what_to_refactor_next",
+        {"path": str(tmp_path), "lens": "structural", "min_risk": 0.0},
+    )
+    assert wire is not None
+    assert wire["git_available"] is None
+    wire_a = next(e for e in wire["priorities"] if e["module"] == "pkg.a")
+    assert wire_a["cc_sum"] is None
+    assert wire_a["churn"] is None
+    assert wire_a["hotspot_score"] is None
+
+    # The CLI exposes only the fused lens, so it still reports measured numbers.
+    args = ["what-to-refactor-next", str(tmp_path), "--min-risk", "0"]
+    cli_json = CliRunner().invoke(main, [*args, "--format", "json"])
+    assert cli_json.exit_code == 0
+    cli_payload = json.loads(cli_json.output)
+    assert cli_payload["git_available"] is True
+    cli_a = next(e for e in cli_payload["priorities"] if e["module"] == "pkg.a")
+    assert cli_a["cc_sum"] == 2
+    assert cli_a["churn"] == 2
+    cli_text = CliRunner().invoke(main, args)
+    assert cli_text.exit_code == 0
+    assert "pkg.a" in cli_text.output
+    assert "cc_sum=2, churn=2" in cli_text.output
+    assert "not a git repo" not in cli_text.output
+
+
 def test_refactor_refuses_a_garbage_since_even_for_the_structural_lens(tmp_path: Path):
     """The structural lens never reads git, but a typo in `since` must still be refused.
 
@@ -167,6 +231,8 @@ def test_refactor_behavioral_lens_shape_and_ranking(tmp_path: Path):
     # The behavioral lens keeps only rows the hotspot lens fired on (a row may
     # also carry edit_risk when it clears the structural floor too).
     assert "hotspot" in top.lenses
+    assert top.cc_sum is not None
+    assert top.churn is not None
     assert top.hotspot_score == top.cc_sum * top.churn
     assert top.path is not None
     assert top.path.endswith("pkg/hot.py")
