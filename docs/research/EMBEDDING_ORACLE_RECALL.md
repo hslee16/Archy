@@ -314,24 +314,39 @@ the first embedding exists.
   executes. Both are pinned by commit: `jinaai/jina-embeddings-v2-base-code` at
   `516f4baf13dec4ddddda8631e019b5737c8bc250` and `jinaai/jina-bert-v2-qk-post-norm` at
   `3baf9e3ac750e76e8edd3019170176884695fb94` (last modified 2024-05-07).
-- **Every file of every snapshot is hashed.** Each model is fetched once as a snapshot of its
+- **Every fetched file is hashed.** Each model is fetched once as a snapshot of its
   pinned revision with an allow-list of file patterns (weights, configs, tokenizer files and
   `.py` files; no `onnx/`), every file's sha256 is recorded, and every later load runs with
   `HF_HUB_OFFLINE=1` and refuses if any file differs. For the primary, the harness asserts
-  that the `auto_map` code resolves into the pinned code snapshot and not into `main`.
+  that the `auto_map` code resolves into the pinned code snapshot and not into `main`, and
+  loads the model from its local pinned snapshot directory and never by repository id: the
+  primary's `encode()` and `__init__` call `AutoTokenizer.from_pretrained(config._name_or_path)`
+  (`modeling_bert.py` lines 1063 to 1065 and 1124 to 1126), which would fetch the tokenizer
+  from the repository's `main` unless `_name_or_path` is that local directory.
 - **Remote code, stated exactly.** The primary needs the two files of its code repository
   (`modeling_bert.py`, 2,312 lines; `configuration_bert.py`, 177 lines), whose card declares no
   license while the file headers carry the Apache-2.0 notice; the model repository declares
   apache-2.0. `BAAI/bge-code-v1`
   needs one in-repo tokenizer file, `tokenization_qwen.py`, named in its tokenizer config. The
   other five arms need none. Both remote files are pinned and hashed like any other.
-- **What was scanned.** On 2026-11-12 the two code-repository files were read for imports and
-  scanned for these patterns: `requests`, `urllib`, `socket`, `subprocess`, `os.system`,
-  `eval(`, `exec(`, `pickle`, `__import__`, `importlib`, `open(`, `http`, `download`,
-  `getenv`, `environ`. They import only `torch`, `transformers`, `numpy` and the standard
-  library, and the only hit is the licence URL in a comment. That is a scan and not an audit;
-  it does not catch indirect or dynamic loading. `tokenization_qwen.py` is scanned the same way
-  before its first load, and a hit stops that arm.
+- **What was read.** On 2026-11-12 the two code-repository files were parsed with Python's
+  `ast` and the call sites below were read in place. Imports at module top level are `torch`,
+  `transformers`, `numpy` and the standard library (`collections`, `dataclasses`, `math`, `os`,
+  `typing`, `warnings`). `modeling_bert.py` also imports `torch.nn.functional`,
+  `tqdm.autonotebook`, `re`, `numpy` and `tensorflow` inside functions or guarded `try` blocks;
+  `tensorflow` appears only in `load_tf_weights_in_bert`, which loading from safetensors does
+  not call, and `tqdm` is optional. `configuration_bert.py` imports `optimum.exporters.onnx`
+  inside a guarded `try` and is optional. The harness refuses to run if `tensorflow` or
+  `optimum` is importable in the embedding environment, so those paths are not taken. The files
+  contain no network call, process call, string `eval` or `exec`, `open`, `pickle` or
+  `__import__`; the `getattr` calls read config or module attributes by fixed names, `self.eval()`
+  is `nn.Module.eval`, and every URL is in a comment or docstring. The one runtime fetch is the
+  tokenizer load described above. A first regex pass reported a single comment hit and was
+  defective (its trailing word boundary could not match `eval(`, and it saw only top-level
+  imports); this paragraph does not rest on it. This is a reading of the pinned files and not
+  an audit, and it does not exclude behaviour reachable through the libraries they call.
+  `tokenization_qwen.py` is read the same way before its first load, and a finding there is
+  triaged by reading before an arm is stopped.
 - **Weights.** Loads pass `use_safetensors=True` for every model except
   `microsoft/unixcoder-base`, which ships only `pytorch_model.bin` at its pinned revision. That
   arm loads through the `weights_only` path with the file's sha256 pinned; if that path is
@@ -348,7 +363,7 @@ the same equal-volume rule on its own similarities.
 | Model | License | Revision | Pooling |
 |---|---|---|---|
 | `jinaai/jina-code-embeddings-0.5b` (as pre-registered; bench only) | cc-by-nc-4.0 | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` | last token |
-| `jinaai/jina-code-embeddings-1.5b` (the strongest Jina code model, same family and recipe as the 0.5b; bench only) | cc-by-nc-4.0 | `39aeb4fb9b60f930934c78ae5d749a46287c248a` | last token |
+| `jinaai/jina-code-embeddings-1.5b` (the larger of the two jina-code models, same family and recipe as the 0.5b; bench only) | cc-by-nc-4.0 | `39aeb4fb9b60f930934c78ae5d749a46287c248a` | last token |
 | `Qwen/Qwen3-Embedding-0.6B` | apache-2.0 | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` | last token |
 | `Qwen/Qwen3-Embedding-8B` (the "would a much stronger embedder change the verdict" arm) | apache-2.0 | `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af` | last token |
 | `microsoft/unixcoder-base` (context 1,026 tokens, so long functions truncate; counts reported) | apache-2.0 | `5604afdc964f6c53782a6813140ade5216b99006` | mean over the attention mask |
@@ -358,24 +373,29 @@ The primary pools by mean, per its `1_Pooling` config. Pooling for the other mod
 in their `1_Pooling` config at the pinned revision, except UniXcoder, which has none: mean over
 the attention mask is chosen here and is this addendum's choice, not the model's published one.
 Licences, revisions and pooling configs were read from the Hugging Face API on 2026-11-12.
-Padding side and end-of-sequence handling come from the pinned tokenizer config, and the canary
-asserts that a text embedded alone and inside a mixed batch gives the same vector to 1e-5.
+Padding side is set explicitly to left for the last-token models, since the pinned tokenizer
+configs do not reliably carry it, and end-of-sequence handling comes from the pinned tokenizer.
+The canary asserts that a text embedded alone and inside a mixed batch gives the same vector
+to 1e-5.
 
 - **No instruction prefix, made operational.** Texts are tokenized verbatim. `prompt_name=None`
-  and `prompt=""` are passed explicitly, since the Qwen3, bge-code and jina-code configs ship
-  prompt defaults, and the canary asserts that no prompt text appears in the tokenized input
-  beyond the tokenizer's own special tokens. Two of the arms are instruction-aware, so a null
-  from them at this default is not evidence about instructed use.
+  and `prompt=""` are passed explicitly, since the Qwen3 and jina-code configs ship named
+  prompts (`bge-code-v1` ships none in its sentence-transformers config), and the canary asserts
+  that no prompt text appears in the tokenized input beyond the tokenizer's own special tokens.
+  Four of the six arms (both jina-code models and both Qwen3 models) ship named prompts, so a
+  null from them at this default is not evidence about instructed use.
 - **What an arm may and may not claim.** Arm results are labeled `sensitivity`. A pass or kill
   is computed only from the primary: no arm number appears in the verdict line, in the headline
   of the results or in the `docs/WHAT_DIDNT_WORK.md` entry's headline, and no arm enters the
   headline share, the TRUE-pool floor or the primary precision. All seven models, the primary and
   the six arms, are reported in one table, each with its interval. With seven models reported
-  in full, about one in seven will look best by chance, and the study makes no claim that any non-primary arm would or would not
-  pass. A kill is a kill for the primary at A's operating point. If a sensitivity arm would
-  have cleared the bars, the results say so and recommend a new pre-registration instead of
-  closing the line.
-- **What an arm reports.** Its precision over its labeled pairs with an interval, its realised
+  in full, roughly one in seven will look best by chance (the arms are correlated, so this is
+  approximate), and the study makes no claim that any non-primary arm would or would not pass.
+  A kill is a kill for the primary at A's operating point. If an arm's precision interval lies
+  wholly above 0.60, the results note it as a hypothesis for a new pre-registration; it is not a
+  pass, it does not change the primary verdict, and no share is computed for it.
+- **What an arm reports.** Its precision over its arm-only labeled pairs (below) with an
+  interval, which is not comparable to the primary's precision and is labeled so in the table, its realised
   volume next to A's and the primary's, its truncation counts and whether its calibration
   reached the target. It reports no share and no verdict, since "found by" needs the full
   pooled labeling that only the primary gets. Cutoffs are not comparable across arms, since
@@ -389,7 +409,8 @@ primary's cap of 300 in "Sample" is unchanged and is drawn first.
 - Arm pairs are drawn only after the primary draw is fixed, from pairs outside the full
   pre-draw primary pool (A's pairs and the primary's B pairs, whether or not the 300-pair draw
   kept them). They never enter the primary pool, the headline share, the TRUE-pool floor or the
-  primary precision. An arm pair that is already in the labeled primary pool uses that label.
+  primary precision. Arm precision is therefore measured over arm-only pairs, excluding pairs
+  shared with A or the primary.
 - Each arm draws at most 100 pairs independently with `random.Random(587)` over sorted pair
   ids. The union is labeled once under the same rubric and packet format, and packets carry no
   arm tag. Six arms of 100 is a ceiling of 600 only when no pair is shared; the cap binds only
@@ -398,7 +419,8 @@ primary's cap of 300 in "Sample" is unchanged and is drawn first.
 **Numerics and what is recorded**
 
 - All embeddings come from one CUDA GPU host with one fixed dtype (float32), TF32 matmul
-  disabled, `torch.use_deterministic_algorithms` set and recorded, one fixed batch size, and
+  disabled, `torch.use_deterministic_algorithms` set with `CUBLAS_WORKSPACE_CONFIG` (which CUDA
+  requires for it) and both recorded, one fixed batch size, and
   batches ordered by token length then pair id. The 8B arm needs at least 48 GB of GPU memory
   at float32; if that is unavailable the arm is not run, not run at another dtype.
 - Vectors from different devices, dtypes, batch sizes or library versions are never merged, and
@@ -419,7 +441,8 @@ primary's cap of 300 in "Sample" is unchanged and is drawn first.
   the returned vectors. No definition changes.
 - The PR-clustered bootstrap for pair precision uses 2,000 resamples and seed 587, as in
   `bench/embedding_oracle_stats.py` (#973). M, the cutoffs and the capped A target are still to
-  be fixed in the post-pilot addendum.
+  be fixed in the post-pilot addendum of "Process, in order" step 4. The model revisions are
+  fixed here, and that addendum does not fix them.
 - A fine-tuned model is not part of this study. Using one needs its own dated addendum before
   its weights are used, with training data disjoint from every repository in this study's
   sample and never the study's labels.
