@@ -1,0 +1,50 @@
+hold on round 3
+
+---
+
+PR merged
+
+---
+
+lets either close out 467 or work on it so that we can close it out
+
+---
+
+smithery is closed
+
+---
+
+Smithery's MCP Proxy and managed identity shut down on October 31
+On October 31, 2026, we're shutting down Smithery's connection management services. Smithery will remain as a public (non-proxied) MCP registry.
+
+Here's what that means for you:
+
+What stays
+smithery.ai, as a public directory of MCP servers, now powered by Arcade.dev
+A curated set of verified servers, whose registry pages will show direct MCP URLs (e.g. mcp.linear.app/mcp instead of linear.run.tools or server.smithery.ai/linear).
+What stops working on October 31
+Server URLs on run.tools and server.smithery.ai
+Smithery API, Connect, and Toolbox
+Smithery accounts and API keys
+The Smithery CLI and SDKs. We'll mark the current versions as deprecated.
+What to do before then
+Using a server yourself? Switch to the vendor's official MCP URL. Smithery URLs stop working on October 31, and connecting through Smithery won't be possible after that. You can find the official URL on the server's page on smithery.ai.
+Want out-of-the-box MCPs like Gmail or Slack? That's what we build at Arcade.
+Managing MCP connections for your own users? You'll need a replacement before October 31. I'm happy to help you figure out the right one, even if it isn't Arcade.
+If you're on a paid plan
+We're refunding every charge since August 5 and cancelling your subscription going forward. You won't be charged again. Refunds usually show up within 5–10 business days.
+
+If you want to talk through your setup or your migration, reach me at ani [at] smithery [dot] ai.
+
+Thank you for building with Smithery. It meant a lot to us.
+
+Anirudh Kamath
+Cofounder, Smithery (now part of Arcade)
+
+---
+
+close it out
+
+---
+
+lets work on 586 next

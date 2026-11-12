@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "62c6e5d2b9a5",
+  "strategy": "manual-commit",
+  "branch": "alee/smithery-shutdown-467",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "docs/MCP_DIRECTORIES.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/62/c6e5d2b9a5/0/metadata.json",
+      "transcript": "/62/c6e5d2b9a5/0/full.jsonl",
+      "content_hash": "/62/c6e5d2b9a5/0/content_hash.txt",
+      "prompt": "/62/c6e5d2b9a5/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 14060,
+    "cache_read_tokens": 1790818,
+    "output_tokens": 6168,
+    "api_call_count": 13
+  }
+}

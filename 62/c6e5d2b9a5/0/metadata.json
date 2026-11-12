@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "62c6e5d2b9a5",
+  "session_id": "9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-12T19:36:29.488377Z",
+  "branch": "alee/smithery-shutdown-467",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "docs/MCP_DIRECTORIES.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "b7781d5be76f",
+  "checkpoint_transcript_start": 501,
+  "transcript_lines_at_start": 501,
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 14060,
+    "cache_read_tokens": 1790818,
+    "output_tokens": 6168,
+    "api_call_count": 13
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01LE7pzEQNf3TsyYvjvR3SD9",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "b7781d5be76f",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 177,
+        "end": 178,
+        "entry_ids": [
+          "4a9d91c0-5d83-48b4-9f63-ed73e9dd96f6"
+        ],
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 12
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-12T19:36:29.44572Z",
+    "agent_lines": 0,
+    "agent_removed": 3,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 6,
+    "total_committed": 2,
+    "total_lines_changed": 9,
+    "agent_percentage": 33.33333333333333,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 94,
+      "user_lines_removed": 6,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "bench/diff_duplicates_precision.jsonl": 87,
+        "docs/MCP_DIRECTORIES.md": 7
+      },
+      "user_removed_per_file": {
+        "docs/MCP_DIRECTORIES.md": 6
+      }
+    }
+  ]
+}
