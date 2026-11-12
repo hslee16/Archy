@@ -124,7 +124,17 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
     """Compose conventions, coverage and (optionally) contracts, as `archy brief` does."""
     if top_n < 1:
         raise ValueError(f"top_n must be >= 1; got {top_n}")
-    report = compute_conventions(path, **graph_kwargs(path), include_tests=include_tests)
+    try:
+        kwargs = graph_kwargs(path)
+    except LayerConfigError:
+        # A malformed archy.yaml must not replace the whole briefing with that
+        # one error (#929): the conventions census does not need the layer
+        # config, so it runs on the default scan arguments, and
+        # `_brief_coverage` below reports the same error as the reason
+        # coverage is absent. Until this catch existed, that handler was
+        # unreachable for exactly the failure it was written for.
+        kwargs = {}
+    report = compute_conventions(path, **kwargs, include_tests=include_tests)
 
     config, coverage, coverage_error = _brief_coverage(path)
 
