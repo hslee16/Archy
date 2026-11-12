@@ -1,0 +1,230 @@
+<task-notification>
+<task-id>a24089c094d813d68</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a24089c094d813d68.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review found no em dashes (U+2014) in `/Users/hosanglee/archy/docs/research/EMBEDDING_ORACLE_RECALL.md`. A grep for the character returned no matches. I marked the review as passed.</result>
+<usage><subagent_tokens>18721</subagent_tokens><tool_uses>3</tool_uses><duration_ms>7826</duration_ms></usage>
+</task-notification>
+
+---
+
+is jina v2 still actively worked on?
+
+---
+
+<task-notification>
+<task-id>a3e672728aad01bcf</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a3e672728aad01bcf.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+The branch's only change against `main` is the addendum in `/Users/hosanglee/archy/docs/research/EMBEDDING_ORACLE_RECALL.md`. No `src/archy/` file or `pyproject.toml` changed, so nothing in the source invalidates the doc.
+
+I checked the one number that mirrors code. The addendum says the bootstrap uses 2,000 resamples and seed 587. `BOOTSTRAP_RESAMPLES = 2000` and `BOOTSTRAP_SEED = 587` in `/Users/hosanglee/archy/bench/embedding_oracle_stats.py` match.
+
+I did not verify the Hugging Face revisions, licences or file hashes the addendum records.</result>
+<usage><subagent_tokens>33641</subagent_tokens><tool_uses>5</tool_uses><duration_ms>13818</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aa5fdd09280a46098</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/aa5fdd09280a46098.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial addendum review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The addendum has one blocking error and several edits to make before merge. I read the addendum against the Sample, Cutoff and Thresholds sections, read the four harness files, and checked the Hugging Face API for the models. The revisions are all 40-hex and match the API's current `sha`. The licences match. The `jina-bert-v2-qk-post-norm` last-modified date matches. The 2,000 resamples and seed 587 match `bench/embedding_oracle_stats.py`. I did not check the 2,312 and 177 line counts.
+
+## Ranked findings
+
+**1. Blocks merge. The safetensors rule cannot be met for UniXcoder.**
+- Quote: "Loads pass `use_safetensors=True`, so no pickle is ever deserialised."
+- Failure: `microsoft/unixcoder-base` at the pinned revision ships only `pytorch_model.bin`. The loader will error. The likely workaround is to drop the flag for that arm, which silently reintroduces pickle deserialisation, or to convert the weights. Either one falsifies "no pickle is ever deserialised" or leaves the pinned revision unused. The addendum also calls itself the only record of pins.
+- Wording: "Loads pass `use_safetensors=True` for every model except `microsoft/unixcoder-base`, which ships only `pytorch_model.bin` at its pinned revision. That arm is loaded with `torch.load(weights_only=True)` and the file's sha256 is pinned and checked. Or drop that arm."
+
+**2. Edit before merge. "Published pooling" is undefined for UniXcoder.**
+- Quote: "with the model's published pooling at the pinned revision".
+- Failure: `unixcoder-base` has no `1_Pooling/config.json` and no sentence-transformers modules. Its card uses a custom wrapper (mean pooling with attention mask). Two implementers will pick CLS, mean, or the card wrapper. The other four are determinable: Jina v2 uses mean pooling, and the Qwen and bge-code models use last-token pooling, per their `1_Pooling` configs.
+- Last-token pooling also depends on padding side and on whether EOS is appended. The addendum pins neither. A last-token pooler with the wrong padding side gives different vectors.
+- Wording: "Pooling per model: jina-v2-base-code mean; jina-code-0.5b, Qwen3-0.6B, Qwen3-8B and bge-code last-token with the pinned tokenizer's own EOS handling; UniXcoder mean over the attention mask. Padding side and EOS handling are set by the pinned tokenizer config and asserted by the canary."
+
+**3. Edit before merge. "No instruction prefix" is a load-time default that has to be switched off.**
+- Quote: "run with no instruction prefix on either side".
+- Failure: the Qwen3 and bge-code configs ship sentence-transformers prompt defaults. A default `encode()` may or may not apply a prompt, depending on the `prompt_name` default. The jina-code-0.5b card's usage expects task prefixes. "No prefix" is easy to violate by accident.
+- Wording: "Texts are tokenized verbatim. `prompt_name=None` and `prompt=''` are passed explicitly. The canary asserts that the tokenized ids equal the ids of the raw text."
+
+**4. Edit before merge. "Never decisive" is not operational, and there are six arms to report in full.**
+- Quote: "reported and never decisive", "none able to change the verdict".
+- Failure: the arms include an 8B model, and an arm with a good number invites promotion. The addendum never says that the arms stay out of the headline share and the primary precision. The headline and verdict never read arm pairs, but that is only implied, not stated.
+- Wording: "Arm results are labeled `sensitivity`. No arm number appears in the verdict line, the abstract or the WHAT_DIDNT_WORK entry headline. A pass or kill is computed only from the primary arm. All six arms are reported in one table with their Wilson or bootstrap intervals. The study makes no claim that any non-primary arm would or would not pass. A reading such as 'an embedder at A's operating point works' needs a new pre-registration."
+- Also add the multiplicity note: six arms means roughly one in six will look best by chance.
+
+**5. Edit before merge. The labeling budget conflicts with "Sample" and is partly undefined.**
+- Quote: "This replaces the single cap of 100 in 'Sample'."
+- Failure: "Sample" contains no cap of 100. It contains the 300-pair primary cap. The 100 lives in the "Sensitivity model" bullet under Generators, so the cross-reference is wrong. "Pooled labeling" only blinds labelers to the primary pool.
+- Leak and pooling gaps:
+  - Arm pairs are labeled after the primary 300 are drawn, so they cannot enter the primary pool, the TRUE-pool floor or the headline share. Say so explicitly.
+  - The 100 per arm is "not already in the primary pool", but "primary pool" is ambiguous. It could mean the pre-draw pool (above 300) or only the 300 drawn. A pair in the pre-draw pool but outside the 300 would be a free arm pair or a leak into the labeled set.
+  - "A pair two arms share is labeled once" does not say which arm's 100 slots it consumes.
+  - 5 arms times 100 is 500, so the 500 total cap is a no-op unless sharing reduces it. State whether the cap binds and how.
+  - When two arms share a pair, one label serves both. Say whether each arm's 100 are drawn independently and then unioned.
+- The labeler blindness covers generator and arm identity, but shared packets could carry arm tags. Say they do not.
+- Wording: "Arm pairs are drawn only from pairs outside the full pre-draw primary pool (A pairs, primary-B pairs and any sensitivity pairs), after the 300-pair primary draw is fixed. They never enter the headline share, the TRUE-pool floor or the primary precision. Each arm draws independently with `Random(587)` over sorted pair ids. The union is labeled once. Packets carry no arm tag."
+- Also note that arm precision is measured over at most 100 pairs per arm, not a full labeled pool, so it is a weak estimate. The arm's "found by" figures cannot be computed on the arm's own pairs, and the addendum should say which arm statistics are reported.
+
+**6. Edit before merge. The pin policy has holes.**
+- Quote: "the harness records their sha256 and refuses to load if either differs".
+- Failure: the `jina-bert-v2-qk-post-norm` code is pinned and hashed, which covers its two `.py` files. It does not cover the tokenizer and config files, or the model repo's `config.json`. The model repo's `config.json` is the file that carries `auto_map`.
+- Also uncovered:
+  - `trust_remote_code` loaders fetch from the Hub at load time unless revision is passed for both repos. Passing `revision=` to the model repo does not, in all `transformers` versions, pin the repo referenced by `auto_map`. The reference is parsed as `repo--file`, and some versions default to `main`.
+  - `bge-code-v1` ships `tokenization_qwen.py`, so the claim "None of the five needs remote code" is unverified for it. Its `config.json` has no `auto_map`, but its tokenizer config may. Either confirm and state it, or pin and hash that file too.
+  - `jina-code-embeddings-0.5b` lacks `tokenizer_config.json` and `tokenizer.json`, so tokenizer loading is underspecified for that arm.
+  - The model repos ship `onnx/` and `pytorch_model.bin` siblings. With `use_safetensors=True` they are ignored, but nothing says to restrict which files are downloaded.
+- Wording: "Every load uses `HF_HUB_OFFLINE=1` after a snapshot download of the pinned revision with an allow-list of file patterns. Every file in each snapshot, including config, tokenizer and `.py` files, is sha256-recorded, and the harness refuses to load if any file differs. For the primary, `auto_map` resolution is asserted to read the pinned code snapshot."
+- Describing the scan as "a scan and not a full audit" is fair. The grep patterns should be named, and whether the scan covered both `.py` files should be stated. A scan of 2,312 lines for `eval`, `exec` and `pickle` will not catch indirect `importlib`, `getattr` or dynamic-loading paths. Add `importlib`, `__import__`, `subprocess`, `os.system`, `socket`, `urllib`, `requests` and `torch.load` to the named list.
+
+**7. Edit before merge. The numerics claim is not reproducible as written, and it is in tension with the pre-registration.**
+- Quote: "The results name the hardware only as 'a single CUDA GPU host'."
+- Failure: the pre-registration says "the results quote the model id and revision that each cached vector row carries", and the addendum says the cache key gains device, dtype and library versions. Naming the hardware only as a generic phrase means a reader cannot tell which GPU or driver produced the vectors. The cutoff is a threshold on a similarity, so the GPU, CUDA version and TF32 flag matter.
+- fp32 on a GPU is not deterministic by default. TF32 matmul, cuDNN autotuning and batch composition can change values at about 1e-6. With a hard threshold, pairs tied or near-tied at the cutoff can flip.
+- The 8B model at fp32 needs about 32 GB of weights plus activations. State a minimum GPU memory.
+- Wording: "The manifest records GPU model, driver and CUDA versions, `torch` version, `torch.backends.cuda.matmul.allow_tf32=False`, `torch.use_deterministic_algorithms` setting and the batch size. The results quote these. 'A single CUDA GPU host' is the public description only." Also say that a cutoff computed on those vectors is applied only to vectors from the same host, and that the canary asserts the same pair order across two batch sizes.
+
+**8. Note. "Sensitivity model gets its own cutoff" now means five calibrations.**
+- Each arm calibrates its own cutoff on the 40-PR calibration subset. That subset is already small, and the cutoff is noisy.
+- State that realised volume per arm is reported beside A's, and that an arm whose calibration cannot reach the target uses the lowest observed similarity (as the cutoff section already says).
+- Also say that an arm with a very different score scale, such as UniXcoder, which has short context and truncates, does not make cutoffs comparable across arms.
+
+**9. Note. A smaller wording issue in the claims.**
+- "The primary is unchanged ... makes this study carry no deviation in its primary instrument." This holds for the model identity but not for the loading configuration. The `use_safetensors=True`, offline, pinned-library and no-prefix settings are new constraints that were not in the pre-registration. They are tightenings and are fine, but "no deviation" overstates it. Suggest: "no change of model, thresholds or rubric".
+- "Last modified 2024-05-07" for the code repo is correct. The model repo itself was modified 2025-01-06, after the pre-registered check on 2026-10-28, so nothing in it changed since.
+
+## Areas that are sound
+- Revisions: all seven are 40-hex and equal to the API's current head.
+- Licences: jina-code-embeddings-0.5b is cc-by-nc-4.0, bench-only, and the other four are apache-2.0.
+- Threshold-side interaction: the verdict logic in `bench/embedding_oracle_score.py` reads only primary data, and the addendum leaves the thresholds, pair and unit definitions untouched.
+- Pipeline split: the text-in, vectors-out job on the GPU host, with scoring on the analysis machine, changes no definition.
+- Bootstrap constants match `bench/embedding_oracle_stats.py`.
+- The fine-tuned-model exclusion is clear.</result>
+<usage><subagent_tokens>68431</subagent_tokens><tool_uses>6</tool_uses><duration_ms>62124</duration_ms></usage>
+</task-notification>
+
+---
+
+if the jina v2 license is fine for our purposes, perhaps we should just stick with jina v2
+
+---
+
+lets search for an improved model from jina. Perhaps they released a new version?
+
+---
+
+lets go with your recommendaton. We can still use jina v2 as the comparison model
+
+---
+
+jina-code-embeddings-1.5b, the strongest Jina code model, as a sixth arm is also good too
+
+---
+
+<task-notification>
+<task-id>a0e49f61b223fa8cc</task-id>
+<tool-use-id>toolu_01TtEptzm5ksWBFyjqs884Pp</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a0e49f61b223fa8cc.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No findings. `/Users/hosanglee/archy/docs/research/EMBEDDING_ORACLE_RECALL.md` has no U+2014 characters (a grep for the character found none). I marked the review as passed.</result>
+<usage><subagent_tokens>18715</subagent_tokens><tool_uses>3</tool_uses><duration_ms>6993</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afd5ad7e63276563d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/afd5ad7e63276563d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review update_documents_relating_to_archy_package" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked the review as passed.
+
+The branch's diff against `main` touches only `docs/research/EMBEDDING_ORACLE_RECALL.md` (129 lines added, 1 removed). No files under `src/archy/` and no `pyproject.toml` changed, so no source change can have made a doc claim stale. I did not read the doc's contents or compare its numbers against the other listed docs.</result>
+<usage><subagent_tokens>22889</subagent_tokens><tool_uses>3</tool_uses><duration_ms>8484</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a34b63e491e1d67ca</task-id>
+<tool-use-id>toolu_01KLoAH31LxQERvkrX1rfEXu</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0/tasks/a34b63e491e1d67ca.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial addendum review round 2" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Review of the 2026-11-12 addendum, round 2. Nothing blocks merge. Four findings need an edit first, and the code scan claim is the most serious.
+
+**Edit before merge**
+
+1. **The code-scan result is false against the pinned snapshot.**
+   - Quote: "They import only `torch`, `transformers`, `numpy` and the standard library, and the only hit is the licence URL in a comment."
+   - I re-ran the listed regex on `jina-bert-v2-qk-post-norm` at `3baf9e3a`. The line counts match (2,312 and 177), but there are 12 hits, not 1.
+     - `modeling_bert.py` lines 10, 109, 683, 908, 922, 976, 979 and 1048: `http` in comments and docstrings.
+     - `modeling_bert.py` line 1128: `self.eval()`, which matches the `eval(` pattern.
+     - `configuration_bert.py` lines 10, 41, 78 and 80: `http` in comments and docstrings.
+   - The imports also include `os`, `re`, `tqdm.autonotebook`, `tensorflow` (inside a function at line 105) and `optimum.exporters.onnx` (in `configuration_bert.py` at line 26). None of these is in the claimed list.
+   - Scenario: a reader trusts a "clean" scan that was not clean. The `tokenization_qwen.py` rule, "a hit stops that arm", would also trip on any `http` comment.
+   - Fix: "The scan produced 12 hits, all triaged by reading: `http` in comments and docstrings, and `self.eval()`, which is `nn.Module.eval`. Imports beyond torch, transformers, numpy and the standard library are `os`, `re`, `tqdm.autonotebook`, and `tensorflow` and `optimum` behind lazy or optional guards (modeling_bert.py:105, configuration_bert.py:26); `tensorflow` and `optimum` are not installed on the GPU host. For `tokenization_qwen.py`, a hit is read and triaged before the arm is stopped." The line about `tensorflow` and `optimum` being absent from the host is a statement about the host, which I did not check. The harness should assert it, or the sentence should say what was actually done.
+
+2. **An arm "clearing the bars" is a verdict the arm cannot produce.**
+   - Quote: "It reports no share and no verdict" versus "If a sensitivity arm would have cleared the bars, the results say so and recommend a new pre-registration."
+   - The pass bar needs the 30% only-by-B share, which arms do not compute. An arm can at most clear the precision bar.
+   - Scenario: a post-hoc read says "the 1.5b arm passed", and that recommendation becomes an arm-driven action, the thing "never decisive" forbids.
+   - Fix: "If an arm's precision interval lies wholly above 0.60, the results note it as a hypothesis for a new pre-registration. It is not a pass, does not change the primary verdict, and the share is not computed."
+
+3. **The arm draw is biased and one sentence is dead.**
+   - Quote: "drawn only ... from pairs outside the full pre-draw primary pool" and "An arm pair that is already in the labeled primary pool uses that label."
+   - The second sentence can never fire, because arm pairs are drawn from outside that pool.
+   - The first creates a worse problem. Arm precision is measured only on pairs the primary and A did not emit. For arms that agree with the primary, that sample is made of the arm's unique, likely lower-precision pairs, yet the addendum compares it to the primary's precision "in one table".
+   - Fix: delete the dead sentence, or draw from all arm candidates and reuse existing labels. If the exclusion stays, state: "arm precision is over arm-only pairs, excludes pairs shared with A or the primary, and is not comparable to the primary's precision."
+
+4. **"Two of the arms are instruction-aware" is wrong.** Five arms are: jina-code 0.5b and 1.5b (both ship `*_query` and `*_document` prompts), Qwen3 0.6B and 8B (a "query" prompt), and bge-code-v1 (instruction-style usage). Separately, "the Qwen3, bge-code and jina-code configs ship prompt defaults" is not true of bge-code. Its `config_sentence_transformers.json` at the pin has `prompts: {}`. Fix: "five of the six arms are instruction-trained; bge-code ships no named prompts."
+
+**Note**
+
+5. Padding side is not in the tokenizer config for Qwen3, so it falls back to HF's default of right padding. `tokenizer_config.json` is absent at that path for the jina-code models. Last-token pooling depends on padding side, so "comes from the pinned tokenizer config" is unreliable. The mixed-batch canary would catch a wrong vector, but the addendum should state the explicit padding side (left) for the last-token models, rather than relying on the canary to find it.
+
+6. `torch.use_deterministic_algorithms` on CUDA needs `CUBLAS_WORKSPACE_CONFIG` set, or it raises. Record it with the other settings.
+
+7. "Every file of every snapshot is hashed" conflicts with the allow-list, since `onnx/` is excluded. Say "every fetched file".
+
+8. "The strongest Jina code model" for the 1.5b is an unverified claim. The Hugging Face API shows only the two jina-code sizes in this family, so say "the larger of the two".
+
+9. Process step 4 still lists "the model revisions" for the post-pilot addendum. Add: "revisions are fixed by the 2026-11-12 addendum".
+
+10. "One in seven will look best by chance" is the right idea, but the arms are correlated, so the estimate is approximate. Say "about".
+
+**Sound**
+- Arm count: six arms, seven models total, a 600-pair ceiling and "the other five need none" are all consistent. No stale "five" or "four" remains.
+- Revisions and licences: all 40-hex revisions match the HF API for the eight repositories checked. Licences match, including cc-by-nc-4.0 for both jina-code models, apache-2.0 for the others, and none declared for the code repository. The last-modified dates 2024-05-07 and 2025-01-06 also match.
+- Pooling: the `1_Pooling` configs match the table. Jina v2 is mean, all jina-code, Qwen and bge-code models are last token, and UniXcoder has none, which the addendum states.
+- Safetensors: only UniXcoder lacks a safetensors file. The `auto_map` cross-repo pin is correct. `tokenization_qwen.py` is the bge-code tokenizer remote code, named correctly.
+- Labeling-budget cross-reference: the "Sensitivity model" bullet under "Generators" holds the "at most 100 pairs" sentence.
+- Primary verdict independence: the addendum keeps the primary's verdict, the headline share and the TRUE-pool and scorable floors away from arm numbers.
+- Cache key: the cache-key extension is consistent with the body. The body never required recording the device, so withholding the GPU model contradicts nothing.
+- Process timing: M and the cutoffs remain deferred, as step 4 says.
+- Em dashes: none in the diff.</result>
+<usage><subagent_tokens>70791</subagent_tokens><tool_uses>7</tool_uses><duration_ms>72345</duration_ms></usage>
+</task-notification>
+
+---
+
+merge when CI is green and reviews are done
