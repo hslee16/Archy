@@ -303,63 +303,127 @@ All of AGENTS.md "Measurement and benches" applies. In particular:
 
 Thresholds, the pair and unit definitions, the rubric, the cap, the cutoff rule and the
 strict reading are unchanged. The primary model is unchanged: it stays
-`jinaai/jina-embeddings-v2-base-code`. What this addendum fixes, all before the first
-embedding exists:
+`jinaai/jina-embeddings-v2-base-code`. This addendum makes no change of model, thresholds or
+rubric; it adds loading constraints that the pre-registration did not state, all fixed before
+the first embedding exists.
 
-- **Pins, including the code that runs.** The primary needs `trust_remote_code`, and its
-  `auto_map` points at a second repository, `jinaai/jina-bert-v2-qk-post-norm`, so pinning the
-  model repository alone would not pin what executes. Both are pinned by commit:
-  `jinaai/jina-embeddings-v2-base-code` at `516f4baf13dec4ddddda8631e019b5737c8bc250` and
-  `jinaai/jina-bert-v2-qk-post-norm` at `3baf9e3ac750e76e8edd3019170176884695fb94` (last
-  modified 2024-05-07). The code repository holds two files, `modeling_bert.py` (2,312 lines)
-  and `configuration_bert.py` (177 lines), and the harness records their sha256 and refuses to
-  load if either differs. The files were read for imports and scanned for network, process,
-  `eval`, `exec` and pickle use on 2026-11-12: they import only `torch`, `transformers`,
-  `numpy` and the standard library, and the scan found none of those patterns. That is a scan
-  and not a full audit, and it is stated as such.
-- **Safetensors only.** The model repository also ships a pickle-based `pytorch_model.bin`.
-  Loads pass `use_safetensors=True`, so no pickle is ever deserialised.
-- **Library versions are pinned and recorded.** Remote modeling code written in 2024 can fail
-  on a newer `transformers`. The versions of `transformers`, `torch` and `sentence-transformers`
-  that load it are fixed by the canary and recorded in every manifest row. Models run offline
-  after the first fetch.
-- **Sensitivity arms, reported and never decisive.** The pre-registration names one sensitivity
-  model; it is extended to five, each calibrated by the same equal-volume rule on its own
-  similarities, none able to change the verdict:
+**Pins, including the code that runs**
 
-  | Model | License | Revision |
-  |---|---|---|
-  | `jinaai/jina-code-embeddings-0.5b` (as pre-registered; bench only) | cc-by-nc-4.0 | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` |
-  | `Qwen/Qwen3-Embedding-0.6B` | apache-2.0 | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` |
-  | `Qwen/Qwen3-Embedding-8B` (the "would a much stronger embedder change the verdict" arm) | apache-2.0 | `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af` |
-  | `microsoft/unixcoder-base` (context 1,026 tokens, so long functions truncate; counts reported) | apache-2.0 | `5604afdc964f6c53782a6813140ade5216b99006` |
-  | `BAAI/bge-code-v1` | apache-2.0 | `bd67852057c5d7ddcc7b8234d9d6c410117ed851` |
+- The primary needs `trust_remote_code`, and its `auto_map` points at a second repository,
+  `jinaai/jina-bert-v2-qk-post-norm`, so pinning the model repository alone would not pin what
+  executes. Both are pinned by commit: `jinaai/jina-embeddings-v2-base-code` at
+  `516f4baf13dec4ddddda8631e019b5737c8bc250` and `jinaai/jina-bert-v2-qk-post-norm` at
+  `3baf9e3ac750e76e8edd3019170176884695fb94` (last modified 2024-05-07).
+- **Every file of every snapshot is hashed.** Each model is fetched once as a snapshot of its
+  pinned revision with an allow-list of file patterns (weights, configs, tokenizer files and
+  `.py` files; no `onnx/`), every file's sha256 is recorded, and every later load runs with
+  `HF_HUB_OFFLINE=1` and refuses if any file differs. For the primary, the harness asserts
+  that the `auto_map` code resolves into the pinned code snapshot and not into `main`.
+- **Remote code, stated exactly.** The primary needs the two files of its code repository
+  (`modeling_bert.py`, 2,312 lines; `configuration_bert.py`, 177 lines), whose card declares no
+  license while the file headers carry the Apache-2.0 notice; the model repository declares
+  apache-2.0. `BAAI/bge-code-v1`
+  needs one in-repo tokenizer file, `tokenization_qwen.py`, named in its tokenizer config. The
+  other four arms need none. Both remote files are pinned and hashed like any other.
+- **What was scanned.** On 2026-11-12 the two code-repository files were read for imports and
+  scanned for these patterns: `requests`, `urllib`, `socket`, `subprocess`, `os.system`,
+  `eval(`, `exec(`, `pickle`, `__import__`, `importlib`, `open(`, `http`, `download`,
+  `getenv`, `environ`. They import only `torch`, `transformers`, `numpy` and the standard
+  library, and the only hit is the licence URL in a comment. That is a scan and not an audit;
+  it does not catch indirect or dynamic loading. `tokenization_qwen.py` is scanned the same way
+  before its first load, and a hit stops that arm.
+- **Weights.** Loads pass `use_safetensors=True` for every model except
+  `microsoft/unixcoder-base`, which ships only `pytorch_model.bin` at its pinned revision. That
+  arm loads through the `weights_only` path with the file's sha256 pinned; if that path is
+  unavailable the arm is dropped, never loaded with pickle deserialisation enabled.
+- **Library versions** (`transformers`, `torch`, `sentence-transformers`) are fixed by the
+  canary and recorded in every manifest row. Remote modeling code written in 2024 can fail on a
+  newer `transformers`, and a version that loads it is part of the pin.
 
-  Licences and revisions were read from the Hugging Face API on 2026-11-12. None of the five
-  needs remote code. Every arm, the primary included, is run with no instruction prefix on
-  either side and with the model's published pooling at the pinned revision, then
-  L2-normalised. Two of them (the Qwen and bge-code families) are instruction-aware, so a null
+**Sensitivity arms, reported and never decisive**
+
+The pre-registration names one sensitivity model; it is extended to five. Each is calibrated by
+the same equal-volume rule on its own similarities.
+
+| Model | License | Revision | Pooling |
+|---|---|---|---|
+| `jinaai/jina-code-embeddings-0.5b` (as pre-registered; bench only) | cc-by-nc-4.0 | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` | last token |
+| `Qwen/Qwen3-Embedding-0.6B` | apache-2.0 | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` | last token |
+| `Qwen/Qwen3-Embedding-8B` (the "would a much stronger embedder change the verdict" arm) | apache-2.0 | `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af` | last token |
+| `microsoft/unixcoder-base` (context 1,026 tokens, so long functions truncate; counts reported) | apache-2.0 | `5604afdc964f6c53782a6813140ade5216b99006` | mean over the attention mask |
+| `BAAI/bge-code-v1` | apache-2.0 | `bd67852057c5d7ddcc7b8234d9d6c410117ed851` | last token |
+
+The primary pools by mean, per its `1_Pooling` config. Pooling for the other models is the one
+in their `1_Pooling` config at the pinned revision, except UniXcoder, which has none: mean over
+the attention mask is chosen here and is this addendum's choice, not the model's published one.
+Licences, revisions and pooling configs were read from the Hugging Face API on 2026-11-12.
+Padding side and end-of-sequence handling come from the pinned tokenizer config, and the canary
+asserts that a text embedded alone and inside a mixed batch gives the same vector to 1e-5.
+
+- **No instruction prefix, made operational.** Texts are tokenized verbatim. `prompt_name=None`
+  and `prompt=""` are passed explicitly, since the Qwen3, bge-code and jina-code configs ship
+  prompt defaults, and the canary asserts that no prompt text appears in the tokenized input
+  beyond the tokenizer's own special tokens. Two of the arms are instruction-aware, so a null
   from them at this default is not evidence about instructed use.
-- **Labeling budget for the arms.** The sensitivity pass labels at most 100 pairs per arm that
-  are not already in the primary pool, drawn with seed 587 over pair ids alone before any
-  packet is built. A pair two arms share is labeled once, and the pass is capped at 500 pairs
-  in total. This replaces the single cap of 100 in "Sample".
-- **Numerics.** All embeddings come from one CUDA GPU host with one fixed dtype (float32) and
-  one fixed device, with batches ordered by token length then pair id. Vectors from different
-  devices or dtypes are never merged: the cutoff is a threshold on cosine similarity, and
-  mixed numerics can move a pair across it. The cache key gains the device, the dtype and the
-  library versions. The results name the hardware only as "a single CUDA GPU host".
-- **Pipeline split, no change to any definition.** Function texts are extracted on the
-  analysis machine with archy's own parser and keyed by the sha256 of the normalised text. The
-  embedding is a text-in, vectors-out job on the GPU host, with a manifest per shard. Top-1
-  cosine, the cutoff and all scoring run on the analysis machine, from the returned vectors.
-- **Bootstrap constants.** The PR-clustered bootstrap for pair precision uses 2,000 resamples
-  and seed 587, as in `bench/embedding_oracle_stats.py` (#973). The remaining post-pilot
-  quantities (M, the cutoffs, the capped A target) are still to be fixed in the post-pilot
-  addendum.
-- **A fine-tuned model is not part of this study.** Using one would need its own dated
-  addendum before its weights are used, with training data disjoint from every repository in
-  this study's sample and never the study's labels.
-- **How the primary was kept.** It was pre-registered before anything ran, and keeping it
-  makes this study carry no deviation in its primary instrument. The cost accepted is the
-  remote-code pin above, and the canary still has to pass for it before any real run.
+- **What an arm may and may not claim.** Arm results are labeled `sensitivity`. A pass or kill
+  is computed only from the primary: no arm number appears in the verdict line, in the headline
+  of the results or in the `docs/WHAT_DIDNT_WORK.md` entry's headline, and no arm enters the
+  headline share, the TRUE-pool floor or the primary precision. All six models are reported in
+  one table, each with its interval. With six models reported in full, about one in six will
+  look best by chance, and the study makes no claim that any non-primary arm would or would not
+  pass. A kill is a kill for the primary at A's operating point. If a sensitivity arm would
+  have cleared the bars, the results say so and recommend a new pre-registration instead of
+  closing the line.
+- **What an arm reports.** Its precision over its labeled pairs with an interval, its realised
+  volume next to A's and the primary's, its truncation counts and whether its calibration
+  reached the target. It reports no share and no verdict, since "found by" needs the full
+  pooled labeling that only the primary gets. Cutoffs are not comparable across arms, since
+  score scales differ.
+
+**Labeling budget for the arms**
+
+This replaces the cap of 100 pairs in the "Sensitivity model" bullet under "Generators"; the
+primary's cap of 300 in "Sample" is unchanged and is drawn first.
+
+- Arm pairs are drawn only after the primary draw is fixed, from pairs outside the full
+  pre-draw primary pool (A's pairs and the primary's B pairs, whether or not the 300-pair draw
+  kept them). They never enter the primary pool, the headline share, the TRUE-pool floor or the
+  primary precision. An arm pair that is already in the labeled primary pool uses that label.
+- Each arm draws at most 100 pairs independently with `random.Random(587)` over sorted pair
+  ids. The union is labeled once under the same rubric and packet format, and packets carry no
+  arm tag. Five arms of 100 is a ceiling of 500 only when no pair is shared; the cap binds only
+  then.
+
+**Numerics and what is recorded**
+
+- All embeddings come from one CUDA GPU host with one fixed dtype (float32), TF32 matmul
+  disabled, `torch.use_deterministic_algorithms` set and recorded, one fixed batch size, and
+  batches ordered by token length then pair id. The 8B arm needs at least 48 GB of GPU memory
+  at float32; if that is unavailable the arm is not run, not run at another dtype.
+- Vectors from different devices, dtypes, batch sizes or library versions are never merged, and
+  a cutoff is applied only to vectors from the configuration that calibrated it, because a
+  threshold on similarity can flip a pair that mixed numerics move. The cache key gains the
+  device, dtype, batch size and library versions, and the canary asserts the same pair order at
+  two batch sizes.
+- The results quote the model revisions, `torch` and `transformers` versions, CUDA version,
+  dtype, the TF32 and determinism settings and the batch size. They describe the machine only
+  as "a single CUDA GPU host" and do not name the GPU model, which a private manifest records.
+  That withholds one reproducibility detail, and the results say so.
+
+**Pipeline and the rest**
+
+- Function texts are extracted on the analysis machine with archy's own parser and keyed by the
+  sha256 of the normalised text. Embedding is a text-in, vectors-out job on the GPU host with a
+  manifest per shard. Top-1 cosine, the cutoff and all scoring run on the analysis machine from
+  the returned vectors. No definition changes.
+- The PR-clustered bootstrap for pair precision uses 2,000 resamples and seed 587, as in
+  `bench/embedding_oracle_stats.py` (#973). M, the cutoffs and the capped A target are still to
+  be fixed in the post-pilot addendum.
+- A fine-tuned model is not part of this study. Using one needs its own dated addendum before
+  its weights are used, with training data disjoint from every repository in this study's
+  sample and never the study's labels.
+- **Why the primary stays.** It was pre-registered before anything ran, and keeping it means
+  the study's instrument was not chosen after seeing anything. The cost accepted is the remote
+  code above, and the canary still has to pass for it before any real run. The model repository
+  was last modified on 2025-01-06 and the organisation's newer models are different families,
+  so the pin is also the guarantee that it does not change under the study.
