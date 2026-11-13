@@ -205,7 +205,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 
 **Free, MIT licensed, no commercial version planned.** One maintainer, Python only. Built by [Alex Lee](https://github.com/hslee16/Archy).
 
-**Status:** v0.55.1, working, installed and maintained. Usable today via:
+**Status:** v0.55.2, working, installed and maintained. Usable today via:
 
 | Mode | Command |
 |---|---|
@@ -216,7 +216,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 | Trended score | `archy score --record` + `archy trend` |
 | Refactor priority | `archy hotspots` (CC x git churn), `archy what-to-refactor-next` (fused hotspots + edit-risk) |
 | Duplicate detection | `archy duplicates` (two-tier: likely duplicates vs demoted variants - same-class/boilerplate/test/vendored; advisory, not a score axis) |
-| House style | `archy conventions` (naming families by home module, kind families by transitive base, `NAME = Ctor(...)` registries, mirrored surfaces, a gate inventory kept separate from user-error exits, model census, and the members a project's own `__all__` or docs leave out - derived from the source, so an agent stops guessing conventions; advisory, exits 0 on a successful report, and `--module NAME` switches to a complete, unranked lookup on one module - what it imports, what imports it, and whether it was set aside - which answers a negative the ranked report cannot; `--emit-headers` derives a per-module block (what it owns, what mirrors it, whether a finding here gates) from that same report and prints it, `--write` puts it in the module docstring, and `--check` exits 1 when one is stale) |
+| House style | `archy conventions` (naming families by home module, kind families by transitive base, `NAME = Ctor(...)` registries, mirrored surfaces, a gate inventory kept separate from user-error exits, model census, and the members a project's own `__all__` or docs leave out - derived from the source, so an agent stops guessing conventions; advisory, exits 0 on a successful report, and `--module NAME` switches to a complete, unranked lookup on one module - what it imports, what imports it, and whether it was set aside - which answers a negative the ranked report cannot; `--emit-headers` derives a per-module block (what it owns, what mirrors it, whether a finding here gates) from that same report and prints it, `--write` puts it in the module docstring (exiting 1 and naming any module whose docstring cannot hold it), and `--check` exits 1 when one is stale) |
 | Change coupling | `archy coupling` (module pairs that co-change in git history but share no import/call edge - hidden dependencies; source-only, advisory) |
 | CI impact lookup | `archy affected` (`git diff` -> impacted modules + tests, depth-capped) |
 | Human-facing export | `archy render --view dsm\|trend` (one self-contained HTML file: no JS, no CDN, offline, byte-stable) |
@@ -543,7 +543,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 archy ships a composite action you can drop into any workflow:
 
 ```yaml
-- uses: hslee16/archy@v0.55.1
+- uses: hslee16/archy@v0.55.2
   with:
     command: score      # score | check | cycles | diff | history
     path: .
@@ -573,7 +573,7 @@ Add to `.pre-commit-config.yaml`:
 ```yaml
 repos:
   - repo: https://github.com/hslee16/archy
-    rev: v0.55.1
+    rev: v0.55.2
     hooks:
       - id: archy-check          # layer rules from archy.yaml
       - id: archy-score-strict   # regression gate against last recorded score
@@ -690,6 +690,17 @@ roots:
 ```
 
 A root names the package directory itself, not the directory that contains it: `src/service` makes `service.db`, while `src` would name `src.service.db`. This is the opposite of how `PYTHONPATH` entries work.
+
+In a uv workspace several distributions contribute to one namespace, so every directory that is named like the import needs a root, and the parent `src` directories are the wrong answer:
+
+```yaml
+roots: [packages/core/src]   # wrong: modules become `src.acme.core.*`, silently
+roots:                       # right: modules become `acme.core.*` and `acme.web.*`
+  - packages/core/src/acme
+  - packages/web/src/acme
+```
+
+When a scanned module imports a top-level name that is a directory with no `__init__.py` holding scanned packages, `cycles`, `score` and `check` (text, JSON and the MCP tools) print a warning naming the directories to set. Without it, a cycle between `acme.core` and `acme.web` is invisible and the result reads as clean. It is a warning, not a failure, and archy does not guess the roots for you.
 
 Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
 

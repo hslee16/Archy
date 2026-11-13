@@ -41,6 +41,7 @@ from archy.conventions import ConventionsReport
 from archy.cycles import Cycle
 from archy.duplicates import DuplicateGroup
 from archy.graph import UnresolvedHint
+from archy.graph_namespace import NamespaceGap
 from archy.layers import (
     LayerCoverage,
     ReachViolation,
@@ -79,6 +80,9 @@ class ScorePayload(BaseModel):
     components: ScoreComponents
     inputs: ScoreInputs
     gate: ScoreGate | None = None
+    # Namespace directories the scan imports but `roots:` does not name (#586); a
+    # score over a graph that was never joined is not a clean one.
+    namespace_gaps: tuple[NamespaceGap, ...] = ()
 
     # computed_field, not @property: FastMCP sends model_dump(), which drops a
     # plain property, so a consumer would never see the reason (#523).
@@ -136,6 +140,9 @@ class CheckPayload(BaseModel):
     # its own output needs the reason, not just the verdict.
     presence_fails: bool = False
     min_layers_present: int | None = None
+    # Namespace directories imports point at that no root names (#586); passed=true
+    # next to one is a verdict over a graph that was never joined.
+    namespace_gaps: tuple[NamespaceGap, ...] = ()
     # Nested only when archy_check(contracts=True) additionally runs
     # import-linter (#268): the transitive contract results that used to be the
     # separate archy_contracts tool. None when contracts were not requested.

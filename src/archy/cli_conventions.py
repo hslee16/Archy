@@ -1,7 +1,7 @@
 """Commands that report a project's house style: `conventions`, `brief` and the headers.
 
 archy:owns        brief, conventions
-archy:gates       exit 1 (config:run.stale)
+archy:gates       exit 1 (config:run.errors)
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ from archy.layers import (
     discover_config,
     load_config,
 )
+from archy.scan_config import graph_kwargs
 
 
 @main.command()
@@ -105,7 +106,8 @@ from archy.layers import (
     is_flag=True,
     default=False,
     help="With --emit-headers, write each block into its module docstring. The only "
-    "archy command that modifies your source, so it never happens implicitly.",
+    "archy command that modifies your source, so it never happens implicitly. "
+    "Exit 1 and name any module whose docstring cannot hold the block.",
 )
 @click.option(
     "--check",
@@ -230,7 +232,14 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
     field names in its payload as `--format json` here.
     """
     _require(top_n >= 1, "top", ">= 1", top_n)
-    kw = _graph_kwargs_or_exit(path)
+    try:
+        kw = graph_kwargs(path)
+    except LayerConfigError:
+        # brief tolerates a malformed archy.yaml (#929), unlike the other
+        # commands: the census runs on the default scan arguments and the
+        # load error surfaces below as the reason coverage is absent, the
+        # same shape the MCP payload carries.
+        kw = {}
     report = compute_conventions(path, **kw, include_tests=include_tests)
 
     coverage = config = None
@@ -241,8 +250,9 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
             config = load_config(config_path)
             coverage = compute_coverage(build_graph(path, **kw), config)
         except LayerConfigError as exc:
-            # Parse failures already exit via `_graph_kwargs_or_exit` above. This
-            # catch preserves the briefing if coverage validation fails later.
+            # Reached for a parse failure now that the scan above tolerates
+            # one, and for a coverage validation failure after a clean parse.
+            # Either way the briefing survives, with the reason attached.
             coverage = config = None
             coverage_error = str(exc)
 
@@ -338,7 +348,7 @@ def _emit_headers(
         click.echo(json.dumps(_headers_payload(run), indent=2, sort_keys=True))
     else:
         _echo_headers_text(run, write=write, check=check)
-    if check and run.stale:
+    if (check and run.stale) or run.errors:
         sys.exit(1)
 
 
@@ -350,6 +360,7 @@ class _HeaderRun(BaseModel):
     headers: tuple[ModuleHeader, ...]
     stale: tuple[str, ...]
     written: tuple[str, ...]
+    errors: dict[str, str]
 
 
 def _sync_headers(
@@ -357,6 +368,7 @@ def _sync_headers(
 ) -> _HeaderRun:
     stale: list[str] = []
     written: list[str] = []
+    errors: dict[str, str] = {}
     for header in headers:
         target = path / header.path
         source = target.read_text(encoding="utf-8")
@@ -366,11 +378,15 @@ def _sync_headers(
                 stale.append(header.module)
             continue
         if write:
-            updated = apply_header(source, block)
+            try:
+                updated = apply_header(source, block)
+            except ValueError as exc:
+                errors[header.module] = str(exc)
+                continue
             if updated != source:
                 target.write_text(updated, encoding="utf-8")
                 written.append(header.module)
-    return _HeaderRun(headers=headers, stale=tuple(stale), written=tuple(written))
+    return _HeaderRun(headers=headers, stale=tuple(stale), written=tuple(written), errors=errors)
 
 
 def _headers_payload(run: _HeaderRun) -> dict:
@@ -378,6 +394,7 @@ def _headers_payload(run: _HeaderRun) -> dict:
         "headers": [{**h.model_dump(), "rendered": render_header(h)} for h in run.headers],
         "stale": list(run.stale),
         "written": list(run.written),
+        "errors": run.errors,
     }
 
 
@@ -394,6 +411,8 @@ def _echo_headers_text(run: _HeaderRun, *, write: bool, check: bool) -> None:
         click.echo(
             f"# wrote {len(run.written)} header(s) into {len(run.headers)} scanned module(s)."
         )
+        for module, reason in run.errors.items():
+            click.echo(f"#   {module}: {reason}")
     else:
         for header in run.headers:
             click.echo(f"# {header.path}")

@@ -4,6 +4,8 @@ archy:mirrored-by _cycle_scan_to_dict -> archy.cli_history, archy.cli_render,
                   _cycles_to_json -> archy.cli_history, archy.cli_render,
                   _cycles_to_text -> archy.cli_history, archy.cli_render,
                   _diff_to_text -> archy.cli, archy.cli_history, archy.cli_render,
+                  _namespace_gap_lines -> archy.cli_check, archy.cli_render,
+                  _namespace_gaps_to_json -> archy.cli_check, archy.cli_render,
                   _score_to_text -> archy.cli_history, archy.cli_render,
                   _simulate_to_text -> archy.cli, archy.cli_history, archy.cli_render,
                   _snapshot_to_text -> archy.cli_history, archy.cli_render
@@ -23,6 +25,7 @@ from archy.diff import (
     CapturedSnapshot,
     DiffReport,
 )
+from archy.graph_namespace import NamespaceGap, namespace_gap_reason
 from archy.score import VACUOUS_SCORE_NOTE, Score
 from archy.simulate import SimulateReport
 
@@ -42,8 +45,23 @@ def _call_weighted_modularity_prose(s: Score) -> str:
     return "calls roughly track community structure"
 
 
-def _score_to_dict(s: Score) -> dict:
+def _namespace_gaps_to_json(gaps: tuple[NamespaceGap, ...]) -> list[dict]:
+    """Each gap with its reason, so a JSON consumer is told why and not only that (#586)."""
+    return [{**g.model_dump(mode="json"), "reason": namespace_gap_reason(g)} for g in gaps]
+
+
+def _namespace_gap_lines(gaps: tuple[NamespaceGap, ...]) -> list[str]:
+    return [f"# warning: {namespace_gap_reason(g)}" for g in gaps]
+
+
+def _score_to_dict(s: Score, namespace_gaps: tuple[NamespaceGap, ...] | None = None) -> dict:
+    """`namespace_gaps` is None where the graph was not consulted, so the key is left out."""
     return {
+        **(
+            {}
+            if namespace_gaps is None
+            else {"namespace_gaps": _namespace_gaps_to_json(namespace_gaps)}
+        ),
         "overall": s.overall,
         "modules_scanned": s.inputs.module_count,
         "note": VACUOUS_SCORE_NOTE if s.inputs.module_count == 0 else None,
@@ -77,7 +95,7 @@ def _score_to_dict(s: Score) -> dict:
     }
 
 
-def _score_to_text(s: Score) -> str:
+def _score_to_text(s: Score, namespace_gaps: tuple[NamespaceGap, ...] = ()) -> str:
     vacuous = f" (vacuous: {VACUOUS_SCORE_NOTE})" if s.inputs.module_count == 0 else ""
     lines = [
         f"# archy score: {s.overall:.3f}{vacuous}",
@@ -97,6 +115,7 @@ def _score_to_text(s: Score) -> str:
         f"(diagnostic, not in score; MacCormack reverse-reach fraction)",
         f"# calls: {s.inputs.total_calls} resolved across {s.inputs.call_edge_count} edge(s), "
         f"{s.inputs.calls_per_edge:.2f}/edge  (diagnostic, not in score)",
+        *_namespace_gap_lines(namespace_gaps),
     ]
     return "\n".join(lines)
 
@@ -125,6 +144,7 @@ def _cycle_scan_to_dict(scan: CycleScan) -> dict:
     return {
         "cycles": _cycles_to_json(list(scan.cycles)),
         "excluded_type_checking_edges": scan.excluded_type_checking_edges,
+        "namespace_gaps": _namespace_gaps_to_json(scan.namespace_gaps),
     }
 
 
@@ -295,6 +315,7 @@ def _cycles_to_text(
     *,
     excluded: int | None = None,
     no_modules: str | None = None,
+    namespace_gaps: tuple[NamespaceGap, ...] = (),
 ) -> str:
     """`excluded` is None when TYPE_CHECKING exclusion was off, else the edge count left out.
 
@@ -308,8 +329,9 @@ def _cycles_to_text(
         if excluded is None
         else f"; {excluded} TYPE_CHECKING-only edge(s) excluded (--exclude-type-checking)"
     )
+    warnings = _namespace_gap_lines(namespace_gaps)
     if not cycles:
-        return f"# No cycles found (min_size={min_size}){note}."
+        return "\n".join([f"# No cycles found (min_size={min_size}){note}.", *warnings])
     lines = [f"# {len(cycles)} cycle(s) found{note}"]
     for c in cycles:
         lines.append(f"\nCycle of {len(c.modules)} module(s):")
@@ -326,4 +348,4 @@ def _cycles_to_text(
                 "`if TYPE_CHECKING:`; --exclude-type-checking (or archy.yaml "
                 "`exclude_type_checking_imports: true`) leaves them out."
             )
-    return "\n".join(lines)
+    return "\n".join([*lines, *warnings])

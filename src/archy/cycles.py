@@ -12,6 +12,8 @@ from __future__ import annotations
 import networkx as nx
 from pydantic import BaseModel, ConfigDict
 
+from archy.graph_namespace import NamespaceGap
+
 
 class CycleEdge(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -48,6 +50,10 @@ class CycleScan(BaseModel):
 
     cycles: tuple[Cycle, ...]
     excluded_type_checking_edges: int = 0
+    # Namespace directories the scan's imports point at but `roots:` did not name
+    # (#586). A clean result next to a non-empty tuple is a graph that was never
+    # joined, so it is carried on the scan rather than printed by one caller.
+    namespace_gaps: tuple[NamespaceGap, ...] = ()
 
 
 def scan_cycles(
@@ -61,8 +67,9 @@ def scan_cycles(
     An edge any runtime import or call also supports is never excluded.
     """
     full = find_cycles(graph, min_size=min_size)
+    gaps = tuple(graph.graph.get("namespace_gaps", ()))
     if not exclude_type_checking:
-        return CycleScan(cycles=tuple(full))
+        return CycleScan(cycles=tuple(full), namespace_gaps=gaps)
     kept = graph.copy()
     kept.remove_edges_from(
         [(u, v) for u, v, only in graph.edges(data="type_checking_only", default=False) if only]
@@ -70,6 +77,7 @@ def scan_cycles(
     return CycleScan(
         cycles=tuple(find_cycles(kept, min_size=min_size)),
         excluded_type_checking_edges=sum(c.type_checking_edges for c in full),
+        namespace_gaps=gaps,
     )
 
 

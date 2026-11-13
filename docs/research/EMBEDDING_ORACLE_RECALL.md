@@ -299,4 +299,244 @@ All of AGENTS.md "Measurement and benches" applies. In particular:
 
 ## Addenda
 
-None yet.
+### 2026-11-12, before any embedding was computed and before any label was read
+
+Thresholds, the pair and unit definitions, the rubric, the cap, the cutoff rule and the
+strict reading are unchanged. The primary model is unchanged: it stays
+`jinaai/jina-embeddings-v2-base-code`. This addendum makes no change of model, thresholds or
+rubric; it adds loading constraints that the pre-registration did not state, all fixed before
+the first embedding exists.
+
+**Pins, including the code that runs**
+
+- The primary needs `trust_remote_code`, and its `auto_map` points at a second repository,
+  `jinaai/jina-bert-v2-qk-post-norm`, so pinning the model repository alone would not pin what
+  executes. Both are pinned by commit: `jinaai/jina-embeddings-v2-base-code` at
+  `516f4baf13dec4ddddda8631e019b5737c8bc250` and `jinaai/jina-bert-v2-qk-post-norm` at
+  `3baf9e3ac750e76e8edd3019170176884695fb94` (last modified 2024-05-07).
+- **Every fetched file is hashed.** Each model is fetched once as a snapshot of its
+  pinned revision with an allow-list of file patterns (weights, configs, tokenizer files and
+  `.py` files; no `onnx/`), every file's sha256 is recorded, and every later load runs with
+  `HF_HUB_OFFLINE=1` and refuses if any file differs. For the primary, the harness asserts
+  that the `auto_map` code resolves into the pinned code snapshot and not into `main`, and
+  loads the model from its local pinned snapshot directory and never by repository id: the
+  primary's `encode()` and `__init__` call `AutoTokenizer.from_pretrained(config._name_or_path)`
+  (`modeling_bert.py` lines 1063 to 1065 and 1124 to 1126), which would fetch the tokenizer
+  from the repository's `main` unless `_name_or_path` is that local directory.
+- **Remote code, stated exactly.** The primary needs the two files of its code repository
+  (`modeling_bert.py`, 2,312 lines; `configuration_bert.py`, 177 lines), whose card declares no
+  license while the file headers carry the Apache-2.0 notice; the model repository declares
+  apache-2.0. `BAAI/bge-code-v1`
+  needs one in-repo tokenizer file, `tokenization_qwen.py`, named in its tokenizer config. The
+  other five arms need none. Both remote files are pinned and hashed like any other.
+- **What was read.** On 2026-11-12 the two code-repository files were parsed with Python's
+  `ast` and the call sites below were read in place. Imports at module top level are `torch`,
+  `transformers`, `numpy` and the standard library (`collections`, `dataclasses`, `math`, `os`,
+  `typing`, `warnings`). `modeling_bert.py` also imports `torch.nn.functional`,
+  `tqdm.autonotebook`, `re`, `numpy` and `tensorflow` inside functions or guarded `try` blocks;
+  `tensorflow` appears only in `load_tf_weights_in_bert`, which loading from safetensors does
+  not call, and `tqdm` is optional. `configuration_bert.py` imports `optimum.exporters.onnx`
+  inside a guarded `try` and is optional. The harness refuses to run if `tensorflow` or
+  `optimum` is importable in the embedding environment, so those paths are not taken. The files
+  contain no network call, process call, string `eval` or `exec`, `open`, `pickle` or
+  `__import__`; the `getattr` calls read config or module attributes by fixed names, `self.eval()`
+  is `nn.Module.eval`, and every URL is in a comment or docstring. The one runtime fetch is the
+  tokenizer load described above. A first regex pass reported a single comment hit and was
+  defective (its trailing word boundary could not match `eval(`, and it saw only top-level
+  imports); this paragraph does not rest on it. This is a reading of the pinned files and not
+  an audit, and it does not exclude behaviour reachable through the libraries they call.
+  `tokenization_qwen.py` is read the same way before its first load, and a finding there is
+  triaged by reading before an arm is stopped.
+- **Weights.** Loads pass `use_safetensors=True` for every model except
+  `microsoft/unixcoder-base`, which ships only `pytorch_model.bin` at its pinned revision. That
+  arm loads through the `weights_only` path with the file's sha256 pinned; if that path is
+  unavailable the arm is dropped, never loaded with pickle deserialisation enabled.
+- **Library versions** (`transformers`, `torch`, `sentence-transformers`) are fixed by the
+  canary and recorded in every manifest row. Remote modeling code written in 2024 can fail on a
+  newer `transformers`, and a version that loads it is part of the pin.
+
+**Sensitivity arms, reported and never decisive**
+
+The pre-registration names one sensitivity model; it is extended to six. Each is calibrated by
+the same equal-volume rule on its own similarities.
+
+| Model | License | Revision | Pooling |
+|---|---|---|---|
+| `jinaai/jina-code-embeddings-0.5b` (as pre-registered; bench only) | cc-by-nc-4.0 | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` | last token |
+| `jinaai/jina-code-embeddings-1.5b` (the larger of the two jina-code models, same family and recipe as the 0.5b; bench only) | cc-by-nc-4.0 | `39aeb4fb9b60f930934c78ae5d749a46287c248a` | last token |
+| `Qwen/Qwen3-Embedding-0.6B` | apache-2.0 | `97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3` | last token |
+| `Qwen/Qwen3-Embedding-8B` (the "would a much stronger embedder change the verdict" arm) | apache-2.0 | `1d8ad4ca9b3dd8059ad90a75d4983776a23d44af` | last token |
+| `microsoft/unixcoder-base` (context 1,026 tokens, so long functions truncate; counts reported) | apache-2.0 | `5604afdc964f6c53782a6813140ade5216b99006` | mean over the attention mask |
+| `BAAI/bge-code-v1` | apache-2.0 | `bd67852057c5d7ddcc7b8234d9d6c410117ed851` | last token |
+
+The primary pools by mean, per its `1_Pooling` config. Pooling for the other models is the one
+in their `1_Pooling` config at the pinned revision, except UniXcoder, which has none: mean over
+the attention mask is chosen here and is this addendum's choice, not the model's published one.
+Licences, revisions and pooling configs were read from the Hugging Face API on 2026-11-12.
+Padding side is set explicitly to left for the last-token models, since the pinned tokenizer
+configs do not reliably carry it, and end-of-sequence handling comes from the pinned tokenizer.
+The canary asserts that a text embedded alone and inside a mixed batch gives the same vector
+to 1e-5.
+
+- **No instruction prefix, made operational.** Texts are tokenized verbatim. `prompt_name=None`
+  and `prompt=""` are passed explicitly, since the Qwen3 and jina-code configs ship named
+  prompts (`bge-code-v1` ships none in its sentence-transformers config), and the canary asserts
+  that no prompt text appears in the tokenized input beyond the tokenizer's own special tokens.
+  Four of the six arms (both jina-code models and both Qwen3 models) ship named prompts, so a
+  null from them at this default is not evidence about instructed use.
+- **What an arm may and may not claim.** Arm results are labeled `sensitivity`. A pass or kill
+  is computed only from the primary: no arm number appears in the verdict line, in the headline
+  of the results or in the `docs/WHAT_DIDNT_WORK.md` entry's headline, and no arm enters the
+  headline share, the TRUE-pool floor or the primary precision. All seven models, the primary and
+  the six arms, are reported in one table, each with its interval. With seven models reported
+  in full, roughly one in seven will look best by chance (the arms are correlated, so this is
+  approximate), and the study makes no claim that any non-primary arm would or would not pass.
+  A kill is a kill for the primary at A's operating point. If an arm's precision interval lies
+  wholly above 0.60, the results note it as a hypothesis for a new pre-registration; it is not a
+  pass, it does not change the primary verdict, and no share is computed for it.
+- **What an arm reports.** Its precision over its arm-only labeled pairs (below) with an
+  interval, which is not comparable to the primary's precision and is labeled so in the table, its realised
+  volume next to A's and the primary's, its truncation counts and whether its calibration
+  reached the target. It reports no share and no verdict, since "found by" needs the full
+  pooled labeling that only the primary gets. Cutoffs are not comparable across arms, since
+  score scales differ.
+
+**Labeling budget for the arms**
+
+This replaces the cap of 100 pairs in the "Sensitivity model" bullet under "Generators"; the
+primary's cap of 300 in "Sample" is unchanged and is drawn first.
+
+- Arm pairs are drawn only after the primary draw is fixed, from pairs outside the full
+  pre-draw primary pool (A's pairs and the primary's B pairs, whether or not the 300-pair draw
+  kept them). They never enter the primary pool, the headline share, the TRUE-pool floor or the
+  primary precision. Arm precision is therefore measured over arm-only pairs, excluding pairs
+  shared with A or the primary.
+- Each arm draws at most 100 pairs independently with `random.Random(587)` over sorted pair
+  ids. The union is labeled once under the same rubric and packet format, and packets carry no
+  arm tag. Six arms of 100 is a ceiling of 600 only when no pair is shared; the cap binds only
+  then.
+
+**Numerics and what is recorded**
+
+- All embeddings come from one CUDA GPU host with one fixed dtype (float32), TF32 matmul
+  disabled, `torch.use_deterministic_algorithms` set with `CUBLAS_WORKSPACE_CONFIG` (which CUDA
+  requires for it) and both recorded, one fixed batch size, and
+  batches ordered by token length then pair id. The 8B arm needs at least 48 GB of GPU memory
+  at float32; if that is unavailable the arm is not run, not run at another dtype.
+- Vectors from different devices, dtypes, batch sizes or library versions are never merged, and
+  a cutoff is applied only to vectors from the configuration that calibrated it, because a
+  threshold on similarity can flip a pair that mixed numerics move. The cache key gains the
+  device, dtype, batch size and library versions, and the canary asserts the same pair order at
+  two batch sizes.
+- The results quote the model revisions, `torch` and `transformers` versions, CUDA version,
+  dtype, the TF32 and determinism settings and the batch size. They describe the machine only
+  as "a single CUDA GPU host" and do not name the GPU model, which a private manifest records.
+  That withholds one reproducibility detail, and the results say so.
+
+**Pipeline and the rest**
+
+- Function texts are extracted on the analysis machine with archy's own parser and keyed by the
+  sha256 of the normalised text. Embedding is a text-in, vectors-out job on the GPU host with a
+  manifest per shard. Top-1 cosine, the cutoff and all scoring run on the analysis machine from
+  the returned vectors. No definition changes.
+- The PR-clustered bootstrap for pair precision uses 2,000 resamples and seed 587, as in
+  `bench/embedding_oracle_stats.py` (#973). M, the cutoffs and the capped A target are still to
+  be fixed in the post-pilot addendum of "Process, in order" step 4. The model revisions are
+  fixed here, and that addendum does not fix them.
+- A fine-tuned model is not part of this study. Using one needs its own dated addendum before
+  its weights are used, with training data disjoint from every repository in this study's
+  sample and never the study's labels.
+- **Why the primary stays.** It was pre-registered before anything ran, and keeping it means
+  the study's instrument was not chosen after seeing anything. The cost accepted is the remote
+  code above, and the canary still has to pass for it before any real run. The model repository
+  was last modified on 2025-01-06 and the organisation's newer models are different families,
+  so the pin is also the guarantee that it does not change under the study.
+
+### 2026-11-12 (second addendum), before any embedding, similarity, cutoff or label exists
+
+No threshold, bar, rubric, cap, cutoff rule, model, pin or definition of a firing, a pair or a
+unit changes. One identity rule is made explicit, and one number is corrected.
+
+- **A function's identity includes its file.** Wherever this document says "function", "new
+  function", "(PR, new function)" or "(PR, new function, existing function)", the function is
+  identified by its **file path and its qualified name**. A qualified name is local to its file: in
+  one measured PR, five different files each define `main`. The harness's ids for a pair and for a
+  unit therefore encode the path of the new function, the path of the existing function and their
+  qualified names (as a JSON array, so no character in a path or a name can make two different
+  identities produce one id).
+- **Why now.** A review of the pull request that builds generator B found that the earlier ids
+  ignored the file. That merged 11 distinct new functions of one PR into 7, and in pooled labeling
+  would have merged distinct items into one unit. No similarity, cutoff or label had been computed,
+  so no result depends on it.
+- **What this does to the provisional A target.** The figure of 536 capped pairs (0.511 per PR,
+  from the ledger's members, in the "Cutoff" section above) was already marked
+  provisional and was counted from members, not ids, so it is not a final figure either way. A later
+  recount reported as 533 was produced with the faulty ids and is **withdrawn**. The recount that
+  fixes the target is still made in the post-pilot addendum, keyed by the full identity.
+- **What is still ambiguous.** Two functions with the same path **and** qualified name in one tree
+  (a property getter and setter, a conditional redefinition) still share an id. The extractor numbers
+  them with `occurrence`, and the pair rules must drop or flag a unit whose name is duplicated rather
+  than guess which one is meant. That is decided in the layer that has the index.
+- **A number corrected.** The text under "Generators" says one firing holds 181 new members. The
+  ledger's largest firing holds **183** (the same PR has a second firing holding 181). No rule depends
+  on the figure; the cap exists for the reason stated there, and the correction only fixes the number.
+
+### 2026-11-13 (third addendum), after the pilot and the calibration-shard scoring, before any cutoff, label or evaluation vector exists
+
+No threshold, bar, rubric, cap, cutoff rule, model, pin or definition of a firing, a pair or a unit
+changes. This addendum records the pilot outcome, fixes the A target and the calibration
+denominator, and says what is still to come. The cutoffs, M and the model revisions are fixed in a
+fourth addendum, after `calibrate` has run, because the target below has to be on record before
+calibration runs.
+
+- **What ran.** `score` (every new function's top-1 neighbour and cosine, before any cutoff) on the
+  pilot shard (8,997 rows, sha256 `413b0518e26d8d15453f04a6c188ca58554d61e1a91704e4ea60d44ad36e9ac9`)
+  and the calibration shard (22,190 rows, sha256
+  `e56c4590f501f2706663f957a14488572e04dc8f216e70160af39db338bc43be`), for five of the seven models:
+  jina-embeddings-v2-base-code (primary), jina-code-embeddings 0.5b and 1.5b, unixcoder-base and
+  bge-code-v1. Every run passed its canary and a bitwise-equal second pass, and no scored row holds
+  an id without a vector. `calibrate`, `emit` and `freeze` were not run, and the evaluation shard
+  was not touched. No label was read.
+- **Two arms are not available.** Qwen3-Embedding 0.6B ran out of device memory at the harness
+  memory cap and is VOID; the owner decided on 2026-11-13 not to re-run it. A missing model
+  directory is read as VOID and not as an error. Qwen3-Embedding 8B had not finished when this was
+  written; if it also fails it is VOID by the same rule, and if it lands it is handled as the other
+  sensitivity arms are. Neither affects the primary or any rule above.
+- **Pilot outcome (plumbing only, no rate).** Of #548's 20 pilot PRs, 3 hold new functions (4 new
+  functions in all), 4 were measured and hold none, and 13 are unmeasurable and dropped: 9 had no
+  added Python lines and 4 hit `QualnameCollisionError`. That is the 7 measured PRs the
+  pre-registration already counted. The pilot's one design output was to show the pipeline runs end
+  to end; 4 functions say nothing about a rate, and no cutoff or M is taken from them.
+- **Collision drops are kept.** 4 of the 20 pilot PRs (20%) were dropped because several files in a
+  repository share one module name, in line with the 22% #548 measured (299 of 1,358 Python PRs). A
+  PR #548 dropped is not re-admitted (see "Reused from #548"): generator A cannot fire on it, so
+  admitting it for B alone would add pairs A could never have found and push the "found only by B"
+  share up. The caveat stands as written: the measured population leans toward repositories without
+  duplicate module names. The results restate it beside the headline.
+- **Calibration denominator: all measured PRs.** The calibration subset holds 40 measured PRs, 19
+  with at least one new function (392 new functions scored) and 21 measured with none. The 21 count
+  as zero B pairs; a PR whose measurement failed would be dropped, and none was (0 unmeasurable).
+  This is the same basis as A's 0.5110 per PR over 1,049 measured PRs, which also counts the PRs
+  with no pair. The owner chose it on 2026-11-13; the alternative, scored PRs only, is not used.
+- **The A target is fixed: 536 capped pairs over 1,049 measured PRs, 0.5110 per PR.** The recount
+  keyed by file path and qualified name re-parsed base and head for the 8 PRs that reach the cap,
+  applied the real pair rules (partner existing at both base and head, one pair per pair id, the
+  cap keeping the largest new functions), and found nothing to remove: 536 again, each of the 8 PRs
+  at exactly 10 pairs, 177 PRs with any pair, 1,309 pairs uncapped, 0 unresolved members and 0
+  ambiguous new members. The provisional figure is therefore confirmed and the 533 withdrawn in the
+  second addendum stays withdrawn. One limit: a PR under the cap keeps its ledger count, which can
+  only be too high, so the target is an upper bound for those PRs. A target that is too high lowers
+  B's cutoff and gives B more volume than A, which makes a precision pass harder and a precision
+  kill easier. The bias runs against B, not for it.
+- **Order.** The target above depends on A's ledger alone. B's similarities on the calibration
+  shard were computed before this addendum was written, and the descriptive spread was seen (median
+  top-1 cosine about 0.58 to 0.63 across the five models); no B similarity was used to choose the
+  target, the denominator or anything else here. The cutoffs are calibrated next, per model, by the
+  rule in "Cutoff", and frozen in the fourth addendum together with M and the model revisions.
+- **Truncation is counted, not dropped.** unixcoder-base is capped at 1,024 tokens: 408 of 8,997
+  pilot texts and 744 of 22,190 calibration texts are truncated. jina-embeddings-v2 truncated 2 per
+  shard and the other arms none. The flags are kept with each shard's vectors and the results report
+  the counts by arm.
+- **A limit stated in advance.** The calibration shard scores 392 new functions, so the cutoff
+  rests on about 20 pairs (0.5110 times 40 PRs). It is noisy, and the rule in "Cutoff" is applied as
+  written; the realised volume on the evaluation subset is reported beside A's, as already required.

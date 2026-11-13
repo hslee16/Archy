@@ -39,7 +39,6 @@ from tests.cli_helpers import (
         lambda p: ["dsm", str(p)],
         lambda p: ["hotspots", str(p)],
         lambda p: ["snapshot", str(p)],
-        lambda p: ["brief", str(p)],
         lambda p: ["coupling", str(p)],
         lambda p: ["duplicates", str(p)],
         lambda p: ["conventions", str(p)],
@@ -54,6 +53,10 @@ def test_malformed_archy_yaml_is_one_line_error_not_traceback(tmp_path: Path, bu
 
     `check` and `contracts` already did; the rest used to dump a traceback because
     `_load_graph` / direct `graph_kwargs` let LayerConfigError propagate.
+
+    `brief` is the one exception since #929: it tolerates a malformed
+    archy.yaml and reports it as the reason coverage is absent, so it is
+    covered with the brief tests instead of here.
     """
     pkg = tmp_path / "pkg"
     pkg.mkdir()

@@ -14,8 +14,8 @@ from 7 to 9 for the sake of two small functions.
 
 archy:owns        graph_kwargs, resolve_exclude_type_checking, resolve_max_modules,
                   scan_kwargs
-archy:mirrored-by graph_kwargs -> archy.cli_app, archy.mcp_runs_check,
-                  archy.mcp_runs_core, archy.mcp_runs_git,
+archy:mirrored-by graph_kwargs -> archy.cli_app, archy.cli_conventions,
+                  archy.mcp_runs_check, archy.mcp_runs_core, archy.mcp_runs_git,
                   resolve_exclude_type_checking -> archy.cli_history,
                   archy.mcp_runs_check, scan_kwargs -> archy.cli_check,
                   archy.mcp_runs_check

@@ -223,3 +223,41 @@ def test_brief_rejects_a_nonsense_top_n(tmp_path: Path):
     project = _write_brief_project(tmp_path, with_config=False)
     with pytest.raises(ToolError):
         _call_tool(create_server(), "archy_brief", {"path": str(project), "top_n": 0})
+
+
+def test_brief_survives_a_malformed_config_and_says_why_coverage_is_absent(tmp_path: Path):
+    """#929: `layers: 5` used to replace the whole briefing with the parse
+    error, on both surfaces: run_brief loaded the config for scan arguments
+    before `_brief_coverage` could catch, so the tolerance written there was
+    unreachable for exactly its case. The census does not need the layer
+    config, so the brief now runs on default scan arguments and the error
+    rides along as the reason coverage is absent."""
+    project = _write_brief_project(tmp_path, with_config=False)
+    (tmp_path / "archy.yaml").write_text("layers: 5\n")
+    payload = run_brief(project, top_n=8, with_contracts=False, include_tests=False)
+    # The fixture must have been censused, not just survived as an empty shell.
+    assert payload.conventions.modules_scanned > 0
+    wire = payload.model_dump()
+    assert wire["coverage"] is None
+    assert wire["coverage_error"] == f"`layers` must be a mapping in {tmp_path / 'archy.yaml'}"
+
+
+def test_brief_cli_agrees_with_mcp_on_a_malformed_config(tmp_path: Path):
+    """The CLI hand-rolls its own brief flow, so it had the same unreachable
+    catch behind `_graph_kwargs_or_exit`. Both surfaces must produce the
+    briefing with the same coverage_error, not one briefing and one exit."""
+    from click.testing import CliRunner
+
+    from archy.cli import main
+
+    project = _write_brief_project(tmp_path, with_config=False)
+    (tmp_path / "archy.yaml").write_text("layers: 5\n")
+    expected = f"`layers` must be a mapping in {tmp_path / 'archy.yaml'}"
+
+    text = CliRunner().invoke(main, ["brief", str(project)])
+    assert text.exit_code == 0
+    assert f"archy.yaml found but invalid: {expected}" in text.output
+
+    cli = json.loads(CliRunner().invoke(main, ["brief", str(project), "--format", "json"]).output)
+    assert cli["coverage"] is None
+    assert cli["coverage_error"] == expected

@@ -127,7 +127,13 @@ def score(
     # previous run rather than the row we are about to append.
     gate = _gate_against_history(s, history_path) if strict else None
 
-    _echo_score(s, gate, fmt=fmt, strict_tolerance=strict_tolerance)
+    _echo_score(
+        s,
+        gate,
+        fmt=fmt,
+        strict_tolerance=strict_tolerance,
+        namespace_gaps=tuple(g.graph.get("namespace_gaps", ())),
+    )
     if record:
         _record_score(path, s, history_path)
     if gate is not None and gate["delta"] is not None and gate["delta"] < -strict_tolerance:
@@ -144,14 +150,16 @@ def _refuse_vacuous_score(path: Path, s, *, record: bool, strict: bool) -> None:
         )
 
 
-def _echo_score(s, gate: dict | None, *, fmt: str, strict_tolerance: float) -> None:
+def _echo_score(
+    s, gate: dict | None, *, fmt: str, strict_tolerance: float, namespace_gaps: tuple = ()
+) -> None:
     if fmt == "json":
-        payload = _score_to_dict(s)
+        payload = _score_to_dict(s, namespace_gaps)
         if gate is not None:
             payload["gate"] = _gate_to_dict(gate, strict_tolerance)
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
         return
-    click.echo(_score_to_text(s))
+    click.echo(_score_to_text(s, namespace_gaps))
     if gate is not None:
         click.echo("")
         click.echo(_gate_to_text(gate, strict_tolerance))
@@ -415,7 +423,11 @@ def cycles(
     no_modules = zero_modules_reason(path, "checked") if internal_module_count(g) == 0 else None
 
     if fmt == "json":
-        payload = _cycle_scan_to_dict(scan) if exclude else _cycles_to_json(found)
+        # The object shape carries a flag's trace (#520) or a namespace gap (#586),
+        # since a bare `[]` would leave neither visible; otherwise the list stays.
+        payload = (
+            _cycle_scan_to_dict(scan) if exclude or scan.namespace_gaps else _cycles_to_json(found)
+        )
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
         if no_modules is not None and not strict:
             click.echo(f"warning: {no_modules}", err=True)
@@ -426,6 +438,7 @@ def cycles(
                 min_size,
                 excluded=scan.excluded_type_checking_edges if exclude else None,
                 no_modules=no_modules,
+                namespace_gaps=scan.namespace_gaps,
             )
         )
 
