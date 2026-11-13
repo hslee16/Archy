@@ -49,6 +49,20 @@ def test_conventions_text_reports_all_four_sections(tmp_path: Path):
     assert "1 finding-failure exit(s)" in result.output
 
 
+def test_conventions_text_prints_naming_before_kinds(tmp_path: Path):
+    """The report leads with naming and kinds follows it (#879).
+
+    A comment in the renderer once claimed kinds leads the report. No doc,
+    skill file or snapshot anywhere describes a kinds-first order, and the
+    emitter has always put naming first, so the comment was the stale side
+    of that disagreement. This pins the order the reconciliation kept.
+    """
+    project = _make_conventions_project(tmp_path)
+    result = CliRunner().invoke(main, ["conventions", str(project)])
+    assert result.exit_code == 0
+    assert result.output.index("## naming") < result.output.index("## kinds")
+
+
 def test_conventions_always_exits_zero_even_with_gates_present(tmp_path: Path):
     # Advisory, not a gate: only `check`, `contracts` and the `--strict`
     # variants fail a build. Reporting that a project HAS gates must not
