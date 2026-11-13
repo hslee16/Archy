@@ -277,6 +277,16 @@ def split_block(doc: str) -> tuple[list[str], list[str]]:
     return block, prose
 
 
+_LAYOUT_TOKENS = (
+    tokenize.NEWLINE,
+    tokenize.NL,
+    tokenize.COMMENT,
+    tokenize.INDENT,
+    tokenize.DEDENT,
+    tokenize.ENDMARKER,
+)
+
+
 def apply_header(source: str, block: str) -> str:
     """Put `block` at the end of the module docstring, replacing any block already there.
 
@@ -284,6 +294,9 @@ def apply_header(source: str, block: str) -> str:
     human wrote about the module is the part archy cannot derive, and a
     generator that deletes it would be trading the fact it can compute for one
     it cannot.
+
+    Raises ValueError when the docstring is not a single string literal that
+    can hold the block without discarding source text.
     """
     span = _docstring_span(source)
     if span is None:
@@ -292,13 +305,43 @@ def apply_header(source: str, block: str) -> str:
         return f'"""{block}\n"""\n\n{source}' if source.strip() else f'"""{block}\n"""\n'
 
     doc = source[span[0] : span[1]]
-    quote = '"""' if '"""' in doc else "'''"
-    body = doc.split(quote, 2)
-    if len(body) < 3:
-        return source
-    _, prose_lines = split_block(body[1])
+    tokens: list[tokenize.TokenInfo] = []
+    try:
+        for token in tokenize.generate_tokens(io.StringIO(doc).readline):
+            if token.type not in _LAYOUT_TOKENS and token.string not in ("(", ")"):
+                tokens.append(token)
+    except tokenize.TokenError:
+        # The span covers whole lines: a statement after `;` can start here
+        # and finish outside it, even though the module itself parses. The
+        # tokens read before that point are all this needs.
+        pass
+    # A second string right after the first is implicit concatenation: the
+    # docstring has no single literal to rewrite. Anything else after it
+    # (`"""doc"""; import os`) sits outside the literal and is kept.
+    if (
+        not tokens
+        or tokens[0].type != tokenize.STRING
+        or (len(tokens) > 1 and tokens[1].type == tokenize.STRING)
+    ):
+        raise ValueError("docstring must be a single string literal")
+    literal = tokens[0].string
+    unprefixed = literal.lstrip("rRuU")
+    prefix = literal[: len(literal) - len(unprefixed)]
+    quote = unprefixed[0] * 3
+    width = 3 if unprefixed.startswith(quote) else 1
+    # Splice at the token's own position, not at the first match of its text:
+    # a comment on the lines before it can hold the same characters. Keep the
+    # spelling of escapes and the prefix: evaluating and re-encoding the value
+    # would rewrite human prose even when it means the same thing.
+    line_starts = [0]
+    for line in doc.splitlines(keepends=True):
+        line_starts.append(line_starts[-1] + len(line))
+    begin = line_starts[tokens[0].start[0] - 1] + tokens[0].start[1]
+    finish = line_starts[tokens[0].end[0] - 1] + tokens[0].end[1]
+    before, after = doc[:begin], doc[finish:]
+    _, prose_lines = split_block(unprefixed[width:-width])
     while prose_lines and not prose_lines[-1].strip():
         prose_lines.pop()
     prose = "\n".join(prose_lines)
-    rebuilt = f"{body[0]}{quote}{prose}\n\n{block}\n{quote}{body[2]}"
+    rebuilt = f"{before}{prefix}{quote}{prose}\n\n{block}\n{quote}{after}"
     return source[: span[0]] + rebuilt + source[span[1] :]
