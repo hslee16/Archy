@@ -480,3 +480,63 @@ unit changes. One identity rule is made explicit, and one number is corrected.
 - **A number corrected.** The text under "Generators" says one firing holds 181 new members. The
   ledger's largest firing holds **183** (the same PR has a second firing holding 181). No rule depends
   on the figure; the cap exists for the reason stated there, and the correction only fixes the number.
+
+### 2026-11-13 (third addendum), after the pilot and the calibration-shard scoring, before any cutoff, label or evaluation vector exists
+
+No threshold, bar, rubric, cap, cutoff rule, model, pin or definition of a firing, a pair or a unit
+changes. This addendum records the pilot outcome, fixes the A target and the calibration
+denominator, and says what is still to come. The cutoffs, M and the model revisions are fixed in a
+fourth addendum, after `calibrate` has run, because the target below has to be on record before
+calibration runs.
+
+- **What ran.** `score` (every new function's top-1 neighbour and cosine, before any cutoff) on the
+  pilot shard (8,997 rows, sha256 `413b0518e26d8d15453f04a6c188ca58554d61e1a91704e4ea60d44ad36e9ac9`)
+  and the calibration shard (22,190 rows, sha256
+  `e56c4590f501f2706663f957a14488572e04dc8f216e70160af39db338bc43be`), for five of the seven models:
+  jina-embeddings-v2-base-code (primary), jina-code-embeddings 0.5b and 1.5b, unixcoder-base and
+  bge-code-v1. Every run passed its canary and a bitwise-equal second pass, and no scored row holds
+  an id without a vector. `calibrate`, `emit` and `freeze` were not run, and the evaluation shard
+  was not touched. No label was read.
+- **Two arms are not available.** Qwen3-Embedding 0.6B ran out of device memory at the harness
+  memory cap and is VOID; the owner decided on 2026-11-13 not to re-run it. A missing model
+  directory is read as VOID and not as an error. Qwen3-Embedding 8B had not finished when this was
+  written; if it also fails it is VOID by the same rule, and if it lands it is handled as the other
+  sensitivity arms are. Neither affects the primary or any rule above.
+- **Pilot outcome (plumbing only, no rate).** Of #548's 20 pilot PRs, 3 hold new functions (4 new
+  functions in all), 4 were measured and hold none, and 13 are unmeasurable and dropped: 9 had no
+  added Python lines and 4 hit `QualnameCollisionError`. That is the 7 measured PRs the
+  pre-registration already counted. The pilot's one design output was to show the pipeline runs end
+  to end; 4 functions say nothing about a rate, and no cutoff or M is taken from them.
+- **Collision drops are kept.** 4 of the 20 pilot PRs (20%) were dropped because several files in a
+  repository share one module name, in line with the 22% #548 measured (299 of 1,358 Python PRs). A
+  PR #548 dropped is not re-admitted (see "Reused from #548"): generator A cannot fire on it, so
+  admitting it for B alone would add pairs A could never have found and push the "found only by B"
+  share up. The caveat stands as written: the measured population leans toward repositories without
+  duplicate module names. The results restate it beside the headline.
+- **Calibration denominator: all measured PRs.** The calibration subset holds 40 measured PRs, 19
+  with at least one new function (392 new functions scored) and 21 measured with none. The 21 count
+  as zero B pairs; a PR whose measurement failed would be dropped, and none was (0 unmeasurable).
+  This is the same basis as A's 0.5110 per PR over 1,049 measured PRs, which also counts the PRs
+  with no pair. The owner chose it on 2026-11-13; the alternative, scored PRs only, is not used.
+- **The A target is fixed: 536 capped pairs over 1,049 measured PRs, 0.5110 per PR.** The recount
+  keyed by file path and qualified name re-parsed base and head for the 8 PRs that reach the cap,
+  applied the real pair rules (partner existing at both base and head, one pair per pair id, the
+  cap keeping the largest new functions), and found nothing to remove: 536 again, each of the 8 PRs
+  at exactly 10 pairs, 177 PRs with any pair, 1,309 pairs uncapped, 0 unresolved members and 0
+  ambiguous new members. The provisional figure is therefore confirmed and the 533 withdrawn in the
+  second addendum stays withdrawn. One limit: a PR under the cap keeps its ledger count, which can
+  only be too high, so the target is an upper bound for those PRs. A target that is too high lowers
+  B's cutoff and gives B more volume than A, which makes a precision pass harder and a precision
+  kill easier. The bias runs against B, not for it.
+- **Order.** The target above depends on A's ledger alone. B's similarities on the calibration
+  shard were computed before this addendum was written, and the descriptive spread was seen (median
+  top-1 cosine about 0.58 to 0.63 across the five models); no B similarity was used to choose the
+  target, the denominator or anything else here. The cutoffs are calibrated next, per model, by the
+  rule in "Cutoff", and frozen in the fourth addendum together with M and the model revisions.
+- **Truncation is counted, not dropped.** unixcoder-base is capped at 1,024 tokens: 408 of 8,997
+  pilot texts and 744 of 22,190 calibration texts are truncated. jina-embeddings-v2 truncated 2 per
+  shard and the other arms none. The flags are kept with each shard's vectors and the results report
+  the counts by arm.
+- **A limit stated in advance.** The calibration shard scores 392 new functions, so the cutoff
+  rests on about 20 pairs (0.5110 times 40 PRs). It is noisy, and the rule in "Cutoff" is applied as
+  written; the realised volume on the evaluation subset is reported beside A's, as already required.
