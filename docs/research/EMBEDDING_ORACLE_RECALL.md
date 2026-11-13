@@ -543,7 +543,8 @@ calibration runs.
 
 ### 2026-11-13 (fourth addendum), after calibration, before any evaluation vector or label exists
 
-No threshold, bar, rubric, cap, cutoff rule, model, pin or definition changes. Following "Process, in
+No threshold, bar, rubric, cap, cutoff rule, model, pin or definition changes. One departure is
+stated below: the basis on which M is fixed. Following "Process, in
 order" step 4, this addendum freezes the cutoffs, fixes M and the evaluation draw, and records the
 model revisions. Calibration ran under the third addendum's target (536 capped pairs over 1,049
 measured PRs, 0.5110 per PR) and denominator (all measured PRs) with `calibrate`, per model. No
@@ -577,24 +578,40 @@ label was read and no evaluation vector exists.
   `dafa1fa79a93da51d3ff808198eab07dd5a8fe4d0533b4ba16f9edf7963582f0`; the harness refuses an
   evaluation shard whose keys hash otherwise. The calibration draw's hash by the same construction
   is `721eff0ad057bc6f79369657ecb03179bb536f8d221449222cae0645ca779f83`.
-- **Why 250 (planning figures, not results).** Two inputs only: A's ledger counts on the drawn PRs
-  and the labeling budget already registered.
-  - A's ledger, read for counts and no label, gives at most 160 capped A pairs on these 250 PRs
-    (an upper bound, since PRs under the cap keep ledger counts), 48 PRs with an A pair, 45
-    repositories. B at its calibrated volume adds about 128 pairs (0.511 per PR). Their sum, about
-    288 with no overlap assumed, stays under the 300-pair labeling budget, so every pair is expected
-    to be labeled and the seeded draw is not expected to apply. If the realised pool exceeds 300 the
-    rule in "Sample" applies as written.
-  - Minimum M for the TRUE-pool floor (40 units). With A's strict precision taken as 0.16 (#548's
-    figure, used here only to size the sample) and B's precision p, the expected TRUE units per PR
-    are about 0.102 + 0.51 p. The minimum M is about 131 at p = 0.40 (the kill line), 196 at p = 0.20
-    and 98 at p = 0.60 (the pass line). At M = 250 the floor is expected to be met for any B
-    precision above about 0.11. Below that, the share is recorded "not measurable at this sample" and
-    B's precision bars stand if the scorable floor (30 labeled B candidates from 10 repositories) is
-    met, which about 128 B pairs from 186 repositories makes likely. This is declared before the run.
-  - Embedding cost is not binding: the primary embedded the 22,190-row calibration shard in about
-    five minutes, so roughly 139,000 texts (about 555 per PR) is about half an hour per arm without
-    cross-PR reuse. M is therefore bounded by the labeling budget, not by compute.
+- **Why 250 (planning figures, not results), and a deviation stated as one.** The pre-registration
+  says M is fixed from the pilot's wall time per PR and an embedding cost model "and only from
+  those". Those were computed and are not binding (below), so M is **not** fixed from them. It is fixed
+  from the labeling budget the pre-registration already registers (300 pairs) and A's ledger counts on
+  the drawn PRs. That is a departure from the registered basis, made because compute puts no useful
+  upper bound on M for the primary and the labeling budget does. It changes no threshold or rule.
+  - **Selection disclosed.** M was chosen by looking at A's ledger counts (counts only, no label, no
+    embedding) on the PRs of the evaluation draw, and 250 is about the largest M at which the expected
+    pool stays under 300 pairs (the sums at M = 250, 260, 280 and 300 are about 288, 293, 321 and 337).
+    The draw is a prefix of one seeded shuffle, so no PR was chosen or skipped, and M was not tuned on
+    any B similarity or label. Anyone who weights this should note that M was set to fill the budget.
+  - A's ledger gives at most 160 capped A pairs on these 250 PRs (an upper bound, since PRs under the
+    cap keep ledger counts), 48 PRs with an A pair and 45 repositories. B at its calibrated volume adds
+    about 128 pairs (0.511 per PR). The sum, about 288 with no overlap assumed, is under the 300-pair
+    budget by only about 12 pairs, and B's volume rests on about 21 calibration pairs clustered in a
+    few PRs. A realised B volume of 0.6 pairs per PR would put the pool over 300. The seeded draw in
+    "Sample" is therefore a real possibility and applies as written if it happens.
+  - **Minimum M for the TRUE-pool floor (40 units), computed before the 300-pair draw, in pairs.**
+    A's strict precision is taken as 0.16, which is #548's figure for firings (a different unit from
+    the pair), used here only to size the sample, and each B pair is treated as its own unit with no
+    overlap with A. With B's precision p the expected TRUE units per PR are about 0.102 + 0.51 p. The
+    minimum M is about 130 at p = 0.40 (the kill line), 196 at p = 0.20 and 98 at p = 0.60 (the pass
+    line). At M = 250 the 40-unit count is expected to be met for any B precision above about 0.11.
+    The floor also needs 15 repositories and 20 PRs, which 186 repositories and 250 PRs make likely
+    but this addendum does not compute. Below the floor the share is recorded "not measurable at this
+    sample", and B's precision bars stand if the scorable floor (30 labeled B candidates from 10
+    repositories) is met, which about 128 B pairs from 186 repositories makes likely. This is declared
+    before the run.
+  - **Embedding cost, by arm, is not binding but is not uniform.** About 139,000 texts (about 555 per
+    PR) from the calibration throughput, without cross-PR reuse: jina-v2-base-code (primary) about
+    32 minutes, unixcoder-base about 13, jina-code-0.5b about 58, jina-code-1.5b and bge-code-v1
+    about 4 hours each. The pilot shard (8,997 rows) took the primary about 172 seconds. The Qwen3
+    arms are slower or did not fit the memory cap. The primary and the cheap arms set no upper bound
+    on M; the two slow arms are sensitivity arms and are never decisive.
 - **The evaluation shard still has to be built.** The extractor cannot name it, by design. A
   separate change adds a command that takes this addendum's key-list hash, refuses any other draw,
   and writes the shard and its unit index. It adds no rule and is reviewed on its own.
