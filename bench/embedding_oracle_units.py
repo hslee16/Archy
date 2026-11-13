@@ -23,7 +23,7 @@ archy:mirrored-by UnitFn -> bench.embedding_oracle_generate,
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,7 +49,13 @@ class UnitFn:
     occurrence: int = 0
 
     @property
-    def name_key(self) -> tuple[str, str, int]:
+    def name_key(self) -> tuple[str, str]:
+        """What "the same function" means for self-exclusion: path and qualified name, never an
+        id (identical texts share one) and never an occurrence (it shifts between trees)."""
+        return (self.path, self.qualname)
+
+    @property
+    def sort_key(self) -> tuple[str, str, int]:
         return (self.path, self.qualname, self.occurrence)
 
 
@@ -62,6 +68,7 @@ class PrUnits:
     new: tuple[UnitFn, ...]
     existing: tuple[UnitFn, ...]
     lost_not_at_head: int
+    ambiguous: int = 0
 
 
 def _fn(row: dict[str, object]) -> UnitFn:
@@ -101,23 +108,34 @@ def check_schema(rows: list[dict[str, object]]) -> None:
             )
 
 
+def _duplicated(rows: list[dict[str, object]]) -> set[tuple[str, str]]:
+    """(path, qualname) pairs that more than one function in the same tree carries (a property's
+    getter and setter, an overload, a redefinition): which is "the same function" is unknowable."""
+    seen = Counter((r["side"], r["path"], r["qualname"]) for r in rows)
+    return {(path, qual) for (_side, path, qual), n in seen.items() if n > 1}  # type: ignore[misc]
+
+
 def split_pr(pr: str, rows: list[dict[str, object]]) -> PrUnits:
     """New functions, valid neighbours, and how many base functions the PR took away.
 
     `rows` are every unit row of one PR. A head row with `in_added` true is new. A base row
-    is a neighbour only if its `counterpart` flag is set, whether or not that function is
-    itself in an added hunk at head. A new function never pairs with its own base version
-    (the generator drops that candidate by `name_key`, see `embedding_oracle_generate`).
+    is a neighbour only if its `counterpart` flag is set. A new function whose (path,
+    qualified name) is carried by more than one function in either tree is AMBIGUOUS: it is
+    counted in `ambiguous` and not scored, because its own base version cannot be told from
+    its same-named siblings.
     """
     check_schema(rows)
     base = [r for r in rows if r["side"] == "base"]
     existing = [r for r in base if r["counterpart"]]
-    new = [r for r in rows if r["side"] == "head" and r["in_added"] is True]
-    repo = rows[0]["repo"] if rows else ""
+    added = [r for r in rows if r["side"] == "head" and r["in_added"] is True]
+    dup = _duplicated(rows)
+    new = [r for r in added if (r["path"], r["qualname"]) not in dup]
+    repo = str(rows[0]["repo"]) if rows else ""
     return PrUnits(
         pr=pr,
         repo=repo,
-        new=tuple(sorted(map(_fn, new), key=lambda f: f.name_key)),
-        existing=tuple(sorted(map(_fn, existing), key=lambda f: f.name_key)),
+        new=tuple(sorted(map(_fn, new), key=lambda f: f.sort_key)),
+        existing=tuple(sorted(map(_fn, existing), key=lambda f: f.sort_key)),
         lost_not_at_head=len(base) - len(existing),
+        ambiguous=len(added) - len(new),
     )

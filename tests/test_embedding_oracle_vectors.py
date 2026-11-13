@@ -27,7 +27,7 @@ from embedding_oracle_vectors import (  # ty: ignore[unresolved-import]  (added 
     require_same_config,
 )
 
-from tests.emb587_helpers import write_meta, write_shard, write_vectors
+from tests.emb587_helpers import remote_code, write_meta, write_shard, write_vectors
 
 MODEL = "jina-v2-base-code"
 ARR = np.array([[3.0, 4.0], [0.0, 2.0], [1.0, 0.0]], dtype=np.float32)
@@ -144,7 +144,11 @@ def test_vectors_from_different_configurations_are_never_combined(tmp_path: Path
     write_vectors(root, MODEL, "calibration", ARR)
     a, b = load_vectors(root, MODEL, "pilot"), load_vectors(root, MODEL, "calibration")
     require_same_config(a, b)  # same configuration: fine
-    for field, value in (("batch_size", 16), ("libs", {"torch": "2.12.0"}), ("max_len", 512)):
+    for field, value in (
+        ("batch_size", 16),
+        ("libs", {"torch": "2.12.0", "transformers": "4.57.1", "cuda": "13.0"}),
+        ("max_len", 512),
+    ):
         write_vectors(root, MODEL, "calibration", ARR, **{field: value})
         other = load_vectors(root, MODEL, "calibration")
         with pytest.raises(VectorError, match="different configurations"):
@@ -153,7 +157,7 @@ def test_vectors_from_different_configurations_are_never_combined(tmp_path: Path
 
 def test_config_key_carries_every_comparability_field() -> None:
     man = json.loads(json.dumps({"revision": "r", "libs": {"b": "2", "a": "1"}, "batch_size": 8}))
-    assert config_key(man)[-1] == (("a", "1"), ("b", "2"))
+    assert config_key(man)[-2] == (("a", "1"), ("b", "2"))
     assert 8 in config_key(man)
 
 
@@ -198,3 +202,130 @@ def test_a_shard_whose_ids_are_not_unique_and_sorted_is_refused(tmp_path: Path, 
     write_vectors(root, MODEL, "pilot", ARR if fault == "reversed" else np.vstack([ARR, ARR[:1]]))
     with pytest.raises(VectorError, match="unique and sorted"):
         load_vectors(root, MODEL, "pilot")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "dtype",
+        "tf32",
+        "deterministic_algorithms",
+        "cublas_workspace_config",
+        "batch_size",
+        "pooling",
+        "max_len",
+        "revision",
+    ],
+)
+def test_every_comparability_field_is_required(tmp_path: Path, field: str) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, **{field: None})
+    with pytest.raises(VectorError):
+        load_vectors(root, MODEL, "pilot")
+
+
+@pytest.mark.parametrize(
+    "libs",
+    [
+        None,
+        {},
+        {"transformers": "4", "cuda": "13"},
+        {"torch": "2", "cuda": "13"},
+        {"torch": "2", "transformers": "4"},
+    ],
+)
+def test_the_library_versions_are_required(tmp_path: Path, libs: dict[str, str] | None) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, libs=libs)
+    with pytest.raises(VectorError, match=r"librar|libs"):
+        load_vectors(root, MODEL, "pilot")
+
+
+def test_two_manifests_that_both_lack_a_field_cannot_be_compared(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    for shard in ("pilot", "calibration"):
+        write_vectors(root, MODEL, shard, ARR, batch_size=None)
+        with pytest.raises(VectorError, match="lacks 'batch_size'"):
+            load_vectors(
+                root, MODEL, shard
+            )  # neither loads, so neither can be "equal" to the other
+
+
+@pytest.mark.parametrize(
+    ("patch", "why"),
+    [
+        ({"code_repo": "evil/repo"}, "repository"),
+        ({"code_rev": "0" * 40}, "revision"),
+        ({"module": "transformers_modules.jinaai.main.modeling_bert"}, "pinned snapshot"),
+        ({"executed_file_sha256": ""}, "hash of the executed"),
+    ],
+)
+def test_the_primary_must_record_the_pinned_remote_code(
+    tmp_path: Path, patch: dict[str, str], why: str
+) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, remote_code={**remote_code(MODEL), **patch})
+    with pytest.raises(VectorError, match=why):
+        load_vectors(root, MODEL, "pilot")
+
+
+def test_remote_code_must_be_present_for_every_model(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, remote_code=None)
+    with pytest.raises(VectorError, match="lacks remote_code"):
+        load_vectors(root, MODEL, "pilot")
+
+
+def test_bge_must_name_its_tokenizer_code_and_the_others_run_none(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    write_vectors(
+        root,
+        "bge-code-v1",
+        "pilot",
+        ARR,
+        remote_code={**remote_code("bge-code-v1"), "tokenizer_code": {}},
+    )
+    with pytest.raises(VectorError, match="tokenizer code"):
+        load_vectors(root, "bge-code-v1", "pilot")
+    write_vectors(
+        root,
+        "unixcoder-base",
+        "pilot",
+        ARR,
+        remote_code={**remote_code("unixcoder-base"), "code_rev": "x"},
+    )
+    with pytest.raises(VectorError, match="no remote model code"):
+        load_vectors(root, "unixcoder-base", "pilot")
+    write_vectors(root, "unixcoder-base", "pilot", ARR)
+    assert (
+        load_vectors(root, "unixcoder-base", "pilot").model == "unixcoder-base"
+    )  # reached: the clean one loads
+
+
+def test_a_different_executed_file_is_a_different_configuration(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR)
+    write_vectors(
+        root,
+        MODEL,
+        "calibration",
+        ARR,
+        remote_code={**remote_code(MODEL), "executed_file_sha256": "ee" * 32},
+    )
+    with pytest.raises(VectorError, match="different configurations"):
+        require_same_config(
+            load_vectors(root, MODEL, "pilot"), load_vectors(root, MODEL, "calibration")
+        )
+
+
+def test_a_huge_but_finite_vector_is_normalised_in_float64(tmp_path: Path) -> None:
+    root = _root(tmp_path)
+    huge = np.array([[3e19, 4e19], [1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+    with np.errstate(over="ignore"):
+        assert np.isinf(
+            np.linalg.norm(huge[0:1], axis=1)
+        ).all()  # reached: the float32 norm overflows
+    write_vectors(root, MODEL, "pilot", huge)
+    vs = load_vectors(root, MODEL, "pilot")
+    assert np.allclose(np.linalg.norm(vs.vecs, axis=1), 1.0, atol=1e-6)
+    assert bool(np.isfinite(vs.vecs).all())  # no row became zeros or inf

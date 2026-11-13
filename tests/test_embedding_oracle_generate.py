@@ -23,6 +23,7 @@ from embedding_oracle_generate import (  # ty: ignore[unresolved-import]
     DENOMINATORS,
     PrScores,
     Scored,
+    _groups,
     b_pairs,
     calibrate,
     calibration_scores,
@@ -67,7 +68,7 @@ def test_ties_break_on_path_then_name_whatever_the_order() -> None:
     a, b = fn("t1", path="a.py", qual="z"), fn("t2", path="b.py", qual="a")
     for order in ([a, b], [b, a]):
         got = score_pr(units([fn("q", qual="n")], order), vs).scored[0].existing
-        assert got.name_key == ("a.py", "z", 0)
+        assert got.name_key == ("a.py", "z")
 
 
 def test_a_new_function_never_pairs_with_itself() -> None:
@@ -77,23 +78,41 @@ def test_a_new_function_never_pairs_with_itself() -> None:
     assert ps.scored[0].existing.id == "other"  # the 1.0 self-pair was available and refused
 
 
-def test_self_exclusion_is_per_occurrence() -> None:
+def test_self_exclusion_is_by_path_and_name_never_by_id_or_occurrence() -> None:
     vs = vector_set({"q": (1.0, 0.0), "own": (1.0, 0.0), "other": (4.0, 3.0)})
-    same_name_first = UnitFn(
-        id="own", pr="1", repo="o/r", path="a.py", qualname="f", nodes=40, shape="s", occurrence=0
+    base_twin = UnitFn(
+        id="own", pr="1", repo="o/r", path="a.py", qualname="f", nodes=40, shape="s", occurrence=1
     )
-    new_second = UnitFn(
-        id="q", pr="1", repo="o/r", path="a.py", qualname="f", nodes=40, shape="s", occurrence=1
-    )
-    ps = score_pr(units([new_second], [same_name_first, fn("other", qual="o")]), vs)
-    assert (
-        ps.scored[0].existing.id == "own"
-    )  # a different function of the same name: a valid neighbour at 1.0
     new_first = UnitFn(
         id="q", pr="1", repo="o/r", path="a.py", qualname="f", nodes=40, shape="s", occurrence=0
     )
-    ps = score_pr(units([new_first], [same_name_first, fn("other", qual="o")]), vs)
-    assert ps.scored[0].existing.id == "other"  # the same function at base: refused
+    ps = score_pr(units([new_first], [base_twin, fn("other", qual="o")]), vs)
+    assert ps.scored[0].existing.id == "other"  # same name, other occurrence: still itself
+    same_id = fn("q", path="b.py", qual="elsewhere")  # a different function with the SAME text id
+    ps = score_pr(units([new_first], [same_id, fn("other", qual="o")]), vs)
+    assert ps.scored[0].existing.id == "q"  # not excluded by id: it is a valid neighbour at 1.0
+
+
+def test_identical_text_neighbours_are_scored_once_and_named_by_the_smallest() -> None:
+    a = UnitFn(id="d", pr="1", repo="o/r", path="b.py", qualname="z", nodes=40, shape="s")
+    b = UnitFn(id="d", pr="1", repo="o/r", path="a.py", qualname="y", nodes=40, shape="s")
+    assert len(_groups([a, b])) == 1 and _groups([a, b])["d"][0] is b  # one group, smallest first
+    vs = vector_set({"q": (1.0, 0.0), "d": (4.0, 3.0)})
+    for order in ([a, b], [b, a]):
+        assert score_pr(units([fn("q", qual="n")], order), vs).scored[0].existing.name_key == (
+            "a.py",
+            "y",
+        )
+
+
+def test_scoring_runs_in_float64() -> None:
+    rng = np.random.default_rng(7)
+    raw = rng.standard_normal((2, 768)).astype(np.float32)
+    raw /= np.linalg.norm(raw, axis=1, keepdims=True)
+    vs = vector_set({"q": tuple(raw[0]), "e": tuple(raw[1])})
+    got = score_pr(units([fn("q", qual="n")], [fn("e", qual="e")]), vs).scored[0].sim
+    exact = float(np.dot(vs.get("q").astype(np.float64), vs.get("e").astype(np.float64)))
+    assert got == pytest.approx(exact, rel=1e-13)  # a float32 dot product is off by ~1e-8
 
 
 def test_only_self_available_means_no_neighbour() -> None:
@@ -196,6 +215,7 @@ def test_volume_report_counts_identical_text_and_unit_similarity() -> None:
         "no_neighbour": 1,
         "lost_not_at_head": 2,
         "unshipped": 0,
+        "ambiguous": 0,
     }
 
 
@@ -267,6 +287,8 @@ def test_score_calibrate_emit_end_to_end(root: Path) -> None:
     assert cut["cutoff_by_denominator"]["scored-only"] == pytest.approx(0.9, abs=1e-6)
     assert cut["calibration_prs"]["unmeasurable"] == {"12": "git: boom", "14": "scan too large"}
     assert cut["calibration_prs"]["empty"] == 1  # PR 11 only: a measured PR with no new function
+    assert run.cmd_emit(model, "pilot") == 5  # reached: an unfrozen cutoff is only a trial
+    assert run.cmd_freeze(model, "addendum 2 (test)") == 0
     assert run.cmd_emit(model, "pilot") == 0
     pairs = [
         json.loads(line) for line in (root / f"pairs.{model}.pilot.jsonl").read_text().splitlines()
@@ -291,6 +313,7 @@ def test_emit_refuses_a_cutoff_from_another_configuration(root: Path) -> None:
     model = "jina-v2-base-code"
     run.cmd_score(model, "calibration")
     run.cmd_calibrate(model, 1.0, "t", "all-measured")
+    run.cmd_freeze(model, "addendum (test)")
     ids = sorted(sha(t) for t in (B1, N1))
     text_of = {sha(t): t for t in V}
     write_vectors(
@@ -366,6 +389,7 @@ def test_emit_refuses_a_shard_from_another_extractor_version(root: Path) -> None
     run.cmd_score(model, "calibration")
     run.cmd_score(model, "pilot")
     run.cmd_calibrate(model, 1.0, "t", "all-measured")
+    run.cmd_freeze(model, "addendum (test)")
     meta = json.loads((root / "SHARDS.json").read_text())
     meta["shards"]["pilot"]["extractor_version"] = "3"
     (root / "SHARDS.json").write_text(json.dumps(meta))
@@ -398,8 +422,88 @@ def test_emit_refuses_a_cutoff_file_whose_configuration_is_not_the_shards(root: 
     run.cmd_score(model, "calibration")
     run.cmd_score(model, "pilot")
     run.cmd_calibrate(model, 1.0, "t", "all-measured")
+    run.cmd_freeze(model, "addendum (test)")
     path = root / f"cutoff.{model}.json"
     cut = json.loads(path.read_text())
     cut["config"][4] = 64  # the recorded batch size
     path.write_text(json.dumps(cut))
     assert run.cmd_emit(model, "pilot") == 5
+
+
+MODEL = "jina-v2-base-code"
+
+
+def scored_and_calibrated(root: Path) -> None:
+    assert run.cmd_score(MODEL, "calibration") == 0
+    assert run.cmd_score(MODEL, "pilot") == 0
+    assert run.cmd_calibrate(MODEL, 1.0, "t", "all-measured") == 0
+
+
+def add_unit(root: Path, shard: str, row: dict[str, object]) -> None:
+    path = root / f"{shard}.units.jsonl"
+    path.write_text(path.read_text() + json.dumps(row) + "\n")
+
+
+def test_a_ledger_is_refused_after_the_vectors_are_re_embedded(root: Path) -> None:
+    run.cmd_score(MODEL, "calibration")
+    text_of = {sha(t): t for t in V}
+    ids = sorted(text_of)
+    arr = np.array([V[text_of[i]] for i in ids], dtype=np.float32)
+    write_vectors(
+        root, MODEL, "calibration", arr, batch_size=16
+    )  # a re-embed: another configuration
+    assert run.cmd_score(MODEL, "calibration") == 5  # it would otherwise skip every finished PR
+    assert run.cmd_calibrate(MODEL, 1.0, "t", "all-measured") == 5
+
+
+def test_calibrate_refuses_a_ledger_holding_rows_from_two_configurations(root: Path) -> None:
+    run.cmd_score(MODEL, "calibration")
+    ledger = root / "ledger" / f"{MODEL}.calibration.score.jsonl"
+    row = json.loads(ledger.read_text().splitlines()[0])
+    row.update(key="other-key", binding={**row["binding"], "vectors_sha256": "0" * 64})
+    ledger.write_text(ledger.read_text() + json.dumps(row) + "\n")
+    assert run.cmd_calibrate(MODEL, 1.0, "t", "all-measured") == 5
+
+
+def test_a_changed_unit_index_is_refused_everywhere(root: Path) -> None:
+    scored_and_calibrated(root)
+    run.cmd_freeze(MODEL, "addendum (test)")
+    path = root / "calibration.units.jsonl"
+    path.write_text(path.read_text() + "\n")  # same rows, other bytes
+    assert run.cmd_score(MODEL, "calibration") == 5
+    assert run.cmd_emit(MODEL, "pilot") == 5  # the cutoff was made from the old index
+
+
+def test_calibrate_and_emit_refuse_when_any_id_had_no_vector(root: Path) -> None:
+    ghost = unit("10/base/a.py:ghost", "not-in-the-shard", counterpart=True)
+    add_unit(root, "calibration", ghost)
+    run.cmd_score(MODEL, "calibration")
+    assert (
+        run.cmd_calibrate(MODEL, 1.0, "t", "all-measured") == 5
+    )  # skipped functions raise the cutoff
+    assert not (root / f"cutoff.{MODEL}.json").exists()  # reached: nothing was written
+
+
+def test_emit_refuses_a_shard_with_an_unshipped_id(root: Path) -> None:
+    add_unit(root, "pilot", unit("20/base/a.py:ghost", "not-in-the-shard", counterpart=True))
+    scored_and_calibrated(root)
+    run.cmd_freeze(MODEL, "addendum (test)")
+    assert run.cmd_emit(MODEL, "pilot") == 5
+
+
+def test_a_frozen_cutoff_is_never_overwritten_and_freezing_needs_an_addendum(root: Path) -> None:
+    scored_and_calibrated(root)
+    path = root / f"cutoff.{MODEL}.json"
+    assert run.cmd_freeze(MODEL, "  ") == 5  # no addendum named
+    assert run.cmd_freeze(MODEL, "addendum 2 (test)") == 0
+    before = path.read_text()
+    assert run.cmd_freeze(MODEL, "again") == 5  # not twice
+    assert run.cmd_calibrate(MODEL, 2.0, "t", "all-measured") == 5
+    assert path.read_text() == before
+
+
+@pytest.mark.parametrize("bad", ["nan", "0", "-1", "inf"])
+def test_a_target_must_be_positive_and_finite(root: Path, bad: str) -> None:
+    with pytest.raises(SystemExit):
+        run.main(["calibrate", "--model", MODEL, "--target", bad, "--target-source", "t"])
+    assert run.cmd_calibrate(MODEL, float(bad), "t", "all-measured") == 5

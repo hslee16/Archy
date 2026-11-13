@@ -9,6 +9,12 @@ near-miss tiers on the real fixture files; B is the real `score_pr` / `b_pairs` 
 cosines are set by hand. (2) The model, on the embedding job's own `canary.json` per model, skips
 while no vectors exist.
 
+Limits, stated plainly. (1) The B side of layer (1) uses HAND-SET vectors, so it proves the
+plumbing (top-1, cutoff, cap, no pairing of unrelated functions) and says nothing about whether any
+model embeds a loop and a comprehension close together; only layer (2), on a model's returned
+`canary.json`, does that. (2) These tests need numpy, which is not an archy dependency, so CI
+(`uv sync`) skips them; run them with `uv run --with numpy python -m pytest`.
+
 Note: the embedding job's canary fixture is small (under the 30-node floor), so "missed by A" is
 vacuous on it; the A-side assertion here therefore uses functions that clear the floor, and
 asserts so.

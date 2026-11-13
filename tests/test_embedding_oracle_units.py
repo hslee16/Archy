@@ -120,15 +120,29 @@ def test_a_head_row_that_was_not_added_is_never_joined_on_its_id() -> None:
     assert [f.id for f in split_pr("1", with_id).existing] == ["x"]
 
 
-def test_same_named_functions_in_one_file_stay_apart_by_occurrence() -> None:
+def test_a_duplicated_name_makes_the_new_function_ambiguous_and_it_is_not_scored() -> None:
     rows = [
         row("base/a.py:f", "x0", counterpart=True, occurrence=0),
         row("base/a.py:f", "x1", counterpart=True, occurrence=1),
         row("head/a.py:f", "h1", in_added=True, occurrence=1),
+        row("head/a.py:g", "g1", in_added=True),
     ]
     u = split_pr("1", rows)
-    assert [f.name_key for f in u.existing] == [("a.py", "f", 0), ("a.py", "f", 1)]
-    assert u.new[0].name_key == ("a.py", "f", 1)
+    assert u.ambiguous == 1  # reached: the same-named function was dropped
+    assert [f.qualname for f in u.new] == ["g"]
+    assert [f.sort_key for f in u.existing] == [("a.py", "f", 0), ("a.py", "f", 1)]
+
+
+def test_a_property_getter_and_setter_are_ambiguous_not_self_pairs() -> None:
+    """The setter was added; the getter was not. Both are `C.prop`, so neither is "itself"."""
+    rows = [
+        row("base/a.py:C.prop", "get", counterpart=True, occurrence=0),
+        row("base/a.py:C.prop", "set0", counterpart=True, occurrence=1),
+        row("head/a.py:C.prop", "get", in_added=False, counterpart=True, occurrence=0),
+        row("head/a.py:C.prop", "set1", in_added=True, counterpart=True, occurrence=1),
+    ]
+    u = split_pr("1", rows)
+    assert u.new == () and u.ambiguous == 1
 
 
 def test_neighbours_and_new_are_sorted_by_path_then_name() -> None:

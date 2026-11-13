@@ -11,6 +11,9 @@ source is restored in a `finally`, so an interrupt cannot leave a mutant behind.
 
     uv run --with numpy python bench/embedding_oracle_generate_mutants.py
 
+The tests run as `python -m pytest` (the bare `pytest` form skipped the numpy tests in a clean
+worktree). The baseline run must report no skip other than absent data, or the helper refuses.
+
 archy:owns        main
 """
 
@@ -265,14 +268,8 @@ MUTANTS: list[tuple[str, str, str, str]] = [
     ),
     (
         B + "embedding_oracle_generate.py",
-        "a new function may pair with itself",
-        "if e.name_key == new.name_key:",
-        "if False:",
-    ),
-    (
-        B + "embedding_oracle_generate.py",
         "tie broken by position, not name",
-        "min(tied, key=lambda i: existing[i].name_key)",
+        "min(tied, key=lambda i: names[i].sort_key)",
         "min(tied)",
     ),
     (
@@ -337,6 +334,179 @@ MUTANTS: list[tuple[str, str, str, str]] = [
         "if why == NO_NEW_FUNCTION)",
         "if why != NO_NEW_FUNCTION)",
     ),
+    # --- review round: comparability, remote code, float64 ---------------------------------
+    (
+        B + "embedding_oracle_vectors.py",
+        "a config field may be missing",
+        "man.get(field) is not None",
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "library versions need not be a mapping",
+        "isinstance(libs, dict)",
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "a required library may be missing",
+        "bool(libs.get(lib))",
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "remote_code may be absent",
+        'isinstance(rc, dict), "manifest lacks remote_code"',
+        'True, "manifest lacks remote_code"',
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "primary code repository not checked",
+        'rc.get("code_repo") == CODE_REPO',
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "primary code revision not checked",
+        'rc.get("code_rev") == CODE_REV',
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "executed module not tied to the pin",
+        'CODE_REV in str(rc.get("module"))',
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "executed file hash not required",
+        'bool(rc.get("executed_file_sha256"))',
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "bge tokenizer code not required",
+        '"tokenization_qwen.py" in tok',
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "other models may run remote code",
+        'rc.get("code_rev") is None',
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "remote code left out of the config key",
+        'remote = json.dumps(manifest.get("remote_code"), sort_keys=True)',
+        'remote = ""',
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "normalised in float32",
+        "wide = arr.astype(np.float64)",
+        "wide = arr",
+    ),
+    # --- review round: names, ambiguity, scoring -------------------------------------------
+    (
+        B + "embedding_oracle_units.py",
+        "self-exclusion keyed by occurrence",
+        "return (self.path, self.qualname)\n",
+        "return (self.path, self.qualname, self.occurrence)\n",
+    ),
+    (
+        B + "embedding_oracle_units.py",
+        "ambiguous names not dropped",
+        'if (r["path"], r["qualname"]) not in dup]',
+        "if True]",
+    ),
+    (B + "embedding_oracle_units.py", "duplicates never detected", "if n > 1}", "if n > 99}"),
+    (
+        B + "embedding_oracle_generate.py",
+        "self-exclusion by id",
+        "e.name_key != new.name_key",
+        "e.id != new.id",
+    ),
+    (
+        B + "embedding_oracle_generate.py",
+        "identical texts not grouped",
+        "groups.setdefault(e.id, []).append(e)",
+        "groups.setdefault(e.sort_key, []).append(e)",
+    ),
+    (
+        B + "embedding_oracle_generate.py",
+        "scored in float32",
+        "np.stack([vs.get(i).astype(np.float64) for i in groups])",
+        "np.stack([vs.get(i) for i in groups])",
+    ),
+    # --- review round: ledger and cutoff bindings, freeze gate -----------------------------
+    (
+        B + "embedding_oracle_generate_run.py",
+        "ledger binding not checked on score",
+        "binding = binding_of(vs, _units_path(shard))\n"
+        "        check_binding(ok_rows(_ledger_path(model, shard)), binding)",
+        "binding = binding_of(vs, _units_path(shard))",
+    ),
+    (
+        B + "embedding_oracle_generate_run.py",
+        "ledger binding not checked on read",
+        'never partly used."""\n    check_binding(ok_rows(_ledger_path(model, shard)), binding)',
+        'never partly used."""',
+    ),
+    (
+        B + "embedding_oracle_generate_run.py",
+        "unshipped ids not refused",
+        'if volume["unshipped"]:',
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_generate_run.py",
+        "calibration inputs not rechecked at emit",
+        'if _binding(model, "calibration") != cut["binding"]:',
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_generate_run.py",
+        "frozen cutoff overwritten",
+        "        check_not_frozen(_cutoff_path(model))\n",
+        "",
+    ),
+    (
+        B + "embedding_oracle_binding.py",
+        "unit index hash not bound",
+        '"units_sha256": file_sha256(units_path),',
+        '"units_sha256": "",',
+    ),
+    (
+        B + "embedding_oracle_binding.py",
+        "rows bound to other inputs accepted",
+        'bad = sum(1 for r in rows if r.get("binding") != binding)',
+        "bad = 0",
+    ),
+    (
+        B + "embedding_oracle_binding.py",
+        "bad target accepted",
+        "if not math.isfinite(value) or value <= 0:",
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_binding.py",
+        "unfrozen cutoff applied",
+        'if cut.get("frozen") is not True:',
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_binding.py",
+        "frozen cutoff overwritable",
+        "if frozen is True:",
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_binding.py",
+        "freeze without an addendum",
+        "if not addendum.strip():",
+        "if False:",
+    ),
     # --- the A recount --------------------------------------------------------------------
     (
         B + "embedding_oracle_a_target.py",
@@ -371,16 +541,40 @@ MUTANTS: list[tuple[str, str, str, str]] = [
 ]
 
 
-def _suite_passes() -> bool:
+ALLOWED_SKIPS = ("no extractor output", "no embedding vectors")  # data that is legitimately absent
+
+
+def _pytest(extra: list[str]) -> subprocess.CompletedProcess[str]:
     for cache in ROOT.rglob("__pycache__"):
         shutil.rmtree(cache, ignore_errors=True)
-    run = subprocess.run(
-        ["uv", "run", "--with", "numpy", "pytest", *TESTS, "-x", "-q", "-p", "no:cacheprovider"],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    return run.returncode == 0
+    cmd = [
+        "uv",
+        "run",
+        "--with",
+        "numpy",
+        "python",
+        "-m",
+        "pytest",
+        *TESTS,
+        "-q",
+        "-p",
+        "no:cacheprovider",
+    ]
+    return subprocess.run([*cmd, *extra], cwd=ROOT, capture_output=True, text=True)
+
+
+def _suite_passes() -> bool:
+    return _pytest(["-x"]).returncode == 0
+
+
+def _unexpected_skips() -> list[str]:
+    """Skip reasons in a clean baseline run that are not the allowed 'data is absent' ones.
+
+    A numpy-less environment skips most of these tests, and a mutant would then 'survive'
+    nothing: so any other reason (numpy missing, a platform skip) refuses the whole run."""
+    run = _pytest(["-rs"])
+    skips = [ln for ln in run.stdout.splitlines() if ln.startswith("SKIPPED")]
+    return [ln for ln in skips if not any(ok in ln for ok in ALLOWED_SKIPS)]
 
 
 def _check_matches(sources: dict[str, str]) -> int:
@@ -391,22 +585,40 @@ def _check_matches(sources: dict[str, str]) -> int:
     return 0
 
 
-def main() -> int:
-    sources = {rel: (ROOT / rel).read_text() for rel in {m[0] for m in MUTANTS}}
+def _preflight(sources: dict[str, str]) -> int:
+    """0 if the mutants can be trusted to prove something, else the exit code to stop with."""
     if _check_matches(sources):
         return 1
     if not _suite_passes():
         print("the unmutated suite is not green; nothing to prove")
         return 2
+    unexpected = _unexpected_skips()
+    if unexpected:
+        print("the unmutated suite skipped tests it should not have; refusing:")
+        print("\n".join(unexpected))
+        return 2
+    return 0
+
+
+def _run_mutants(sources: dict[str, str]) -> list[str]:
     survivors: list[str] = []
+    for rel, name, old, new in MUTANTS:
+        (ROOT / rel).write_text(sources[rel].replace(old, new))
+        killed = not _suite_passes()
+        (ROOT / rel).write_text(sources[rel])
+        print(("killed   " if killed else "SURVIVED ") + name)
+        if not killed:
+            survivors.append(name)
+    return survivors
+
+
+def main() -> int:
+    sources = {rel: (ROOT / rel).read_text() for rel in {m[0] for m in MUTANTS}}
+    stop = _preflight(sources)
+    if stop:
+        return stop
     try:
-        for rel, name, old, new in MUTANTS:
-            (ROOT / rel).write_text(sources[rel].replace(old, new))
-            killed = not _suite_passes()
-            (ROOT / rel).write_text(sources[rel])
-            print(("killed   " if killed else "SURVIVED ") + name)
-            if not killed:
-                survivors.append(name)
+        survivors = _run_mutants(sources)
     finally:
         for rel, text in sources.items():
             (ROOT / rel).write_text(text)

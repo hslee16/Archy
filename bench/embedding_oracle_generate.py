@@ -56,6 +56,7 @@ class PrScores:
     no_neighbour: int
     lost_not_at_head: int
     unshipped: int = 0
+    ambiguous: int = 0
 
 
 @dataclass(frozen=True)
@@ -65,22 +66,31 @@ class CutoffResult:
     mean_at_cutoff: float
 
 
-def _best(sims: np.ndarray, existing: Sequence[UnitFn]) -> int:
-    tied = np.flatnonzero(sims == sims.max())
-    return int(min(tied, key=lambda i: existing[i].name_key))
+def _groups(existing: Sequence[UnitFn]) -> dict[str, list[UnitFn]]:
+    """Neighbours grouped by text id. Identical texts have identical vectors and can score a last
+    bit apart, so they are scored once and named by the smallest (path, qualname, occurrence)."""
+    groups: dict[str, list[UnitFn]] = {}
+    for e in existing:
+        groups.setdefault(e.id, []).append(e)
+    return {i: sorted(g, key=lambda f: f.sort_key) for i, g in groups.items()}
 
 
 def _score_one(
-    new: UnitFn, existing: Sequence[UnitFn], mat: np.ndarray, vs: VectorSet
+    new: UnitFn, groups: dict[str, list[UnitFn]], mat: np.ndarray, vs: VectorSet
 ) -> Scored | None:
+    # `mat` is float64 (see `score_pr`), so the product is: ties must not depend on rounding
     sims = mat @ vs.get(new.id)
-    for i, e in enumerate(existing):
-        if e.name_key == new.name_key:
-            sims[i] = -np.inf  # never itself
+    names: list[UnitFn | None] = []
+    for i, members in enumerate(groups.values()):
+        usable = [e for e in members if e.name_key != new.name_key]  # never itself, by name
+        names.append(usable[0] if usable else None)
+        if not usable:
+            sims[i] = -np.inf
     if np.isinf(sims.max()):
         return None
-    j = _best(sims, existing)
-    return Scored(new, existing[j], float(sims[j]))
+    tied = np.flatnonzero(sims == sims.max())
+    j = int(min(tied, key=lambda i: names[i].sort_key))  # type: ignore[union-attr]
+    return Scored(new, names[j], float(sims[j]))  # type: ignore[arg-type]
 
 
 def score_pr(units: PrUnits, vs: VectorSet) -> PrScores:
@@ -94,8 +104,9 @@ def score_pr(units: PrUnits, vs: VectorSet) -> PrScores:
     existing = [e for e in units.existing if vs.has(e.id)]
     new_fns = [n for n in units.new if vs.has(n.id)]
     unshipped = len(units.existing) - len(existing) + len(units.new) - len(new_fns)
-    mat = np.stack([vs.get(e.id) for e in existing]) if existing else None
-    scored = [] if mat is None else [_score_one(n, existing, mat, vs) for n in new_fns]
+    groups = _groups(existing)
+    mat = np.stack([vs.get(i).astype(np.float64) for i in groups]) if groups else None
+    scored = [] if mat is None else [_score_one(n, groups, mat, vs) for n in new_fns]
     got = tuple(s for s in scored if s is not None)
     return PrScores(
         units.pr,
@@ -105,6 +116,7 @@ def score_pr(units: PrUnits, vs: VectorSet) -> PrScores:
         len(new_fns) - len(got),
         units.lost_not_at_head,
         unshipped,
+        units.ambiguous,
     )
 
 
@@ -158,14 +170,19 @@ def b_pairs(prs: Iterable[PrScores], cutoff: float) -> list[Pair]:
     return cap_pairs(passing)
 
 
+def _total(prs: Sequence[PrScores], field: str) -> int:
+    return sum(getattr(ps, field) for ps in prs)
+
+
 def volume_report(prs: Sequence[PrScores]) -> dict[str, int]:
     """Counts the results must report beside the cutoff: scored, identical text, similarity ~1.0."""
     scored = [s for ps in prs for s in ps.scored]
+    counts = {
+        f: _total(prs, f) for f in ("no_neighbour", "lost_not_at_head", "unshipped", "ambiguous")
+    }
     return {
         "scored": len(scored),
         "identical_text": sum(s.new.id == s.existing.id for s in scored),
         "similarity_at_one": sum(s.sim >= IDENTICAL for s in scored),
-        "no_neighbour": sum(ps.no_neighbour for ps in prs),
-        "lost_not_at_head": sum(ps.lost_not_at_head for ps in prs),
-        "unshipped": sum(ps.unshipped for ps in prs),
+        **counts,
     }

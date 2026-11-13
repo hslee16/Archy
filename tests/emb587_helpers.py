@@ -19,6 +19,8 @@ np = pytest.importorskip("numpy")  # bench-only dependency: skip where it is abs
 # bench/ is not a package; appended (not inserted first) so its generic names cannot shadow others.
 sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 from embedding_oracle_vectors import (  # ty: ignore[unresolved-import]
+    CODE_REPO,
+    CODE_REV,
     PINS,
     POOLING,
     VectorSet,
@@ -61,6 +63,28 @@ def write_meta(
     (root / "SHARDS.json").write_text(json.dumps({"ok": ok, "shards": shards}), encoding="utf-8")
 
 
+def remote_code(model: str) -> dict[str, object]:
+    """The `remote_code` block the embedding job writes, as the loader requires it per model."""
+    none: dict[str, object] = {
+        "code_repo": None,
+        "code_rev": None,
+        "module": None,
+        "executed_file_sha256": None,
+        "tokenizer_code": {},
+    }
+    if model == "jina-v2-base-code":
+        return {
+            **none,
+            "code_repo": CODE_REPO,
+            "code_rev": CODE_REV,
+            "module": f"transformers_modules.jinaai.pinned.{CODE_REV}.modeling_bert",
+            "executed_file_sha256": "ab" * 32,
+        }
+    if model == "bge-code-v1":
+        return {**none, "tokenizer_code": {"tokenization_qwen.py": "cd" * 32}}
+    return none
+
+
 def manifest(root: Path, model: str, shard: str, arr: np.ndarray) -> dict[str, object]:
     meta = json.loads((root / "SHARDS.json").read_text(encoding="utf-8"))["shards"][shard]
     npy = root / "vectors" / model / f"{shard}.npy"
@@ -81,6 +105,7 @@ def manifest(root: Path, model: str, shard: str, arr: np.ndarray) -> dict[str, o
         "max_len": 8192,
         "libs": {"torch": "2.11.0", "transformers": "4.57.1", "cuda": "13.0"},
         "determinism": {"full_second_pass_bitwise_equal": True, "max_abs_diff": 0.0},
+        "remote_code": remote_code(model),
     }
 
 

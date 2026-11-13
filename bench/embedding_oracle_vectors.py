@@ -15,9 +15,13 @@ Layout this module reads (all gitignored, under `bench/cache/emb587/`):
 
 Vectors are raw pooled; this module L2-normalises them, so a dot product is a cosine.
 
-archy:owns        VectorError, VectorSet, check_manifest, check_shards_meta,
-                  config_key, load_vectors, read_shards_meta, require_same_config,
-                  shard_ids
+archy:owns        VectorError, VectorSet, check_manifest, check_remote_code,
+                  check_shards_meta, config_key, file_sha256, load_vectors,
+                  read_shards_meta, require_same_config, shard_ids
+archy:mirrored-by VectorError -> bench.embedding_oracle_binding,
+                  bench.embedding_oracle_generate_run,
+                  VectorSet -> bench.embedding_oracle_binding,
+                  bench.embedding_oracle_generate
 """
 
 from __future__ import annotations
@@ -50,6 +54,9 @@ POOLING: dict[str, str] = {
     "bge-code-v1": "last",
 }
 SHARDS = ("pilot", "calibration")  # the evaluation shard has no name here, on purpose
+CODE_REPO = "jinaai/jina-bert-v2-qk-post-norm"  # the primary's remote code, addendum 1 "Pins"
+CODE_REV = "3baf9e3ac750e76e8edd3019170176884695fb94"
+REQUIRED_LIBS = ("torch", "transformers", "cuda")
 CONFIG_FIELDS = (
     "dtype",
     "tf32",
@@ -75,6 +82,7 @@ class VectorSet:
     index: dict[str, int]
     vecs: np.ndarray
     config: tuple[object, ...]
+    sha256: str = ""
 
     def get(self, text_id: str) -> np.ndarray:
         return self.vecs[self.index[text_id]]
@@ -83,7 +91,7 @@ class VectorSet:
         return text_id in self.index
 
 
-def _sha256(path: Path) -> str:
+def file_sha256(path: Path) -> str:
     h = hashlib.sha256()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 20), b""):
@@ -102,7 +110,8 @@ def shard_ids(path: Path) -> list[str]:
 def config_key(manifest: dict[str, object]) -> tuple[object, ...]:
     """Everything that makes two vectors comparable: numerics, batch size, context, libraries."""
     libs = tuple(sorted((manifest.get("libs") or {}).items()))
-    return (*(manifest.get(f) for f in CONFIG_FIELDS), libs)
+    remote = json.dumps(manifest.get("remote_code"), sort_keys=True)
+    return (*(manifest.get(f) for f in CONFIG_FIELDS), libs, remote)
 
 
 def _require(cond: bool, what: str) -> None:
@@ -130,6 +139,39 @@ def check_manifest(man: dict[str, object], model: str, shard: str, meta: dict[st
     _require(man.get("rows") == want["rows"], "manifest rows differ from SHARDS.json")
     det = man.get("determinism") or {}
     _require(det.get("full_second_pass_bitwise_equal") is True, "not bitwise deterministic")
+    _check_comparable(man)
+    check_remote_code(man, model)
+
+
+def _check_comparable(man: dict[str, object]) -> None:
+    """Every field that makes two vector sets comparable must be present, or two manifests
+    that both lack it would compare equal."""
+    for field in CONFIG_FIELDS:
+        _require(man.get(field) is not None, f"manifest lacks {field!r}")
+    libs = man.get("libs")
+    _require(isinstance(libs, dict), "manifest lacks the library versions")
+    for lib in REQUIRED_LIBS:
+        _require(bool(libs.get(lib)), f"manifest libs lack {lib!r}")  # type: ignore[union-attr]
+
+
+def check_remote_code(man: dict[str, object], model: str) -> None:
+    """The code that ran, as the embedding job recorded it (addendum 1: pin what executes)."""
+    rc = man.get("remote_code")
+    _require(isinstance(rc, dict), "manifest lacks remote_code")
+    if model == "jina-v2-base-code":
+        _require(rc.get("code_repo") == CODE_REPO, "remote code repository is not the pinned one")  # type: ignore[union-attr]
+        _require(rc.get("code_rev") == CODE_REV, "remote code revision is not the pin")  # type: ignore[union-attr]
+        _require(
+            CODE_REV in str(rc.get("module")), "the executed module is not the pinned snapshot"
+        )  # type: ignore[union-attr]
+        _require(bool(rc.get("executed_file_sha256")), "no hash of the executed code file")  # type: ignore[union-attr]
+    elif model == "bge-code-v1":
+        tok = rc.get("tokenizer_code")  # type: ignore[union-attr]
+        _require(
+            isinstance(tok, dict) and "tokenization_qwen.py" in tok, "tokenizer code not named"
+        )
+    else:
+        _require(rc.get("code_rev") is None, f"{model} should run no remote model code")  # type: ignore[union-attr]
 
 
 def check_shards_meta(meta: dict[str, object]) -> None:
@@ -161,11 +203,13 @@ def load_vectors(root: Path, model: str, shard: str) -> VectorSet:
     check_manifest(man, model, shard, meta)
     shard_file = root / f"{shard}.jsonl"
     _require(
-        _sha256(shard_file) == meta["shards"][shard]["sha256"],
+        file_sha256(shard_file) == meta["shards"][shard]["sha256"],
         "shard file differs from SHARDS.json",
     )
     npy = vdir / f"{shard}.npy"
-    _require(_sha256(npy) == man.get("vectors_sha256"), "vectors differ from the manifest's sha256")
+    _require(
+        file_sha256(npy) == man.get("vectors_sha256"), "vectors differ from the manifest's sha256"
+    )
     arr = np.load(npy, allow_pickle=False)
     ids = shard_ids(shard_file)
     return _build((model, shard), ids, arr, man)
@@ -178,11 +222,13 @@ def _build(
     _require(arr.shape[0] == len(ids), f"{arr.shape[0]} vectors for {len(ids)} ids")
     _require(arr.shape[1] == man.get("dim"), "vector width differs from the manifest")
     _require(bool(np.isfinite(arr).all()), "vectors contain NaN or Inf")
-    norms = np.linalg.norm(arr, axis=1, keepdims=True)
+    wide = arr.astype(np.float64)  # a float32 norm overflows near 3e19 and would zero the row
+    norms = np.linalg.norm(wide, axis=1, keepdims=True)
     _require(bool((norms > 0).all()), "a vector has zero norm")
+    unit = (wide / norms).astype(np.float32)
     index = {t: i for i, t in enumerate(ids)}
     model, shard = which
-    return VectorSet(model, shard, index, (arr / norms).astype(np.float32), config_key(man))
+    return VectorSet(model, shard, index, unit, config_key(man), str(man.get("vectors_sha256")))
 
 
 def require_same_config(a: VectorSet, b: VectorSet) -> None:
