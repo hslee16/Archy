@@ -86,8 +86,11 @@ def _calibrated(model: str = MODEL, freeze: bool = True) -> None:
         assert run.cmd_freeze(model, "addendum (test)") == 0
 
 
-def test_the_evaluation_shard_is_a_valid_command_line_choice_but_refused_here(root: Path) -> None:
+def test_the_evaluation_shard_is_a_valid_command_line_choice_but_refused_here(
+    root: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     assert run.main(["score", "--model", MODEL, "--shard", "evaluation"]) == 5  # no cutoff yet
+    assert "cutoff" in capsys.readouterr().err
 
 
 def test_scoring_the_evaluation_shard_needs_a_frozen_cutoff(
@@ -143,3 +146,25 @@ def test_calibrate_and_freeze_still_cannot_take_a_shard() -> None:
     for cmd in ("calibrate", "freeze"):
         with pytest.raises(SystemExit):
             run.main([cmd, "--model", MODEL, "--shard", "evaluation"])
+
+
+def test_an_evaluation_entry_without_an_extractor_version_is_refused_not_a_traceback(
+    root: Path, registered: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _calibrated()
+    meta = json.loads((root / "SHARDS.json").read_text())
+    del meta["shards"]["evaluation"]["extractor_version"]
+    (root / "SHARDS.json").write_text(json.dumps(meta), encoding="utf-8")
+    assert run.cmd_score(MODEL, "evaluation") == 5
+    assert "extractor_version" in capsys.readouterr().err
+
+
+def test_evaluation_vectors_must_match_the_calibration_vectors_now_on_disk(
+    root: Path, registered: None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _calibrated()
+    ids = sorted(sha(t) for t in (B1, B2, N1, N2))
+    arr = np.array([V[TEXT_OF[i]] for i in ids], dtype=np.float32)
+    write_vectors(root, MODEL, "calibration", arr, batch_size=16)  # re-embedded after the freeze
+    assert run.cmd_score(MODEL, "evaluation") == 5
+    assert "come from different configurations" in capsys.readouterr().err
