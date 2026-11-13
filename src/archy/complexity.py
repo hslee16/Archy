@@ -19,9 +19,9 @@ archy:owns        FunctionComplexity, FunctionFeatures, compute_function_complex
 archy:mirrored-by FunctionComplexity -> archy.duplicates, archy.graph_assemble,
                   archy.parser,
                   compute_function_complexity -> bench.diff_duplicates_oracles,
-                  bench.duplicates_recall_experiment, bench.health_repro,
-                  extract_token_bags -> archy.duplicates,
-                  bench.duplicates_recall_experiment
+                  bench.duplicates_recall_experiment, bench.embedding_oracle_a_target,
+                  bench.health_repro, extract_token_bags -> archy.duplicates,
+                  bench.duplicates_recall_experiment, bench.embedding_oracle_a_target
 """
 
 from __future__ import annotations
