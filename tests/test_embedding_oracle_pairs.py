@@ -195,3 +195,10 @@ def test_an_id_cannot_collide_through_a_separator_in_a_path_or_name() -> None:
     y = with_(pair("1", "y|z", "o.f"), new_path="x")
     assert f"{x.pr}|{x.new_path}|{x.new_qualname}" == f"{y.pr}|{y.new_path}|{y.new_qualname}"
     assert x.unit_id != y.unit_id and x.pair_id != y.pair_id  # but the encoded ids differ
+
+
+def test_the_id_escapes_quotes_backslashes_and_non_ascii_deterministically() -> None:
+    """Hand-worked: JSON escapes a quote and a backslash, and writes U+00E9 as an ASCII escape."""
+    p = with_(pair("1", "n.f", "o.f"), new_path='caf\u00e9"\\|.py')
+    assert p.unit_id == '["1","caf\\u00e9\\"\\\\|.py","n.f"]'
+    assert p.unit_id.isascii()  # no raw non-ASCII in an id, whatever the path holds
