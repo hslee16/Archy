@@ -5,7 +5,8 @@ CALIBRATION subset (40 measured PRs, at most 5 per repository, drawn first with
 `random.Random(587)` over the sorted PR keys) it parses the base and head trees with
 archy's own parser, keeps the functions that clear the pre-registered floor and the
 source-only filter, and writes text-only shards for a single CUDA GPU host. The
-evaluation subset is NOT extractable here: the CLI has no way to name it.
+evaluation subset is NOT extractable by this CLI: `--shard` cannot name it. It has its own
+command, `embedding_oracle_evaluation`, which refuses any draw but the registered one.
 
 Per PR it ships (a) every function whose def line falls in an added hunk (head tree) and
 (b) every function that existed at base, outside the added hunks by construction. The
@@ -41,8 +42,8 @@ once is shipped once.
 
 archy:owns        Fn, audit_shard, check_disjoint, draw_calibration, extract_pr,
                   extract_tree, function_texts, git_sha, is_final, main, measured_rows,
-                  normalise, parity_mismatches, pr_result, reason_class, run_shard,
-                  text_id, write_shard
+                  normalise, parity_mismatches, pr_result, reason_class,
+                  run_and_record, run_shard, text_id, write_shard
 """
 
 from __future__ import annotations
@@ -643,6 +644,18 @@ def _report_mismatches(shards: Mapping[str, dict]) -> None:
                 print(f"{kind.upper()} in {name}: {shard[kind]}", file=sys.stderr)
 
 
+def run_and_record(rows: Mapping[str, list[dict]]) -> int:
+    """Extract the named shards, record them in the manifest, and return the exit code:
+    0 done, 130 interrupted, 3 a #548 reproduction or parity mismatch."""
+    shards = _run_all(rows)
+    if shards is None:
+        return 130
+    if _write_manifest(shards):
+        return 0
+    _report_mismatches(shards)
+    return 3
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--shard", choices=SHARD_NAMES, action="append")
@@ -653,13 +666,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         for name, rs in rows.items():
             print(name, len(rs), [str(r["key"]) for r in rs])
         return 0
-    shards = _run_all(rows)
-    if shards is None:
-        return 130
-    if _write_manifest(shards):
-        return 0
-    _report_mismatches(shards)
-    return 3
+    return run_and_record(rows)
 
 
 if __name__ == "__main__":
