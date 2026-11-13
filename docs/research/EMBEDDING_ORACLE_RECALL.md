@@ -540,3 +540,65 @@ calibration runs.
 - **A limit stated in advance.** The calibration shard scores 392 new functions, so the cutoff
   rests on about 20 pairs (0.5110 times 40 PRs). It is noisy, and the rule in "Cutoff" is applied as
   written; the realised volume on the evaluation subset is reported beside A's, as already required.
+
+### 2026-11-13 (fourth addendum), after calibration, before any evaluation vector or label exists
+
+No threshold, bar, rubric, cap, cutoff rule, model, pin or definition changes. Following "Process, in
+order" step 4, this addendum freezes the cutoffs, fixes M and the evaluation draw, and records the
+model revisions. Calibration ran under the third addendum's target (536 capped pairs over 1,049
+measured PRs, 0.5110 per PR) and denominator (all measured PRs) with `calibrate`, per model. No
+label was read and no evaluation vector exists.
+
+- **Cutoffs, frozen by this addendum.** The largest observed top-1 cosine t at which the mean
+  capped count of B pairs per calibration PR (40 PRs, 21 of them with no new function) is at least
+  0.5110. Every model reached the target; none fell back to its lowest observed similarity. No pair
+  has similarity exactly 1.0. The realised mean at each cutoff is 0.525 (21 pairs over 40 PRs), the
+  closest the data allow since the count moves in whole pairs. Each cutoff is bound to the
+  calibration vectors it came from and applies only to vectors from the same configuration.
+
+  | Model | Revision | Cutoff | Calibration vectors sha256 |
+  |---|---|---|---|
+  | jina-embeddings-v2-base-code (primary) | `516f4baf13dec4ddddda8631e019b5737c8bc250` | 0.893929 | `947ceb5f57611cfccf4a05cd6998c7ca0be0b040ba6816346fcee1ce7a2a9ec4` |
+  | jina-code-embeddings 0.5b | `4db235132dafbe56a8b9c5f59b59795ecf58a4a7` | 0.909055 | `4709b636a19c72a06dd264eaa090aedb0fab3326c249cb00f47a9cf4d6575e7d` |
+  | jina-code-embeddings 1.5b | `39aeb4fb9b60f930934c78ae5d749a46287c248a` | 0.899234 | `de5a6582be1afe083d3a97ca405b30747a20666525f7a13dc07267e28825941c` |
+  | unixcoder-base | `5604afdc964f6c53782a6813140ade5216b99006` | 0.920389 | `1137ee38a3f7dc88b0c843c33cc4d009f9c63fe93ea1eb3307f2451bd598cfbb` |
+  | bge-code-v1 | `bd67852057c5d7ddcc7b8234d9d6c410117ed851` | 0.842663 | `b20267f77aa598acfb1db98b26e7a274e9825f6171e56f19f976f0c291734427` |
+
+  The remote-code pin for the primary is the one in the first addendum. The two Qwen3-Embedding
+  arms have no cutoff: the 0.6B arm is VOID and the 8B arm had not returned vectors. If the 8B arm
+  returns, it is calibrated by the same rule and recorded in a later dated addendum before its
+  evaluation vectors exist; it is never added silently.
+- **M = 250 measured PRs.** The evaluation subset is the first 250 PR keys of a
+  `random.Random(587)` shuffle of the sorted keys of the measured PRs that remain after the
+  calibration draw (1,009 PRs from 536 repositories; the pilot PRs are not in the measured set),
+  skipping a PR once its repository already holds 25. This is the same generator and key order as
+  the calibration draw. The draw is 250 PRs from 186 repositories, the largest repository holding
+  3% of them, and the sha256 of its sorted keys joined by newlines is
+  `dafa1fa79a93da51d3ff808198eab07dd5a8fe4d0533b4ba16f9edf7963582f0`; the harness refuses an
+  evaluation shard whose keys hash otherwise. The calibration draw's hash by the same construction
+  is `721eff0ad057bc6f79369657ecb03179bb536f8d221449222cae0645ca779f83`.
+- **Why 250 (planning figures, not results).** Two inputs only: A's ledger counts on the drawn PRs
+  and the labeling budget already registered.
+  - A's ledger, read for counts and no label, gives at most 160 capped A pairs on these 250 PRs
+    (an upper bound, since PRs under the cap keep ledger counts), 48 PRs with an A pair, 45
+    repositories. B at its calibrated volume adds about 128 pairs (0.511 per PR). Their sum, about
+    288 with no overlap assumed, stays under the 300-pair labeling budget, so every pair is expected
+    to be labeled and the seeded draw is not expected to apply. If the realised pool exceeds 300 the
+    rule in "Sample" applies as written.
+  - Minimum M for the TRUE-pool floor (40 units). With A's strict precision taken as 0.16 (#548's
+    figure, used here only to size the sample) and B's precision p, the expected TRUE units per PR
+    are about 0.102 + 0.51 p. The minimum M is about 131 at p = 0.40 (the kill line), 196 at p = 0.20
+    and 98 at p = 0.60 (the pass line). At M = 250 the floor is expected to be met for any B
+    precision above about 0.11. Below that, the share is recorded "not measurable at this sample" and
+    B's precision bars stand if the scorable floor (30 labeled B candidates from 10 repositories) is
+    met, which about 128 B pairs from 186 repositories makes likely. This is declared before the run.
+  - Embedding cost is not binding: the primary embedded the 22,190-row calibration shard in about
+    five minutes, so roughly 139,000 texts (about 555 per PR) is about half an hour per arm without
+    cross-PR reuse. M is therefore bounded by the labeling budget, not by compute.
+- **The evaluation shard still has to be built.** The extractor cannot name it, by design. A
+  separate change adds a command that takes this addendum's key-list hash, refuses any other draw,
+  and writes the shard and its unit index. It adds no rule and is reviewed on its own.
+- **Order and what stays open.** The cutoffs are frozen by naming this addendum (`freeze --addendum`)
+  after it merges. The evaluation shard is then extracted, embedded once per arm, scored with `emit`,
+  pooled, labeled and evaluated as the earlier sections say. The sample is not extended after the run
+  starts.
