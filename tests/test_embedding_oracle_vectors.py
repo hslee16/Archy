@@ -17,6 +17,8 @@ np = pytest.importorskip("numpy")  # bench-only dependency: skip where it is abs
 
 sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 
+import embedding_oracle_vectors as vec  # ty: ignore[unresolved-import]  (added to sys.path above)
+from embedding_oracle_registered import keys_sha256  # ty: ignore[unresolved-import]
 from embedding_oracle_vectors import (  # ty: ignore[unresolved-import]  (added to sys.path above)
     PINS,
     POOLING,
@@ -119,10 +121,30 @@ def test_a_missing_manifest_is_refused(tmp_path: Path) -> None:
         load_vectors(_root(tmp_path), MODEL, "pilot")
 
 
-def test_the_evaluation_shard_cannot_be_named(tmp_path: Path) -> None:
+def test_only_the_named_shards_are_authorised(tmp_path: Path) -> None:
     assert SHARDS == ("pilot", "calibration")
     with pytest.raises(VectorError, match="not authorised"):
-        load_vectors(_root(tmp_path), MODEL, "evaluation")
+        load_vectors(_root(tmp_path), MODEL, "holdout")
+
+
+def test_the_evaluation_shard_needs_an_entry_that_is_the_registered_draw(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _root(tmp_path)
+    write_shard(root, "evaluation", ["g", "h", "i"])
+    with pytest.raises(VectorError, match="no evaluation shard"):
+        load_vectors(root, MODEL, "evaluation")  # an entry-less SHARDS.json
+    write_meta(
+        root,
+        {"evaluation": ["1", "2"]},
+        {"evaluation": {"3": "x"}},
+    )
+    with pytest.raises(VectorError, match="not the draw"):
+        load_vectors(root, MODEL, "evaluation")  # keys {1,2,3} are not the registered 250
+    write_vectors(root, MODEL, "evaluation", ARR)
+    monkeypatch.setattr(vec, "EVALUATION_KEYS_SHA256", keys_sha256(["1", "2", "3"]))
+    vs = load_vectors(root, MODEL, "evaluation")  # the registered draw (here: hash of 1,2,3)
+    assert vs.shard == "evaluation" and len(vs.index) == 3
 
 
 def test_an_unknown_model_is_refused(tmp_path: Path) -> None:

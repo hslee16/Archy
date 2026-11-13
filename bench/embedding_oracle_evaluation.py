@@ -22,13 +22,12 @@ scoring commands do not name it: embedding it needs its own ticket, and scoring 
 change.
 
 archy:owns        EvaluationDrawError, check_registered, draw_evaluation,
-                  evaluation_rows, keys_sha256, main
+                  evaluation_rows, main
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import sys
 from collections.abc import Mapping, Sequence
@@ -41,21 +40,17 @@ from embedding_oracle_extract import (  # ty: ignore[unresolved-import]  (bench/
     measured_rows,
     run_and_record,
 )
-
-EVALUATION_N = 250
-EVALUATION_REPO_CAP = 25
-# Fixed by the fourth addendum (2026-11-13). Changing either constant is a new addendum.
-EVALUATION_KEYS_SHA256 = "dafa1fa79a93da51d3ff808198eab07dd5a8fe4d0533b4ba16f9edf7963582f0"
-CALIBRATION_KEYS_SHA256 = "721eff0ad057bc6f79369657ecb03179bb536f8d221449222cae0645ca779f83"
+from embedding_oracle_registered import (  # ty: ignore[unresolved-import]  (bench/ is sys.path[0])
+    CALIBRATION_KEYS_SHA256,
+    EVALUATION_KEYS_SHA256,
+    EVALUATION_N,
+    EVALUATION_REPO_CAP,
+    keys_sha256,
+)
 
 
 class EvaluationDrawError(ValueError):
     """The drawn keys are not the ones the pre-registration fixed."""
-
-
-def keys_sha256(keys: Sequence[str]) -> str:
-    """The registered fingerprint of a draw: its sorted keys joined by newlines."""
-    return hashlib.sha256("\n".join(sorted(keys)).encode()).hexdigest()
 
 
 def draw_evaluation(

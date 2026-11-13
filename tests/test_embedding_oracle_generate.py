@@ -332,11 +332,6 @@ def test_score_refuses_vectors_that_fail_validation(root: Path) -> None:
     assert run.cmd_score("jina-v2-base-code", "pilot") == 5
 
 
-def test_the_evaluation_shard_cannot_be_named_on_the_command_line() -> None:
-    with pytest.raises(SystemExit):
-        run.main(["score", "--model", "jina-v2-base-code", "--shard", "evaluation"])
-
-
 def test_one_crashing_pr_is_recorded_and_the_loop_goes_on(tmp_path: Path) -> None:
     from _supervise import Ledger  # ty: ignore[unresolved-import]
 

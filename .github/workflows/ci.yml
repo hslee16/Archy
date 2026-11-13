@@ -47,6 +47,7 @@ jobs:
             tests/test_embedding_oracle_vectors.py \
             tests/test_embedding_oracle_generate.py \
             tests/test_embedding_oracle_canary.py \
+            tests/test_embedding_oracle_evaluation_scoring.py \
             | tee numpy-tests.log
           ! grep -q "could not import" numpy-tests.log
 

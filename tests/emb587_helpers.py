@@ -48,10 +48,16 @@ def write_shard(root: Path, shard: str, texts: list[str], ascii_only: bool = Tru
 
 
 def write_meta(
-    root: Path, pr_keys: dict[str, list[str]], drops: dict[str, dict[str, str]], ok: bool = True
+    root: Path,
+    pr_keys: dict[str, list[str]],
+    drops: dict[str, dict[str, str]],
+    ok: bool = True,
 ) -> None:
+    """Describe every shard file present (pilot and calibration always; evaluation if written)."""
     shards: dict[str, object] = {}
-    for shard in ("pilot", "calibration"):
+    for shard in ("pilot", "calibration", "evaluation"):
+        if shard == "evaluation" and not (root / "evaluation.jsonl").exists():
+            continue
         data = (root / f"{shard}.jsonl").read_bytes()
         shards[shard] = {
             "sha256": hashlib.sha256(data).hexdigest(),
