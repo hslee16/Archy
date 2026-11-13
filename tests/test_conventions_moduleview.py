@@ -263,3 +263,50 @@ def test_module_view_sees_an_importer_hidden_behind_a_latin1_cookie(tmp_path: Pa
     (pkg / "store.py").write_text("class Store:\n    pass\n")
     view = compute_module_view(root, "pkg.store")
     assert view.imported_by == ("pkg.legacy",)
+
+
+def test_module_view_resolves_a_file_path_to_its_module(tmp_path: Path):
+    """The agent that just read `pkg/core.py` asks for its census by that path
+    and gets the census, not a refusal. The expected values below are the
+    fixture's own contents, asserted directly; the parity assertions the
+    issue asks for (same view as the dotted name, on model_dump() and on the
+    CLI text) come after them, so they cannot pass on an empty view."""
+    root = _project(
+        tmp_path,
+        {
+            "core.py": (
+                "from pkg.helper import assist\n\nclass Core:\n    pass\n\ndef run():\n    ...\n"
+            ),
+            "helper.py": "def assist():\n    ...\n",
+            "user.py": "from pkg.core import Core\n",
+        },
+    )
+    view = compute_module_view(root, "pkg/core.py")
+    assert view.module == "pkg.core"
+    assert view.classes == ("Core",)
+    assert view.functions == ("run",)
+    assert view.imports_internal == ("pkg.helper",)
+    assert view.imported_by == ("pkg.user",)
+    by_name = compute_module_view(root, "pkg.core")
+    assert view.model_dump() == by_name.model_dump()
+    assert _module_view_to_text(view) == _module_view_to_text(by_name)
+
+
+def test_module_view_resolves_an_init_path_to_its_package(tmp_path: Path):
+    """A package is its `__init__.py`: the path names the package itself."""
+    root = _project(
+        tmp_path,
+        {"sub/__init__.py": "class Thing:\n    pass\n", "sub/mod.py": ""},
+    )
+    view = compute_module_view(root, "pkg/sub/__init__.py")
+    assert view.module == "pkg.sub"
+    assert view.classes == ("Thing",)
+
+
+def test_module_view_refusal_for_a_mistyped_path_names_the_module():
+    """`pkg/cor.py` names no file, so it still refuses, but the hint names the
+    module the path was probably meant to be, not another path to guess at."""
+    root = _new_project({"core.py": ""})
+    with pytest.raises(LookupError) as caught:
+        compute_module_view(root, "pkg/cor.py")
+    assert str(caught.value) == (f"no module 'pkg/cor.py' under {root}; did you mean pkg.core?")

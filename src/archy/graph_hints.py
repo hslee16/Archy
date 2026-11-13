@@ -3,7 +3,7 @@
 archy:owns        hint_unresolved, resolve_modules, suggest_files, suggest_modules
 archy:mirrored-by hint_unresolved -> archy.graph, archy.mcp_runs_graph, archy.simulate,
                   resolve_modules -> archy.graph, archy.mcp_runs_graph, archy.simulate,
-                  suggest_files -> archy.graph, archy.impact,
+                  suggest_files -> archy.conventions, archy.graph, archy.impact,
                   suggest_modules -> archy.affected, archy.cli_graph,
                   archy.conventions, archy.graph, archy.mcp_runs_graph
 """

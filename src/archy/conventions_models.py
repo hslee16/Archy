@@ -9,6 +9,7 @@ archy:mirrored-by BaseFamily -> archy.conventions_docs, archy.conventions_famili
                   archy.conventions, archy.mcp_runs_check, archy.mcp_tools_conventions,
                   NamingFamily -> archy.conventions, archy.conventions_families,
                   RegistryEntry -> archy.conventions_docs, archy.conventions_families,
+                  UnparsedModule -> archy.conventions, archy.conventions_collect,
                   camel_suffix -> archy.conventions, archy.conventions_families
 """
 
