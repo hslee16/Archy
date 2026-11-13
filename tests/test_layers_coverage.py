@@ -218,3 +218,48 @@ def test_governs_no_edges_survives_model_dump():
     dumped = coverage.model_dump()
     assert dumped["governs_no_edges"] is True
     assert dumped["exact_pattern_hints"] == (hint.model_dump(),)
+
+
+def test_coverage_counts_neither_external_nor_outside_root_targets(tmp_path: Path):
+    """A layered module importing the outside world must not break coverage (#804).
+
+    Fixture: app.core.y imports app.ui.x, which is the one internal edge,
+    and app.ui.x imports os (external) and tools.z (a project package
+    outside the declared roots). Hand-worked: neither target is an entry of
+    layer_of, so neither edge counts in edges_total or edges_governed, and
+    coverage must not raise KeyError looking the targets up in layer_of.
+    The graph assertions come first so the fixture cannot drift out of
+    reaching the edge filter.
+    """
+    from archy.graph import build_graph
+
+    app = tmp_path / "app"
+    (app / "ui").mkdir(parents=True)
+    (app / "core").mkdir(parents=True)
+    (app / "__init__.py").write_text("")
+    (app / "ui" / "__init__.py").write_text("")
+    (app / "core" / "__init__.py").write_text("")
+    (app / "ui" / "x.py").write_text("import os\nimport tools.z\n")
+    (app / "core" / "y.py").write_text("from app.ui import x\n")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    (tools / "__init__.py").write_text("")
+    (tools / "z.py").write_text("")
+
+    config = _cfg(
+        tmp_path,
+        "layers:\n"
+        "  ui:\n"
+        "    modules: ['app.ui.**']\n"
+        "  core:\n"
+        "    modules: ['app.core.**']\n"
+        "forbid: []\n",
+    )
+    graph = build_graph(tmp_path)
+    assert graph.has_edge("app.ui.x", "os")
+    assert graph.has_edge("app.ui.x", "tools.z")
+
+    coverage = compute_coverage(graph, config)
+
+    assert coverage.edges_total == 1
+    assert coverage.edges_governed == 1

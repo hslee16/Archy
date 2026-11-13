@@ -103,6 +103,45 @@ def test_load_config_roots_must_be_list_of_strings(tmp_path: Path):
 
 
 @pytest.mark.parametrize(
+    "body, message",
+    [
+        # A list holding a non-string or an empty string is as invalid as a
+        # non-list: `modules: [5]` otherwise loads as a layer with zero
+        # patterns, a rule set that cannot fire while `check` exits 0 (#804).
+        (
+            "layers: {ui: {modules: [5]}}\nforbid: []\n",
+            "must define `modules` as a list of non-empty strings",
+        ),
+        (
+            "layers: {ui: {modules: ['']}}\nforbid: []\n",
+            "must define `modules` as a list of non-empty strings",
+        ),
+        (
+            "layers: {ui: {modules: [app.**]}}\nforbid: []\nexclude: [5]\n",
+            "`exclude` must be a list of non-empty strings",
+        ),
+        (
+            "layers: {ui: {modules: [app.**]}}\nforbid: []\nexclude: ['']\n",
+            "`exclude` must be a list of non-empty strings",
+        ),
+        (
+            "layers: {ui: {modules: [app.**]}}\nforbid: []\nroots: [5]\n",
+            "`roots` must be a list of non-empty strings",
+        ),
+        (
+            "layers: {ui: {modules: [app.**]}}\nforbid: []\nroots: ['']\n",
+            "`roots` must be a list of non-empty strings",
+        ),
+    ],
+)
+def test_load_config_list_entries_must_be_non_empty_strings(
+    tmp_path: Path, body: str, message: str
+):
+    with pytest.raises(LayerConfigError, match=message):
+        _cfg(tmp_path, body)
+
+
+@pytest.mark.parametrize(
     "bad",
     [
         "**",  # leading ** -> contracts root extraction would yield "**"
