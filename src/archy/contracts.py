@@ -256,8 +256,11 @@ def _drive_import_linter(
         )
         reason = " ".join(str(exc).splitlines()) or type(exc).__name__
         if isinstance(exc, NotATopLevelModule) and user_options is not None:
-            roots = ", ".join(repr(root) for root in _root_packages(user_options) if "." in root)
-            reason += f"; root_package must be a top-level package (got {roots})"
+            dotted = [root for root in _root_packages(user_options) if "." in root]
+            got = ", ".join(repr(root) for root in dotted)
+            tops = dict.fromkeys(root.split(".")[0] for root in dotted)
+            use = ", ".join(repr(top) for top in tops)
+            reason += f"; root_package must be a top-level package (got {got}; use {use})"
         elif isinstance(exc, ValueError) and re.fullmatch(r"Module '.+' does not exist\.", reason):
             reason = (
                 f"a contract names a module that is not in the import graph: {reason} "

@@ -574,7 +574,7 @@ def test_a_floating_layer_pattern_in_a_forbid_rule_is_refused_clearly(tmp_path: 
             ".importlinter",
             "[importlinter]\nroot_package = configcase.sub\n",
             "NotATopLevelModule",
-            "top-level",
+            "use 'configcase'",
         ),
         (
             "overlap",
