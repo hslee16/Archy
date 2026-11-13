@@ -51,8 +51,9 @@ from embedding_oracle_generate import (
 )
 from embedding_oracle_units import UnitFn, UnitIndexError, check_schema, load_units, split_pr
 from embedding_oracle_vectors import (
+    AUTHORISED,
+    EVALUATION_SHARD,
     PINS,
-    SHARDS,
     VectorError,
     load_vectors,
     read_shards_meta,
@@ -149,6 +150,9 @@ def _units_path(shard: str) -> Path:
 
 def cmd_score(model: str, shard: str, allow_unshipped: bool = False) -> int:
     try:
+        if shard == EVALUATION_SHARD:
+            # the pre-registration freezes the cutoff BEFORE the evaluation subset is scored
+            _checked_cutoff(model, shard)
         vs = load_vectors(ROOT, model, shard)
         shipped, _empty, dropped = universe(shard)
         units = load_units(_units_path(shard))
@@ -156,7 +160,7 @@ def cmd_score(model: str, shard: str, allow_unshipped: bool = False) -> int:
             check_schema(rows)
         binding = binding_of(vs, _units_path(shard))
         check_binding(ok_rows(_ledger_path(model, shard)), binding)
-    except (VectorError, UnitIndexError) as exc:
+    except (VectorError, UnitIndexError, FileNotFoundError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 5
     ledger = Ledger(_ledger_path(model, shard))
@@ -330,7 +334,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for name in ("score", "emit"):
         p = sub.add_parser(name)
         p.add_argument("--model", required=True, choices=sorted(PINS))
-        p.add_argument("--shard", required=True, choices=SHARDS)
+        p.add_argument("--shard", required=True, choices=AUTHORISED)
         if name == "score":
             p.add_argument(
                 "--allow-unshipped",

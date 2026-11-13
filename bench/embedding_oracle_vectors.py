@@ -15,9 +15,9 @@ Layout this module reads (all gitignored, under `bench/cache/emb587/`):
 
 Vectors are raw pooled; this module L2-normalises them, so a dot product is a cosine.
 
-archy:owns        VectorError, VectorSet, check_manifest, check_remote_code,
-                  check_shards_meta, config_key, file_sha256, load_vectors,
-                  read_shards_meta, require_same_config, shard_ids
+archy:owns        VectorError, VectorSet, check_evaluation_meta, check_manifest,
+                  check_remote_code, check_shards_meta, config_key, file_sha256,
+                  load_vectors, read_shards_meta, require_same_config, shard_ids
 archy:mirrored-by VectorError -> bench.embedding_oracle_binding,
                   bench.embedding_oracle_generate_run,
                   VectorSet -> bench.embedding_oracle_binding,
@@ -33,6 +33,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np  # ty: ignore[unresolved-import]  (bench-only: `uv run --with numpy`)
+from embedding_oracle_registered import (  # ty: ignore[unresolved-import]  (bench/ is sys.path[0])
+    EVALUATION_KEYS_SHA256,
+    EVALUATION_SHARD,
+    keys_sha256,
+)
 
 # Hugging Face commit pins, copied from addendum 1 (table and "Pins"). A manifest that
 # names any other revision is refused, whatever else it says.
@@ -54,7 +59,10 @@ POOLING: dict[str, str] = {
     "qwen3-embedding-8b": "last",
     "bge-code-v1": "last",
 }
-SHARDS = ("pilot", "calibration")  # the evaluation shard has no name here, on purpose
+SHARDS = ("pilot", "calibration")  # the shards every consumer may name
+# The evaluation shard is loadable too, but only when SHARDS.json says it holds exactly the PRs
+# the fourth addendum registered (`check_evaluation_meta`).
+AUTHORISED = (*SHARDS, EVALUATION_SHARD)
 CODE_REPO = "jinaai/jina-bert-v2-qk-post-norm"  # the primary's remote code, addendum 1 "Pins"
 CODE_REV = "3baf9e3ac750e76e8edd3019170176884695fb94"
 REQUIRED_LIBS = ("torch", "transformers", "cuda")
@@ -201,6 +209,19 @@ def check_shards_meta(meta: dict[str, object]) -> None:
         )
 
 
+def check_evaluation_meta(meta: dict[str, object]) -> None:
+    """The evaluation entry must cover exactly the registered 250 PRs (shipped plus measured-empty
+    plus dropped), written by a known extractor version. Any other draw is refused."""
+    entry = meta["shards"].get(EVALUATION_SHARD)  # type: ignore[union-attr]
+    _require(entry is not None, "SHARDS.json has no evaluation shard")
+    keys = {*entry.get("pr_keys", []), *entry.get("drops", {})}  # type: ignore[union-attr]
+    _require(
+        keys_sha256(keys) == EVALUATION_KEYS_SHA256,
+        "the evaluation shard is not the draw the fourth addendum registered",
+    )
+    _require("extractor_version" in entry, "evaluation: no extractor_version in SHARDS.json")  # type: ignore[operator]
+
+
 def read_shards_meta(root: Path) -> dict[str, object]:
     meta = json.loads((root / "SHARDS.json").read_text(encoding="utf-8"))
     check_shards_meta(meta)
@@ -209,9 +230,11 @@ def read_shards_meta(root: Path) -> dict[str, object]:
 
 def load_vectors(root: Path, model: str, shard: str) -> VectorSet:
     """The normalised vectors for `model` on `shard`, after every check, or VectorError."""
-    _require(shard in SHARDS, f"shard {shard!r} is not authorised")
+    _require(shard in AUTHORISED, f"shard {shard!r} is not authorised")
     _require(model in PINS, f"unknown model {model!r}")
     meta = read_shards_meta(root)
+    if shard == EVALUATION_SHARD:
+        check_evaluation_meta(meta)
     vdir = root / "vectors" / model
     try:
         man = json.loads((vdir / f"manifest.{shard}.json").read_text(encoding="utf-8"))
