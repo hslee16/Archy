@@ -8,10 +8,8 @@ target (the post-pilot addendum does) and reads no label and no embedding.
 The provisional rule reproduces the pre-registered numbers exactly (1,309 new members
 uncapped, 536 capped): one pair per new member per firing, a PR counting at most K.
 
-CAVEAT: `Pair.pair_id` and `Pair.unit_id` in `embedding_oracle_pairs.py` ignore the file path, so
-two same-named functions in different files collide, and the de-duplication below inherits that.
-Until that is fixed on main, a recount that differs from the provisional figure is NOT evidence
-about pairs repeated across firings; this module records counts only.
+Pair and unit ids carry the file path as well as the qualified name (#978), so two same-named
+functions in different files are two pairs here, not one. This module records counts only.
 
 For the PRs that hit the cap the recount re-parses base and head and applies the real rules
 of `expand_a_firing`: the partner is the existing member with the highest token overlap

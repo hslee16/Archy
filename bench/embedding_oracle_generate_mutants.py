@@ -84,8 +84,20 @@ MUTANTS: list[tuple[str, str, str, str]] = [
     (
         B + "embedding_oracle_pairs.py",
         "unit keyed by PR only",
-        'return f"{self.pr}|{self.new_qualname}"',
-        'return f"{self.pr}"',
+        "return _identity(self.pr, self.new_path, self.new_qualname)",
+        "return _identity(self.pr)",
+    ),
+    (
+        B + "embedding_oracle_pairs.py",
+        "pair id ignores the file paths",
+        "self.pr, self.new_path, self.new_qualname, self.existing_path, self.existing_qualname",
+        "self.pr, self.new_qualname, self.existing_qualname",
+    ),
+    (
+        B + "embedding_oracle_pairs.py",
+        "unit id ignores the file path",
+        "return _identity(self.pr, self.new_path, self.new_qualname)\n\n    @computed_field",
+        "return _identity(self.pr, self.new_qualname)\n\n    @computed_field",
     ),
     (
         B + "embedding_oracle_generate_run.py",

@@ -193,3 +193,19 @@ def test_a_ledger_row_holding_u2028_is_read_whole(tmp_path: Path) -> None:
         len((tmp_path / "precision.x.jsonl").read_text(encoding="utf-8").splitlines()) > 2
     )  # reached
     assert sorted(ledger_rows(tmp_path)) == ["1", "2"]
+
+
+def test_same_named_functions_in_different_files_are_distinct_pairs() -> None:
+    """`main` in two files, one partner: two pairs, not one (the id carries the path, #978)."""
+    members = [
+        member("a.py", "main", True, 1),
+        member("b.py", "main", True, 1),
+        member("c.py", "old", False, 1),
+    ]
+    files = {
+        p: info({"main": 40}) if p != "c.py" else info({"old": 40})
+        for p in ("a.py", "b.py", "c.py")
+    }
+    rc = recount_pr(row("1", [members]), world(files, files))
+    assert rc.new_per_firing == 2  # reached: two new members
+    assert rc.pairs == 2 and rc.kept == 2  # a name-only id would merge them into one
