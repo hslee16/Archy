@@ -8,8 +8,11 @@ wrote, which is the part archy cannot derive.
 
 from __future__ import annotations
 
+import ast
+import json
 from pathlib import Path
 
+import pytest
 from click.testing import CliRunner
 
 from archy.cli import main
@@ -248,6 +251,138 @@ def test_apply_header_gives_a_docstring_to_a_module_without_one(tmp_path: Path):
 
     assert existing_block(out) == "archy:owns        f"
     assert "import sys" in out
+
+
+@pytest.mark.parametrize("prefix", ["", "r", "u", "R", "U"])
+@pytest.mark.parametrize("quote", ['"', "'"])
+def test_apply_header_expands_one_quote_docstrings(prefix: str, quote: str):
+    literal = f"{prefix}{quote}single quoted doc{quote}"
+    code = "\n\ndef sq_fn():\n    pass\n"
+    source = literal + code
+    assert ast.get_docstring(ast.parse(source)) == "single quoted doc"
+    assert '"""' not in source and "'''" not in source
+    block = "archy:owns        sq_fn"
+
+    out = apply_header(source, block)
+
+    assert out.startswith(f"{prefix}{quote * 3}single quoted doc\n\n")
+    assert out.endswith(quote * 3 + code)
+    assert existing_block(out) == block
+    assert apply_header(out, block) == out
+
+
+@pytest.mark.parametrize("literal", [r'"line\nnext\t\"quote\""', r"'it\'s escaped'", r'r"a\nb"'])
+def test_apply_header_keeps_one_quote_escapes_as_written(literal: str):
+    source = literal + "\n"
+    before = ast.get_docstring(ast.parse(source), clean=False)
+    assert before is not None
+    assert '"""' not in source and "'''" not in source
+
+    out = apply_header(source, "archy:owns        f")
+
+    inner = literal[2:-1] if literal.startswith("r") else literal[1:-1]
+    assert inner in out
+    assert ast.get_docstring(ast.parse(out), clean=False) == before + "\n\narchy:owns        f\n"
+
+
+@pytest.mark.parametrize("literal", ['("""human prose""")', "('''human prose''')"])
+def test_apply_header_keeps_parenthesized_triple_quoted_docstrings(literal: str):
+    source = literal + "\n"
+    assert ast.get_docstring(ast.parse(source)) == "human prose"
+
+    out = apply_header(source, "archy:owns        f")
+
+    assert ast.get_docstring(ast.parse(out), clean=False) == "human prose\n\narchy:owns        f\n"
+    assert out.endswith(")\n")
+    assert apply_header(out, "archy:owns        f") == out
+
+
+@pytest.mark.parametrize(
+    "docstring",
+    ['"single " "quoted doc"', '("single "\n    "quoted doc")'],
+)
+def test_apply_header_refuses_docstrings_it_cannot_isolate(docstring: str):
+    source = f"{docstring}\n\ndef sq_fn():\n    pass\n"
+    assert ast.get_docstring(ast.parse(source)) == "single quoted doc"
+    assert '"""' not in source and "'''" not in source
+
+    with pytest.raises(ValueError, match="docstring must be a single string literal"):
+        apply_header(source, "archy:owns        sq_fn")
+
+
+@pytest.mark.parametrize(
+    "docstring",
+    [
+        '(  # "doc"\n    "doc"\n)',
+        '"doc"; value = (\n    1\n)',
+        '"""doc"""; import os',
+    ],
+)
+def test_apply_header_splices_the_literal_itself(docstring: str):
+    source = f"{docstring}\n\ndef sq_fn():\n    pass\n"
+    assert ast.get_docstring(ast.parse(source)) == "doc"
+
+    out = apply_header(source, "archy:owns        sq_fn")
+
+    assert ast.get_docstring(ast.parse(out), clean=False) == "doc\n\narchy:owns        sq_fn\n"
+    assert apply_header(out, "archy:owns        sq_fn") == out
+
+
+def test_write_one_quote_docstring_then_check(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    target = pkg / "sq.py"
+    source = '"single quoted doc"\n\ndef sq_fn():\n    pass\n'
+    assert ast.get_docstring(ast.parse(source)) == "single quoted doc"
+    assert '"""' not in source and "'''" not in source
+    target.write_text(source)
+
+    first = _write(tmp_path)
+
+    assert first.exit_code == 0, first.output
+    assert "wrote 1 header(s)" in first.output
+    once = target.read_text()
+    assert '"""single quoted doc\n' in once
+    assert "def sq_fn():\n    pass\n" in once
+    checked = _check(tmp_path)
+    assert checked.exit_code == 0, checked.output
+    second = _write(tmp_path)
+    assert second.exit_code == 0, second.output
+    assert "wrote 0 header(s)" in second.output
+    assert target.read_text() == once
+
+
+@pytest.mark.parametrize("fmt", ["text", "json"])
+@pytest.mark.parametrize(
+    "docstring",
+    ['"single " "quoted doc"', '("single "\n    "quoted doc")'],
+)
+def test_write_names_refused_modules_and_continues(tmp_path: Path, fmt: str, docstring: str):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    source = f"{docstring}\n\ndef sq_fn():\n    pass\n"
+    assert ast.get_docstring(ast.parse(source)) == "single quoted doc"
+    assert '"""' not in source and "'''" not in source
+    (pkg / "bad.py").write_text(source)
+    (pkg / "good.py").write_text("def good_fn():\n    pass\n")
+
+    result = CliRunner().invoke(
+        main, ["conventions", str(tmp_path), "--emit-headers", "--write", "--format", fmt]
+    )
+
+    assert result.exit_code == 1, result.output
+    reason = "docstring must be a single string literal"
+    if fmt == "json":
+        payload = json.loads(result.output)
+        assert payload["errors"] == {"pkg.bad": reason}
+        assert payload["written"] == ["pkg.good"]
+    else:
+        assert f"#   pkg.bad: {reason}" in result.output
+        assert "wrote 1 header(s) into 2 scanned module(s)" in result.output
+    assert (pkg / "bad.py").read_text() == source
+    assert existing_block((pkg / "good.py").read_text()) == "archy:owns        good_fn"
 
 
 def test_render_wraps_long_lists_under_the_value_column(tmp_path: Path):
