@@ -157,9 +157,10 @@ def _naming_lines(report: ConventionsReport, top_n: int) -> list[str]:
 
 
 def _kinds_lines(report: ConventionsReport, top_n: int) -> list[str]:
-    # Kinds before names. A base family answers "what is it a kind of", which is
-    # the question a suffix census silently fails when the two disagree -- and
-    # they disagree in most projects, so this section leads.
+    # Kinds follow naming. A base family answers "what is it a kind of", which
+    # is the question a suffix census silently fails when the two disagree,
+    # and they disagree in most projects, so kinds sits directly behind the
+    # naming census it corrects (#879).
     lines = [
         "",
         f"## kinds - classes grouped by what they derive from {_shown(len(report.bases), top_n)}",
