@@ -10,6 +10,12 @@ hands the rows to the extractor, so the evaluation shard cannot be built from an
     uv run python bench/embedding_oracle_evaluation.py --plan      # print the keys, change nothing
     uv run python bench/embedding_oracle_evaluation.py             # extract the evaluation shard
 
+Its entry joins `SHARDS.json`, whose top-level `ok` covers EVERY shard in it: an evaluation
+reproduction or parity mismatch, or an evaluation entry left at an older extractor version, makes
+the manifest not `ok` and so refuses the pilot and calibration shards too. That is deliberate (a
+manifest that mixes versions or hides a mismatch is not good); re-extract the evaluation shard, or
+read its `reproduction_mismatches` and `parity_mismatches`, before suspecting the other two.
+
 The shard is written beside the pilot and calibration shards as `evaluation.jsonl` and
 `evaluation.units.jsonl`, with the same contract and the same manifest. The vector loader and the
 scoring commands do not name it: embedding it needs its own ticket, and scoring it is a later

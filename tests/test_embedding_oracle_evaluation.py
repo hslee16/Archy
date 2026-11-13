@@ -103,6 +103,30 @@ def test_evaluation_rows_returns_the_ledger_rows_of_the_registered_keys() -> Non
     assert all(r["status"] == "ok" and "dropped" not in r for r in rows)
 
 
+def test_the_rows_come_back_sorted_by_key() -> None:
+    keys = [str(r["key"]) for r in ev.evaluation_rows()]
+    assert keys == sorted(keys) and keys != list(reversed(keys))
+
+
+def test_a_pilot_pr_in_the_draw_is_refused(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    drawn = str(ev.evaluation_rows()[0]["key"])
+    ledger = tmp_path / "pilot.jsonl"
+    ledger.write_text(f'{{"key": "{drawn}"}}\n', encoding="utf-8")
+    monkeypatch.setattr(ev, "PILOT_LEDGER", ledger)
+    with pytest.raises(AssertionError, match="overlap"):
+        ev.evaluation_rows()
+
+
+def test_a_calibration_pr_in_the_draw_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    measured = measured_rows(sorted(DATA.glob("precision.*.jsonl")))
+    cal = draw_calibration({k: v["repo"] for k, v in measured.items()})
+    overlapping = [*cal[:1], *ev.draw_evaluation({k: v["repo"] for k, v in measured.items()}, cal)]
+    monkeypatch.setattr(ev, "draw_evaluation", lambda *a, **k: overlapping)
+    monkeypatch.setattr(ev, "EVALUATION_KEYS_SHA256", ev.keys_sha256(overlapping))
+    with pytest.raises(AssertionError, match="overlap"):
+        ev.evaluation_rows()
+
+
 def test_the_old_cli_still_cannot_name_the_evaluation_shard() -> None:
     assert "evaluation" not in SHARD_NAMES
 
