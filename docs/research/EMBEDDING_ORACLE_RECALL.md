@@ -451,3 +451,32 @@ primary's cap of 300 in "Sample" is unchanged and is drawn first.
   code above, and the canary still has to pass for it before any real run. The model repository
   was last modified on 2025-01-06 and the organisation's newer models are different families,
   so the pin is also the guarantee that it does not change under the study.
+
+### 2026-11-12 (second addendum), before any embedding, similarity, cutoff or label exists
+
+No threshold, bar, rubric, cap, cutoff rule, model, pin or definition of a firing, a pair or a
+unit changes. One identity rule is made explicit, and one number is corrected.
+
+- **A function's identity includes its file.** Wherever this document says "function", "new
+  function", "(PR, new function)" or "(PR, new function, existing function)", the function is
+  identified by its **file path and its qualified name**. A qualified name is local to its file: in
+  one measured PR, five different files each define `main`. The harness's ids for a pair and for a
+  unit therefore encode the path of the new function, the path of the existing function and their
+  qualified names (as a JSON array, so no character in a path or a name can make two different
+  identities produce one id).
+- **Why now.** A review of the pull request that builds generator B found that the earlier ids
+  ignored the file. That merged 11 distinct new functions of one PR into 7, and in pooled labeling
+  would have merged distinct items into one unit. No similarity, cutoff or label had been computed,
+  so no result depends on it.
+- **What this does to the provisional A target.** The figure of 536 capped pairs (0.511 per PR,
+  from the ledger's members, in the "Cutoff" section above) was already marked
+  provisional and was counted from members, not ids, so it is not a final figure either way. A later
+  recount reported as 533 was produced with the faulty ids and is **withdrawn**. The recount that
+  fixes the target is still made in the post-pilot addendum, keyed by the full identity.
+- **What is still ambiguous.** Two functions with the same path **and** qualified name in one tree
+  (a property getter and setter, a conditional redefinition) still share an id. The extractor numbers
+  them with `occurrence`, and the pair rules must drop or flag a unit whose name is duplicated rather
+  than guess which one is meant. That is decided in the layer that has the index.
+- **A number corrected.** The text under "Generators" says one firing holds 181 new members. The
+  ledger's largest firing holds **183** (the same PR has a second firing holding 181). No rule depends
+  on the figure; the cap exists for the reason stated there, and the correction only fixes the number.

@@ -56,8 +56,9 @@ def with_(p: Pair, **fields) -> Pair:
 def test_pair_model_dump_carries_the_computed_ids_and_exact_tier():
     """Assert the serialized form: a plain property would be dropped."""
     same = with_(pair("7", "a.f", "b.g"), new_shape="x", existing_shape="x")
-    assert same.model_dump()["pair_id"] == "7|a.f|b.g"
-    assert same.model_dump()["unit_id"] == "7|a.f"
+    # the identity of a function is its file AND its qualified name; the paths come from the helper
+    assert same.model_dump()["pair_id"] == '["7","a/f.py","a.f","b/g.py","b.g"]'
+    assert same.model_dump()["unit_id"] == '["7","a/f.py","a.f"]'
     assert same.model_dump()["exact_tier"] is True
     assert with_(pair("1", "n.f", "o.f"), new_shape="x", existing_shape="y").exact_tier is False
 
@@ -164,7 +165,33 @@ def test_pool_merges_a_pair_both_generators_found_and_keeps_the_rest():
     pooled = pool_pairs(a, b)
     by_id = {p.pair_id: p for p in pooled}
     assert len(pooled) == 3
-    assert by_id["1|n.f|o.f"].generators == ("A", "B")
-    assert by_id["1|n.f|o.f"].similarity == 0.91
-    assert by_id["1|n.g|o.g"].generators == ("A",)
+    merged = by_id['["1","n/f.py","n.f","o/f.py","o.f"]']
+    assert merged.generators == ("A", "B") and merged.similarity == 0.91
+    assert by_id['["1","n/g.py","n.g","o/g.py","o.g"]'].generators == ("A",)
     assert [p.pair_id for p in pooled] == sorted(by_id)
+
+
+# --- review fix: a qualified name is local to its file ---------------------------------
+
+
+def test_same_name_in_different_files_is_a_different_function() -> None:
+    """One measured PR defines `main` in five files; a qualified name alone merged them."""
+    a = with_(pair("1", "main", "o.f"), new_path="tools/a.py")
+    b = with_(pair("1", "main", "o.f"), new_path="tools/b.py")
+    assert a.new_qualname == b.new_qualname and a.existing_qualname == b.existing_qualname
+    assert a.pair_id != b.pair_id  # same names, different new file
+    assert a.unit_id != b.unit_id
+    c = with_(pair("1", "n.f", "main"), existing_path="lib/x.py")
+    d = with_(pair("1", "n.f", "main"), existing_path="lib/y.py")
+    assert c.pair_id != d.pair_id  # same names, different existing file
+    assert c.unit_id == d.unit_id  # the NEW function is the same one
+    pooled = pool_pairs([a, c], [b, d])
+    assert len(pooled) == 4  # none of them was absorbed into another
+
+
+def test_an_id_cannot_collide_through_a_separator_in_a_path_or_name() -> None:
+    """A naive `|` join gives these two the same id: a path or a name holds the separator."""
+    x = with_(pair("1", "z", "o.f"), new_path="x|y")
+    y = with_(pair("1", "y|z", "o.f"), new_path="x")
+    assert f"{x.pr}|{x.new_path}|{x.new_qualname}" == f"{y.pr}|{y.new_path}|{y.new_qualname}"
+    assert x.unit_id != y.unit_id and x.pair_id != y.pair_id  # but the encoded ids differ

@@ -193,3 +193,12 @@ def test_an_unmeasurable_share_can_never_pass_and_a_precision_kill_still_stands(
 def test_below_b_floors_nothing_is_decided_even_a_would_be_kill(scorable, repos):
     got = sc.verdict(counts(prec(0.1, 0.0, 0.2), scorable, repos), headline(0.5, 0.4, 0.6))
     assert got.outcome == "not_measurable"
+
+
+def test_two_functions_with_one_name_in_different_files_are_two_units() -> None:
+    """The unit is (PR, file, qualified name): `main` in two files is two TRUE units, not one."""
+    one = pair("1", "main", "o.a", ("B",)).model_copy(update={"new_path": "tools/a.py"})
+    two = pair("1", "main", "o.b", ("B",)).model_copy(update={"new_path": "tools/b.py"})
+    assert one.new_qualname == two.new_qualname and one.pr == two.pr  # the fixture reaches it
+    got = sh.share([one, two], {one.pair_id: True, two.pair_id: True})
+    assert got.true_units == 2 and got.only_b == 2
