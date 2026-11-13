@@ -16,6 +16,7 @@ archy:mirrored-by Pair -> bench.embedding_oracle_score, bench.embedding_oracle_s
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 
@@ -34,6 +35,17 @@ class Member(BaseModel):
     is_new: bool
     nodes: int
     shape: str
+
+
+def _identity(*parts: str) -> str:
+    """An id from parts, with no separator that a path or a name could contain.
+
+    A function's identity is its file AND its qualified name: a qualified name is local to its
+    file (one measured PR defines `main` in five files), so a name-only id merged distinct
+    functions into one pair or one unit. Encoding the parts as a JSON array also means a `|` or
+    any other character in a path cannot make two different identities produce one id.
+    """
+    return json.dumps(parts, separators=(",", ":"))
 
 
 class Pair(BaseModel):
@@ -57,12 +69,14 @@ class Pair(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def pair_id(self) -> str:
-        return f"{self.pr}|{self.new_qualname}|{self.existing_qualname}"
+        return _identity(
+            self.pr, self.new_path, self.new_qualname, self.existing_path, self.existing_qualname
+        )
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def unit_id(self) -> str:
-        return f"{self.pr}|{self.new_qualname}"
+        return _identity(self.pr, self.new_path, self.new_qualname)
 
     @computed_field  # type: ignore[prop-decorator]
     @property
