@@ -6,8 +6,10 @@ from pathlib import Path
 
 from archy.graph import (
     _add_kind,
+    _follow_reexport_chains,
     build_graph,
     graph_to_dict,
+    resolve_relative_import,
 )
 from tests.graph_helpers import _edge, _internal_nodes, _mkpkg, _src_layout
 
@@ -104,6 +106,9 @@ def test_over_dotted_relative_import_from_package_injects_no_node(tmp_path: Path
     (sub / "__init__.py").write_text("from ...other import X\n")
     g = build_graph(tmp_path)
     assert "other" not in g.nodes
+    # The phantom the off-by-one actually invents is named `.other`, which a
+    # plain `"other" not in nodes` check cannot see (#806).
+    assert not any(name.startswith(".") for name in g.nodes)
     assert not any(t == "other" for _, t in g.edges)
     internal = _internal_nodes(g)
     assert internal == {"proj", "proj.regular", "proj.sub"}
@@ -380,3 +385,55 @@ def test_a_reexport_cycle_stops_at_the_first_repeat_not_after_a_fixed_number_of_
     _follow_reexport_chains(maps)
 
     assert maps["a"]["X"] == "c"
+
+
+def test_resolve_relative_import_walking_past_the_root_returns_none():
+    """One dot too many must resolve to None, not to the bare suffix (#806).
+
+    Hand-worked: level 2 from the one-segment package `pkg` walks one level
+    up, which is already past the root, so there is no base left and the
+    answer is None. From `a.b` the same level lands on `a`, so `x` resolves
+    to `a.x`. The `>=` boundary decides these; loosening it to `>` invents
+    `.x` for the first call.
+    """
+    assert resolve_relative_import("x", 2, "pkg") is None
+    assert resolve_relative_import("x", 2, "a.b") == "a.x"
+
+
+def test_reexport_check_respects_the_dot_boundary(tmp_path: Path):
+    """A prefix-sharing sibling is not a submodule of the package (#806).
+
+    `a/__init__.py` imports X from the sibling package `ab`. That is a plain
+    import, not a re-export of a's own submodule, so a consumer's
+    `from a import X` must keep its edge on `a` instead of being re-pointed
+    at `ab`. The fixture reaches the branch only if the graph really does
+    carry the a -> ab import, so assert that edge before the outcome.
+    """
+    _mkpkg(tmp_path, "a", "from ab import X\n")
+    _mkpkg(tmp_path, "ab", "X = 1\n")
+    (tmp_path / "c.py").write_text("from a import X\n")
+
+    g = build_graph(tmp_path)
+
+    internal = _internal_nodes(g)
+    edges = {(s, t) for s, t in g.edges if s in internal and t in internal}
+    assert ("a", "ab") in edges
+    assert edges == {("a", "ab"), ("c", "a")}
+
+
+def test_reexport_chain_two_node_cycle_stops_at_the_first_repeat():
+    """p -> q -> r -> q: the walk stops at r, the first repeated target (#806).
+
+    Hand-worked: p's target is q; q re-exports the same name from r, so the
+    walk moves to r; r re-exports it from q, which the walk has already
+    visited, so it stops and p lands on r. Bouncing between q and r until
+    the depth cap would land on q or r depending on the cap's parity.
+    """
+    maps = {"p": {"X": "q"}, "q": {"X": "r"}, "r": {"X": "q"}}
+    # The fixture really is circular, so a later edit cannot quietly make
+    # this an acyclic chain that any walker would answer the same way.
+    assert maps["r"]["X"] == "q" and maps["q"]["X"] == "r"
+
+    _follow_reexport_chains(maps)
+
+    assert maps["p"] == {"X": "r"}
