@@ -300,9 +300,17 @@ def apply_header(source: str, block: str) -> str:
     """
     span = _docstring_span(source)
     if span is None:
-        # Nothing to preserve here by construction, so the block can be the
-        # whole docstring rather than being merged into one.
-        return f'"""{block}\n"""\n\n{source}' if source.strip() else f'"""{block}\n"""\n'
+        # A shebang and encoding cookie depend on their physical line numbers.
+        offset = 0
+        for line in io.StringIO(source, newline=""):
+            if line.strip() and not line.lstrip().startswith("#"):
+                break
+            offset += len(line)
+        preamble, rest = source[:offset], source[offset:]
+        if preamble and not preamble.endswith(("\n", "\r")):
+            preamble += "\n"
+        header = f'"""{block}\n"""\n'
+        return preamble + header + ("\n" + rest if rest else "")
 
     doc = source[span[0] : span[1]]
     tokens: list[tokenize.TokenInfo] = []
