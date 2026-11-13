@@ -208,8 +208,21 @@ def compute_module_view(
         return _missing_module_view(
             module, root=root, modules=modules, facts=facts, unparsed=unparsed
         )
+    return _collected_module_view(
+        module, facts[module], facts, shadows, unparsed, include_tests=include_tests
+    )
 
-    f = facts[module]
+
+def _collected_module_view(
+    module: str,
+    f: _ModuleFacts,
+    facts: dict[str, _ModuleFacts],
+    shadows: frozenset[str],
+    unparsed: tuple[UnparsedModule, ...],
+    *,
+    include_tests: bool,
+) -> ModuleView:
+    """The view of a module the census collected."""
     known = frozenset(facts)
     reexports = _reexport_maps(facts, known)
     resolved = {q: _resolved_imports(g, known, reexports) for q, g in facts.items()}
@@ -217,7 +230,6 @@ def compute_module_view(
     # presence or ABSENCE of Y here, so a partial list is worse than none.
     # When any module was unparsed, that completeness claim is false (#666).
     imports = sorted(resolved[module] - {module})
-    by = sorted(q for q, mods in resolved.items() if q != module and module in mods)
     fams = sorted({camel_suffix(c.name) for c in f.classes})
     gates, errors = _gates([f])
     return ModuleView(
@@ -226,13 +238,18 @@ def compute_module_view(
         classes=tuple(sorted(c.name for c in f.classes)),
         functions=tuple(sorted(fn.name for fn in f.functions)),
         imports_internal=tuple(imports),
-        imported_by=tuple(by),
+        imported_by=tuple(_imported_by(resolved, module)),
         exports=tuple(sorted(f.exports)) if f.exports is not None else None,
         suffix_families=tuple(fams),
         gates=tuple(gates) + tuple(errors),
         census_complete=not unparsed,
         unparsed_modules=unparsed,
     )
+
+
+def _imported_by(resolved: dict[str, set[str]], module: str) -> list[str]:
+    """Every module whose resolved imports name `module`, sorted."""
+    return sorted(q for q, mods in resolved.items() if q != module and module in mods)
 
 
 def _missing_module_view(
@@ -252,23 +269,45 @@ def _missing_module_view(
     """
     miss = next((u for u in unparsed if u.module == module), None)
     if miss is not None:
-        # The module exists on disk but this interpreter cannot census it.
-        # Returning a view (not LookupError) keeps the negative answerable:
-        # the lists are empty because parsing failed, not because the name
-        # is unknown (#666).
-        return ModuleView(
-            module=module,
-            status=(f"could not be parsed (Python {miss.python}): {miss.reason} ({miss.path})"),
-            classes=(),
-            functions=(),
-            imports_internal=(),
-            imported_by=(),
-            exports=None,
-            suffix_families=(),
-            gates=(),
-            census_complete=False,
-            unparsed_modules=(miss,),
-        )
+        return _unparsed_module_view(module, miss)
+    suggestions = _refusal_suggestions(
+        module, root=root, modules=modules, facts=facts, unparsed=unparsed
+    )
+    raise LookupError(
+        f"no module {module!r} under {root}"
+        + (f"; did you mean {', '.join(suggestions[:5])}?" if suggestions else "")
+    )
+
+
+def _unparsed_module_view(module: str, miss: UnparsedModule) -> ModuleView:
+    # The module exists on disk but this interpreter cannot census it.
+    # Returning a view (not LookupError) keeps the negative answerable:
+    # the lists are empty because parsing failed, not because the name
+    # is unknown (#666).
+    return ModuleView(
+        module=module,
+        status=(f"could not be parsed (Python {miss.python}): {miss.reason} ({miss.path})"),
+        classes=(),
+        functions=(),
+        imports_internal=(),
+        imported_by=(),
+        exports=None,
+        suffix_families=(),
+        gates=(),
+        census_complete=False,
+        unparsed_modules=(miss,),
+    )
+
+
+def _refusal_suggestions(
+    module: str,
+    *,
+    root: Path,
+    modules: list[Module],
+    facts: dict[str, _ModuleFacts],
+    unparsed: tuple[UnparsedModule, ...],
+) -> list[str]:
+    """The near misses a refusal for `module` can name, best first."""
     if _looks_like_path(module):
         # `suggest_modules` compares dotted names; a mistyped path is
         # answered by the file hints, whose answer is translated back
@@ -279,11 +318,7 @@ def _missing_module_view(
     # Also suggest unparsed names: an agent asking for pkg.cache after a
     # SyntaxError skip must not be told the module does not exist.
     near_unparsed = [u.module for u in unparsed if module.split(".")[-1] in u.module]
-    suggestions = list(dict.fromkeys([*near, *near_unparsed]))
-    raise LookupError(
-        f"no module {module!r} under {root}"
-        + (f"; did you mean {', '.join(suggestions[:5])}?" if suggestions else "")
-    )
+    return list(dict.fromkeys([*near, *near_unparsed]))
 
 
 def _looks_like_path(module: str) -> bool:
@@ -315,15 +350,18 @@ def _resolve_module_path(root: Path, modules: list[Module], typed: str) -> str |
     """
     typed_posix = typed.replace("\\", "/").removeprefix("./")
     rel_paths = _module_rel_paths(root, modules)
-    matches = {
-        m.qualname
-        for m in modules
-        if str(m.path) == typed
+    matches = {m.qualname for m in modules if _spelling_matches(m, rel_paths, typed, typed_posix)}
+    return matches.pop() if len(matches) == 1 else None
+
+
+def _spelling_matches(m: Module, rel_paths: dict[str, str], typed: str, typed_posix: str) -> bool:
+    """Whether any spelling of a discovered file's path names the typed one."""
+    return (
+        str(m.path) == typed
         or rel_paths.get(m.qualname) == typed_posix
         or rel_paths.get(m.qualname, "").endswith("/" + typed_posix)
         or typed_posix.endswith("/" + rel_paths.get(m.qualname, "\0"))
-    }
-    return matches.pop() if len(matches) == 1 else None
+    )
 
 
 def _suggest_module_path(root: Path, modules: list[Module], typed: str) -> list[str]:
@@ -342,7 +380,13 @@ def _suggest_module_path(root: Path, modules: list[Module], typed: str) -> list[
     hints = suggest_files(graph, [typed], base=root)
     if not hints:
         return []
+    by_form = _path_forms(root, modules)
+    return [by_form[form] for form in hints[0].did_you_mean if form in by_form]
+
+
+def _path_forms(root: Path, modules: list[Module]) -> dict[str, str]:
+    """`{path spelling: qualname}`: each module's absolute and root-relative form."""
     by_form: dict[str, str] = {str(m.path): m.qualname for m in modules}
     for qualname, rel in _module_rel_paths(root, modules).items():
         by_form[rel] = qualname
-    return [by_form[form] for form in hints[0].did_you_mean if form in by_form]
+    return by_form
