@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import os
 import subprocess
 import sys
@@ -16,6 +17,14 @@ from archy.conventions import (
     compute_conventions,
     compute_module_view,
 )
+from archy.conventions_collect import (
+    _inner_names_by_prefix,
+    _ModuleFacts,
+    _names_outside_prefix,
+    _package_reexports,
+    _shadow_roots,
+)
+from archy.conventions_families import _collection_fields, _frozen_config
 from archy.graph import build_graph
 from tests.conventions_helpers import (
     _HOME_UNDER_SEED,
@@ -578,3 +587,124 @@ def test_conventions_report_lists_unparsed_modules(tmp_path: Path):
     assert [u["module"] for u in dumped["unparsed_modules"]] == ["pkg.bad"]
     text = _conventions_to_text(report, top_n=8)
     assert "pkg.bad" in text
+
+
+# --- #889: one pin per conventions rule the mutation run found unguarded ---
+
+
+def test_shadow_roots_decides_the_ratio_boundary_and_the_module_floor():
+    """Hand-worked expectations for _shadow_roots (#889).
+
+    pkg.v1 restates 5 of the parent's 10 names and adds 5 of its own, so
+    its inner set holds 10 names with an overlap of exactly 5: a ratio of
+    0.5, which is a shadow only because the comparison is >=. pkg.v2
+    restates 4 names with an inner set of 4, a perfect overlap that stays
+    under the min_modules floor of 5, so it is not a shadow. The other.*
+    names sit under a different top-level package and count for neither
+    side.
+    """
+    parent = [f"pkg.m{i:02d}" for i in range(1, 11)]
+    names = (
+        parent
+        + ["pkg.v1", "pkg.v2"]
+        + [f"pkg.v1.m{i:02d}" for i in range(1, 6)]
+        + [f"pkg.v1.n{i:02d}" for i in range(1, 6)]
+        + [f"pkg.v2.m{i:02d}" for i in range(1, 5)]
+        + [f"other.m{i:02d}" for i in range(1, 6)]
+    )
+    by_prefix = _inner_names_by_prefix(names)
+    # The fixture really reaches both branches: v1 has 10 inner names with
+    # an overlap of exactly 5, and v2 has only 4 inner names.
+    assert len(by_prefix["pkg.v1"]) == 10
+    assert len(by_prefix["pkg.v1"] & _names_outside_prefix("pkg.v1", names)) == 5
+    assert len(by_prefix["pkg.v2"]) == 4
+
+    assert _shadow_roots(names) == frozenset({"pkg.v1"})
+
+
+def test_shadow_roots_outside_names_exclude_the_prefix_itself():
+    """A package's own modules are not outside names for itself (#889).
+
+    lib.v1 restates 2 of its parent's names (alpha, beta) out of an inner
+    set of 5, an overlap ratio of 0.4, so it is not a shadow. Its inner
+    set also holds v1.alpha and v1.beta, which are exactly the names its
+    own top-level modules strip to under the root; counting the prefix's
+    own subtree as outside names would lift the overlap to 4 of 5 and
+    invent a shadow.
+    """
+    names = [
+        "lib.alpha",
+        "lib.beta",
+        "lib.v1.alpha",
+        "lib.v1.beta",
+        "lib.v1.extra",
+        "lib.v1.v1.alpha",
+        "lib.v1.v1.beta",
+    ]
+    assert _inner_names_by_prefix(names)["lib.v1"] == {
+        "alpha",
+        "beta",
+        "extra",
+        "v1.alpha",
+        "v1.beta",
+    }
+    assert _names_outside_prefix("lib.v1", names) == {"alpha", "beta"}
+
+    assert _shadow_roots(names) == frozenset()
+
+
+def _package_facts(
+    qualname: str, import_froms: list[tuple[str, tuple[tuple[str, str], ...]]]
+) -> _ModuleFacts:
+    facts = _ModuleFacts(qualname)
+    facts.is_package = True
+    facts.import_froms = import_froms
+    return facts
+
+
+def test_package_reexports_reject_self_unknown_and_outside_sources():
+    """Only a known submodule of the package can be a re-export (#889)."""
+    known = frozenset({"pkg", "pkg.mod"})
+    cases: list[tuple[list[tuple[str, tuple[tuple[str, str], ...]]], dict[str, str]]] = [
+        # A known submodule: the one shape that does re-export.
+        ([("pkg.mod", (("Thing", "Thing"),))], {"Thing": "pkg.mod"}),
+        # The package importing from itself is not a re-export.
+        ([("pkg", (("Thing", "Thing"),))], {}),
+        # A submodule-shaped base that does not exist is not a re-export.
+        ([("pkg.ghost", (("Thing", "Thing"),))], {}),
+        # An import from outside the package is not a re-export.
+        ([("other.mod", (("Thing", "Thing"),))], {}),
+    ]
+    for import_froms, expected in cases:
+        assert _package_reexports("pkg", _package_facts("pkg", import_froms), known) == expected
+
+
+def _class_def(source: str) -> ast.ClassDef:
+    return next(n for n in ast.parse(source).body if isinstance(n, ast.ClassDef))
+
+
+def test_frozen_config_counts_only_the_literal_true():
+    """frozen=1 is truthy, but only the literal True freezes (#889)."""
+    cases = [
+        ("model_config = ConfigDict(frozen=True)", True),
+        ("model_config = ConfigDict(frozen=False)", False),
+        ("model_config = ConfigDict(frozen=1)", False),
+        ("model_config = ConfigDict(frozen=SOME_FLAG)", False),
+    ]
+    for line, expected in cases:
+        frozen, flags = _frozen_config(_class_def(f"class A(BaseModel):\n    {line}\n"))
+        assert frozen is expected
+        assert flags == ["frozen"]
+
+
+def test_collection_fields_count_tuple_spellings_not_just_the_exact_head():
+    """tuple and typing.Tuple both count; Sequence and dict do not (#889)."""
+    cls = _class_def(
+        "class A:\n"
+        "    a: tuple[int, ...]\n"
+        "    b: typing.Tuple[int]\n"
+        "    c: list[str]\n"
+        "    d: Sequence[int]\n"
+        "    e: dict[str, int]\n"
+    )
+    assert _collection_fields(cls) == (2, 1)
