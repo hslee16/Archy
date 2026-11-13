@@ -37,6 +37,19 @@ jobs:
       - name: Tests
         run: uv run pytest
 
+      # numpy is not an archy dependency (only the optional `parity` group has it), so the
+      # #587 embedding-oracle tests skip in the step above. This runs them on a fixed list of
+      # files with numpy supplied for this step only, and fails if one skipped for want of numpy
+      # (a new numpy test file must be added to this list or it never runs in CI).
+      - name: Tests that need numpy (embedding oracle, #587)
+        run: |
+          uv run --with numpy python -m pytest -q -rs \
+            tests/test_embedding_oracle_vectors.py \
+            tests/test_embedding_oracle_generate.py \
+            tests/test_embedding_oracle_canary.py \
+            | tee numpy-tests.log
+          ! grep -q "could not import" numpy-tests.log
+
       - name: Layer rules (archy check)
         uses: ./
         with:

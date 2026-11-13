@@ -486,7 +486,9 @@ def test_calibrate_and_emit_refuse_when_any_id_had_no_vector(root: Path) -> None
 
 def test_emit_refuses_a_shard_with_an_unshipped_id(root: Path) -> None:
     add_unit(root, "pilot", unit("20/base/a.py:ghost", "not-in-the-shard", counterpart=True))
-    scored_and_calibrated(root)
+    assert run.cmd_score(MODEL, "calibration") == 0
+    assert run.cmd_score(MODEL, "pilot", allow_unshipped=True) == 0  # pilot plumbing, allowed
+    assert run.cmd_calibrate(MODEL, 1.0, "t", "all-measured") == 0
     run.cmd_freeze(MODEL, "addendum (test)")
     assert run.cmd_emit(MODEL, "pilot") == 5
 
@@ -507,3 +509,11 @@ def test_a_target_must_be_positive_and_finite(root: Path, bad: str) -> None:
     with pytest.raises(SystemExit):
         run.main(["calibrate", "--model", MODEL, "--target", bad, "--target-source", "t"])
     assert run.cmd_calibrate(MODEL, float(bad), "t", "all-measured") == 5
+
+
+def test_score_refuses_unshipped_ids_unless_explicitly_allowed(root: Path) -> None:
+    add_unit(root, "pilot", unit("20/base/a.py:ghost", "not-in-the-shard", counterpart=True))
+    assert run.cmd_score(MODEL, "pilot") == 5  # reached: the ghost id had no vector
+    assert run.cmd_score(MODEL, "pilot", allow_unshipped=True) == 0  # explicit, for pilot plumbing
+    assert run.main(["score", "--model", MODEL, "--shard", "pilot"]) == 5
+    assert run.main(["score", "--model", MODEL, "--shard", "pilot", "--allow-unshipped"]) == 0

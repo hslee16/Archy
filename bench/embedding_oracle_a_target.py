@@ -19,7 +19,7 @@ the largest new functions. A PR under the cap keeps its ledger count, which can 
 high (existence and de-duplication only remove pairs), so the recount is an UPPER bound for
 those PRs; `--reparse all` removes that caveat at the price of cloning every firing PR.
 
-archy:owns        FileInfo, PrRecount, a_target, git_info_at, ledger_count,
+archy:owns        Expansion, FileInfo, PrRecount, a_target, git_info_at, ledger_count,
                   ledger_rows, main, new_members, recount_pr
 """
 
@@ -30,10 +30,12 @@ import json
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
+from diff_duplicates_precision import MIN_NODES  # ty: ignore[unresolved-import]
 from embedding_oracle_pairs import K, Member, Pair, PrRef, cap_pairs, expand_a_firing
 
 from archy.complexity import compute_function_complexity, extract_token_bags
@@ -49,6 +51,9 @@ class FileInfo:
 
     funcs: dict[str, tuple[int, str, int]]
     bags: dict[int, Counter[str]]
+    dups: frozenset[str] = (
+        frozenset()
+    )  # qualified names carried by more than one floor-clearing function
 
 
 InfoAt = Callable[[str, str], "FileInfo | None"]  # (side, path) -> the file, or None if absent
@@ -62,6 +67,8 @@ class PrRecount:
     dropped_no_partner: int
     kept: int
     kept_nodes: tuple[int, ...]
+    ambiguous: int = 0
+    unresolved_members: int = 0
 
 
 def ledger_rows(data: Path) -> dict[str, dict[str, object]]:
@@ -87,6 +94,13 @@ def ledger_count(row: dict[str, object]) -> int:
     return min(K, new_members(row))
 
 
+class Expansion(NamedTuple):
+    pairs: list[Pair]
+    dropped: int
+    ambiguous: int
+    unresolved: int
+
+
 def _member(m: dict[str, object], head: FileInfo | None) -> Member:
     nodes, shape, _line = (head.funcs.get(m["qualified_name"]) if head else None) or (
         0,
@@ -98,9 +112,27 @@ def _member(m: dict[str, object], head: FileInfo | None) -> Member:
     )
 
 
-def _firing_pairs(ref: PrRef, firing: dict[str, object], info_at: InfoAt) -> tuple[list[Pair], int]:
-    line = {(m["path"], m["qualified_name"]): m["line"] for m in firing["members"]}
-    members = [_member(m, info_at("head", m["path"])) for m in firing["members"]]
+def _unresolved(m: dict[str, object], info_at: InfoAt) -> bool:
+    """A member archy found at head that the re-parse cannot find: its size would read as 0."""
+    head = info_at("head", m["path"])
+    return head is None or m["qualified_name"] not in head.funcs
+
+
+def _ambiguous(m: dict[str, object], info_at: InfoAt) -> bool:
+    """B drops a new function whose (path, qualified name) more than one function carries in a
+    tree; A does the same, so the two generators agree on which new functions are scored."""
+    if not m["new"]:
+        return False
+    sides = (info_at("base", m["path"]), info_at("head", m["path"]))
+    return any(i is not None and m["qualified_name"] in i.dups for i in sides)
+
+
+def _firing_pairs(ref: PrRef, firing: dict[str, object], info_at: InfoAt) -> Expansion:
+    raw = firing["members"]
+    line = {(m["path"], m["qualified_name"]): m["line"] for m in raw}
+    unresolved = sum(_unresolved(m, info_at) for m in raw)
+    keep = [m for m in raw if not _ambiguous(m, info_at)]
+    members = [_member(m, info_at("head", m["path"])) for m in keep]
 
     def bag(m: Member) -> Counter[str]:
         info = info_at("head", m.path)
@@ -110,28 +142,29 @@ def _firing_pairs(ref: PrRef, firing: dict[str, object], info_at: InfoAt) -> tup
         base, head = info_at("base", m.path), info_at("head", m.path)
         return bool(base and head and m.qualname in base.funcs and m.qualname in head.funcs)
 
-    return expand_a_firing(
+    pairs, dropped = expand_a_firing(
         ref, members, overlap=lambda a, b: _jaccard(bag(a), bag(b)), exists_at_both=exists_at_both
     )
+    return Expansion(pairs, dropped, len(raw) - len(keep), unresolved)
 
 
 def recount_pr(row: dict[str, object], info_at: InfoAt) -> PrRecount:
     """Real pair expansion for one PR: partners, existence, de-duplication, then the cap."""
     ref = PrRef(pr=row["key"], repo=row["repo"])
     pooled: dict[str, Pair] = {}
-    dropped = 0
+    dropped = ambiguous = unresolved = 0
     for firing in row["firings"]:
-        pairs, lost = _firing_pairs(ref, firing, info_at)
-        dropped += lost
-        pooled.update({p.pair_id: p for p in pairs})
+        ex = _firing_pairs(ref, firing, info_at)
+        dropped, ambiguous, unresolved = (
+            dropped + ex.dropped,
+            ambiguous + ex.ambiguous,
+            unresolved + ex.unresolved,
+        )
+        pooled.update({p.pair_id: p for p in ex.pairs})
     kept = cap_pairs(list(pooled.values()))
+    nodes = tuple(sorted(p.new_nodes for p in kept))
     return PrRecount(
-        row["key"],
-        new_members(row),
-        len(pooled),
-        dropped,
-        len(kept),
-        tuple(sorted(p.new_nodes for p in kept)),
+        row["key"], new_members(row), len(pooled), dropped, len(kept), nodes, ambiguous, unresolved
     )
 
 
@@ -165,23 +198,34 @@ def a_target(
     return _summary(rows, total, recounts, unresolved)
 
 
+def _counts(rows: dict[str, dict[str, object]], recounts: Sequence[PrRecount]) -> dict[str, object]:
+    return {
+        "measured_prs": len(rows),
+        "uncapped_new_members": sum(new_members(r) for r in rows.values()),
+        "prs_with_any_firing": sum(1 for r in rows.values() if r["firings"]),
+        "prs_at_cap": sum(1 for r in rows.values() if new_members(r) > K),
+        "ambiguous_new_members": sum(rc.ambiguous for rc in recounts),
+        "unresolved_members": sum(rc.unresolved_members for rc in recounts),
+    }
+
+
 def _summary(
     rows: dict[str, dict[str, object]],
     total: int,
-    recounts: Iterable[PrRecount],
+    recounts: Sequence[PrRecount],
     unresolved: dict[str, str],
 ) -> dict[str, object]:
-    n = len(rows)
+    counts = _counts(rows, recounts)
     provisional = sum(ledger_count(r) for r in rows.values())
+    final = not unresolved and not counts["unresolved_members"]
+    label = "recount" if final else "partial_recount"  # a non-final total is never named final
     return {
-        "measured_prs": n,
-        "uncapped_new_members": sum(new_members(r) for r in rows.values()),
+        **counts,
+        "final": final,
         "provisional_capped_pairs": provisional,
-        "provisional_per_pr": provisional / n,
-        "recount_capped_pairs": total,
-        "recount_per_pr": total / n,
-        "prs_with_any_firing": sum(1 for r in rows.values() if r["firings"]),
-        "prs_at_cap": sum(1 for r in rows.values() if new_members(r) > K),
+        "provisional_per_pr": provisional / len(rows),
+        f"{label}_capped_pairs": total,
+        f"{label}_per_pr": total / len(rows),
         "reparsed": [rc.__dict__ for rc in recounts],
         "unresolved": unresolved,
         "frozen": False,
@@ -192,11 +236,11 @@ def _summary(
 
 
 def _parse(source: bytes) -> FileInfo:
-    funcs = {
-        f.qualified_name: (f.size, f.shape_hash, f.line)
-        for f in compute_function_complexity(source)
-    }
-    return FileInfo(funcs=funcs, bags=extract_token_bags(source))
+    fns = compute_function_complexity(source)
+    funcs = {f.qualified_name: (f.size, f.shape_hash, f.line) for f in fns}
+    floor = Counter(f.qualified_name for f in fns if f.shape_hash and f.size >= MIN_NODES)
+    dups = frozenset(q for q, n in floor.items() if n > 1)
+    return FileInfo(funcs=funcs, bags=extract_token_bags(source), dups=dups)
 
 
 def git_info_at(repo_dir: Path, base: str, head: str) -> InfoAt:
@@ -238,10 +282,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         json.dumps(result, indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
     print(
-        json.dumps(
-            {k: v for k, v in result.items() if k not in ("reparsed",)}, indent=1, sort_keys=True
-        )
+        json.dumps({k: v for k, v in result.items() if k != "reparsed"}, indent=1, sort_keys=True)
     )
+    if not result["final"]:
+        print(
+            "NOT FINAL: unresolved PRs or members; the partial total is not the A target",
+            file=sys.stderr,
+        )
+        return 6
     return 0
 
 

@@ -11,11 +11,14 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+import pytest
+
 sys.path.append(str(Path(__file__).resolve().parent.parent / "bench"))
 
 from embedding_oracle_a_target import (  # ty: ignore[unresolved-import]  (added to sys.path above)
     FileInfo,
     _firing_pairs,
+    _parse,
     a_target,
     git_info_at,
     ledger_count,
@@ -103,11 +106,11 @@ def test_the_partner_is_the_existing_member_with_the_highest_token_overlap() -> 
         3: Counter("aab"),
     }  # n and near identical (Jaccard 1), far disjoint (0)
     fi = FileInfo({"n": (40, "s", 1), "far": (40, "s", 2), "near": (40, "s", 3)}, bags)
-    pairs, dropped = _firing_pairs(
+    ex = _firing_pairs(
         PrRef(pr="1", repo="o/r"), {"members": members}, world({"a.py": fi}, {"a.py": fi})
     )
-    assert dropped == 0 and len(pairs) == 1
-    assert pairs[0].existing_qualname == "near"
+    assert ex.dropped == 0 and len(ex.pairs) == 1
+    assert ex.pairs[0].existing_qualname == "near"
 
 
 def test_pairs_from_two_firings_with_the_same_id_are_one_pair() -> None:
@@ -150,7 +153,7 @@ def test_a_target_reparses_only_what_it_was_asked_to() -> None:
 
 def test_an_unresolvable_pr_keeps_its_ledger_count_and_is_reported() -> None:
     got = a_target({"1": row("1", [big_firing(12)])}, lambda r: None, "capped")
-    assert got["recount_capped_pairs"] == 10
+    assert got["partial_recount_capped_pairs"] == 10 and got["final"] is False
     assert list(got["unresolved"]) == ["1"]
 
 
@@ -209,3 +212,84 @@ def test_same_named_functions_in_different_files_are_distinct_pairs() -> None:
     rc = recount_pr(row("1", [members]), world(files, files))
     assert rc.new_per_firing == 2  # reached: two new members
     assert rc.pairs == 2 and rc.kept == 2  # a name-only id would merge them into one
+
+
+def test_an_unresolved_member_makes_the_recount_non_final() -> None:
+    """The head parse lacks one member archy found there: its size would read 0 and it could fall
+    out of the top K without a sound. The result is flagged, and no total is named final."""
+    head = {f"new{i:02d}": 30 + i for i in range(12)}  # `old` is missing from the head parse
+    world_ = world({"a.py": info({"old": 50})}, {"a.py": info(head)})
+    rc = recount_pr(row("1", [big_firing(12)]), world_)
+    assert rc.unresolved_members == 1  # reached: the old member could not be resolved
+    got = a_target({"1": row("1", [big_firing(12)])}, lambda r: world_, "capped")
+    assert got["final"] is False and got["unresolved_members"] == 1
+    assert "recount_capped_pairs" not in got and got["partial_recount_capped_pairs"] == 0
+
+
+def test_an_unresolved_pr_makes_the_recount_non_final_and_a_clean_one_final() -> None:
+    bad = a_target({"1": row("1", [big_firing(12)])}, lambda r: None, "capped")
+    assert bad["final"] is False and "recount_capped_pairs" not in bad
+    good = a_target({"1": row("1", [big_firing(12)])}, lambda r: big_world(12), "capped")
+    assert good["final"] is True and good["recount_capped_pairs"] == 10
+
+
+def test_main_exits_non_zero_when_the_recount_is_not_final(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import embedding_oracle_a_target as mod  # ty: ignore[unresolved-import]
+
+    monkeypatch.setattr(mod, "ROOT", tmp_path)
+    monkeypatch.setattr(mod, "ledger_rows", lambda data: {"1": row("1", [big_firing(12)])})
+    monkeypatch.setattr(mod, "_resolver", lambda r: None)
+    assert mod.main(["--reparse", "capped"]) == 6
+    assert "NOT FINAL" in capsys.readouterr().err
+    monkeypatch.setattr(mod, "_resolver", lambda r: big_world(12))
+    assert mod.main(["--reparse", "capped"]) == 0
+
+
+def test_a_new_member_whose_name_is_duplicated_is_ambiguous_as_in_b() -> None:
+    """B drops a new function whose (path, qualified name) more than one function carries; A
+    must too, so both generators score the same new functions. Old members are unaffected."""
+    members = [
+        member("a.py", "prop", True, 1),
+        member("a.py", "other", True, 2),
+        member("a.py", "old", False, 3),
+    ]
+    dup = FileInfo(
+        {"prop": (40, "s", 1), "other": (40, "s", 2), "old": (40, "s", 3)},
+        {},
+        frozenset({"prop", "old"}),
+    )
+    files = {"a.py": dup}
+    ex = _firing_pairs(PrRef(pr="1", repo="o/r"), {"members": members}, world(files, files))
+    assert ex.ambiguous == 1  # reached: `prop` was dropped
+    assert [p.new_qualname for p in ex.pairs] == ["other"]
+    assert ex.pairs[0].existing_qualname == "old"  # a duplicated OLD member is still a partner
+
+
+LOOP_BODY = """        cleaned = []
+        for record in records:
+            name = record.get("name")
+            if name is None:
+                continue
+            score = record.get("score", 0)
+            if score < minimum:
+                continue
+            cleaned.append({"name": name.strip().lower(), "score": score})
+        return cleaned
+"""
+
+
+def test_the_parser_flags_names_carried_by_two_floor_clearing_functions() -> None:
+    twice = (
+        "class C:\n    def prop(self, records, minimum):\n"
+        + LOOP_BODY
+        + "    def prop(self, records, minimum, extra):\n"
+        + LOOP_BODY
+        + "    def once(self, records, minimum):\n"
+        + LOOP_BODY
+        + "    def tiny(self):\n        return 1\n    def tiny(self, x):\n        return x\n"
+    )
+    parsed = _parse(twice.encode())
+    assert parsed.funcs["C.prop"][0] >= 30 and parsed.funcs["C.tiny"][0] < 30  # reached: both kinds
+    assert parsed.dups == frozenset({"C.prop"})  # the duplicated tiny pair is under the floor

@@ -519,6 +519,116 @@ MUTANTS: list[tuple[str, str, str, str]] = [
         "if not addendum.strip():",
         "if False:",
     ),
+    # --- review round 2: shape and range of the config, A recount honesty, unshipped refusal -----
+    (
+        B + "embedding_oracle_vectors.py",
+        "batch size and max_len not validated",
+        '    for field in ("batch_size", "max_len"):\n        _check_positive_int(man, field)\n',
+        "",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "cublas config not validated",
+        '    _check_cublas(man.get("cublas_workspace_config"))\n',
+        "",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "batch size may be below one",
+        "and value >= 1",
+        "and True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "a bool is a batch size",
+        "and not isinstance(value, bool)",
+        "",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "batch size may be any type",
+        "ok = isinstance(value, int) and",
+        "ok = True and",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "cublas form not checked",
+        "CUBLAS_FORM.fullmatch(value) is not None",
+        "True",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "cublas value may be any type",
+        "ok = isinstance(value, str) and",
+        "ok = True and",
+    ),
+    (
+        B + "embedding_oracle_vectors.py",
+        "cublas prefix match accepted",
+        "CUBLAS_FORM.fullmatch(value)",
+        "CUBLAS_FORM.match(value)",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "unresolved members not counted",
+        "unresolved = sum(_unresolved(m, info_at) for m in raw)",
+        "unresolved = 0",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "a non-final recount called final",
+        'final = not unresolved and not counts["unresolved_members"]',
+        "final = True",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "a partial total named final",
+        'label = "recount" if final else "partial_recount"',
+        'label = "recount"',
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "a non-final recount exits zero",
+        'if not result["final"]:',
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "ambiguous new members kept",
+        "keep = [m for m in raw if not _ambiguous(m, info_at)]",
+        "keep = list(raw)",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "duplicated names never ambiguous",
+        'any(i is not None and m["qualified_name"] in i.dups for i in sides)',
+        "False",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "old members dropped as ambiguous",
+        'if not m["new"]:\n        return False\n',
+        "",
+    ),
+    (
+        B + "embedding_oracle_a_target.py",
+        "duplicates counted below the floor",
+        "if f.shape_hash and f.size >= MIN_NODES)",
+        "if True)",
+    ),
+    (B + "embedding_oracle_a_target.py", "duplicates need three copies", "if n > 1)", "if n > 2)"),
+    (
+        B + "embedding_oracle_generate_run.py",
+        "unshipped ids accepted by score",
+        "if unshipped and not allow_unshipped:",
+        "if False:",
+    ),
+    (
+        B + "embedding_oracle_generate_run.py",
+        "the allow flag is ignored",
+        "cmd_score(a.model, a.shard, a.allow_unshipped)",
+        "cmd_score(a.model, a.shard)",
+    ),
     # --- the A recount --------------------------------------------------------------------
     (
         B + "embedding_oracle_a_target.py",
@@ -529,8 +639,8 @@ MUTANTS: list[tuple[str, str, str, str]] = [
     (
         B + "embedding_oracle_a_target.py",
         "pairs from two firings not pooled",
-        "pooled.update({p.pair_id: p for p in pairs})",
-        'pooled.update({f"{len(pooled)}|{p.pair_id}": p for p in pairs})',
+        "pooled.update({p.pair_id: p for p in ex.pairs})",
+        'pooled.update({f"{len(pooled)}|{p.pair_id}": p for p in ex.pairs})',
     ),
     (
         B + "embedding_oracle_a_target.py",

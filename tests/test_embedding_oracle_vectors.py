@@ -329,3 +329,31 @@ def test_a_huge_but_finite_vector_is_normalised_in_float64(tmp_path: Path) -> No
     vs = load_vectors(root, MODEL, "pilot")
     assert np.allclose(np.linalg.norm(vs.vecs, axis=1), 1.0, atol=1e-6)
     assert bool(np.isfinite(vs.vecs).all())  # no row became zeros or inf
+
+
+@pytest.mark.parametrize("field", ["batch_size", "max_len"])
+@pytest.mark.parametrize("bad", [0, -1, 8.5, "8", True])
+def test_batch_size_and_max_len_must_be_integers_of_at_least_one(
+    tmp_path: Path, field: str, bad: object
+) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, **{field: bad})
+    with pytest.raises(VectorError, match=f"{field} must be an integer"):
+        load_vectors(root, MODEL, "pilot")
+
+
+@pytest.mark.parametrize("bad", ["", "4096:8", ":a:b", ":4096", 5, ":4096:8:"])
+def test_the_cublas_workspace_config_must_be_a_cuda_form(tmp_path: Path, bad: object) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, cublas_workspace_config=bad)
+    with pytest.raises(VectorError, match="not a CUDA form"):
+        load_vectors(root, MODEL, "pilot")
+
+
+@pytest.mark.parametrize("good", [":4096:8", ":16:8", ":4096:8:16:8"])
+def test_the_accepted_cublas_forms_load(tmp_path: Path, good: str) -> None:
+    root = _root(tmp_path)
+    write_vectors(root, MODEL, "pilot", ARR, cublas_workspace_config=good)
+    assert (
+        load_vectors(root, MODEL, "pilot").model == MODEL
+    )  # reached: the good form is not refused

@@ -147,7 +147,7 @@ def _units_path(shard: str) -> Path:
     return ROOT / f"{shard}.units.jsonl"
 
 
-def cmd_score(model: str, shard: str) -> int:
+def cmd_score(model: str, shard: str, allow_unshipped: bool = False) -> int:
     try:
         vs = load_vectors(ROOT, model, shard)
         shipped, _empty, dropped = universe(shard)
@@ -168,11 +168,18 @@ def cmd_score(model: str, shard: str) -> int:
     )
     rows = [ledger.get(_key(model, shard, pr)) for pr in shipped]
     unshipped = sum(r["unshipped"] for r in rows if r)  # type: ignore[index]
-    note = f"; WARNING {unshipped} ids had no vector (not shipped)" if unshipped else ""
+    note = f"; {unshipped} ids had no vector (not shipped)" if unshipped else ""
     print(
         f"{model} {shard}: {ledger.completed}/{len(shipped)} PRs scored, {errors} errored, "
         f"{len(dropped)} unmeasurable{note}"
     )
+    if unshipped and not allow_unshipped:
+        print(
+            "REFUSED: scored rows hold unshipped ids; calibrate and emit will refuse them too. "
+            "Pass --allow-unshipped only for pilot plumbing, never for calibration.",
+            file=sys.stderr,
+        )
+        return 5
     return 6 if errors else 0
 
 
@@ -324,6 +331,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         p = sub.add_parser(name)
         p.add_argument("--model", required=True, choices=sorted(PINS))
         p.add_argument("--shard", required=True, choices=SHARDS)
+        if name == "score":
+            p.add_argument(
+                "--allow-unshipped",
+                action="store_true",
+                help="accept ids with no vector (pilot plumbing only; emit still refuses)",
+            )
     c = sub.add_parser("calibrate")
     c.add_argument("--model", required=True, choices=sorted(PINS))
     c.add_argument("--target", required=True, type=_target)
@@ -337,7 +350,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if a.cmd == "freeze":
             return cmd_freeze(a.model, a.addendum)
         if a.cmd == "score":
-            return cmd_score(a.model, a.shard)
+            return cmd_score(a.model, a.shard, a.allow_unshipped)
         if a.cmd == "emit":
             return cmd_emit(a.model, a.shard)
         return cmd_calibrate(a.model, a.target, a.target_source, a.denominator)

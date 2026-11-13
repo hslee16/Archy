@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -57,6 +58,7 @@ SHARDS = ("pilot", "calibration")  # the evaluation shard has no name here, on p
 CODE_REPO = "jinaai/jina-bert-v2-qk-post-norm"  # the primary's remote code, addendum 1 "Pins"
 CODE_REV = "3baf9e3ac750e76e8edd3019170176884695fb94"
 REQUIRED_LIBS = ("torch", "transformers", "cuda")
+CUBLAS_FORM = re.compile(r"(:[0-9]+:[0-9]+)+")
 CONFIG_FIELDS = (
     "dtype",
     "tf32",
@@ -148,10 +150,25 @@ def _check_comparable(man: dict[str, object]) -> None:
     that both lack it would compare equal."""
     for field in CONFIG_FIELDS:
         _require(man.get(field) is not None, f"manifest lacks {field!r}")
+    for field in ("batch_size", "max_len"):
+        _check_positive_int(man, field)
+    _check_cublas(man.get("cublas_workspace_config"))
     libs = man.get("libs")
     _require(isinstance(libs, dict), "manifest lacks the library versions")
     for lib in REQUIRED_LIBS:
         _require(bool(libs.get(lib)), f"manifest libs lack {lib!r}")  # type: ignore[union-attr]
+
+
+def _check_positive_int(man: dict[str, object], field: str) -> None:
+    value = man.get(field)
+    ok = isinstance(value, int) and not isinstance(value, bool) and value >= 1
+    _require(ok, f"{field} must be an integer of at least 1, not {value!r}")
+
+
+def _check_cublas(value: object) -> None:
+    """CUDA's forms of CUBLAS_WORKSPACE_CONFIG: one or more `:SIZE:COUNT`, e.g. `:4096:8`."""
+    ok = isinstance(value, str) and CUBLAS_FORM.fullmatch(value) is not None
+    _require(ok, f"cublas_workspace_config {value!r} is not a CUDA form such as ':4096:8'")
 
 
 def check_remote_code(man: dict[str, object], model: str) -> None:
