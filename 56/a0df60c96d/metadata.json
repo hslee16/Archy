@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "56a0df60c96d",
+  "strategy": "manual-commit",
+  "branch": "alee/emb587-labeling",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/56/a0df60c96d/0/metadata.json",
+      "transcript": "/56/a0df60c96d/0/full.jsonl",
+      "content_hash": "/56/a0df60c96d/0/content_hash.txt",
+      "prompt": "/56/a0df60c96d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1504,
+    "cache_creation_tokens": 2310118,
+    "cache_read_tokens": 210541169,
+    "output_tokens": 756721,
+    "api_call_count": 658
+  }
+}

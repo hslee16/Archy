@@ -1,0 +1,101 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "56a0df60c96d",
+  "session_id": "9ad19a71-f971-4bfa-a7a2-ceb1ad7b0ad0",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-15T18:32:00.802125Z",
+  "branch": "alee/emb587-labeling",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "Claude Code",
+  "model": "claude-sonnet-5-5",
+  "turn_id": "c837062bd782",
+  "token_usage": {
+    "input_tokens": 1504,
+    "cache_creation_tokens": 2310118,
+    "cache_read_tokens": 210541169,
+    "output_tokens": 756721,
+    "api_call_count": 658
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "prompt-skill-claude-code-deepwork:review-2026-11-12T22:25:46.454242Z",
+      "event_type": "prompt_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "prompt_slash_command",
+        "confidence": "explicit"
+      },
+      "turn_id": "6a99b482cfac",
+      "timestamp": "2026-11-12T22:25:46.454242Z",
+      "native": {
+        "command": "/deepwork:review"
+      },
+      "collapse": {
+        "target": "user_message",
+        "label": "/deepwork:review",
+        "default_collapsed": true
+      }
+    },
+    {
+      "id": "claude-skill-toolu_01LE7pzEQNf3TsyYvjvR3SD9",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "c837062bd782",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 177,
+        "end": 178,
+        "entry_ids": [
+          "4a9d91c0-5d83-48b4-9f63-ed73e9dd96f6"
+        ],
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01LE7pzEQNf3TsyYvjvR3SD9"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 79
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 56,
+      "user_lines_removed": 31,
+      "agent_lines_added": 87,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "bench/embedding_oracle_a_target.py": 12,
+        "bench/embedding_oracle_packets.py": 3,
+        "bench/embedding_oracle_pool.py": 17,
+        "tests/test_embedding_oracle_labeling.py": 24
+      },
+      "user_removed_per_file": {
+        "bench/embedding_oracle_a_target.py": 3,
+        "bench/embedding_oracle_packets.py": 2,
+        "bench/embedding_oracle_pool.py": 9,
+        "tests/test_embedding_oracle_labeling.py": 17
+      }
+    }
+  ]
+}
