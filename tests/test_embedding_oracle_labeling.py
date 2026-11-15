@@ -20,10 +20,10 @@ import embedding_oracle_report as rep  # ty: ignore[unresolved-import]  (path se
 from embedding_oracle_pairs import Pair  # ty: ignore[unresolved-import]  (path set above)
 
 
-def _pair(i: int, gens=("B",), pr="1", repo="o/r", shape=("n", "e")) -> Pair:
+def _pair(i: int, gens=("B",), shape=("n", "e")) -> Pair:
     return Pair(
-        pr=pr,
-        repo=repo,
+        pr="1",
+        repo="o/r",
         new_path="a.py",
         new_qualname=f"new{i}",
         new_nodes=50,
@@ -258,3 +258,30 @@ def test_report_is_strict_and_counts_by_hand() -> None:
     assert primary["share_with_exact"]["only_b"] == 1
     assert primary["a_precision"] == pytest.approx(1.0)  # p0 and p2 both TRUE
     assert out["packets_labeled_by_both"] == 4
+
+
+def test_a_name_carried_by_two_functions_in_a_file_is_not_located(tmp_path: Path) -> None:
+    """`dup` is defined twice in one file: which one the pair means is unknowable, so the
+    packet is refused rather than built from a guess."""
+    repo, _base, _head = _repo(tmp_path)
+    (repo / "c.py").write_text("def dup():\n    return 1\n\ndef dup():\n    return 2\n")
+    import subprocess
+
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "c"], check=True)
+    head = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+    ).stdout.strip()
+    with pytest.raises(LookupError, match="matches 2 functions"):
+        pk._source(repo, head, "c.py", "dup")
+    with pytest.raises(LookupError, match="matches 0 functions"):
+        pk._source(repo, head, "c.py", "absent")
+
+
+def test_plan_summary_counts_pairs_both_generators_emit() -> None:
+    a, b = _pair(1, ("A",)), _pair(1, ("B",))
+    plan = pool.plan_pool([], lambda row: None, [b, _pair(2, ("B",))])
+    merged = pool.PoolPlan([a], plan.b_pairs, pool.pool_pairs([a], plan.b_pairs), [], [])
+    summary = pool._plan_summary(merged)
+    assert summary["pool"] == 2 and summary["emitted_by_both"] == 1
+    assert summary["a_pairs"] == 1 and summary["b_pairs"] == 2

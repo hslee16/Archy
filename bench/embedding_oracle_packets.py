@@ -57,47 +57,68 @@ def source_by_indent(text: str, line: int) -> str | None:
     kept, up to the first line that is not.
     """
     lines = text.splitlines()
-    if not 1 <= line <= len(lines):
-        return None
-    first = lines[line - 1]
+    first = lines[line - 1] if 1 <= line <= len(lines) else ""
     if not first.lstrip().startswith(("def ", "async def ")):
         return None
-    indent = len(first) - len(first.lstrip())
-    start = line - 1
-    while (
-        start > 0
-        and lines[start - 1].strip().startswith("@")
-        and _indent(lines[start - 1]) == indent
-    ):
-        start -= 1
-    i, depth = line - 1, 0
-    while i < len(lines):
-        depth += sum(lines[i].count(c) for c in "([{") - sum(lines[i].count(c) for c in ")]}")
-        if depth <= 0 and lines[i].rstrip().endswith(":"):
-            break
-        i += 1
-    end = i
-    for j in range(i + 1, len(lines)):
-        if lines[j].strip() and _indent(lines[j]) <= indent:
-            break
-        if lines[j].strip():
-            end = j
-    return "\n".join(lines[start : end + 1])
+    indent = _indent(first)
+    header_end = _header_end(lines, line - 1)
+    return "\n".join(
+        lines[_decorator_start(lines, line - 1, indent) : _body_end(lines, header_end, indent) + 1]
+    )
 
 
 def _indent(line: str) -> int:
     return len(line) - len(line.lstrip())
 
 
+def _is_decorator(line: str, indent: int) -> bool:
+    return line.strip().startswith("@") and _indent(line) == indent
+
+
+def _decorator_start(lines: Sequence[str], at: int, indent: int) -> int:
+    """The first line of the decorators stacked directly above the def at `at`."""
+    while at > 0 and _is_decorator(lines[at - 1], indent):
+        at -= 1
+    return at
+
+
+def _header_end(lines: Sequence[str], at: int) -> int:
+    """The line where the def header's brackets are closed and it ends in a colon."""
+    depth = 0
+    for i in range(at, len(lines)):
+        depth += sum(lines[i].count(c) for c in "([{") - sum(lines[i].count(c) for c in ")]}")
+        if depth <= 0 and lines[i].rstrip().endswith(":"):
+            return i
+    return len(lines) - 1
+
+
+def _body_end(lines: Sequence[str], header_end: int, indent: int) -> int:
+    """The last non-blank line indented deeper than the def, after its header."""
+    end = header_end
+    for j in range(header_end + 1, len(lines)):
+        if not lines[j].strip():
+            continue
+        if _indent(lines[j]) <= indent:
+            break
+        end = j
+    return end
+
+
+def _def_line(raw: bytes, path: str, qualname: str, rev: str) -> int:
+    """The one line archy's parser puts `qualname` on, or a LookupError naming why not."""
+    lines = [f.line for f in compute_function_complexity(raw) if f.qualified_name == qualname]
+    if len(lines) != 1:
+        raise LookupError(f"{qualname} matches {len(lines)} functions in {path} at {rev[:8]}")
+    return lines[0]
+
+
 def _source(repo_dir: Path, rev: str, path: str, qualname: str) -> str:
     raw = _show(repo_dir, rev, path)
     if raw is None:
         raise LookupError(f"cannot open {path} at {rev[:8]}")
-    lines = [f.line for f in compute_function_complexity(raw) if f.qualified_name == qualname]
-    if len(lines) != 1:
-        raise LookupError(f"{qualname} matches {len(lines)} functions in {path} at {rev[:8]}")
+    line = _def_line(raw, path, qualname, rev)
     text = raw.decode("utf-8", "replace")
-    source = function_source(text, lines[0]) or source_by_indent(text, lines[0])
+    source = function_source(text, line) or source_by_indent(text, line)
     if source is None:
         raise LookupError(f"cannot read {qualname} in {path} at {rev[:8]}")
     return source

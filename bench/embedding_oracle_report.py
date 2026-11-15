@@ -65,39 +65,41 @@ def report(
     """Every pre-registered number from the labels. `pairs_by_set` has `primary` and arms."""
     a = {k: v for k, v in labels["sonnet"].items() if k in labels["opus"]}
     b = {k: labels["opus"][k] for k in a}
-    by_packet = resolve_labels(a, b)
-    truth = {key[k]["pair_id"]: t for k, t in by_packet.items()}
-    primary = pairs_by_set["primary"]
-    headline = share(primary, truth)
-    # `share` drops exact-tier pairs by predicate; unequal shapes make every pair count.
-    unfiltered = [p.model_copy(update={"new_shape": "n", "existing_shape": "e"}) for p in primary]
-    with_exact = share(unfiltered, truth)
-    prec = b_precision(primary, truth)
-    scored = [p for p in primary if p.pair_id in truth]
-    a_pairs = [p for p in scored if "A" in p.generators]
-    non_exact_b = [p for p in primary if not p.exact_tier]
-    out: dict[str, object] = {
+    truth = {key[k]["pair_id"]: t for k, t in resolve_labels(a, b).items()}
+    return {
         "labelers": list(LABELERS),
         "packets_labeled_by_both": len(a),
         "kappa": cohen_kappa(a, b),
         "unscorable_by_either": sum("UNSCORABLE" in (a[k], b[k]) for k in a),
-        "primary": {
-            "pairs": len(primary),
-            "scored": len(scored),
-            "b_precision": prec.model_dump(),
-            "b_precision_without_exact": b_precision(non_exact_b, truth).model_dump(),
-            "a_precision": _rate(sum(truth[p.pair_id] for p in a_pairs), len(a_pairs)),
-            "a_scored": len(a_pairs),
-            "share_headline": headline.model_dump(),
-            "share_with_exact": with_exact.model_dump(),
-            "verdict": verdict(prec, headline).model_dump(),
-            "leak_check": _leak(scored, truth, identical),
-        },
+        "primary": _primary(pairs_by_set["primary"], truth, identical),
         "arms_sensitivity": {
             m: b_precision(pairs_by_set[f"arm:{m}"], truth).model_dump() for m in ARMS
         },
     }
-    return out
+
+
+def _primary(
+    primary: Sequence[Pair], truth: Mapping[str, bool], identical: Mapping[str, bool]
+) -> dict[str, object]:
+    headline = share(primary, truth)
+    # `share` drops exact-tier pairs by predicate; unequal shapes make every pair count.
+    unfiltered = [p.model_copy(update={"new_shape": "n", "existing_shape": "e"}) for p in primary]
+    prec = b_precision(primary, truth)
+    scored = [p for p in primary if p.pair_id in truth]
+    a_pairs = [p for p in scored if "A" in p.generators]
+    non_exact = [p for p in primary if not p.exact_tier]
+    return {
+        "pairs": len(primary),
+        "scored": len(scored),
+        "b_precision": prec.model_dump(),
+        "b_precision_without_exact": b_precision(non_exact, truth).model_dump(),
+        "a_precision": _rate(sum(truth[p.pair_id] for p in a_pairs), len(a_pairs)),
+        "a_scored": len(a_pairs),
+        "share_headline": headline.model_dump(),
+        "share_with_exact": share(unfiltered, truth).model_dump(),
+        "verdict": verdict(prec, headline).model_dump(),
+        "leak_check": _leak(scored, truth, identical),
+    }
 
 
 def _leak(

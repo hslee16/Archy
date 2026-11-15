@@ -110,37 +110,34 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 5
     plan = plan_pool(rows, _resolver, read_pairs(ROOT / f"pairs.{PRIMARY}.evaluation.jsonl"))
-    both = sum(1 for p in plan.pool if len(p.generators) > 1)
-    print(
-        json.dumps(
-            {
-                "a_pairs": len(plan.a_pairs),
-                "b_pairs": len(plan.b_pairs),
-                "pool": len(plan.pool),
-                "emitted_by_both": both,
-                "drawn": len(plan.drawn),
-                "unresolved_prs": plan.unresolved_prs,
-            },
-            sort_keys=True,
-        )
-    )
+    print(json.dumps(_plan_summary(plan), sort_keys=True))
     if plan.unresolved_prs:
         print("NOT FINAL: some firing PRs could not be re-parsed", file=sys.stderr)
         return 6
     pool_ids = {p.pair_id for p in plan.pool}
     arms = {m: arm_draw(read_pairs(ROOT / f"pairs.{m}.evaluation.jsonl"), pool_ids) for m in ARMS}
-    union = {p.pair_id for ps in arms.values() for p in ps}
-    print(
-        json.dumps(
-            {"arm_drawn": {m: len(ps) for m, ps in arms.items()}, "arm_union": len(union)},
-            sort_keys=True,
-        )
-    )
+    print(json.dumps(_arm_summary(arms), sort_keys=True))
     if args.write:
         _write(ROOT / "label_pool.evaluation.jsonl", plan.drawn)
         for m, ps in arms.items():
             _write(ROOT / f"label_arm.{m}.evaluation.jsonl", ps)
     return 0
+
+
+def _plan_summary(plan: PoolPlan) -> dict[str, object]:
+    return {
+        "a_pairs": len(plan.a_pairs),
+        "b_pairs": len(plan.b_pairs),
+        "pool": len(plan.pool),
+        "emitted_by_both": sum(1 for p in plan.pool if len(p.generators) > 1),
+        "drawn": len(plan.drawn),
+        "unresolved_prs": plan.unresolved_prs,
+    }
+
+
+def _arm_summary(arms: Mapping[str, Sequence[Pair]]) -> dict[str, object]:
+    union = {p.pair_id for ps in arms.values() for p in ps}
+    return {"arm_drawn": {m: len(ps) for m, ps in arms.items()}, "arm_union": len(union)}
 
 
 def _write(dest: Path, pairs: Sequence[Pair]) -> None:
