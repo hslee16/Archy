@@ -1,0 +1,35 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "aa6c0466c11f",
+  "strategy": "manual-commit",
+  "branch": "alee/emb587-labeling",
+  "checkpoints_count": 48,
+  "files_touched": [
+    "bench/diff_duplicates_labeler.py",
+    "bench/diff_duplicates_packets.py",
+    "bench/embedding_oracle_a_target.py",
+    "bench/embedding_oracle_evaluation.py",
+    "bench/embedding_oracle_packets.py",
+    "bench/embedding_oracle_pairs.py",
+    "bench/embedding_oracle_pool.py",
+    "bench/embedding_oracle_report.py",
+    "src/archy/complexity.py",
+    "tests/test_diff_duplicates_labeler.py",
+    "tests/test_embedding_oracle_labeling.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/aa/6c0466c11f/0/metadata.json",
+      "transcript": "/aa/6c0466c11f/0/full.jsonl",
+      "content_hash": "/aa/6c0466c11f/0/content_hash.txt",
+      "prompt": "/aa/6c0466c11f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 1458,
+    "cache_creation_tokens": 2268078,
+    "cache_read_tokens": 206475513,
+    "output_tokens": 739429,
+    "api_call_count": 637
+  }
+}
