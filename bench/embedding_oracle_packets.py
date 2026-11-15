@@ -123,8 +123,10 @@ def _source(repo_dir: Path, rev: str, path: str, qualname: str) -> str:
     return source
 
 
-def build_pair_packet(pair: Pair, base: str, head: str, repo_dir: Path, rubric: str) -> dict:
-    """The blind packet for one pair. Raises LookupError if either function is unreadable."""
+def build_pair_packet(pair: Pair, revs: tuple[str, str], repo_dir: Path, rubric: str) -> dict:
+    """The blind packet for one pair, `revs` being (base, head). Raises LookupError if either
+    function is unreadable."""
+    base, head = revs
     return {
         "id": packet_id(pair.pair_id),
         "repo": pair.repo,
@@ -199,7 +201,7 @@ def _write_packet(p: Pair, entry: dict, rubric: str, out: Path) -> int:
     reason goes into `entry`)."""
     repo_dir = CLONES / p.repo.replace("/", "__")
     try:
-        packet = build_pair_packet(p, entry["base"], entry["head"], repo_dir, rubric)
+        packet = build_pair_packet(p, (entry["base"], entry["head"]), repo_dir, rubric)
     except LookupError as exc:
         entry["unscorable_reason"] = str(exc)
         return 0

@@ -171,7 +171,7 @@ def test_the_packet_is_blind_and_shows_new_at_head_and_existing_at_base(tmp_path
         existing_path="b.py", existing_qualname="old", existing_shape="e",
         similarity=0.99, generators=("A", "B"),
     )  # fmt: skip
-    packet = pk.build_pair_packet(pair, base, head, repo, "RUBRIC")
+    packet = pk.build_pair_packet(pair, (base, head), repo, "RUBRIC")
     assert set(packet) == {"id", "repo", "instructions", "new", "existing"}
     assert packet["new"] == [
         {"path": "a.py", "qualified_name": "new", "source": "@deco\ndef new(y):\n    return y + 2"}
