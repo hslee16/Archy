@@ -19,10 +19,10 @@ import random
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import NamedTuple
 
 from embedding_oracle_a_target import InfoAt, expand_pr  # ty: ignore[unresolved-import]
 from embedding_oracle_pairs import Pair, pool_pairs  # ty: ignore[unresolved-import]
+from pydantic import BaseModel, ConfigDict
 
 ROOT = Path(__file__).resolve().parent.parent / "bench" / "cache" / "emb587"
 PRIMARY = "jina-v2-base-code"
@@ -30,12 +30,14 @@ LABEL_CAP = 300
 LABEL_SEED = 587
 
 
-class PoolPlan(NamedTuple):
-    a_pairs: list[Pair]
-    b_pairs: list[Pair]
-    pool: list[Pair]
-    drawn: list[Pair]
-    unresolved_prs: list[str]
+class PoolPlan(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    a_pairs: tuple[Pair, ...]
+    b_pairs: tuple[Pair, ...]
+    pool: tuple[Pair, ...]
+    drawn: tuple[Pair, ...]
+    unresolved_prs: tuple[str, ...]
 
 
 def budget_draw(pairs: Sequence[Pair], cap: int = LABEL_CAP, seed: int = LABEL_SEED) -> list[Pair]:
@@ -87,7 +89,13 @@ def plan_pool(
             continue
         a.extend(expand_pr(dict(row), info_at).kept)
     pool = pool_pairs(a, b_pairs)
-    return PoolPlan(a, list(b_pairs), pool, budget_draw(pool), unresolved)
+    return PoolPlan(
+        a_pairs=tuple(a),
+        b_pairs=tuple(b_pairs),
+        pool=tuple(pool),
+        drawn=tuple(budget_draw(pool)),
+        unresolved_prs=tuple(unresolved),
+    )
 
 
 def read_pairs(path: Path) -> list[Pair]:
@@ -131,7 +139,7 @@ def _plan_summary(plan: PoolPlan) -> dict[str, object]:
         "pool": len(plan.pool),
         "emitted_by_both": sum(1 for p in plan.pool if len(p.generators) > 1),
         "drawn": len(plan.drawn),
-        "unresolved_prs": plan.unresolved_prs,
+        "unresolved_prs": list(plan.unresolved_prs),
     }
 
 

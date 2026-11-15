@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import random
+import subprocess
 import sys
 from pathlib import Path
 
@@ -87,7 +88,7 @@ def test_plan_pool_merges_an_a_pair_and_a_b_pair_with_one_id() -> None:
 def test_plan_pool_lists_a_firing_pr_it_could_not_reparse() -> None:
     rows = [{"key": "9", "firings": [{"members": []}]}, {"key": "8", "firings": []}]
     plan = pool.plan_pool(rows, lambda row: None, [])
-    assert plan.unresolved_prs == ["9"]
+    assert plan.unresolved_prs == ("9",)
 
 
 # --- packets -----------------------------------------------------------------------------
@@ -137,13 +138,15 @@ def test_source_by_indent_refuses_a_line_that_is_not_a_def() -> None:
     assert pk.source_by_indent("def f():\n    pass\n", 9) is None
 
 
-def _repo(tmp: Path) -> tuple[Path, str, str]:
-    import subprocess
+def _git(repo: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args], check=True, capture_output=True, text=True
+    ).stdout.strip()
 
+
+def _repo(tmp: Path) -> tuple[Path, str, str]:
     def git(*args: str) -> str:
-        return subprocess.run(
-            ["git", "-C", str(tmp), *args], check=True, capture_output=True, text=True
-        ).stdout.strip()
+        return _git(tmp, *args)
 
     git("init", "-q")
     git("config", "user.email", "t@t")
@@ -153,7 +156,9 @@ def _repo(tmp: Path) -> tuple[Path, str, str]:
     git("commit", "-q", "-m", "base")
     base = git("rev-parse", "HEAD")
     (tmp / "a.py").write_text("@deco\ndef new(y):\n    return y + 2\n")
-    (tmp / "b.py").write_text("def old(x):\n    return x + 99\n")  # changed at head
+    (tmp / "b.py").write_text(
+        "def old(x):\n    return x + 99\n"
+    )  # changed at head so the test proves the packet shows it at base
     git("add", ".")
     git("commit", "-q", "-m", "head")
     return tmp, base, git("rev-parse", "HEAD")
@@ -254,9 +259,9 @@ def test_report_is_strict_and_counts_by_hand() -> None:
     assert primary["b_precision_without_exact"]["true"] == 1
     assert primary["share_headline"]["true_units"] == 2
     assert primary["share_headline"]["only_b"] == 0
-    assert primary["share_with_exact"]["true_units"] == 3  # p3's unit joins; it is only-by-B
+    assert primary["share_with_exact"]["true_units"] == 3
     assert primary["share_with_exact"]["only_b"] == 1
-    assert primary["a_precision"] == pytest.approx(1.0)  # p0 and p2 both TRUE
+    assert primary["a_precision"] == pytest.approx(1.0)
     assert out["packets_labeled_by_both"] == 4
 
 
@@ -265,13 +270,9 @@ def test_a_name_carried_by_two_functions_in_a_file_is_not_located(tmp_path: Path
     packet is refused rather than built from a guess."""
     repo, _base, _head = _repo(tmp_path)
     (repo / "c.py").write_text("def dup():\n    return 1\n\ndef dup():\n    return 2\n")
-    import subprocess
-
-    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
-    subprocess.run(["git", "-C", str(repo), "commit", "-q", "-m", "c"], check=True)
-    head = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
-    ).stdout.strip()
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "c")
+    head = _git(repo, "rev-parse", "HEAD")
     with pytest.raises(LookupError, match="matches 2 functions"):
         pk._source(repo, head, "c.py", "dup")
     with pytest.raises(LookupError, match="matches 0 functions"):
@@ -281,7 +282,13 @@ def test_a_name_carried_by_two_functions_in_a_file_is_not_located(tmp_path: Path
 def test_plan_summary_counts_pairs_both_generators_emit() -> None:
     a, b = _pair(1, ("A",)), _pair(1, ("B",))
     plan = pool.plan_pool([], lambda row: None, [b, _pair(2, ("B",))])
-    merged = pool.PoolPlan([a], plan.b_pairs, pool.pool_pairs([a], plan.b_pairs), [], [])
+    merged = pool.PoolPlan(
+        a_pairs=(a,),
+        b_pairs=plan.b_pairs,
+        pool=tuple(pool.pool_pairs([a], plan.b_pairs)),
+        drawn=(),
+        unresolved_prs=(),
+    )
     summary = pool._plan_summary(merged)
     assert summary["pool"] == 2 and summary["emitted_by_both"] == 1
     assert summary["a_pairs"] == 1 and summary["b_pairs"] == 2

@@ -3,9 +3,9 @@
 Reads the two labelers' ledgers and `key.json` from the packets directory, turns them into
 strict truth (both TRUE), and reports: the primary's B precision, A's precision, the
 headline only-by-B share (exact tier excluded) and the share with it, the verdict, the leak
-check (precision split by byte-identical bodies), Cohen's kappa, drops by reason and
-generator, and each sensitivity arm's precision over its arm-only pairs. Arm results are
-labeled `sensitivity` and never enter the primary numbers.
+check (precision split by byte-identical bodies), Cohen's kappa, the count of packets either
+labeler called UNSCORABLE, and each sensitivity arm's precision over its arm-only pairs. Arm
+results are labeled `sensitivity` and never enter the primary numbers.
 
 archy:owns        cohen_kappa, load_labels, main, report
 """

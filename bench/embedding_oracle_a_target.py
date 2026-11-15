@@ -37,6 +37,7 @@ from typing import NamedTuple
 
 from diff_duplicates_precision import MIN_NODES  # ty: ignore[unresolved-import]
 from embedding_oracle_pairs import K, Member, Pair, PrRef, cap_pairs, expand_a_firing
+from pydantic import BaseModel, ConfigDict
 
 from archy.complexity import compute_function_complexity, extract_token_bags
 from archy.duplicates import _jaccard  # the near-miss tier's own scorer
@@ -148,10 +149,12 @@ def _firing_pairs(ref: PrRef, firing: dict[str, object], info_at: InfoAt) -> Exp
     return Expansion(pairs, dropped, len(raw) - len(keep), unresolved)
 
 
-class PrPairs(NamedTuple):
+class PrPairs(BaseModel):
     """A's capped pairs for one PR, the uncapped pair count, and the counted drops."""
 
-    kept: list[Pair]
+    model_config = ConfigDict(frozen=True)
+
+    kept: tuple[Pair, ...]
     pooled: int
     dropped: int
     ambiguous: int
@@ -171,7 +174,13 @@ def expand_pr(row: dict[str, object], info_at: InfoAt) -> PrPairs:
             unresolved + ex.unresolved,
         )
         pooled.update({p.pair_id: p for p in ex.pairs})
-    return PrPairs(cap_pairs(list(pooled.values())), len(pooled), dropped, ambiguous, unresolved)
+    return PrPairs(
+        kept=tuple(cap_pairs(list(pooled.values()))),
+        pooled=len(pooled),
+        dropped=dropped,
+        ambiguous=ambiguous,
+        unresolved=unresolved,
+    )
 
 
 def recount_pr(row: dict[str, object], info_at: InfoAt) -> PrRecount:

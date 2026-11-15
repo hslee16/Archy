@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -40,8 +41,6 @@ def packet_id(pair_id: str) -> str:
 
 
 def _show(repo_dir: Path, rev: str, path: str):
-    import subprocess
-
     shown = subprocess.run(
         ["git", "-C", str(repo_dir), "show", f"{rev}:{path}"], capture_output=True, check=False
     )
@@ -192,6 +191,8 @@ def write_packets(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # Deferred: only the CLI needs the draw and the pool, and importing this module for
+    # `packet_id` or `write_packets` should not load them.
     from embedding_oracle_evaluation import evaluation_rows  # ty: ignore[unresolved-import]
     from embedding_oracle_pool import ARMS, read_pairs  # ty: ignore[unresolved-import]
 
