@@ -181,3 +181,13 @@ def test_a_second_labeler_has_its_own_ledger_and_never_reads_the_first(tmp_path:
     rows_a = [json.loads(x) for x in (out / "labels_A.jsonl").read_text().splitlines()]
     assert sorted(r["id"] for r in rows_a) == ["1:0", "2:0"]
     assert len((out / "labels_B.jsonl").read_text().splitlines()) == 2  # B untouched
+
+
+def test_parse_answer_accepts_a_note_that_contains_braces() -> None:
+    """A note quoting an f-string (`{address}`) defeated the brace-free span match, so a clear
+    TRUE was recorded as an error on every retry."""
+    reply = '{"label":"TRUE","reason":null,"note":"call is_mirroring_serial(f\\"{a}:{p}\\")."}'
+    got = lb.parse_answer(reply)
+    assert got is not None and got["label"] == "TRUE" and "{a}" in got["note"]
+    assert lb.parse_answer('{"label": "MAYBE"}') is None
+    assert lb.parse_answer("[1, 2]") is None

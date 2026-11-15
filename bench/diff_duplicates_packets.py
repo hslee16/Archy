@@ -14,6 +14,8 @@ firing ids ALONE, before any packet is built or any function is read.
 
 archy:owns        build_packet, draw_for_labeling, flatten_firings, function_source,
                   main, write_packets
+archy:mirrored-by function_source -> bench.diff_duplicates_oracles,
+                  bench.embedding_oracle_packets
 """
 
 from __future__ import annotations

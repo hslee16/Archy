@@ -23,6 +23,8 @@ change.
 
 archy:owns        EvaluationDrawError, check_registered, draw_evaluation,
                   evaluation_rows, main
+archy:mirrored-by evaluation_rows -> bench.embedding_oracle_packets,
+                  bench.embedding_oracle_pool
 """
 
 from __future__ import annotations

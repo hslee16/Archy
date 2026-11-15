@@ -19,8 +19,8 @@ the largest new functions. A PR under the cap keeps its ledger count, which can 
 high (existence and de-duplication only remove pairs), so the recount is an UPPER bound for
 those PRs; `--reparse all` removes that caveat at the price of cloning every firing PR.
 
-archy:owns        Expansion, FileInfo, PrRecount, a_target, git_info_at, ledger_count,
-                  ledger_rows, main, new_members, recount_pr
+archy:owns        Expansion, FileInfo, PrPairs, PrRecount, a_target, expand_pr,
+                  git_info_at, ledger_count, ledger_rows, main, new_members, recount_pr
 """
 
 from __future__ import annotations
@@ -148,7 +148,17 @@ def _firing_pairs(ref: PrRef, firing: dict[str, object], info_at: InfoAt) -> Exp
     return Expansion(pairs, dropped, len(raw) - len(keep), unresolved)
 
 
-def recount_pr(row: dict[str, object], info_at: InfoAt) -> PrRecount:
+class PrPairs(NamedTuple):
+    """A's capped pairs for one PR, the uncapped pair count, and the counted drops."""
+
+    kept: list[Pair]
+    pooled: int
+    dropped: int
+    ambiguous: int
+    unresolved: int
+
+
+def expand_pr(row: dict[str, object], info_at: InfoAt) -> PrPairs:
     """Real pair expansion for one PR: partners, existence, de-duplication, then the cap."""
     ref = PrRef(pr=row["key"], repo=row["repo"])
     pooled: dict[str, Pair] = {}
@@ -161,10 +171,22 @@ def recount_pr(row: dict[str, object], info_at: InfoAt) -> PrRecount:
             unresolved + ex.unresolved,
         )
         pooled.update({p.pair_id: p for p in ex.pairs})
-    kept = cap_pairs(list(pooled.values()))
-    nodes = tuple(sorted(p.new_nodes for p in kept))
+    return PrPairs(cap_pairs(list(pooled.values())), len(pooled), dropped, ambiguous, unresolved)
+
+
+def recount_pr(row: dict[str, object], info_at: InfoAt) -> PrRecount:
+    """Counts of `expand_pr` for one PR."""
+    ex = expand_pr(row, info_at)
+    nodes = tuple(sorted(p.new_nodes for p in ex.kept))
     return PrRecount(
-        row["key"], new_members(row), len(pooled), dropped, len(kept), nodes, ambiguous, unresolved
+        row["key"],
+        new_members(row),
+        ex.pooled,
+        ex.dropped,
+        len(ex.kept),
+        nodes,
+        ex.ambiguous,
+        ex.unresolved,
     )
 
 

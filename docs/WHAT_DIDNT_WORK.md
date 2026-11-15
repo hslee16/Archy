@@ -704,6 +704,40 @@ Full results, including the git oracle (which could not confirm the labelers) an
 SonarQube-gate comparison, are in
 [`../bench/diff_duplicates_precision_results.md`](../bench/diff_duplicates_precision_results.md).
 
+## Study 11: would an embedding model find what the AST clone tiers miss?
+
+Study 10 ended on what its detector misses by design: Type-4 (semantic) redundancy,
+which an embedding model might see. Before building anything, an embedding model was used
+as an offline oracle on agent PRs
+([#587](https://github.com/hslee16/archy/issues/587)): for each new function, the most
+similar function that existed at base and head, pooled with the AST tiers' pairs and
+labeled blind by two models.
+
+**Pre-registered before any embedding existed**
+([`research/EMBEDDING_ORACLE_RECALL.md`](research/EMBEDDING_ORACLE_RECALL.md), four dated
+addenda): one decisive model (`jina-embeddings-v2-base-code`), four sensitivity models that
+cannot change the verdict, a cutoff fixed at the AST tiers' own volume before any label,
+precision pass at 0.60 and kill below 0.40, a share pass at 0.30 and kill below 0.10, and
+no post-hoc rescue.
+
+**Precision kill.** Of 174 pairs the primary surfaced, **46 were true under the strict
+reading (both labelers), 0.264**, interval 0.158 to 0.377, with the top under the 0.40
+kill line. The AST tiers scored 0.188 on the same pool and labelers, so the embedding
+model is somewhat better and still far from shippable. The only-by-B share (0.63) is not
+measurable, because the 35 true units are under the pre-registered floor of 40. The four
+sensitivity models scored 0.06 to 0.16 on their own arm-only pairs, which are not
+comparable to the primary's number and decide nothing.
+
+Hold next to it: **no human labeled** (two models from one vendor, kappa 0.63), the kill
+is **at the AST tiers' operating point** and says nothing about a stricter cutoff,
+fine-tuned models or other uses of embeddings, and byte-identical pairs are labeled true
+far more often (about 0.7) than different ones (about 0.2), though there are only 12 per
+generator. The embedding-evaluation run also had to be redone once after a determinism
+gate fired on a halved batch; the shipped vectors are from the clean rerun.
+
+Full results, including the departures and the arms, are in
+[`../bench/embedding_oracle_recall_results.md`](../bench/embedding_oracle_recall_results.md).
+
 ## What survived, and why archy still exists
 
 Two nulls on agent-side benefit, one retracted premise, a study saying the
