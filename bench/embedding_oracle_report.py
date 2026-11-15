@@ -119,26 +119,34 @@ def _leak(
     }
 
 
+def _pairs_by_set() -> dict[str, list[Pair]]:
+    sets = {"primary": read_pairs(ROOT / "label_pool.evaluation.jsonl")}
+    for m in ARMS:
+        sets[f"arm:{m}"] = read_pairs(ROOT / f"label_arm.{m}.evaluation.jsonl")
+    return sets
+
+
+def _identical(key: Mapping[str, Mapping[str, object]], packets: Path) -> dict[str, bool]:
+    """Whether each packet's two function bodies are byte-identical, by pair id."""
+    out: dict[str, bool] = {}
+    for packet_key, entry in key.items():
+        path = packets / f"{packet_key}.json"
+        if path.exists():
+            body = json.loads(path.read_text(encoding="utf-8"))
+            out[str(entry["pair_id"])] = body["new"][0]["source"] == body["existing"][0]["source"]
+    return out
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--dir", type=Path, default=ROOT / "labels")
     args = parser.parse_args(argv)
     key = json.loads((args.dir / "key.json").read_text(encoding="utf-8"))
     labels = {n: load_labels(args.dir / f"labels_{n}.jsonl") for n in LABELERS}
-    pairs_by_set = {"primary": read_pairs(ROOT / "label_pool.evaluation.jsonl")}
-    for m in ARMS:
-        pairs_by_set[f"arm:{m}"] = read_pairs(ROOT / f"label_arm.{m}.evaluation.jsonl")
-    identical = {}
-    for k, v in key.items():
-        f = args.dir / "packets" / f"{k}.json"
-        if f.exists():
-            pk = json.loads(f.read_text(encoding="utf-8"))
-            identical[v["pair_id"]] = pk["new"][0]["source"] == pk["existing"][0]["source"]
-    out = report(key, labels, pairs_by_set, identical)
-    (args.dir / "report.json").write_text(
-        json.dumps(out, indent=1, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    print(json.dumps(out, indent=1, sort_keys=True))
+    out = report(key, labels, _pairs_by_set(), _identical(key, args.dir / "packets"))
+    text = json.dumps(out, indent=1, sort_keys=True) + "\n"
+    (args.dir / "report.json").write_text(text, encoding="utf-8")
+    print(text, end="")
     return 0
 
 

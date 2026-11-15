@@ -154,40 +154,59 @@ def write_packets(
     `revs` maps a PR key to (base, head). A pair in several sets is one packet.
     """
     rubric = _rubric()
-    by_id: dict[str, Pair] = {}
-    member_of: dict[str, list[str]] = {}
-    for name, pairs in sets.items():
-        for p in pairs:
-            by_id.setdefault(p.pair_id, p)
-            member_of.setdefault(p.pair_id, []).append(name)
+    by_id, member_of = _union(sets)
     (out / "packets").mkdir(parents=True, exist_ok=True)
     key: dict[str, dict] = {}
     built = 0
     for pid in sorted(by_id):
         p = by_id[pid]
         base, head = revs[p.pr]
-        entry = {
-            "pair_id": pid,
-            "pr": p.pr,
-            "repo": p.repo,
-            "base": base,
-            "head": head,
-            "generators": list(p.generators),
-            "sets": sorted(member_of[pid]),
-            "exact_tier": p.exact_tier,
-        }
+        entry = _key_entry(p, base, head, member_of[pid])
         key[packet_id(pid)] = entry
-        try:
-            packet = build_pair_packet(p, base, head, CLONES / p.repo.replace("/", "__"), rubric)
-        except LookupError as exc:
-            entry["unscorable_reason"] = str(exc)
-            continue
-        (out / "packets" / f"{packet['id']}.json").write_text(
-            json.dumps(packet, indent=2), encoding="utf-8"
-        )
-        built += 1
+        built += _write_packet(p, entry, rubric, out)
     (out / "key.json").write_text(json.dumps(key, indent=2, sort_keys=True), encoding="utf-8")
     return {"pairs": len(by_id), "packets": built, "unscorable": len(by_id) - built}
+
+
+def _union(
+    sets: Mapping[str, Sequence[Pair]],
+) -> tuple[dict[str, Pair], dict[str, list[str]]]:
+    """Every distinct pair by id, and the names of the sets that drew it."""
+    by_id: dict[str, Pair] = {}
+    member_of: dict[str, list[str]] = {}
+    for name, pairs in sets.items():
+        for p in pairs:
+            by_id.setdefault(p.pair_id, p)
+            member_of.setdefault(p.pair_id, []).append(name)
+    return by_id, member_of
+
+
+def _key_entry(p: Pair, base: str, head: str, sets: Sequence[str]) -> dict:
+    return {
+        "pair_id": p.pair_id,
+        "pr": p.pr,
+        "repo": p.repo,
+        "base": base,
+        "head": head,
+        "generators": list(p.generators),
+        "sets": sorted(sets),
+        "exact_tier": p.exact_tier,
+    }
+
+
+def _write_packet(p: Pair, entry: dict, rubric: str, out: Path) -> int:
+    """Write the packet for `p`; 1 if written, 0 if a function could not be located (the
+    reason goes into `entry`)."""
+    repo_dir = CLONES / p.repo.replace("/", "__")
+    try:
+        packet = build_pair_packet(p, entry["base"], entry["head"], repo_dir, rubric)
+    except LookupError as exc:
+        entry["unscorable_reason"] = str(exc)
+        return 0
+    (out / "packets" / f"{packet['id']}.json").write_text(
+        json.dumps(packet, indent=2), encoding="utf-8"
+    )
+    return 1
 
 
 def main(argv: Sequence[str] | None = None) -> int:
