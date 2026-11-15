@@ -101,16 +101,27 @@ def build_prompt(packet: dict) -> str:
     )
 
 
+def _candidates(text: str) -> list[str]:
+    """The whole reply first, then each brace-free `{...}` span.
+
+    The whole reply handles a note that itself contains braces (`f"{address}"`), which the
+    brace-free span cannot match; the spans remain for a reply wrapped in prose.
+    """
+    return [text.strip(), *(m.group(0) for m in _ANSWER.finditer(text))]
+
+
 def parse_answer(text: str) -> dict | None:
     """The labeler's verdict from its final text, or None if it is not a valid one.
 
     An unknown FALSE reason is folded into `other`; a missing or unknown LABEL is not a
     verdict and returns None (the firing is retried, never scored from a guess).
     """
-    for match in _ANSWER.finditer(text):
+    for candidate in _candidates(text):
         try:
-            data = json.loads(match.group(0))
+            data = json.loads(candidate)
         except json.JSONDecodeError:
+            continue
+        if not isinstance(data, dict):
             continue
         label = data.get("label")
         if label not in LABELS:
