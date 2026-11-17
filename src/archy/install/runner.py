@@ -366,7 +366,12 @@ def preview_config(
     """Dry-run a single adapter and pair each rendered file with its baselines."""
     adapter = _known_adapter(adapter_id)
     ws = DryRunWriteSystem()
-    plan = plan_for(adapter, scope, project_root=project_root, seed_permissions=seed_permissions)
+    plan = plan_for(
+        adapter,
+        scope,
+        project_root=project_root,
+        seed_permissions=seed_permissions,
+    )
     previews: list[ConfigPreview] = []
     for action in plan:
         existing_text = ws.read_text(action.path)
@@ -381,7 +386,9 @@ def preview_config(
                 raise InstallError(f"{action.path}: {msg}") from exc
             raise
         # Bytes, not read_text: universal newlines would hide a CRLF rewrite.
-        existing = action.path.read_bytes().decode("utf-8") if action.path.exists() else None
+        existing = (
+            action.path.read_bytes().decode("utf-8") if action.path.exists() else None
+        )
         previews.append(
             ConfigPreview(
                 path=action.path,
