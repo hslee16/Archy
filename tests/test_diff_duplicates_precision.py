@@ -53,6 +53,59 @@ def test_added_line_ranges_parses_hunks_and_skips_deletions() -> None:
     assert ddp.added_line_ranges(diff) == {"p/x.py": [(4, 5), (21, 21)]}
 
 
+def test_added_line_ranges_parses_spaced_unicode_and_quoted_paths() -> None:
+    diff = "\n".join(
+        [
+            "+++ b/pkg/my mod.py" + "\t",
+            "@@ -0,0 +1 @@",
+            "+++ b/pkg/café.py",
+            "@@ -0,0 +2 @@",
+            r'+++ "b/pkg/quote\"name.py"',
+            "@@ -0,0 +3 @@",
+            r'+++ "b/pkg/back\\slash.py"',
+            "@@ -0,0 +4 @@",
+            r'+++ "b/pkg/control\001.py"',
+            "@@ -0,0 +5 @@",
+        ]
+    )
+
+    assert ddp.added_line_ranges(diff) == {
+        "pkg/my mod.py": [(1, 1)],
+        "pkg/café.py": [(2, 2)],
+        'pkg/quote"name.py': [(3, 3)],
+        "pkg/back\\slash.py": [(4, 4)],
+        "pkg/control\x01.py": [(5, 5)],
+    }
+
+
+def test_git_diff_uses_utf8_paths_for_added_ranges(tmp_path: Path) -> None:
+    repo = _repo(tmp_path)
+    base = ddp._commit_fixture(repo, {"pkg/__init__.py": ""}, "base")
+    head = ddp._commit_fixture(
+        repo,
+        {"pkg/my mod.py": "VALUE = 1\n", "pkg/café.py": "VALUE = 2\n"},
+        "add files with spaced and unicode paths",
+    )
+
+    diff = ddp._git(
+        repo,
+        "-c",
+        "core.quotepath=false",
+        "diff",
+        "-U0",
+        "--no-renames",
+        base,
+        head,
+        "--",
+        "*.py",
+    )
+
+    assert ddp.added_line_ranges(diff) == {
+        "pkg/my mod.py": [(1, 1)],
+        "pkg/café.py": [(1, 1)],
+    }
+
+
 def test_copy_into_new_file_fires(tmp_path: Path) -> None:
     repo = _repo(tmp_path)
     base = ddp._commit_fixture(repo, {"pkg/__init__.py": "", "pkg/a.py": ddp._ORIGINAL}, "base")
