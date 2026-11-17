@@ -108,6 +108,7 @@ def _decode_git_quoted_path(value: str) -> str | None:
     except UnicodeDecodeError:
         return None
 
+
 def _new_file_path(line: str) -> str | None:
     """Extract a path from a Git `+++` header."""
     if not line.startswith("+++ "):
@@ -115,7 +116,11 @@ def _new_file_path(line: str) -> str | None:
     value = line[4:]
     if value.startswith('"'):
         decoded = _decode_git_quoted_path(value)
-        return decoded[2:] if decoded is not None and decoded.startswith("b/") else None
+        return (
+            decoded[2:]
+            if decoded is not None and decoded.startswith("b/")
+            else None
+        )
     if not value.startswith("b/"):
         return None
     # Git adds a tab before a timestamp for unquoted paths containing spaces.
