@@ -74,8 +74,15 @@ def _decode_git_quoted_path(value: str) -> str | None:
     if len(value) < 2 or value[0] != '"' or value[-1] != '"':
         return None
     escapes = {
-        "a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12,
-        "r": 13, "\\": 92, '"': 34,
+        "a": 7,
+        "b": 8,
+        "t": 9,
+        "n": 10,
+        "v": 11,
+        "f": 12,
+        "r": 13,
+        "\\": 92,
+        '"': 34,
     }
     raw = bytearray()
     index = 1
