@@ -35,9 +35,11 @@ archy:mirrored-by ContractsConfigError -> archy.cli_check, archy.mcp_runs_check,
 
 from __future__ import annotations
 
+import configparser
 import contextlib
 import importlib.util
 import os
+import re
 import sys
 import warnings
 from collections.abc import Iterable
@@ -215,12 +217,19 @@ def _drive_import_linter(
     derive contracts from archy.yaml). Imports are deferred so the
     optional-dep guard in `run_contracts` triggers first.
     """
+    from grimp.exceptions import GrimpException, NotATopLevelModule
     from importlinter import configuration
     from importlinter.application.use_cases import (
         _register_contract_types,
         create_report,
         read_user_options,
     )
+    from importlinter.domain.contract import NoSuchContractType
+
+    if sys.version_info >= (3, 11):
+        import tomllib
+    else:
+        import tomli as tomllib
 
     configuration.configure()
     prior_cwd = Path.cwd()
@@ -233,19 +242,33 @@ def _drive_import_linter(
             os.chdir(config_path.parent)
             user_options = read_user_options(config_filename=config_path.name)
         _register_contract_types(user_options)
-        try:
-            report = create_report(user_options, cache_dir=None)
-        except ValueError as exc:
-            # import-linter aborts the whole run when a contract names a module
-            # that is not in the graph, and the message is just "Module 'x'
-            # does not exist." Reaching a user as a traceback makes archy look
-            # broken rather than the config; say which config and what to do.
-            raise ContractsConfigError(
-                f"a contract names a module that is not in the import graph: {exc}. "
+        report = create_report(user_options, cache_dir=None)
+    except (
+        configparser.Error,
+        tomllib.TOMLDecodeError,
+        FileNotFoundError,
+        NoSuchContractType,
+        GrimpException,
+        ValueError,
+    ) as exc:
+        source = (
+            str(config_path) if config_path is not None else "contracts derived from archy.yaml"
+        )
+        reason = " ".join(str(exc).splitlines()) or type(exc).__name__
+        if isinstance(exc, NotATopLevelModule) and user_options is not None:
+            dotted = [root for root in _root_packages(user_options) if "." in root]
+            got = ", ".join(repr(root) for root in dotted)
+            tops = dict.fromkeys(root.split(".")[0] for root in dotted)
+            use = ", ".join(repr(top) for top in tops)
+            reason += f"; root_package must be a top-level package (got {got}; use {use})"
+        elif isinstance(exc, ValueError) and re.fullmatch(r"Module '.+' does not exist\.", reason):
+            reason = (
+                f"a contract names a module that is not in the import graph: {reason} "
                 "Check the layer patterns in archy.yaml (or the module names in "
                 ".importlinter) against the modules archy discovers, which "
                 "`archy graph . --format json` lists."
-            ) from exc
+            )
+        raise ContractsConfigError(f"{source}: {reason}") from exc
     finally:
         os.chdir(prior_cwd)
 

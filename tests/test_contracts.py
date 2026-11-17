@@ -384,7 +384,7 @@ def test_a_layers_contract_with_an_absent_required_layer_is_a_config_error(
     _write_two_module_fixture(tmp_path)
     _write_layers_config(tmp_path, layers=("nonexistent_a", "nonexistent_b"))
 
-    with pytest.raises(ContractsConfigError, match="not in the import graph"):
+    with pytest.raises(ContractsConfigError, match="Missing layer in container"):
         run_contracts(tmp_path)
 
 

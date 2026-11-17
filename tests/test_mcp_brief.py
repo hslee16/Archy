@@ -261,3 +261,32 @@ def test_brief_cli_agrees_with_mcp_on_a_malformed_config(tmp_path: Path):
     cli = json.loads(CliRunner().invoke(main, ["brief", str(project), "--format", "json"]).output)
     assert cli["coverage"] is None
     assert cli["coverage_error"] == expected
+
+
+def test_unreadable_contracts_preserve_check_and_brief(tmp_path: Path):
+    """#801: a real parser refusal is advisory on both MCP composed tools."""
+    import configparser
+
+    from importlinter import configuration
+    from importlinter.application.use_cases import read_user_options
+
+    config = tmp_path / ".importlinter"
+    config.write_text("not an INI file\n")
+    configuration.configure()
+    with pytest.raises(configparser.MissingSectionHeaderError):
+        read_user_options(config_filename=str(config))
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "archy.yaml").write_text("layers:\n  app:\n    modules: [app.**]\n")
+    server = create_server()
+    _content, wire = _call_tool(server, "archy_check", {"path": str(tmp_path), "contracts": True})
+    assert isinstance(wire, dict)
+    result = wire["result"]
+    assert result["passed"] is True
+    assert result["contracts"]["available"] is True
+    assert str(config) in result["contracts"]["error"]
+    _content, wire = _call_tool(server, "archy_brief", {"path": str(tmp_path), "contracts": True})
+    assert isinstance(wire, dict)
+    assert wire["conventions"] is not None
+    assert wire["contracts"]["available"] is True
+    assert str(config) in wire["contracts"]["error"]
