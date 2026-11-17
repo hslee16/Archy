@@ -56,51 +56,47 @@ AddedRanges = dict[str, list[tuple[int, int]]]
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
+def _decode_git_escape(
+    value: str, index: int, end: int, escapes: dict[str, int]
+) -> tuple[int, int] | None:
+    """Decode one Git escape into a byte and the next input index."""
+    escaped = value[index]
+    if escaped in escapes:
+        return escapes[escaped], index + 1
+    octal = re.match(r"[0-7]{1,3}", value[index:end])
+    if octal is None:
+        return None
+    return int(octal.group(), 8), index + len(octal.group())
+
+
 def _decode_git_quoted_path(value: str) -> str | None:
     """Decode Git C-quoted paths, including octal UTF-8 bytes."""
-    if len(value) < 2 or not value.startswith('"') or not value.endswith('"'):
+    if len(value) < 2 or value[0] != '"' or value[-1] != '"':
         return None
     escapes = {
-        "a": 7,
-        "b": 8,
-        "t": 9,
-        "n": 10,
-        "v": 11,
-        "f": 12,
-        "r": 13,
-        "\\": 92,
-        '"': 34,
+        "a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12,
+        "r": 13, "\\": 92, '"': 34,
     }
     raw = bytearray()
     index = 1
     end = len(value) - 1
     while index < end:
-        char = value[index]
-        if char != "\\":
-            raw.extend(char.encode("utf-8"))
+        if value[index] != "\\":
+            raw.extend(value[index].encode("utf-8"))
             index += 1
             continue
         index += 1
         if index >= end:
             return None
-        escaped = value[index]
-        if escaped in escapes:
-            raw.append(escapes[escaped])
-            index += 1
-            continue
-        if escaped in "01234567":
-            octal = re.match(r"[0-7]{1,3}", value[index:end])
-            if octal is None:
-                return None
-            raw.append(int(octal.group(), 8))
-            index += len(octal.group())
-            continue
-        return None
+        decoded = _decode_git_escape(value, index, end, escapes)
+        if decoded is None:
+            return None
+        byte, index = decoded
+        raw.append(byte)
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         return None
-
 
 def _new_file_path(line: str) -> str | None:
     """Extract a path from a Git `+++` header."""
