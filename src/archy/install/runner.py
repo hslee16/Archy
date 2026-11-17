@@ -158,9 +158,7 @@ def _render_uninstall(
             content = action.unrender(existing)
         except InstallError as exc:
             message = str(exc)
-            errors.append(
-                message if str(action.path) in message else f"{action.path}: {message}"
-            )
+            errors.append(message if str(action.path) in message else f"{action.path}: {message}")
             continue
         rendered.append((action.path, content))
     return rendered
@@ -386,9 +384,7 @@ def preview_config(
                 raise InstallError(f"{action.path}: {msg}") from exc
             raise
         # Bytes, not read_text: universal newlines would hide a CRLF rewrite.
-        existing = (
-            action.path.read_bytes().decode("utf-8") if action.path.exists() else None
-        )
+        existing = action.path.read_bytes().decode("utf-8") if action.path.exists() else None
         previews.append(
             ConfigPreview(
                 path=action.path,
