@@ -122,4 +122,4 @@ def test_what_to_refactor_next_names_missing_commit_history(tmp_path: Path):
     result = CliRunner().invoke(main, ["what-to-refactor-next", str(repo)])
     assert result.exit_code == 0, result.output
     assert "not a git repo" not in result.output.lower()
-    assert "commits" in result.output
+    assert "No commit history yet" in result.output

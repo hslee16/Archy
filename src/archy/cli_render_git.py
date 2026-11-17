@@ -22,14 +22,7 @@ from archy.hotspots import Hotspot
 from archy.refactor import (
     RefactorPriority,
 )
-
-
-def _empty_window_note(since: str) -> str:
-    """Shared wording for an empty ``--since`` commit window."""
-    return (
-        f"No commits in the --since window ({since}). "
-        "Widen the window or omit --since to use full history."
-    )
+from archy.refactor_notes import empty_window_note, fused_refactor_note
 
 
 def _hotspots_note(rows: list[Hotspot], *, since: str | None, empty_window: bool) -> str | None:
@@ -37,7 +30,7 @@ def _hotspots_note(rows: list[Hotspot], *, since: str | None, empty_window: bool
     if rows:
         return None
     if empty_window and since:
-        return _empty_window_note(since)
+        return empty_window_note(since)
     return None
 
 
@@ -94,7 +87,7 @@ def _coupling_note(
     since: str | None,
     empty_window: bool = False,
 ) -> str | None:
-    """Machine-readable explanation for the empty case (mirrors _refactor_note).
+    """Machine-readable explanation for the empty case (mirrors refactor_notes.fused_refactor_note).
 
     An empty list is a real answer: either the history is too short to clear
     `--min-support`, or every co-changing pair already has a structural edge (so
@@ -104,7 +97,7 @@ def _coupling_note(
     if rows:
         return None
     if empty_window and since:
-        return _empty_window_note(since)
+        return empty_window_note(since)
     suffix = f" since {since}" if since else ""
     return (
         f"No structurally-unconnected module pairs co-change above the thresholds{suffix}. "
@@ -285,55 +278,6 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
     return "\n".join(out)
 
 
-def _refactor_note(
-    rows: list[RefactorPriority],
-    *,
-    min_risk: float,
-    git_available: bool,
-    no_commits: bool = False,
-    empty_window: bool = False,
-    since: str | None = None,
-) -> str | None:
-    """Machine-readable explanation for the empty / git-absent cases.
-
-    Mirrors the `note` the MCP tool returns so the CLI JSON surface carries
-    the same "nothing to prioritize" / "structural-only" signal rather than
-    leaving the caller to infer it from an empty list."""
-    if not rows:
-        if empty_window and since and git_available:
-            return _empty_window_note(since)
-        if git_available:
-            return (
-                "No refactoring priorities surfaced: no file is both complex "
-                "and frequently changed, and no module is central and fragile "
-                f"above min_risk={min_risk}. Lower min_risk to widen the "
-                "structural lens."
-            )
-        if no_commits:
-            return (
-                "No commit history yet, so the CC x churn lens was skipped and "
-                f"only the structural lens ran; no module is central and fragile "
-                f"above min_risk={min_risk}. Lower min_risk to widen the "
-                "structural lens."
-            )
-        return (
-            "Not a git repository, so the CC x churn lens was skipped and only "
-            f"the structural lens ran; no module is central and fragile above "
-            f"min_risk={min_risk}. Lower min_risk to widen the structural lens."
-        )
-    if not git_available:
-        if no_commits:
-            return (
-                "No commit history yet; the CC x churn lens was skipped and "
-                "this ranking is structural-only (edit-risk)."
-            )
-        return (
-            "Not a git repository; the CC x churn lens was skipped and this "
-            "ranking is structural-only (edit-risk)."
-        )
-    return None
-
-
 def _refactor_to_dict(
     rows: list[RefactorPriority],
     *,
@@ -351,8 +295,8 @@ def _refactor_to_dict(
         "total": len(rows),
         "shown": min(top_n, len(rows)),
         "priorities": [r.model_dump() for r in rows[:top_n]],
-        "note": _refactor_note(
-            rows,
+        "note": fused_refactor_note(
+            has_rows=bool(rows),
             min_risk=min_risk,
             git_available=git_available,
             no_commits=no_commits,
@@ -373,29 +317,22 @@ def _refactor_to_text(
     since: str | None = None,
 ) -> str:
     if not rows:
-        if empty_window and since and git_available:
-            return f"# {_empty_window_note(since)}"
-        if git_available:
-            return (
-                "# Nothing to refactor: no file is both complex and churned, and "
-                f"no module is central+fragile above min_risk={min_risk}."
-            )
-        if no_commits:
-            return (
-                "# No commits yet, so only the structural lens ran; no module is "
-                f"central+fragile above min_risk={min_risk}. Nothing surfaced."
-            )
-        return (
-            "# Not a git repo, so only the structural lens ran; no module is "
-            f"central+fragile above min_risk={min_risk}. Nothing surfaced."
+        note = fused_refactor_note(
+            has_rows=False,
+            min_risk=min_risk,
+            git_available=git_available,
+            no_commits=no_commits,
+            empty_window=empty_window,
+            since=since,
         )
+        return f"# {note}"
     shown = rows[:top_n]
     header = f"# {len(rows)} refactor candidate(s); showing top {len(shown)}"
     if not git_available:
         if no_commits:
             header += " (structural-only: no commits yet)"
         else:
-            header += " (structural-only: not a git repo)"
+            header += " (structural-only: not a git repo or git is unavailable)"
     lines = [header, ""]
     for i, r in enumerate(shown, 1):
         lenses = "+".join(r.lenses)

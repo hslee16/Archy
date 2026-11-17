@@ -322,7 +322,7 @@ def test_what_to_refactor_next_honest_null(tmp_path: Path):
     assert payload.priorities == ()
     assert payload.total == 0
     assert payload.note is not None
-    assert "nothing to prioritize" in payload.note
+    assert "No refactoring priorities surfaced" in payload.note
 
 
 def test_what_to_refactor_next_validates_args(acyclic_project: Path):
@@ -437,5 +437,5 @@ def test_what_to_refactor_next_fresh_repo_note_mentions_commit_history(tmp_path:
     payload = run_what_to_refactor_next(repo, top_n=20, since=None, min_risk=0.0)
     assert payload.git_available is False
     assert payload.note is not None
-    assert "no commit history" in payload.note
+    assert "No commit history" in payload.note
     assert "not inside a git repository" not in payload.note
