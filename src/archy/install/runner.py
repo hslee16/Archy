@@ -17,7 +17,6 @@ archy:mirrored-by ConfigPreview -> archy.cli_install, archy.install,
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
@@ -26,8 +25,6 @@ from archy.install.base import (
     AgentAdapter,
     FileAction,
     Scope,
-    apply_plan,
-    apply_uninstall,
     remove_instructions,
     render_plan,
     write_rendered,
@@ -142,6 +139,31 @@ def plan_for(
     )
 
 
+def _render_uninstall(
+    plan: list[FileAction],
+    write_system: WriteSystem,
+    errors: list[str],
+) -> list[tuple[Path, str | None]]:
+    """Prepare uninstall changes without writing, recording refusals for all actions."""
+    rendered: list[tuple[Path, str | None]] = []
+    for action in plan:
+        try:
+            existing = write_system.read_text(action.path)
+        except InstallError as exc:
+            errors.append(str(exc))
+            continue
+        if existing is None:
+            continue
+        try:
+            content = action.unrender(existing)
+        except InstallError as exc:
+            message = str(exc)
+            errors.append(message if str(action.path) in message else f"{action.path}: {message}")
+            continue
+        rendered.append((action.path, content))
+    return rendered
+
+
 def _run_for_adapters(
     adapters: list[AgentAdapter],
     scope: Scope,
@@ -149,18 +171,17 @@ def _run_for_adapters(
     project_root: Path | None,
     seed_permissions: bool,
     write_system: WriteSystem | None,
-    apply_fn: Callable[[list[FileAction], WriteSystem], list[Path]],
     for_uninstall: bool = False,
 ) -> InstallResult:
-    """Plan each adapter and run ``apply_fn`` over it. Shared by install/uninstall.
+    """Plan each adapter and prepare its changes before writing.
 
-    Install (#591) is two-phase: render every adapter first (collecting every
-    ``InstallError``), write nothing if any failed, otherwise write all. Uninstall
-    keeps the sequential ``apply_fn`` path so reverse order stays unchanged.
+    Install (#591) and uninstall (#964) are two-phase: prepare every adapter's
+    changes first, collect every ``InstallError``, and write nothing if any failed.
     """
     ws = write_system if write_system is not None else RealWriteSystem()
     if for_uninstall:
-        results: list[AdapterResult] = []
+        prepared_uninstall: list[tuple[str, list[tuple[Path, str | None]]]] = []
+        errors: list[str] = []
         for adapter in adapters:
             plan = plan_for(
                 adapter,
@@ -169,10 +190,18 @@ def _run_for_adapters(
                 seed_permissions=seed_permissions,
                 for_uninstall=True,
             )
-            touched = apply_fn(plan, ws)
+            pairs = _render_uninstall(plan, ws, errors)
+            prepared_uninstall.append((adapter.id, pairs))
+
+        if errors:
+            raise InstallError("; ".join(errors))
+
+        results: list[AdapterResult] = []
+        for adapter_id, pairs in prepared_uninstall:
+            touched = write_rendered(pairs, ws)
             results.append(
                 AdapterResult(
-                    adapter_id=adapter.id,
+                    adapter_id=adapter_id,
                     written=tuple(touched),
                     notes=(),
                 )
@@ -234,7 +263,6 @@ def run_install(
         project_root=project_root,
         seed_permissions=seed_permissions,
         write_system=write_system,
-        apply_fn=apply_plan,
     )
 
 
@@ -258,7 +286,6 @@ def run_uninstall(
         project_root=project_root,
         seed_permissions=seed_permissions,
         write_system=write_system,
-        apply_fn=apply_uninstall,
         for_uninstall=True,
     )
 
@@ -337,7 +364,12 @@ def preview_config(
     """Dry-run a single adapter and pair each rendered file with its baselines."""
     adapter = _known_adapter(adapter_id)
     ws = DryRunWriteSystem()
-    plan = plan_for(adapter, scope, project_root=project_root, seed_permissions=seed_permissions)
+    plan = plan_for(
+        adapter,
+        scope,
+        project_root=project_root,
+        seed_permissions=seed_permissions,
+    )
     previews: list[ConfigPreview] = []
     for action in plan:
         existing_text = ws.read_text(action.path)

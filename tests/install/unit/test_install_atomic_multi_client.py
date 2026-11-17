@@ -9,8 +9,8 @@ from click.testing import CliRunner
 
 from archy.cli import main
 from archy.install.base import Scope, render_plan, write_rendered
-from archy.install.runner import resolve_targets, run_install
-from archy.install.writer import InstallError, RealWriteSystem
+from archy.install.runner import resolve_targets, run_install, run_uninstall
+from archy.install.writer import DryRunWriteSystem, InstallError, RealWriteSystem
 
 
 def _tree_snapshot(root: Path) -> dict[str, str]:
@@ -70,6 +70,53 @@ def test_install_all_one_bad_config_leaves_others_unwritten(simulate_os):
     assert not (fake.home / ".claude.json").exists()
     assert not (fake.home / ".claude" / "settings.json").exists()
     assert before == _tree_snapshot(fake.home)
+
+
+def _install_then_break_codex_uninstall(simulate_os):
+    fake = simulate_os("linux")
+    project = fake.home / "project"
+    adapters = resolve_targets("claude,codex")
+    run_install(adapters, Scope.LOCAL, project_root=project, write_system=RealWriteSystem())
+
+    agents = project / "AGENTS.md"
+    content = agents.read_text(encoding="utf-8")
+    assert "<!-- archy:begin -->" in content
+    assert "<!-- archy:end -->" in content
+    agents.write_text(content.replace("<!-- archy:end -->", ""), encoding="utf-8")
+    return fake, project, adapters
+
+
+def test_uninstall_all_targets_preflights_before_writing(simulate_os):
+    fake, project, adapters = _install_then_break_codex_uninstall(simulate_os)
+    before = _tree_snapshot(fake.home)
+
+    with pytest.raises(InstallError, match=r"AGENTS\.md"):
+        run_uninstall(
+            adapters,
+            Scope.LOCAL,
+            project_root=project,
+            write_system=RealWriteSystem(),
+        )
+
+    assert before == _tree_snapshot(fake.home)
+
+
+def test_uninstall_all_targets_preflights_before_recording_dry_run(simulate_os):
+    fake, project, adapters = _install_then_break_codex_uninstall(simulate_os)
+    before = _tree_snapshot(fake.home)
+    dry_run = DryRunWriteSystem()
+
+    with pytest.raises(InstallError, match=r"AGENTS\.md"):
+        run_uninstall(
+            adapters,
+            Scope.LOCAL,
+            project_root=project,
+            write_system=dry_run,
+        )
+
+    assert before == _tree_snapshot(fake.home)
+    assert dry_run.records == []
+    assert dry_run.removed == []
 
 
 def test_render_plan_then_write_is_apply_plan(simulate_os):
