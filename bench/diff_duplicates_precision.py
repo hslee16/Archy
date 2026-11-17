@@ -54,7 +54,73 @@ MIN_NODES = 30  # shipped `archy duplicates --min-nodes` default
 AddedRanges = dict[str, list[tuple[int, int]]]
 
 _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
-_NEW_FILE = re.compile(r"^\+\+\+ b/(.+)$")
+
+
+def _decode_git_escape(
+    value: str,
+    index: int,
+    end: int,
+    escapes: dict[str, int],
+) -> tuple[int, int] | None:
+    """Decode one Git escape into a byte and the next input index."""
+    escaped = value[index]
+    if escaped in escapes:
+        return escapes[escaped], index + 1
+    octal = re.match(r"[0-7]{1,3}", value[index:end])
+    if octal is None:
+        return None
+    return int(octal.group(), 8), index + len(octal.group())
+
+
+def _decode_git_quoted_path(value: str) -> str | None:
+    """Decode Git C-quoted paths, including octal UTF-8 bytes."""
+    if len(value) < 2 or value[0] != '"' or value[-1] != '"':
+        return None
+    escapes = {
+        "a": 7,
+        "b": 8,
+        "t": 9,
+        "n": 10,
+        "v": 11,
+        "f": 12,
+        "r": 13,
+        "\\": 92,
+        '"': 34,
+    }
+    raw = bytearray()
+    index = 1
+    end = len(value) - 1
+    while index < end:
+        if value[index] != "\\":
+            raw.extend(value[index].encode("utf-8"))
+            index += 1
+            continue
+        index += 1
+        if index >= end:
+            return None
+        decoded = _decode_git_escape(value, index, end, escapes)
+        if decoded is None:
+            return None
+        byte, index = decoded
+        raw.append(byte)
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _new_file_path(line: str) -> str | None:
+    """Extract a path from a Git `+++` header."""
+    if not line.startswith("+++ "):
+        return None
+    value = line[4:]
+    if value.startswith('"'):
+        decoded = _decode_git_quoted_path(value)
+        return decoded[2:] if decoded is not None and decoded.startswith("b/") else None
+    if not value.startswith("b/"):
+        return None
+    # Git adds a tab before a timestamp for unquoted paths containing spaces.
+    return value[2:].removesuffix("\t")
 
 
 def added_line_ranges(diff: str) -> AddedRanges:
@@ -68,9 +134,8 @@ def added_line_ranges(diff: str) -> AddedRanges:
     ranges: AddedRanges = {}
     path: str | None = None
     for line in diff.splitlines():
-        m = _NEW_FILE.match(line)
-        if m:
-            path = m.group(1)
+        if line.startswith("+++ "):
+            path = _new_file_path(line)
             continue
         added = _hunk_added_range(line)
         if added is None or path is None:
@@ -145,7 +210,18 @@ def analyze_checkout(root: Path, base: str, head: str) -> dict:
     try:
         _git(root, "checkout", "--quiet", "--force", "--detach", head)
         _git(root, "clean", "-fdxq")
-        diff = _git(root, "diff", "-U0", "--no-renames", base, head, "--", "*.py")
+        diff = _git(
+            root,
+            "-c",
+            "core.quotepath=false",
+            "diff",
+            "-U0",
+            "--no-renames",
+            base,
+            head,
+            "--",
+            "*.py",
+        )
     except subprocess.CalledProcessError as exc:
         return {"dropped": f"git: {exc.stderr.strip()[:80] if exc.stderr else exc.returncode}"}
     if is_test_path(str(root.resolve() / "probe.py")):
