@@ -57,7 +57,10 @@ _HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
 
 
 def _decode_git_escape(
-    value: str, index: int, end: int, escapes: dict[str, int]
+    value: str,
+    index: int,
+    end: int,
+    escapes: dict[str, int],
 ) -> tuple[int, int] | None:
     """Decode one Git escape into a byte and the next input index."""
     escaped = value[index]
