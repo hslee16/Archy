@@ -28,10 +28,10 @@ def test_install_all_two_bad_configs_names_both_and_writes_nothing(simulate_os):
     fake = simulate_os("linux")
     cursor = fake.home / ".cursor" / "mcp.json"
     cursor.parent.mkdir(parents=True, exist_ok=True)
-    cursor.write_text("{ not json\n", encoding="utf-8")
+    cursor.write_text("{ not json\\n", encoding="utf-8")
     codex = fake.home / ".codex" / "config.toml"
     codex.parent.mkdir(parents=True, exist_ok=True)
-    codex.write_text("[[[\n", encoding="utf-8")
+    codex.write_text("[[[\\n", encoding="utf-8")
     before = _tree_snapshot(fake.home)
 
     # Reach the multi-error branch via the library API (same path as CLI).
@@ -57,7 +57,7 @@ def test_install_all_one_bad_config_leaves_others_unwritten(simulate_os):
     fake = simulate_os("linux")
     cursor = fake.home / ".cursor" / "mcp.json"
     cursor.parent.mkdir(parents=True, exist_ok=True)
-    cursor.write_text("{ not json\n", encoding="utf-8")
+    cursor.write_text("{ not json\\n", encoding="utf-8")
     before = _tree_snapshot(fake.home)
 
     with pytest.raises(InstallError) as excinfo:
@@ -90,7 +90,7 @@ def test_uninstall_all_targets_preflights_before_writing(simulate_os):
     fake, project, adapters = _install_then_break_codex_uninstall(simulate_os)
     before = _tree_snapshot(fake.home)
 
-    with pytest.raises(InstallError, match="AGENTS.md"):
+    with pytest.raises(InstallError, match=r"AGENTS\\.md"):
         run_uninstall(
             adapters,
             Scope.LOCAL,
@@ -106,7 +106,7 @@ def test_uninstall_all_targets_preflights_before_recording_dry_run(simulate_os):
     before = _tree_snapshot(fake.home)
     dry_run = DryRunWriteSystem()
 
-    with pytest.raises(InstallError, match="AGENTS.md"):
+    with pytest.raises(InstallError, match=r"AGENTS\\.md"):
         run_uninstall(
             adapters,
             Scope.LOCAL,
