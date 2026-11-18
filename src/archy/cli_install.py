@@ -174,8 +174,8 @@ def install(
     """Wire archy's MCP server into your AI coding agents.
 
     Detects installed clients (Claude Code, Cursor, Codex CLI, opencode,
-    Continue), writes each one's MCP config and rules file, and seeds Claude's
-    permission allowlist. Re-running is idempotent.
+    Continue, Copilot CLI, Gemini CLI), writes each one's MCP config and rules
+    file, and seeds Claude's permission allowlist. Re-running is idempotent.
     """
     from archy.install import (
         InstallError,

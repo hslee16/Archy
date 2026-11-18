@@ -5,7 +5,9 @@ Paths (from the GitHub Docs page "Adding MCP servers for GitHub Copilot CLI"):
 - local MCP config:  ``<project>/.github/mcp.json`` (shared file Copilot CLI reads; not
   ``.mcp.json``, which the Claude adapter writes a different entry into)
 - instructions:      ``<project>/.github/copilot-instructions.md``
-  (global ``~/.copilot/copilot-instructions.md`` is retired, #560)
+
+                     (a global install writes no block, it only clears an old one
+                     from ``~/.copilot/copilot-instructions.md``, #560)
 
 Copilot CLI wants ``type: "local"`` and a ``tools`` list on every local server,
 so it has its own render. It has no permission allowlist archy seeds.

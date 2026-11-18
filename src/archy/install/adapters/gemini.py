@@ -3,7 +3,9 @@
 Paths (from the Gemini CLI docs, ``tools/mcp-server.md`` and ``cli/gemini-md.md``):
 - global MCP config: ``~/.gemini/settings.json`` (`mcpServers` object)
 - local MCP config:  ``<project>/.gemini/settings.json``
-- instructions:      ``<project>/GEMINI.md`` (global ``~/.gemini/GEMINI.md`` is retired, #560)
+- instructions:      ``<project>/GEMINI.md``
+                     (a global install writes no block, it only clears an old one
+                     from ``~/.gemini/GEMINI.md``, #560)
 
 Gemini CLI has no permission allowlist archy seeds, so ``seed_permissions`` is
 ignored. The server entry is the shared ``{command, args}`` stanza.
@@ -57,7 +59,7 @@ class GeminiAdapter(AgentAdapter):
         )
         return [
             FileAction(
-                path=self._config_dir(scope, project_root) / "settings.json",
+                path=self.config_paths(scope, project_root)[0],
                 kind="mcp",
                 render=render_json_mcp,
                 unrender=strip_json_mcp,
