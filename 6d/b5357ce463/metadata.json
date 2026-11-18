@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6db5357ce463",
+  "strategy": "manual-commit",
+  "branch": "alee/release-v0.56.0",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "README.md",
+    "pyproject.toml",
+    "server.json",
+    "src/archy/__init__.py",
+    "uv.lock"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6d/b5357ce463/0/metadata.json",
+      "transcript": "/6d/b5357ce463/0/full.jsonl",
+      "content_hash": "/6d/b5357ce463/0/content_hash.txt",
+      "prompt": "/6d/b5357ce463/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 30,
+    "cache_creation_tokens": 6955,
+    "cache_read_tokens": 1630735,
+    "output_tokens": 3149,
+    "api_call_count": 11
+  }
+}
