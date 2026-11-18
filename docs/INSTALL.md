@@ -161,6 +161,12 @@ Windows) and opencode's go to `$XDG_CONFIG_HOME/opencode/`. Install, uninstall,
 `--print-config` and detection all follow them. "owned" marks files archy creates
 exclusively; everything else is a shared file archy merges into.
 
+Copilot CLI and Gemini CLI ignore a project's MCP servers until you trust the
+folder, so after `--location local` the entry shows as skipped or disabled until
+you approve it in that client. A global install is not affected. The first
+launch can also read "Disconnected" while `uvx` fetches archy for the first
+time; it connects once that finishes.
+
 ## Uninstalling
 
 `archy uninstall` is the exact inverse and takes the same flags:
