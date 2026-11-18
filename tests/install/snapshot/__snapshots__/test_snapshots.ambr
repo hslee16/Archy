@@ -677,6 +677,222 @@
     ''',
   })
 # ---
+# name: test_emitted_config_snapshot[copilot-global-darwin]
+  dict({
+    '<HOME>/.copilot/mcp-config.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "type": "local",
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ],
+            "tools": [
+              "*"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[copilot-global-linux]
+  dict({
+    '<HOME>/.copilot/mcp-config.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "type": "local",
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ],
+            "tools": [
+              "*"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[copilot-global-win32]
+  dict({
+    '<HOME>/.copilot/mcp-config.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "type": "local",
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ],
+            "tools": [
+              "*"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[copilot-local-darwin]
+  dict({
+    '<HOME>/myproject/.github/copilot-instructions.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. Ask it before you decide, not only after
+      you edit: most of what it answers is cheaper to look up than to work out from
+      file names, and a question you answer by reading is a question you may answer
+      wrong.
+      
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
+      - To settle whether one part of the codebase can reach another, including
+        through intermediaries, call `archy_check(contracts=True)`. Plain
+        `archy_check` reports DIRECT edges only, so a clean pass from it does not
+        answer a reachability question.
+      - To settle "does this module import that one", "what imports this", or "was
+        this module even analysed", call `archy_module_view`. Every list it returns
+        is complete for that module, so an absence is an answer.
+      - To settle "what do I call this, which module does it go in, what has to be
+        updated alongside it", call `archy_conventions` instead of inferring the
+        house style from whichever files you happen to have open.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/myproject/.github/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "type": "local",
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ],
+            "tools": [
+              "*"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[copilot-local-linux]
+  dict({
+    '<HOME>/myproject/.github/copilot-instructions.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. Ask it before you decide, not only after
+      you edit: most of what it answers is cheaper to look up than to work out from
+      file names, and a question you answer by reading is a question you may answer
+      wrong.
+      
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
+      - To settle whether one part of the codebase can reach another, including
+        through intermediaries, call `archy_check(contracts=True)`. Plain
+        `archy_check` reports DIRECT edges only, so a clean pass from it does not
+        answer a reachability question.
+      - To settle "does this module import that one", "what imports this", or "was
+        this module even analysed", call `archy_module_view`. Every list it returns
+        is complete for that module, so an absence is an answer.
+      - To settle "what do I call this, which module does it go in, what has to be
+        updated alongside it", call `archy_conventions` instead of inferring the
+        house style from whichever files you happen to have open.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/myproject/.github/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "type": "local",
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ],
+            "tools": [
+              "*"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[copilot-local-win32]
+  dict({
+    '<HOME>/myproject/.github/copilot-instructions.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. Ask it before you decide, not only after
+      you edit: most of what it answers is cheaper to look up than to work out from
+      file names, and a question you answer by reading is a question you may answer
+      wrong.
+      
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
+      - To settle whether one part of the codebase can reach another, including
+        through intermediaries, call `archy_check(contracts=True)`. Plain
+        `archy_check` reports DIRECT edges only, so a clean pass from it does not
+        answer a reachability question.
+      - To settle "does this module import that one", "what imports this", or "was
+        this module even analysed", call `archy_module_view`. Every list it returns
+        is complete for that module, so an absence is an answer.
+      - To settle "what do I call this, which module does it go in, what has to be
+        updated alongside it", call `archy_conventions` instead of inferring the
+        house style from whichever files you happen to have open.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+    '<HOME>/myproject/.github/mcp.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "type": "local",
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ],
+            "tools": [
+              "*"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
 # name: test_emitted_config_snapshot[cursor-global-darwin]
   dict({
     '<HOME>/.cursor/mcp.json': '''
@@ -840,6 +1056,198 @@
   
     ''',
     '<HOME>/myproject/.cursor/rules/archy.mdc': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. Ask it before you decide, not only after
+      you edit: most of what it answers is cheaper to look up than to work out from
+      file names, and a question you answer by reading is a question you may answer
+      wrong.
+      
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
+      - To settle whether one part of the codebase can reach another, including
+        through intermediaries, call `archy_check(contracts=True)`. Plain
+        `archy_check` reports DIRECT edges only, so a clean pass from it does not
+        answer a reachability question.
+      - To settle "does this module import that one", "what imports this", or "was
+        this module even analysed", call `archy_module_view`. Every list it returns
+        is complete for that module, so an absence is an answer.
+      - To settle "what do I call this, which module does it go in, what has to be
+        updated alongside it", call `archy_conventions` instead of inferring the
+        house style from whichever files you happen to have open.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[gemini-global-darwin]
+  dict({
+    '<HOME>/.gemini/settings.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[gemini-global-linux]
+  dict({
+    '<HOME>/.gemini/settings.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[gemini-global-win32]
+  dict({
+    '<HOME>/.gemini/settings.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[gemini-local-darwin]
+  dict({
+    '<HOME>/myproject/.gemini/settings.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/GEMINI.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. Ask it before you decide, not only after
+      you edit: most of what it answers is cheaper to look up than to work out from
+      file names, and a question you answer by reading is a question you may answer
+      wrong.
+      
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
+      - To settle whether one part of the codebase can reach another, including
+        through intermediaries, call `archy_check(contracts=True)`. Plain
+        `archy_check` reports DIRECT edges only, so a clean pass from it does not
+        answer a reachability question.
+      - To settle "does this module import that one", "what imports this", or "was
+        this module even analysed", call `archy_module_view`. Every list it returns
+        is complete for that module, so an absence is an answer.
+      - To settle "what do I call this, which module does it go in, what has to be
+        updated alongside it", call `archy_conventions` instead of inferring the
+        house style from whichever files you happen to have open.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[gemini-local-linux]
+  dict({
+    '<HOME>/myproject/.gemini/settings.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/GEMINI.md': '''
+      <!-- archy:begin -->
+      ## archy (architectural sensor)
+      
+      archy is wired in as an MCP server. Ask it before you decide, not only after
+      you edit: most of what it answers is cheaper to look up than to work out from
+      file names, and a question you answer by reading is a question you may answer
+      wrong.
+      
+      - Before editing, call `archy_impact` (or `archy_impact(mode='affected')` on a
+        set of changed files) to see what a module change reaches.
+      - To settle whether one part of the codebase can reach another, including
+        through intermediaries, call `archy_check(contracts=True)`. Plain
+        `archy_check` reports DIRECT edges only, so a clean pass from it does not
+        answer a reachability question.
+      - To settle "does this module import that one", "what imports this", or "was
+        this module even analysed", call `archy_module_view`. Every list it returns
+        is complete for that module, so an absence is an answer.
+      - To settle "what do I call this, which module does it go in, what has to be
+        updated alongside it", call `archy_conventions` instead of inferring the
+        house style from whichever files you happen to have open.
+      - Take a baseline with `archy_snapshot` at the start of a task; after edits,
+        call `archy_diff` and read `summary.headline` first.
+      
+      Outputs are structured JSON meant for you to act on, not dashboards for humans.
+      <!-- archy:end -->
+  
+    ''',
+  })
+# ---
+# name: test_emitted_config_snapshot[gemini-local-win32]
+  dict({
+    '<HOME>/myproject/.gemini/settings.json': '''
+      {
+        "mcpServers": {
+          "archy": {
+            "command": "uvx",
+            "args": [
+              "archy",
+              "mcp"
+            ]
+          }
+        }
+      }
+  
+    ''',
+    '<HOME>/myproject/GEMINI.md': '''
       <!-- archy:begin -->
       ## archy (architectural sensor)
       

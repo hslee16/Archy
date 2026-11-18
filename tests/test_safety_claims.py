@@ -459,7 +459,9 @@ GLOBAL_INSTALL_WRITES = [
     ".codex/config.toml",
     ".config/opencode/opencode.json",
     ".continue/mcpServers/archy.yaml",
+    ".copilot/mcp-config.json",
     ".cursor/mcp.json",
+    ".gemini/settings.json",
 ]
 
 LOCAL_INSTALL_WRITES = [
@@ -469,9 +471,13 @@ LOCAL_INSTALL_WRITES = [
     ".continue/rules/archy.md",
     ".cursor/mcp.json",
     ".cursor/rules/archy.mdc",
+    ".gemini/settings.json",
+    ".github/copilot-instructions.md",
+    ".github/mcp.json",
     ".mcp.json",
     "AGENTS.md",
     "CLAUDE.md",
+    "GEMINI.md",
     "opencode.json",
 ]
 

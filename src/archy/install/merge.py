@@ -8,13 +8,14 @@ JSON/TOML strings, always parse-then-reserialize, so a user's unrelated config
 survives untouched and a second run is a byte-for-byte no-op (idempotency).
 
 archy:owns        denied_archy_permission_patterns, render_claude_permissions,
-                  render_continue_yaml, render_json_mcp, render_opencode_mcp,
-                  render_toml_mcp, strip_claude_permissions, strip_json_mcp,
-                  strip_opencode_mcp, strip_toml_mcp
+                  render_continue_yaml, render_copilot_mcp, render_json_mcp,
+                  render_opencode_mcp, render_toml_mcp, strip_claude_permissions,
+                  strip_json_mcp, strip_opencode_mcp, strip_toml_mcp
 archy:mirrored-by render_json_mcp -> archy.install.adapters.claude,
-                  archy.install.adapters.cursor,
+                  archy.install.adapters.cursor, archy.install.adapters.gemini,
                   strip_json_mcp -> archy.install.adapters.claude,
-                  archy.install.adapters.cursor
+                  archy.install.adapters.copilot, archy.install.adapters.cursor,
+                  archy.install.adapters.gemini
 """
 
 from __future__ import annotations
@@ -111,6 +112,20 @@ def render_json_mcp(existing: str | None, *, servers_key: str = "mcpServers") ->
     """
     obj = _load_json_obj(existing)
     _ensure_dict(obj, servers_key)[SERVER_KEY] = _mcp_entry()
+    return _dump_json(obj)
+
+
+def render_copilot_mcp(existing: str | None) -> str:
+    """Copilot CLI's `mcpServers.archy` stanza: the shared one plus ``type`` and ``tools``.
+
+    Its docs show every local server as ``{type: "local", command, args, tools: ["*"]}``.
+    """
+    obj = _load_json_obj(existing)
+    _ensure_dict(obj, "mcpServers")[SERVER_KEY] = {
+        "type": "local",
+        **_mcp_entry(),
+        "tools": ["*"],
+    }
     return _dump_json(obj)
 
 

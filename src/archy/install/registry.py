@@ -1,6 +1,6 @@
 """The adapter registry: the one list of supported clients.
 
-Adding a sixth client is a new adapter module plus one entry here. Everything
+Adding another client is a new adapter module plus one entry here. Everything
 else (CLI, runner, tests) iterates this registry rather than naming adapters
 directly.
 
@@ -14,7 +14,9 @@ from __future__ import annotations
 from archy.install.adapters.claude import ClaudeAdapter
 from archy.install.adapters.codex import CodexAdapter
 from archy.install.adapters.continue_ import ContinueAdapter
+from archy.install.adapters.copilot import CopilotAdapter
 from archy.install.adapters.cursor import CursorAdapter
+from archy.install.adapters.gemini import GeminiAdapter
 from archy.install.adapters.opencode import OpencodeAdapter
 from archy.install.base import AgentAdapter
 
@@ -25,6 +27,8 @@ REGISTRY: tuple[AgentAdapter, ...] = (
     CodexAdapter(),
     OpencodeAdapter(),
     ContinueAdapter(),
+    CopilotAdapter(),
+    GeminiAdapter(),
 )
 
 _BY_ID = {adapter.id: adapter for adapter in REGISTRY}

@@ -72,6 +72,19 @@ def test_opencode_config_parses_as_json(simulate_os):
     assert entry["enabled"] is True
 
 
+def test_copilot_config_parses_as_json(simulate_os):
+    files = _emit("copilot", simulate_os)
+    entry = json.loads(files["mcp-config.json"])["mcpServers"]["archy"]
+    assert entry["type"] == "local"
+    assert entry["tools"] == ["*"]
+    _assert_uvx_archy(entry)
+
+
+def test_gemini_config_parses_as_json(simulate_os):
+    files = _emit("gemini", simulate_os)
+    _assert_uvx_archy(json.loads(files["settings.json"])["mcpServers"]["archy"])
+
+
 def test_continue_block_parses_as_yaml(simulate_os):
     files = _emit("continue", simulate_os)
     doc = yaml.safe_load(files["archy.yaml"])
@@ -81,11 +94,20 @@ def test_continue_block_parses_as_yaml(simulate_os):
     assert server["args"] == ["archy", "mcp"]
 
 
-@pytest.mark.parametrize("adapter_id", ["claude", "cursor", "codex", "opencode", "continue"])
+@pytest.mark.parametrize(
+    "adapter_id", ["claude", "cursor", "codex", "opencode", "continue", "copilot", "gemini"]
+)
 def test_instruction_file_is_nonempty_text(adapter_id, simulate_os):
     # Local: a global install writes no instruction block (#560).
     files = _emit(adapter_id, simulate_os, Scope.LOCAL)
-    rule_names = {"CLAUDE.md", "AGENTS.md", "archy.mdc", "archy.md"}
+    rule_names = {
+        "CLAUDE.md",
+        "AGENTS.md",
+        "archy.mdc",
+        "archy.md",
+        "copilot-instructions.md",
+        "GEMINI.md",
+    }
     instruction_files = [c for name, c in files.items() if name in rule_names]
     assert instruction_files, f"{adapter_id} emitted no instruction file"
     assert all("archy" in c for c in instruction_files)
