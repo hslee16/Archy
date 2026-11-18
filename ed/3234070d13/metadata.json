@@ -1,0 +1,37 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "ed3234070d13",
+  "strategy": "manual-commit",
+  "branch": "alee/install-copilot-gemini-598",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/INSTALL.md",
+    "docs/SAFETY.md",
+    "src/archy/install/adapters/copilot.py",
+    "src/archy/install/adapters/gemini.py",
+    "src/archy/install/base.py",
+    "src/archy/install/merge.py",
+    "src/archy/install/registry.py",
+    "tests/install/contract/test_contracts.py",
+    "tests/install/snapshot/__snapshots__/test_snapshots.ambr",
+    "tests/install/unit/test_global_no_instructions.py",
+    "tests/install/unit/test_registry.py",
+    "tests/test_safety_claims.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ed/3234070d13/0/metadata.json",
+      "transcript": "/ed/3234070d13/0/full.jsonl",
+      "content_hash": "/ed/3234070d13/0/content_hash.txt",
+      "prompt": "/ed/3234070d13/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 74413,
+    "cache_read_tokens": 1852140,
+    "output_tokens": 12056,
+    "api_call_count": 22
+  }
+}

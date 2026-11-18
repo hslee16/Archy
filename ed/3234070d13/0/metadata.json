@@ -1,0 +1,82 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "ed3234070d13",
+  "session_id": "5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-18T22:47:10.562712Z",
+  "branch": "alee/install-copilot-gemini-598",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "docs/INSTALL.md",
+    "docs/SAFETY.md",
+    "src/archy/install/adapters/copilot.py",
+    "src/archy/install/adapters/gemini.py",
+    "src/archy/install/base.py",
+    "src/archy/install/merge.py",
+    "src/archy/install/registry.py",
+    "tests/install/contract/test_contracts.py",
+    "tests/install/snapshot/__snapshots__/test_snapshots.ambr",
+    "tests/install/unit/test_global_no_instructions.py",
+    "tests/install/unit/test_registry.py",
+    "tests/test_safety_claims.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5-2",
+  "turn_id": "872e7303213b",
+  "token_usage": {
+    "input_tokens": 46,
+    "cache_creation_tokens": 74413,
+    "cache_read_tokens": 1852140,
+    "output_tokens": 12056,
+    "api_call_count": 22
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-18T22:47:10.531469Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 569,
+    "human_modified": 50,
+    "human_removed": 0,
+    "total_committed": 569,
+    "total_lines_changed": 619,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 706,
+      "user_lines_removed": 25,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "README.md": 4,
+        "bench/diff_duplicates_precision.jsonl": 87,
+        "docs/INSTALL.md": 4,
+        "docs/SAFETY.md": 4,
+        "src/archy/install/adapters/copilot.py": 71,
+        "src/archy/install/adapters/gemini.py": 66,
+        "src/archy/install/base.py": 1,
+        "src/archy/install/merge.py": 20,
+        "src/archy/install/registry.py": 5,
+        "tests/install/contract/test_contracts.py": 24,
+        "tests/install/snapshot/__snapshots__/test_snapshots.ambr": 408,
+        "tests/install/unit/test_global_no_instructions.py": 5,
+        "tests/install/unit/test_registry.py": 1,
+        "tests/test_safety_claims.py": 6
+      },
+      "user_removed_per_file": {
+        "README.md": 4,
+        "docs/INSTALL.md": 2,
+        "docs/SAFETY.md": 2,
+        "src/archy/install/base.py": 7,
+        "src/archy/install/merge.py": 5,
+        "src/archy/install/registry.py": 1,
+        "tests/install/contract/test_contracts.py": 2,
+        "tests/install/unit/test_global_no_instructions.py": 1,
+        "tests/install/unit/test_registry.py": 1
+      }
+    }
+  ]
+}
