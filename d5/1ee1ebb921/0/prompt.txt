@@ -1,0 +1,164 @@
+<task-notification>
+<task-id>a85fa9c8ff74300bf</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a85fa9c8ff74300bf.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with no findings. I searched all 12 files for U+2014 and found none, then marked `no_em_dashes--12_files--2265b2fbe009` as passed.</result>
+<usage><subagent_tokens>19966</subagent_tokens><tool_uses>3</tool_uses><duration_ms>9009</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a68fe08f3f196bb64</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a68fe08f3f196bb64.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python copilot.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review passed with zero violations, and I marked it as passed.
+
+`/Users/hosanglee/archy/src/archy/install/adapters/copilot.py` meets every listed criterion:
+- **Imports and typing:** it has `from __future__ import annotations`, uses PEP 604 types, and groups its imports correctly.
+- **Naming and paths:** names follow the snake_case, PascalCase and underscore-prefix rules, and it uses `pathlib.Path`.
+- **Layout:** no line is over 100 characters, and no block is copy-pasted.
+- **Value objects:** the file defines none.
+- **Comments:** the docstring says the global `~/.copilot/copilot-instructions.md` is "retired, #560", while `plan()` still passes that path for global scope. This is accurate because `instructions_action` in `src/archy/install/base.py` cleans up the old global file on install. `gemini.py` words it the same way.</result>
+<usage><subagent_tokens>21614</subagent_tokens><tool_uses>3</tool_uses><duration_ms>11013</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a2a52eaca2b36b647</task-id>
+<tool-use-id>toolu_01791hvya9BdsgYsmgP9n2bB</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a2a52eaca2b36b647.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python gemini.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review fails with three findings. I did not call `mark_review_as_passed`. The other criteria pass: the `__future__` import, PEP 604 syntax, naming, imports, line length, `pathlib` and the absence of value objects.
+
+1. **Line 51 (docstring), criterion "Comment accuracy: every comment must explain WHY... not WHAT".**
+   - The docstring says the global `~/.gemini/GEMINI.md` "is retired, #560". But `plan()` at lines 98-102 still returns `paths.home() / ".gemini" / "GEMINI.md"` for the non-local scope.
+   - The comment contradicts the code.
+   - Suggested fix: if the global file really is retired, make `plan()` stop targeting it, for example by returning only the MCP action for global scope. Otherwise reword the docstring to say what actually happens, such as "global instructions are written to `~/.gemini/GEMINI.md`", and give the reason for #560.
+
+2. **Lines 80-82 and 98-102, criterion "DRY: no copy-pasted blocks that should be a shared helper".**
+   - The scope branch (`Scope.LOCAL` gives `local_root(project_root)`, otherwise `paths.home()`) is written twice. It appears once in `_config_dir` and again in the `instructions` expression.
+   - Suggested fix: add a `_base(scope, project_root)` helper that returns the root. Then use `_base(...) / ".gemini"` and `_base(...) / "GEMINI.md"`. This only works for the local `GEMINI.md` if the global case changes per finding 1. If the global file stays at `~/.gemini/GEMINI.md`, use `_config_dir(...) / "GEMINI.md"` for global and `local_root(...) / "GEMINI.md"` for local.
+
+3. **Lines 85 and 105, criterion "DRY".**
+   - `plan()` rebuilds the `settings.json` path with `self._config_dir(scope, project_root) / "settings.json"`. `config_paths()` already builds that same path.
+   - Suggested fix: use `self.config_paths(scope, project_root)[0]` in `plan()`, or add a `_settings_path` helper that both call.
+
+File: `/Users/hosanglee/archy/src/archy/install/adapters/gemini.py`</result>
+<usage><subagent_tokens>21155</subagent_tokens><tool_uses>1</tool_uses><duration_ms>10500</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a75587cc020578f31</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a75587cc020578f31.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python merge.py" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/src/archy/install/merge.py` found no violations, and I marked it as passed.
+
+I read the file against the listed criteria and ran a line-length check, which found no lines over 100 characters. I did not open `.deepwork/review/python_conventions.md`, so the review used only the criteria listed in the instruction file.</result>
+<usage><subagent_tokens>25009</subagent_tokens><tool_uses>3</tool_uses><duration_ms>9701</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7e3fb1e888626a98</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a7e3fb1e888626a98.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python tests contracts" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>PASS: I found no violations in `/Users/hosanglee/archy/tests/install/contract/test_contracts.py` and marked the review as passed.
+
+I checked it against each listed criterion:
+- **Future import and typing:** `from __future__ import annotations` is at the top, and the type syntax is PEP 604 with no `typing.List` or `Optional`.
+- **Naming:** names follow the snake_case and underscore-prefix rules.
+- **Value objects and paths:** there are no value-object classes and no `os.path` use, so those criteria don't apply.
+- **Imports:** they are grouped stdlib, third-party, then local.
+- **Line length:** I read the longest lines (such as the `_emit` and `_strip_each` signatures) and none looked over 100 characters. I did not run a length check.
+- **DRY:** `_emit` and `_strip_each` repeat a few setup lines, but that is too small to need a shared helper.
+- **Comments:** the two inline comments explain why, citing #560 and uninstall deleting archy-owned files.
+
+I did not open `.deepwork/review/python_conventions.md`; I applied the criteria as listed in the instruction file.</result>
+<usage><subagent_tokens>22972</subagent_tokens><tool_uses>2</tool_uses><duration_ms>9512</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afe55ad2c8469de02</task-id>
+<tool-use-id>toolu_01Lo64uqjb16UnnL1zyGzxEa</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/afe55ad2c8469de02.output</output-file>
+<status>completed</status>
+<summary>Agent "Review python safety claims test" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The review of `/Users/hosanglee/archy/tests/test_safety_claims.py` passed with zero violations, and I marked it as passed.
+
+I checked each listed criterion:
+- **Line length:** no line exceeds 100 characters (checked with a line-length scan).
+- **Typing and naming:** `from __future__ import annotations` is present, and the file uses PEP 604 types and snake_case names with underscore-prefixed private helpers.
+- **Imports and paths:** imports are grouped stdlib, third-party, then local, and the file uses `pathlib` rather than `os.path`.
+- **Value objects:** the file defines none, so the frozen-pydantic criterion doesn't apply.
+- **DRY:** the repeated snapshot-and-compare blocks across the writer tests are short, so I didn't count them as a copy-paste violation.
+- **Comments:** they explain why, not what.</result>
+<usage><subagent_tokens>30635</subagent_tokens><tool_uses>3</tool_uses><duration_ms>10058</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a54fc992968ec509f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a54fc992968ec509f.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docs relating to archy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. I marked review `REDACTED` as passed.
+
+The Copilot CLI and Gemini CLI adapters are described consistently in `README.md`, `docs/INSTALL.md` and `docs/SAFETY.md`:
+- **Client lists:** every list matches the new set of seven clients.
+- **File counts:** `docs/SAFETY.md` says 8 files for a global install and 14 for a local one. I counted both lists and they match.
+- **Paths:** the Copilot and Gemini paths in the INSTALL table and the SAFETY lists match the commit message.
+- **`--target` ids:** the comma list in `docs/INSTALL.md` includes `copilot` and `gemini`.
+
+Two things I left alone because they fall outside this review's scope:
+- **CLI help text:** the docstring of `archy install` in `/Users/hosanglee/archy/src/archy/cli_install.py` (around line 176) still lists only five clients. It is user-facing, but it is source code rather than a listed doc, so it is worth a follow-up fix.
+- **Historical specs:** `/Users/hosanglee/archy/docs/SPEC_INDEX_AND_INSTALL.md` and `/Users/hosanglee/archy/docs/SPEC_INSTALL_TESTING.md` still say "five adapters". They describe the launch design, so I did not count them as drift.</result>
+<usage><subagent_tokens>31223</subagent_tokens><tool_uses>6</tool_uses><duration_ms>19611</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a70364a8bafd5b972</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a70364a8bafd5b972.output</output-file>
+<status>completed</status>
+<summary>Agent "Review archy structural" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No structural regressions; blast radius verified via archy. I marked the review as passed.
+
+- **Cycles:** `uv run archy cycles .` reported no cycles.
+- **Layer rules:** `uv run archy check .` reported no layer violations.
+- **Derived headers:** `uv run archy conventions . --emit-headers --check` reported all 149 headers match the tree. That covers the `base.py` header diff, which dropped the `instructions_action` and `local_root` mirrored-by lines.
+- **Blast radius:**
+  - `copilot.py` has 45 transitive dependents: `archy.cli`, `cli_install`, `install`, `registry`, `runner` and the install tests.
+  - `base.py` affects 13 modules and 50 tests under `uv run archy affected`; the install unit, contract, snapshot and integration tests are in that set.
+  - `registry.py` and `merge.py` are only touched by additive changes (two new `REGISTRY` entries and `render_copilot_mcp`).
+  - I did not read the output of `impact` for `gemini.py`, `base.py`, `merge.py` and `registry.py`. The command batch timed out and I moved on to the other checks.
+- **Edit-risk:** `uv run archy what-to-refactor-next . --top 10` lists `archy.install.base` as a hotspot (priority 0.796, rank 7). The diff to `base.py` is a docstring header change only, so I raised no finding.</result>
+<usage><subagent_tokens>24465</subagent_tokens><tool_uses>6</tool_uses><duration_ms>689051</duration_ms></usage>
+</task-notification>
