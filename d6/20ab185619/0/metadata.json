@@ -1,0 +1,73 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d620ab185619",
+  "session_id": "5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-18T23:28:29.112904Z",
+  "branch": "alee/install-copilot-gemini-598",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "docs/INSTALL.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5-2",
+  "turn_id": "b4ae4365ae51",
+  "checkpoint_transcript_start": 588,
+  "transcript_lines_at_start": 588,
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 1241,
+    "cache_read_tokens": 287203,
+    "output_tokens": 727,
+    "api_call_count": 2
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01GMfZweSXjiTRuKUy14GJee",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "b4ae4365ae51",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 230,
+        "end": 231,
+        "entry_ids": [
+          "bcdbb5c9-84d9-4aa8-af62-e2a90cdc7c3e"
+        ],
+        "tool_use_id": "toolu_01GMfZweSXjiTRuKUy14GJee"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01GMfZweSXjiTRuKUy14GJee"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-18T23:28:29.074086Z",
+    "agent_lines": 2,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 2,
+    "total_lines_changed": 3,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}

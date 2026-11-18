@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d620ab185619",
+  "strategy": "manual-commit",
+  "branch": "alee/install-copilot-gemini-598",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "docs/INSTALL.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/d6/20ab185619/0/metadata.json",
+      "transcript": "/d6/20ab185619/0/full.jsonl",
+      "content_hash": "/d6/20ab185619/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 4,
+    "cache_creation_tokens": 1241,
+    "cache_read_tokens": 287203,
+    "output_tokens": 727,
+    "api_call_count": 2
+  }
+}
