@@ -39,7 +39,7 @@ from archy.mcp_runs_core import (
     _validate_response_format,
 )
 from archy.refactor import compute_refactor_priorities
-from archy.refactor_notes import empty_window_note, fused_refactor_note
+from archy.refactor_notes import FusedNoteInputs, empty_window_note, fused_refactor_note
 from archy.scan_config import (
     graph_kwargs,
     resolve_max_modules,
@@ -177,12 +177,13 @@ def _refactor_note(note: _RefactorNoteInputs) -> str | None:
     """
     if note.lens == "fused":
         return fused_refactor_note(
-            has_rows=note.has_rows,
-            min_risk=note.min_risk,
-            git_available=bool(note.git_available),
-            no_commits=note.no_commits,
-            empty_window=note.empty_window_since is not None,
-            since=note.empty_window_since,
+            FusedNoteInputs(
+                has_rows=note.has_rows,
+                min_risk=note.min_risk,
+                git_available=bool(note.git_available),
+                no_commits=note.no_commits,
+                window_since=note.empty_window_since,
+            )
         )
     if note.has_rows:
         return None

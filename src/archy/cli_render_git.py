@@ -22,7 +22,7 @@ from archy.hotspots import Hotspot
 from archy.refactor import (
     RefactorPriority,
 )
-from archy.refactor_notes import empty_window_note, fused_refactor_note
+from archy.refactor_notes import FusedNoteInputs, empty_window_note, fused_refactor_note
 
 
 def _hotspots_note(rows: list[Hotspot], *, since: str | None, empty_window: bool) -> str | None:
@@ -296,12 +296,13 @@ def _refactor_to_dict(
         "shown": min(top_n, len(rows)),
         "priorities": [r.model_dump() for r in rows[:top_n]],
         "note": fused_refactor_note(
-            has_rows=bool(rows),
-            min_risk=min_risk,
-            git_available=git_available,
-            no_commits=no_commits,
-            empty_window=empty_window,
-            since=since,
+            FusedNoteInputs(
+                has_rows=bool(rows),
+                min_risk=min_risk,
+                git_available=git_available,
+                no_commits=no_commits,
+                window_since=since if empty_window else None,
+            )
         ),
     }
 
@@ -318,12 +319,13 @@ def _refactor_to_text(
 ) -> str:
     if not rows:
         note = fused_refactor_note(
-            has_rows=False,
-            min_risk=min_risk,
-            git_available=git_available,
-            no_commits=no_commits,
-            empty_window=empty_window,
-            since=since,
+            FusedNoteInputs(
+                has_rows=False,
+                min_risk=min_risk,
+                git_available=git_available,
+                no_commits=no_commits,
+                window_since=since if empty_window else None,
+            )
         )
         return f"# {note}"
     shown = rows[:top_n]

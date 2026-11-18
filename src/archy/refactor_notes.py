@@ -1,11 +1,14 @@
 """Shared wording for fused refactor-priority notes.
 
-archy:owns        empty_window_note, fused_refactor_note
-archy:mirrored-by empty_window_note -> archy.cli_render_git, archy.mcp_runs_git,
+archy:owns        FusedNoteInputs, empty_window_note, fused_refactor_note
+archy:mirrored-by FusedNoteInputs -> archy.cli_render_git, archy.mcp_runs_git,
+                  empty_window_note -> archy.cli_render_git, archy.mcp_runs_git,
                   fused_refactor_note -> archy.cli_render_git, archy.mcp_runs_git
 """
 
 from __future__ import annotations
+
+from pydantic import BaseModel, ConfigDict
 
 
 def empty_window_note(since: str) -> str:
@@ -16,26 +19,31 @@ def empty_window_note(since: str) -> str:
     )
 
 
-def fused_refactor_note(
-    *,
-    has_rows: bool,
-    min_risk: float,
-    git_available: bool,
-    no_commits: bool = False,
-    empty_window: bool = False,
-    since: str | None = None,
-) -> str | None:
+class FusedNoteInputs(BaseModel):
+    """What the fused note is worded from: what ran and what was found."""
+
+    model_config = ConfigDict(frozen=True)
+
+    has_rows: bool
+    min_risk: float
+    git_available: bool
+    no_commits: bool = False
+    # Set only when git ran and the --since window held no commits at all.
+    window_since: str | None = None
+
+
+def fused_refactor_note(note: FusedNoteInputs) -> str | None:
     """Explain an empty or degraded fused ranking on CLI text, CLI JSON and MCP surfaces."""
-    if not has_rows:
+    if not note.has_rows:
         return _empty_ranking_note(
-            min_risk=min_risk,
-            git_available=git_available,
-            no_commits=no_commits,
-            window_since=since if empty_window else None,
+            min_risk=note.min_risk,
+            git_available=note.git_available,
+            no_commits=note.no_commits,
+            window_since=note.window_since,
         )
-    if git_available:
+    if note.git_available:
         return None
-    return _structural_only_note(no_commits=no_commits)
+    return _structural_only_note(no_commits=note.no_commits)
 
 
 def _empty_ranking_note(
