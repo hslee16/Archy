@@ -16,13 +16,7 @@ archy:owns        AgentAdapter, FileAction, Scope, apply_plan, apply_uninstall,
                   permission_patterns, remove_instructions, render_plan,
                   upsert_instructions, write_rendered
 archy:mirrored-by delete_file -> archy.install.adapters.continue_,
-                  archy.install.adapters.cursor,
-                  instructions_action -> archy.install.adapters.claude,
-                  archy.install.adapters.codex, archy.install.adapters.continue_,
-                  archy.install.adapters.cursor, archy.install.adapters.opencode,
-                  local_root -> archy.install.adapters.claude,
-                  archy.install.adapters.codex, archy.install.adapters.continue_,
-                  archy.install.adapters.cursor, archy.install.adapters.opencode
+                  archy.install.adapters.cursor
 """
 
 from __future__ import annotations

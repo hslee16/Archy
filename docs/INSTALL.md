@@ -123,7 +123,7 @@ distribution channels.
 
 | | `archy install` | Claude Code plugin |
 |---|---|---|
-| Clients | Claude Code, Cursor, Codex, opencode, Continue | Claude Code only |
+| Clients | Claude Code, Cursor, Codex, opencode, Continue, Copilot CLI, Gemini CLI | Claude Code only |
 | Acquisition | run a command in your shell | `/plugin marketplace add hslee16/archy` then `/plugin install archy@archy` |
 | Seeds Claude `permissions.allow` | yes | no (loader limitation) |
 | Ships the `archy` skill as a first-class skill | no (a local install drops a `CLAUDE.md` block) | yes |
@@ -150,6 +150,8 @@ project-scoped files under the current directory (or `--project-root`).
 | Cursor | `~/.cursor/mcp.json` / `<project>/.cursor/mcp.json` | `<project>/.cursor/rules/archy.mdc` (owned) | n/a |
 | Codex CLI | `~/.codex/config.toml` / `<project>/.codex/config.toml` | `<project>/AGENTS.md` | n/a |
 | opencode | `~/.config/opencode/opencode.json` / `<project>/opencode.json` | `<project>/AGENTS.md` | n/a |
+| GitHub Copilot CLI | `~/.copilot/mcp-config.json` / `<project>/.github/mcp.json` | `<project>/.github/copilot-instructions.md` | n/a |
+| Gemini CLI | `~/.gemini/settings.json` / `<project>/.gemini/settings.json` | `<project>/GEMINI.md` | n/a |
 | Continue | `~/.continue/mcpServers/archy.yaml` / `<project>/.continue/...` (owned) | `<project>/.continue/rules/archy.md` (owned) | n/a |
 
 On Windows the homedir-anchored paths resolve under `%USERPROFILE%`, and
@@ -158,6 +160,13 @@ Codex's global files go there; set `XDG_CONFIG_HOME` to an absolute path (not on
 Windows) and opencode's go to `$XDG_CONFIG_HOME/opencode/`. Install, uninstall,
 `--print-config` and detection all follow them. "owned" marks files archy creates
 exclusively; everything else is a shared file archy merges into.
+
+Copilot CLI and Gemini CLI ignore a project's MCP servers until you trust the
+folder, so after `--location local` the entry shows as skipped or disabled until
+you approve it in that client. Gemini CLI also suppresses user-level servers
+in an untrusted folder, so a global install can show the same way. The first
+launch can also read "Disconnected" while `uvx` fetches archy for the first
+time; it connects once that finishes.
 
 ## Uninstalling
 
@@ -187,7 +196,7 @@ whole file instead, secrets included);
 `uninstall` adds `--dry-run` (preview all removals).
 
 - `--target` accepts `auto` (detected clients only), `all` (every known client),
-  or a comma list of ids (`claude,cursor,codex,opencode,continue`).
+  or a comma list of ids (`claude,cursor,codex,opencode,continue,copilot,gemini`).
 - `--location` is `global` (default) or `local`.
 - `--no-permissions` leaves Claude's allowlist untouched in both directions.
 

@@ -14,7 +14,7 @@ from archy.install.base import Scope, instructions_block
 from archy.install.runner import resolve_targets, run_install, run_uninstall
 from archy.install.writer import RealWriteSystem
 
-ADAPTERS = ["claude", "codex", "cursor", "opencode", "continue"]
+ADAPTERS = ["claude", "codex", "cursor", "opencode", "continue", "copilot", "gemini"]
 # Where each adapter keeps its instruction file, relative to the (faked) home on
 # linux, and whether archy owns the file outright (so retiring it deletes it).
 GLOBAL_FILES = {
@@ -23,6 +23,8 @@ GLOBAL_FILES = {
     "opencode": (".config/opencode/AGENTS.md", False),
     "cursor": (".cursor/rules/archy.mdc", True),
     "continue": (".continue/rules/archy.md", True),
+    "copilot": (".copilot/copilot-instructions.md", False),
+    "gemini": (".gemini/GEMINI.md", False),
 }
 LOCAL_FILES = {
     "claude": "CLAUDE.md",
@@ -30,6 +32,8 @@ LOCAL_FILES = {
     "opencode": "AGENTS.md",
     "cursor": ".cursor/rules/archy.mdc",
     "continue": ".continue/rules/archy.md",
+    "copilot": ".github/copilot-instructions.md",
+    "gemini": "GEMINI.md",
 }
 USER_TEXT = b"# my notes\r\nkeep this exactly\r\n"  # CRLF: a rewrite would normalise it
 OLD_BLOCK = instructions_block()

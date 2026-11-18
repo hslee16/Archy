@@ -7,7 +7,7 @@ import pytest
 from archy.install.base import AgentAdapter
 from archy.install.registry import adapter_ids, all_adapters, get_adapter
 
-EXPECTED_IDS = {"claude", "cursor", "codex", "opencode", "continue"}
+EXPECTED_IDS = {"claude", "cursor", "codex", "opencode", "continue", "copilot", "gemini"}
 
 
 def test_registry_has_the_five_launch_adapters():

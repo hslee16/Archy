@@ -192,7 +192,7 @@ The sharp version, about [colbymchenry/codegraph](https://github.com/colbymchenr
 ## Start in one command
 
 ```bash
-uvx archy install     # detects Claude Code, Cursor, Codex, opencode, Continue and wires each one up
+uvx archy install     # detects Claude Code, Cursor, Codex, opencode, Continue, Copilot CLI, Gemini CLI and wires each one up
 ```
 
 Nothing lands on your PATH: the config it writes runs `uvx archy mcp` on demand. Prefer a real install? `pip install archy`, `uv tool install archy`, or `pipx install archy`. Either way, try it on a project without installing anything:
@@ -223,7 +223,7 @@ uvx archy check .        # layer rules from archy.yaml; exits 1 on violation
 | Pre-task briefing | `archy brief` (one screen composing conventions, layer coverage and the gate inventory for an agent to read BEFORE it starts, plus optional `--contracts`; advisory, always exits 0) |
 | MCP server | `archy mcp` (cached: warm graph builds in seconds even on 10k+ module repos) |
 | Parse cache | `archy index sync` / `archy index clear` (persistent `.archy/index.db`; transparent under the MCP server) |
-| Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue; wire in or cleanly remove the MCP server) |
+| Agent install | `archy install` / `archy uninstall` (auto-detect Claude Code, Cursor, Codex, opencode, Continue, Copilot CLI, Gemini CLI; wire in or cleanly remove the MCP server) |
 
 How the score is computed and how to read it: [`docs/SCORING.md`](docs/SCORING.md). Benchmarks against pydantic, fastapi, flask, pytest, and archy-on-archy: [`docs/CASE_STUDIES.md`](docs/CASE_STUDIES.md). Design rationale and comparison with sentrux: [`docs/LEARNINGS.md`](docs/LEARNINGS.md).
 
@@ -281,7 +281,7 @@ pip install archy
 # or nothing at all: prefix any command with `uvx`, e.g. `uvx archy score .`
 ```
 
-Using archy as an MCP server inside an AI coding agent? Skip the manual config and run `uvx archy install`, which wires it into Claude Code, Cursor, Codex, opencode, or Continue automatically and writes a config that invokes `uvx archy mcp`, so archy never needs to be on your PATH. See [`docs/INSTALL.md`](docs/INSTALL.md).
+Using archy as an MCP server inside an AI coding agent? Skip the manual config and run `uvx archy install`, which wires it into Claude Code, Cursor, Codex, opencode, Continue, Copilot CLI, or Gemini CLI automatically and writes a config that invokes `uvx archy mcp`, so archy never needs to be on your PATH. See [`docs/INSTALL.md`](docs/INSTALL.md).
 
 All examples below use the installed `archy` command. If you're working from a checkout, prefix them with `uv run` (e.g. `uv run archy graph .`).
 
@@ -521,7 +521,7 @@ archy maps failures onto MCP's two error mechanisms with one convention, so an a
 
 #### Wiring it into your agents
 
-One command detects your installed clients (Claude Code, Cursor, Codex CLI, opencode, Continue) and wires each one up:
+One command detects your installed clients (Claude Code, Cursor, Codex CLI, opencode, Continue, Copilot CLI, Gemini CLI) and wires each one up:
 
 ```bash
 uvx archy install        # detect, confirm, register the MCP server in each client

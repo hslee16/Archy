@@ -78,8 +78,8 @@ each exits 0 (a usage error would "write nothing" for free):
 | `archy score --record` | appends to `.archy/history.jsonl` | `test_score_record_writes_only_the_history_file` |
 | `archy index sync` | `.archy/index.db`, a parse cache; `archy index clear` deletes it | `test_index_sync_writes_only_the_cache` |
 | `archy render --out FILE` | `FILE` only | `test_render_out_writes_only_the_named_file` |
-| `archy install --target all` (global, the default) | the 6 files listed below, in your home directory | `test_global_install_writes_exactly_the_listed_files_in_home` |
-| `archy install --target all --location local` | the 10 files listed below, in the project | `test_local_install_writes_exactly_the_listed_files_in_the_project` |
+| `archy install --target all` (global, the default) | the 8 files listed below, in your home directory | `test_global_install_writes_exactly_the_listed_files_in_home` |
+| `archy install --target all --location local` | the 14 files listed below, in the project | `test_local_install_writes_exactly_the_listed_files_in_the_project` |
 | `archy uninstall` | removes archy's entries from those files | `test_uninstall_removes_what_install_added` |
 | `archy mcp` | see next section | `test_mcp_tools_write_only_cache_and_baseline` |
 
@@ -89,6 +89,7 @@ Install, global (paths relative to your home directory):
 .claude.json                       .codex/config.toml
 .claude/settings.json              .config/opencode/opencode.json
 .cursor/mcp.json                   .continue/mcpServers/archy.yaml
+.copilot/mcp-config.json           .gemini/settings.json
 ```
 
 A global install writes no instruction block into a client-wide file such as
@@ -105,6 +106,7 @@ Install, local (paths relative to the project):
 .mcp.json   CLAUDE.md   .claude/settings.json   AGENTS.md   opencode.json
 .codex/config.toml   .cursor/mcp.json   .cursor/rules/archy.mdc
 .continue/mcpServers/archy.yaml   .continue/rules/archy.md
+.github/mcp.json   .github/copilot-instructions.md   .gemini/settings.json   GEMINI.md
 ```
 
 These lists are what a **clean** home directory or project gets. On an existing
