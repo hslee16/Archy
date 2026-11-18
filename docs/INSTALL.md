@@ -163,7 +163,8 @@ exclusively; everything else is a shared file archy merges into.
 
 Copilot CLI and Gemini CLI ignore a project's MCP servers until you trust the
 folder, so after `--location local` the entry shows as skipped or disabled until
-you approve it in that client. A global install is not affected. The first
+you approve it in that client. Gemini CLI also suppresses user-level servers
+in an untrusted folder, so a global install can show the same way. The first
 launch can also read "Disconnected" while `uvx` fetches archy for the first
 time; it connects once that finishes.
 
