@@ -1,0 +1,61 @@
+<task-notification>
+<task-id>a0e79b58ddb1546c5</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/a0e79b58ddb1546c5.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The docstring accuracy review passed with no findings, and I marked it as passed (`docstring_accuracy--5_files--438b474545fc`).
+
+- **Retired global instructions files:** the Copilot and Gemini docstrings say the global instructions files are retired (#560). In `src/archy/install/base.py`, `instructions_action` sets `retire=scope is Scope.GLOBAL and not for_uninstall`, so a global install writes nothing there.
+- **Shared server stanza:** the Gemini docstring says the entry is the shared `{command, args}` stanza. `_mcp_entry()` in `src/archy/install/merge.py` returns exactly that.
+- **Copilot render:** `render_copilot_mcp` writes `type: "local"`, the shared stanza and `tools: ["*"]`, which matches its docstring.
+- **Derived headers:** `uv run archy conventions . --emit-headers --check` reported 149 headers matching the tree, so the changed `archy:owns` and `archy:mirrored-by` blocks are current.
+- **Registry wording:** the `registry.py` change from "a sixth client" to "another client" is accurate.
+
+I did not check the external docs URLs and page names that the Copilot and Gemini docstrings cite as the source of their paths.</result>
+<usage><subagent_tokens>26573</subagent_tokens><tool_uses>5</tool_uses><duration_ms>707085</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bt8vn662v</task-id>
+<tool-use-id>toolu_01VhD22b6V58kaKFDQjatCKn</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec/tasks/bt8vn662v.output</output-file>
+<status>completed</status>
+<summary>Monitor "Wait for PR checks to finish" stream ended</summary>
+<event>DONE</event>
+</task-notification>
+
+---
+
+how did we test this? do we have copilot cli and gemini cli we can test with in local?
+
+---
+
+do it
+
+---
+
+hold off 599
+
+---
+
+how do i log into copilot?
+
+---
+
+gh is already logged in
+
+---
+
+use the gemini api key in doppler to test out the prompt
+
+---
+
+add the note
+
+---
+
+merge PR after

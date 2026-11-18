@@ -1,0 +1,85 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "625eb982e0ec",
+  "session_id": "5ac0b94d-ef77-4e3c-907a-ecadf15bd5ec",
+  "strategy": "manual-commit",
+  "created_at": "2026-11-18T23:28:05.095557Z",
+  "branch": "alee/install-copilot-gemini-598",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "docs/INSTALL.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5-2",
+  "turn_id": "b4ae4365ae51",
+  "checkpoint_transcript_start": 388,
+  "transcript_lines_at_start": 388,
+  "token_usage": {
+    "input_tokens": 68,
+    "cache_creation_tokens": 15358,
+    "cache_read_tokens": 3387201,
+    "output_tokens": 9616,
+    "api_call_count": 25
+  },
+  "skill_events_version": 1,
+  "skill_events": [
+    {
+      "id": "claude-skill-toolu_01GMfZweSXjiTRuKUy14GJee",
+      "event_type": "tool_invocation",
+      "skill": {
+        "name": "deepwork:review"
+      },
+      "source": {
+        "agent": "claude-code",
+        "signal": "skill_tool_use",
+        "confidence": "explicit"
+      },
+      "turn_id": "b4ae4365ae51",
+      "transcript_anchor": {
+        "unit": "line",
+        "start": 230,
+        "end": 231,
+        "entry_ids": [
+          "bcdbb5c9-84d9-4aa8-af62-e2a90cdc7c3e"
+        ],
+        "tool_use_id": "toolu_01GMfZweSXjiTRuKUy14GJee"
+      },
+      "native": {
+        "tool_name": "Skill",
+        "tool_use_id": "toolu_01GMfZweSXjiTRuKUy14GJee"
+      },
+      "collapse": {
+        "target": "tool_pair",
+        "label": "Skill: deepwork:review",
+        "default_collapsed": true
+      }
+    }
+  ],
+  "session_metrics": {
+    "turn_count": 8
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-11-18T23:28:05.050293Z",
+    "agent_lines": 6,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 6,
+    "total_lines_changed": 6,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 87,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "bench/diff_duplicates_precision.jsonl": 87
+      }
+    }
+  ]
+}
