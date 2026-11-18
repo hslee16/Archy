@@ -104,6 +104,7 @@ layers:
       - "archy.mcp_runs_core"
       - "archy.mcp_runs_git"
       - "archy.mcp_runs_graph"
+      - "archy.refactor_notes"
       - "archy.render"
       - "archy.scan_config"
   install:

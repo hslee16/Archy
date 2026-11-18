@@ -39,6 +39,7 @@ from archy.mcp_runs_core import (
     _validate_response_format,
 )
 from archy.refactor import compute_refactor_priorities
+from archy.refactor_notes import FusedNoteInputs, empty_window_note, fused_refactor_note
 from archy.scan_config import (
     graph_kwargs,
     resolve_max_modules,
@@ -154,6 +155,7 @@ class _RefactorNoteInputs(BaseModel):
     git_available: bool | None
     min_risk: float
     missing_git: str
+    no_commits: bool = False
     # Set only when git ran and the --since window held no commits at all.
     empty_window_since: str | None = None
 
@@ -173,19 +175,20 @@ def _refactor_note(note: _RefactorNoteInputs) -> str | None:
     to structural-only off git. A non-empty single-lens result needs no note.
     An empty --since window is named so it is not mistaken for a calm codebase.
     """
-    if note.has_rows:
-        if note.lens == "fused" and not note.git_available:
-            return (
-                f"{note.missing_git}; "
-                "the CC x churn behavioral lens was skipped and this ranking is "
-                "structural-only (edit-risk). Run inside git for the fused view."
+    if note.lens == "fused":
+        return fused_refactor_note(
+            FusedNoteInputs(
+                has_rows=note.has_rows,
+                min_risk=note.min_risk,
+                git_available=bool(note.git_available),
+                no_commits=note.no_commits,
+                window_since=note.empty_window_since,
             )
+        )
+    if note.has_rows:
         return None
     if note.empty_window_since:
-        return (
-            f"No commits in the --since window ({note.empty_window_since}). "
-            "Widen the window or omit --since to use full history."
-        )
+        return empty_window_note(note.empty_window_since)
     return _empty_lens_note(note.lens, note.git_available, note.missing_git, note.min_risk)
 
 
@@ -206,27 +209,9 @@ def _empty_lens_note(
             "frequently changed (CC x churn). The project is likely small, "
             "young, or structurally clean."
         )
-    if lens == "structural":
-        return (
-            f"No module is central and fragile above min_risk={min_risk}. Lower "
-            "min_risk (pass 0 to surface every module) to widen the lens."
-        )
-    # fused: the only lens left once behavioral and structural have returned
-    if git_available:
-        return (
-            "No refactoring priorities surfaced: no file is both complex and "
-            "frequently changed (CC x churn hotspots: 0), and no module is "
-            f"central and fragile above min_risk={min_risk} (0). The project is "
-            "likely small, young, or structurally clean - there is genuinely "
-            "nothing to prioritize right now. Lower min_risk to widen the "
-            "structural lens."
-        )
     return (
-        f"{missing_git}, so the "
-        "CC x churn behavioral lens was skipped and only the structural "
-        f"edit-risk lens ran. No module is central and fragile above "
-        f"min_risk={min_risk}, so nothing was surfaced. Lower min_risk to widen "
-        "the structural lens."
+        f"No module is central and fragile above min_risk={min_risk}. Lower "
+        "min_risk (pass 0 to surface every module) to widen the lens."
     )
 
 
@@ -318,6 +303,7 @@ def run_what_to_refactor_next(
             git_available=git_available,
             min_risk=min_risk,
             missing_git=_missing_git_phrase(path, no_commits),
+            no_commits=no_commits,
             empty_window_since=since if empty_window else None,
         )
     )
