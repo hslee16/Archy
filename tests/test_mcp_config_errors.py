@@ -22,7 +22,7 @@ from archy.graph import ScanTooLargeError
 from archy.layers import LayerConfigError, load_config
 from archy.mcp import create_server
 from archy.mcp_compat import ToolError
-from archy.mcp_runs import _load_graph
+from archy.mcp_runs import _load_graph, run_check
 
 # Tools that load the config or scan the tree. `archy_diff` is deliberately absent:
 # it does not scan before it looks for a baseline.
@@ -75,3 +75,17 @@ def test_a_malformed_config_reaches_the_agent_with_its_reason(bad_config: Path, 
 def test_an_oversized_scan_reaches_the_agent_with_the_fix(too_big: Path, tool: str):
     message = _tool_error(tool, too_big)
     assert "max_modules" in message and "exclude:" in message
+
+
+def test_non_utf8_config_reaches_the_agent_with_its_reason(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_bytes(b"layers: {}\n# \xff\n")
+    with pytest.raises(LayerConfigError) as caught:
+        run_check(tmp_path, config_path=cfg)
+    message = str(caught.value)
+    assert str(cfg) in message
+    assert "utf-8" in message
+    assert isinstance(caught.value.__cause__, UnicodeDecodeError)
+    tool_message = _tool_error("archy_check", tmp_path)
+    assert message in tool_message
+    assert "Traceback" not in tool_message
