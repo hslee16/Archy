@@ -75,6 +75,26 @@ def test_index_commands_report_a_corrupt_cache_without_a_traceback(tmp_path: Pat
     assert CliRunner().invoke(main, ["index", command, str(project)]).exit_code == 0
 
 
+@pytest.mark.parametrize("name", ["-project", "--help", "my project"])
+def test_corrupt_cache_remedy_runs_as_printed(tmp_path: Path, monkeypatch, name: str):
+    # The printed remedy must clear the cache when pasted, even for a path that
+    # looks like an option.
+    (tmp_path / "base").mkdir()
+    renamed = _make_acyclic_project(tmp_path / "base").rename(tmp_path / name)
+    monkeypatch.chdir(tmp_path)
+    assert CliRunner().invoke(main, ["index", "sync", "--", name]).exit_code == 0
+    (renamed / ".archy" / "index.db").write_text("garbage\n")
+    result = CliRunner().invoke(main, ["index", "status", "--", name])
+    assert result.exit_code == 1
+    remedy = result.output.split("`")[1]
+    argv = shlex.split(remedy)
+    assert argv[:3] == ["archy", "index", "clear"]
+    cleared = CliRunner().invoke(main, argv[1:])
+    assert cleared.exit_code == 0
+    assert "removed" in cleared.output
+    assert not (renamed / ".archy" / "index.db").exists()
+
+
 def test_index_status_reports_drift_from_the_tree(tmp_path: Path):
     # #776: status promised freshness but printed only the row count.
     project = tmp_path / "proj"

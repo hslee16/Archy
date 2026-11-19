@@ -173,9 +173,11 @@ def _cache_error(db: Path, path: Path, exc: sqlite3.DatabaseError) -> click.Clic
         # A lock or access failure does not establish corruption; clearing a live
         # database can interfere with the process currently writing it.
         return click.ClickException(f"cannot access cache at {db} ({exc}).")
+    # A path that starts with "-" would be read as an option without "--".
+    end_of_options = "-- " if str(path).startswith("-") else ""
     return click.ClickException(
         f"corrupt cache at {db} ({exc}); "
-        f"run `archy index clear {shlex.quote(str(path))}` to reset it."
+        f"run `archy index clear {end_of_options}{shlex.quote(str(path))}` to reset it."
     )
 
 
