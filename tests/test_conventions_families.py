@@ -137,6 +137,34 @@ def test_model_census_counts_frozen_pydantic_and_field_style(tmp_path: Path):
     assert census.config_flags == (("frozen", 1),)
 
 
+def test_model_config_is_read_from_every_assignment_shape(tmp_path: Path):
+    """Plain, annotated and chained `model_config` all count, and a chained
+    statement whose `model_config` is not the first target still does."""
+    project = _project(
+        tmp_path,
+        {
+            "models.py": (
+                "from typing import ClassVar\n"
+                "from pydantic import BaseModel, ConfigDict\n"
+                "class Plain(BaseModel):\n"
+                "    model_config = ConfigDict(frozen=True)\n"
+                "class Annotated(BaseModel):\n"
+                "    model_config: ClassVar[ConfigDict] = ConfigDict(frozen=True)\n"
+                "class Chained(BaseModel):\n"
+                "    other = model_config = ConfigDict(frozen=True)\n"
+                "class Elsewhere(BaseModel):\n"
+                "    settings = ConfigDict(frozen=True)\n"
+            )
+        },
+    )
+    census = compute_conventions(project).models
+    # Four value classes; the fourth assigns a ConfigDict to another name,
+    # so it must not count, or the test would pass on "any ConfigDict".
+    assert census.value_classes == 4
+    assert census.frozen_classes == 3
+    assert census.config_flags == (("frozen", 3),)
+
+
 def test_unparsable_file_is_counted_not_raised(tmp_path: Path):
     # Advisory command: a half-written file must not turn reporting into an
     # error, and the count is how the caller learns coverage was partial.
