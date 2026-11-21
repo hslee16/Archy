@@ -393,6 +393,20 @@ def test_check_explicit_config_path(tmp_path: Path):
     assert result.exit_code == 0
 
 
+def test_check_non_utf8_config_reports_one_line_error(tmp_path: Path):
+    project = _make_layered_project(tmp_path, with_violation=False)
+    cfg = tmp_path / "bad.yaml"
+    cfg.write_bytes(b"layers: {}\n# \xff\n")
+    result = CliRunner().invoke(main, ["check", str(project), "--config", str(cfg)])
+    assert result.exit_code != 0
+    assert isinstance(result.exception, SystemExit), result.exception
+    assert result.output.startswith("Error:")
+    assert str(cfg) in result.output
+    assert "utf-8" in result.output
+    assert "Traceback" not in result.output
+    assert len(result.output.strip().splitlines()) == 1
+
+
 def test_check_malformed_config_reports_error(tmp_path: Path):
     project = _make_layered_project(tmp_path, with_violation=False)
     (project / "archy.yaml").write_text(

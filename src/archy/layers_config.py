@@ -100,7 +100,9 @@ def load_config(path: Path) -> LayerConfig:
     if not path.exists():
         raise LayerConfigError(f"config file not found: {path}")
     try:
-        raw = yaml.safe_load(path.read_text())
+        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError) as exc:
+        raise LayerConfigError(f"could not read config at {path}: {exc}") from exc
     except yaml.YAMLError as exc:
         raise LayerConfigError(f"could not parse YAML at {path}: {exc}") from exc
     if not isinstance(raw, dict):
