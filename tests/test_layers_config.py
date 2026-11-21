@@ -40,6 +40,40 @@ def test_load_config_missing_file(tmp_path: Path):
         load_config(tmp_path / "missing.yaml")
 
 
+def test_load_config_non_utf8_names_path_and_reason(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_bytes(b"layers: {}\n# \xff\n")
+    with pytest.raises(LayerConfigError) as caught:
+        load_config(cfg)
+    assert str(cfg) in str(caught.value)
+    assert "utf-8" in str(caught.value)
+    assert isinstance(caught.value.__cause__, UnicodeDecodeError)
+
+
+def test_load_config_read_error_names_path_and_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {}\n", encoding="utf-8")
+    error = PermissionError("permission denied")
+
+    def unreadable(self: Path, *args: object, **kwargs: object) -> str:
+        raise error
+
+    monkeypatch.setattr(Path, "read_text", unreadable)
+    with pytest.raises(LayerConfigError) as caught:
+        load_config(cfg)
+    assert str(cfg) in str(caught.value)
+    assert str(error) in str(caught.value)
+    assert caught.value.__cause__ is error
+
+
+def test_load_config_utf8_layer_name(tmp_path: Path):
+    cfg = tmp_path / "archy.yaml"
+    cfg.write_text("layers: {caf\u00e9: {modules: [pkg.**]}}\n", encoding="utf-8")
+    assert load_config(cfg).layers[0].name == "caf\u00e9"
+
+
 def test_load_config_malformed_yaml(tmp_path: Path):
     cfg = tmp_path / "archy.yaml"
     cfg.write_text("layers: {core: [unclosed]\n")
