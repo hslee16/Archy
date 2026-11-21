@@ -143,7 +143,10 @@ def run_brief(path: Path, *, top_n: int, with_contracts: bool, include_tests: bo
         contracts_verdict(contracts) if contracts is not None else (False, None)
     )
 
-    reason: str | None = None
+    # Zero contracts needs no layer config to explain itself (#775).
+    reason: str | None = (
+        unverifiable_reason if contracts is not None and contracts.unverified_reason else None
+    )
     if config is not None and coverage is not None and not checked:
         reason = unverifiable_reason or _unverified_forbid_reason(config, coverage, contracts)
 
@@ -374,6 +377,7 @@ def run_contracts(path: Path, *, config_filename: Path | None) -> ContractsPaylo
         all_kept=result.all_kept,
         verified=result.verified,
         unverifiable=result.unverifiable,
+        unverified_reason=result.unverified_reason,
         kept=result.kept,
         broken=result.broken,
         module_count=result.module_count,
@@ -388,13 +392,22 @@ def contracts_verdict(contracts: ContractsPayload) -> tuple[bool, str | None]:
 
     Only a verdict counts as "checked": a missing import-linter leaves the rules
     as unverified as not asking (#343), and so does a contract that could not
-    have failed (#457). The reason is set exactly when some contract could not
-    have failed, whatever the direct edges govern. Shared by `archy_check` and
+    have failed (#457), and so does a config that defines no contract (#775).
+    The reason is set exactly when some contract could not have failed or none
+    was defined, whatever the direct edges govern. Shared by `archy_check` and
     `archy_brief` so the two cannot disagree about either (same rule as the
     CLI's `_transitive_checked`).
     """
     unverifiable = contracts.unverifiable or 0
-    checked = contracts.available and contracts.error is None and unverifiable == 0
+    checked = (
+        contracts.available
+        and contracts.error is None
+        and unverifiable == 0
+        and contracts.unverified_reason is None
+    )
+    if contracts.unverified_reason is not None:
+        # Zero contracts (#775): the run evaluated nothing, so it is no verdict.
+        return checked, f"{contracts.unverified_reason}."
     reason = (
         f"{unverifiable} contract(s) could not have failed: their module patterns "
         "matched nothing, so the rule holds whatever the code does. Fix the "

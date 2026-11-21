@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from archy.cli_app import _graph_kwargs_or_exit, _require, main
 from archy.cli_check import (
+    _no_contracts_reason,
     _no_verdict_error,
     _run_check_contracts,
     _transitive_checked,
@@ -277,11 +278,15 @@ def brief(path: Path, top_n: int, with_contracts: bool, include_tests: bool, fmt
                     [],
                     no_verdict_error=_no_verdict_error(contracts),
                     unverifiable=_unverifiable_contracts(contracts),
+                    no_contracts=_no_contracts_reason(contracts),
                 )
                 # brief tolerates a missing or malformed archy.yaml and still
-                # reports; `check` cannot get here without one.
-                if config is not None
-                and coverage is not None
+                # reports; `check` cannot get here without one. Zero contracts
+                # needs no layer config to explain itself (#775).
+                if (
+                    (config is not None and coverage is not None)
+                    or _no_contracts_reason(contracts) is not None
+                )
                 and not _transitive_checked(contracts)
                 else None
             ),
