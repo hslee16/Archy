@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sqlite3
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -14,6 +17,8 @@ from archy.mcp import (
 from tests.mcp_helpers import (
     _PROJECT_PATH_ARGS,
     _cold_fallback_callers,
+    _git,
+    _init_git_repo,
     _list_tools,
     _output_schema,
     _return_models,
@@ -161,6 +166,148 @@ def test_manager_for_reuses_or_evicts_by_config(tmp_path: Path):
         for manager in set(created):
             manager.stop()
         _MANAGERS.clear()
+
+
+def _subdir_project(root: Path) -> Path:
+    """A committed git repo ignoring `/.archy/`, with a package nested in `src/app`.
+
+    `tools/` sits outside `src/app` and imports into it, so the root's score
+    differs from the subtree's and a subpath call answered from the root's graph
+    would not pass for the subtree's own answer.
+    """
+    root.mkdir()
+    _init_git_repo(root)
+    (root / ".gitignore").write_text("/.archy/\n")
+    for pkg in ("src/app", "src/app/core", "src/app/api", "tools"):
+        (root / pkg).mkdir(parents=True)
+        (root / pkg / "__init__.py").write_text("")
+    (root / "src/app/core/x.py").write_text("X = 1\n")
+    (root / "src/app/api/v.py").write_text("from app.core import x\n")
+    (root / "tools/run.py").write_text("from app.api import v\nfrom app.core import x\n")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "init")
+    return root
+
+
+def _index_dbs(root: Path) -> list[Path]:
+    return sorted(root.rglob("index.db"))
+
+
+def _git_status(root: Path) -> str:
+    return subprocess.run(
+        ["git", "-C", str(root), "status", "--porcelain", "--untracked-files=all"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+
+
+def test_subpath_tool_call_reuses_the_project_roots_index(tmp_path: Path):
+    """`archy_score` on `src/app` after the root: one manager, one index.db (#753).
+
+    Before the fix each subdirectory got its own manager, watcher and
+    `<subdir>/.archy/index.db`, which a root `/.archy/` ignore does not cover.
+    The subpath's score is pinned against a cold `archy score src/app` run in a
+    separate process, so it does not share a manager with the call it checks.
+    """
+    from archy.mcp_runs import _MANAGERS
+
+    project = _subdir_project(tmp_path / "proj")
+    sub = project / "src" / "app"
+    assert sorted(
+        p.relative_to(sub).as_posix() for p in sub.rglob("*.py") if p.stem != "__init__"
+    ) == ["api/v.py", "core/x.py"]
+
+    server = create_server()
+    _, root_score = _call_tool(server, "archy_score", {"path": str(project)})
+    _, sub_score = _call_tool(server, "archy_score", {"path": str(sub)})
+    assert root_score is not None and sub_score is not None
+
+    assert _index_dbs(project) == [project / ".archy" / "index.db"]
+    assert len(_MANAGERS) == 1
+    assert _git_status(project) == ""
+
+    cli = subprocess.run(
+        [sys.executable, "-m", "archy.cli", "score", str(sub), "--format", "json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert cli.returncode == 0, cli.stderr
+    cold = json.loads(cli.stdout[cli.stdout.index("{") :])
+    sub_result = sub_score["result"]
+    # The fixture separates the two answers, so equality below is not the root's.
+    assert root_score["result"]["overall"] != cold["overall"]
+    assert sub_result["overall"] == cold["overall"]
+    assert sub_result["components"] == cold["components"]
+    assert sub_result["inputs"]["module_count"] == cold["inputs"]["module_count"] == 5
+
+
+def test_subpath_first_does_not_plant_an_index_in_the_source_tree(tmp_path: Path):
+    """A subpath called before the root still leaves the source tree clean (#753)."""
+    from archy.mcp_runs import _MANAGERS
+
+    project = _subdir_project(tmp_path / "proj")
+    server = create_server()
+    _call_tool(server, "archy_score", {"path": str(project / "src" / "app")})
+    _call_tool(server, "archy_score", {"path": str(project / "src" / "app" / "core")})
+    assert _index_dbs(project) == []
+    _call_tool(server, "archy_score", {"path": str(project)})
+
+    assert _index_dbs(project) == [project / ".archy" / "index.db"]
+    assert len(_MANAGERS) == 1
+    assert _git_status(project) == ""
+
+
+@pytest.mark.parametrize("order", ["outer_first", "inner_first"])
+def test_nested_repo_gets_no_index_in_either_order(tmp_path: Path, order: str):
+    """A repository nested in a served project gets no `.archy/index.db` (#753).
+
+    It is its own VCS root, but its tree is inside the outer project's, so its
+    own index would land below the outer root. Either call order gives the same
+    answer: the decision reads the file system, not the live managers.
+    """
+    from archy.mcp_runs import _MANAGERS
+
+    project = _subdir_project(tmp_path / "proj")
+    inner = project / "vendor" / "inner"
+    (inner / "lib").mkdir(parents=True)
+    _init_git_repo(inner)
+    (inner / "lib" / "__init__.py").write_text("")
+    (inner / "lib" / "m.py").write_text("M = 1\n")
+    assert (inner / ".git").is_dir()
+
+    server = create_server()
+    calls = [project, inner] if order == "outer_first" else [inner, project]
+    scores = {p: _call_tool(server, "archy_score", {"path": str(p)})[1] for p in calls}
+    inner_score = scores[inner]
+    assert inner_score is not None
+    assert inner_score["result"]["inputs"]["module_count"] == 2
+
+    assert _index_dbs(project) == [project / ".archy" / "index.db"]
+    assert len(_MANAGERS) == 1
+
+
+@pytest.mark.parametrize("order", ["root_first", "package_first"])
+def test_subfolder_archy_yaml_gets_no_index_in_either_order(tmp_path: Path, order: str):
+    """An archy.yaml in a package folder does not give that folder a manager (#753).
+
+    Inside a repository only its root owns the tree, so a monorepo package with
+    its own archy.yaml builds cold and the root keeps the one index.
+    """
+    from archy.mcp_runs import _MANAGERS
+
+    project = _subdir_project(tmp_path / "proj")
+    package = project / "src" / "app"
+    (package / "archy.yaml").write_text("layers: {}\n")
+
+    server = create_server()
+    calls = [project, package] if order == "root_first" else [package, project]
+    for path in calls:
+        _call_tool(server, "archy_score", {"path": str(path)})
+
+    assert _index_dbs(project) == [project / ".archy" / "index.db"]
+    assert len(_MANAGERS) == 1
 
 
 def test_mcp_load_graph_trips_scan_size_guard(tmp_path: Path):

@@ -17,7 +17,7 @@ Three signals, each a fact Python itself acts on rather than a naming guess:
 Each derived module carries the reason it was derived, so a violation can say
 why the rule applied to a module the author never named.
 
-archy:owns        derive_entrypoints
+archy:owns        derive_entrypoints, repo_root
 """
 
 from __future__ import annotations
@@ -98,10 +98,7 @@ def _pyprojects(root: Path, paths: Iterable[Path]) -> list[Path]:
     stray `pyproject.toml` in a parent directory bind or break this project.
     """
     scan_root = root.resolve()
-    ceiling = next(
-        (d for d in (scan_root, *scan_root.parents) if _is_repo_root(d)),
-        scan_root,
-    )
+    ceiling = repo_root(scan_root) or scan_root
     seen: set[Path] = set()
     for path in paths:
         current = path.resolve().parent
@@ -109,6 +106,12 @@ def _pyprojects(root: Path, paths: Iterable[Path]) -> list[Path]:
             seen.add(current)
             current = current.parent
     return sorted(d / "pyproject.toml" for d in seen if (d / "pyproject.toml").is_file())
+
+
+def repo_root(start: Path) -> Path | None:
+    """The nearest directory at or above `start` holding a VCS marker, else None."""
+    resolved = start.resolve()
+    return next((d for d in (resolved, *resolved.parents) if _is_repo_root(d)), None)
 
 
 def _is_repo_root(directory: Path) -> bool:
