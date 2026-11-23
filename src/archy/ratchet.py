@@ -1,5 +1,5 @@
-"""The `archy diff --strict` verdict: no new cycles, no new layer violations,
-and no weakened rule in archy.yaml.
+"""The `archy diff --strict` verdict: no new cycles, no new layer or
+required-reach violations, and no weakened rule in archy.yaml.
 
 A ratchet for codebases that already carry findings. `archy cycles --strict`
 fails on day one for most existing projects (25 of 28 bench graphs have a
@@ -26,6 +26,11 @@ guessed.
 
 **What counts as a new violation.** A forbid-rule violation whose
 `(from_layer, to_layer, source, target)` is not in the baseline.
+
+**What counts as a new required-reach violation (#746).** A `required:` row
+whose `(source, within, must_reach, module)` is not in the baseline, keyed as
+the diff keys it, so a reworded detail is not new. `archy check` fails on the
+same row.
 
 **What counts as a weakened rule (#585).** Findings are computed from the
 archy.yaml that is on disk now, so deleting `forbid` or excluding the
@@ -68,11 +73,12 @@ class StrictEdge(BaseModel):
 
 
 class StrictFinding(BaseModel):
-    """A cycle, violation, or weakened rule the baseline does not allow."""
+    """A cycle, violation, required-reach failure, or weakened rule the baseline
+    does not allow."""
 
     model_config = ConfigDict(frozen=True)
 
-    kind: str  # "cycle", "violation", or "rule"
+    kind: str  # "cycle", "violation", "required", or "rule"
     modules: tuple[str, ...]
     # For a cycle: its edges that no baseline cycle has (the ones that closed
     # it). For a violation: the forbidden edge itself.
@@ -113,7 +119,7 @@ class StrictVerdict(BaseModel):
             f"carried from {self.baseline}"
         )
         if not self.findings:
-            text = f"no new cycles or layer violations; {carried}"
+            text = f"no new cycles, layer or required-reach violations; {carried}"
         else:
             lines = [f"{len(self.findings)} new finding(s); {carried}:"]
             lines.extend(f"  {finding.detail}" for finding in self.findings)
