@@ -6,7 +6,7 @@ import ast
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 
-from archy.conventions_collect import _assigned_names, _dotted, _ModuleFacts
+from archy.conventions_collect import _assign_targets, _assigned_names, _dotted, _ModuleFacts
 from archy.conventions_models import (
     BaseFamily,
     ModelCensus,
@@ -460,12 +460,9 @@ def _mirrored_families(facts: list[_ModuleFacts], min_count: int) -> list[Surfac
 
 def _model_config_call(stmt: ast.stmt) -> ast.Call | None:
     """The `ConfigDict(...)` call of a `model_config = ...` statement, else None."""
-    if isinstance(stmt, ast.Assign):
-        targets = list(stmt.targets)
-    elif isinstance(stmt, ast.AnnAssign):
-        targets = [stmt.target]
-    else:
+    if not isinstance(stmt, ast.Assign | ast.AnnAssign):
         return None
+    targets = _assign_targets(stmt)
     if not any(isinstance(t, ast.Name) and t.id == "model_config" for t in targets):
         return None
     return stmt.value if isinstance(stmt.value, ast.Call) else None

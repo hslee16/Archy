@@ -130,10 +130,14 @@ def _collect_import_from(node: ast.ImportFrom, facts: _ModuleFacts, pkg: str) ->
         )
 
 
+def _assign_targets(node: ast.Assign | ast.AnnAssign) -> list[ast.expr]:
+    """The target nodes of an assignment: each of `a = b = ...`, or the annotated one."""
+    return list(node.targets) if isinstance(node, ast.Assign) else [node.target]
+
+
 def _assigned_names(node: ast.Assign | ast.AnnAssign) -> list[str]:
     """The plain names a module-level assignment binds."""
-    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-    return [t.id for t in targets if isinstance(t, ast.Name)]
+    return [t.id for t in _assign_targets(node) if isinstance(t, ast.Name)]
 
 
 def _collect_assignments(tree: ast.Module, facts: _ModuleFacts) -> None:
