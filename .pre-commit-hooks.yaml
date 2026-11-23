@@ -24,7 +24,7 @@
 
 - id: archy-no-new-cycles
   name: archy diff --strict
-  description: Fail on an import cycle or layer violation the committed baseline does not carry
+  description: Fail on an import cycle, layer violation or required-reach violation the committed baseline does not carry
   entry: archy diff . --strict --baseline archy-baseline.json
   language: python
   pass_filenames: false

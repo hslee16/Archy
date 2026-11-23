@@ -30,6 +30,19 @@ forbid:
 
 _IMPORT = "from myapp.infra.db import connect\n"
 
+# A `required:` contract binds every module its source matches, and a contract
+# the tree breaks fails --strict like a new forbid (#746). So a half that
+# asserts a config change is allowed gets a tree that keeps the contract: no
+# forbid in the way, and a domain that imports the database as a script.
+_OPEN_YAML = _ISSUE_YAML.replace("forbid:\n  - {from: domain, to: infra}\n", "")
+_KEPT = _IMPORT + '\nif __name__ == "__main__":\n    connect()\n'
+
+
+def _kept_project(tmp_path: Path, yaml_text: str) -> Path:
+    root = _project(tmp_path, yaml_text, service=_KEPT)
+    (root / "myapp" / "domain" / "__init__.py").write_text(_IMPORT)
+    return root
+
 
 def _project(tmp_path: Path, yaml_text: str, *, service: str = "") -> Path:
     root = tmp_path / "app"
@@ -249,9 +262,9 @@ def test_removing_a_required_contract_fails_and_adding_one_does_not(tmp_path: Pa
     (root / "archy.yaml").write_text(_ISSUE_YAML)
     _assert_failed(root, "required myapp.domain.** must reach myapp.infra.db removed since")
 
-    root = _project(tmp_path, _ISSUE_YAML)
+    root = _kept_project(tmp_path, _OPEN_YAML)
     _snapshot(root)
-    (root / "archy.yaml").write_text(_ISSUE_YAML + required)
+    (root / "archy.yaml").write_text(_OPEN_YAML + required)
     _assert_passed(root)
 
 
@@ -273,9 +286,9 @@ def test_narrowing_an_entrypoints_contract_fails_and_widening_it_does_not(tmp_pa
     )
 
     held = wide.replace("within: myapp.domain.**", "within: myapp.domain.service")
-    root = _project(tmp_path, _ISSUE_YAML + held)
+    root = _kept_project(tmp_path, _OPEN_YAML + held)
     _snapshot(root)
-    (root / "archy.yaml").write_text(_ISSUE_YAML + wide)
+    (root / "archy.yaml").write_text(_OPEN_YAML + wide)
     _assert_passed(root)
 
 
@@ -289,10 +302,33 @@ def test_an_easier_must_reach_fails_and_a_harder_one_does_not(tmp_path: Path):
     (root / "archy.yaml").write_text(_ISSUE_YAML + easier)
     _assert_failed(root, "required myapp.domain.** must reach myapp.infra.db removed since")
 
-    root = _project(tmp_path, _ISSUE_YAML + easier)
+    root = _kept_project(tmp_path, _OPEN_YAML + easier)
     _snapshot(root)
-    (root / "archy.yaml").write_text(_ISSUE_YAML + exact)
+    (root / "archy.yaml").write_text(_OPEN_YAML + exact)
     _assert_passed(root)
+
+
+def test_adding_a_contract_the_tree_breaks_fails_like_a_new_forbid(tmp_path: Path):
+    # Adding a rule is never a weakened config, so no `rule` finding; but the
+    # tree breaks the new rule, and that is a new violation either way.
+    required = (
+        "required:\n  - {source: myapp.domain.**, must_reach: myapp.infra.db, reason: bootstrap}\n"
+    )
+    for before, after, kind in (
+        (_OPEN_YAML, _ISSUE_YAML, "violation"),
+        (_ISSUE_YAML, _ISSUE_YAML + required, "required"),
+    ):
+        root = _project(tmp_path, before, service=_IMPORT if kind == "violation" else "")
+        _snapshot(root)
+        (root / "archy.yaml").write_text(after)
+
+        text, cli, mcp = _surfaces(root)
+
+        assert text.exit_code == 1, text.output
+        for strict in (cli, mcp):
+            assert strict["passed"] is False
+            assert {f["kind"] for f in strict["findings"]} == {kind}
+            assert "added since" not in strict["reason"]
 
 
 def test_removing_a_root_fails_and_adding_one_does_not(tmp_path: Path):
