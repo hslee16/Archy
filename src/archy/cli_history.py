@@ -291,7 +291,8 @@ def snapshot(path: Path, out_path: Path | None, findings_only: bool) -> None:
     is_flag=True,
     default=False,
     help=(
-        "Exit 1 on a cycle or layer violation the baseline does not carry, or when "
+        "Exit 1 on a cycle, layer violation or required-reach violation the baseline "
+        "does not carry, or when "
         "archy.yaml removes or narrows a rule the baseline fingerprint records. "
         "Never on score. Requires --baseline: a committed file, never "
         ".archy/baseline.json."

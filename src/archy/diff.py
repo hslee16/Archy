@@ -433,6 +433,22 @@ def strict_verdict(
     # would have caught it was removed or narrowed.
     if verdict.refused is not None:
         return verdict
+    # A `required:` row the baseline does not have is a regression `archy
+    # check` already fails on (#746); keyed as the diff keys it, so a reworded
+    # `detail` is not a new finding.
+    required = tuple(
+        StrictFinding(
+            kind="required",
+            modules=() if v.module is None else (v.module,),
+            edges=(),
+            detail=v.detail,
+        )
+        for v in _reach_violation_set_diff(
+            baseline.required_violations, current.required_violations
+        ).added
+    )
+    if required:
+        verdict = verdict.model_copy(update={"findings": (*verdict.findings, *required)})
     if baseline.rules is None:
         return verdict.model_copy(
             update={

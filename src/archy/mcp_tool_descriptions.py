@@ -84,10 +84,11 @@ ARCHY_DIFF_DESCRIPTION = (
     "layer violations that have been added or resolved since the "
     "baseline. Use after edits to localize regressions; see the `loop` "
     "prompt. `strict=True` with `baseline` (a committed file, relative "
-    "to `path`) adds `strict`. `passed` is false when a cycle or layer "
-    "violation is new, or when archy.yaml removes or narrows a rule the "
-    "baseline fingerprint records. `reason` names it. A baseline with no "
-    "fingerprint still checks cycles and violations."
+    "to `path`) adds `strict`. `passed` is false when a cycle, layer "
+    "violation or required-reach violation is new, or when archy.yaml "
+    "removes or narrows a rule the baseline fingerprint records. `reason` "
+    "names it. A baseline with no "
+    "fingerprint still checks cycles, violations and required reach."
 )
 
 ARCHY_SIMULATE_DESCRIPTION = (
