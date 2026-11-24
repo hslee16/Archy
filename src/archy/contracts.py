@@ -101,6 +101,11 @@ class ContractsResult(BaseModel):
     # a stray scripts or fixtures directory would otherwise fail every existing
     # `archy contracts` gate with no way to silence it.
     unscanned_dirs: tuple[str, ...] = ()
+    # Where the contracts came from, so a message about them can name the file,
+    # and whether they were translated from archy.yaml `forbid:` rules (the
+    # remedy differs: an import-linter config wants a contract section).
+    source: str | None = None
+    derived_from_archy_yaml: bool = False
 
     @property
     def all_kept(self) -> bool:
@@ -122,9 +127,30 @@ class ContractsResult(BaseModel):
         """Every contract was both evaluated and held.
 
         The verdict callers actually want. `all_kept` cannot answer it: a
-        contract that matched no module is trivially "kept" (#435).
+        contract that matched no module is trivially "kept" (#435). Zero
+        contracts is the same fact one step further: nothing was evaluated, so
+        nothing was verified (#775).
         """
-        return self.broken == 0 and self.unverifiable == 0
+        return bool(self.contracts) and self.broken == 0 and self.unverifiable == 0
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def unverified_reason(self) -> str | None:
+        """Why a run with no contract to evaluate verified nothing, or None.
+
+        A config that is present but defines no contract (an `.importlinter`
+        with no contract sections, an `archy.yaml` with no `forbid:` rules)
+        otherwise reads exactly like a clean codebase.
+        """
+        if self.contracts:
+            return None
+        where = f" in {self.source}" if self.source else ""
+        remedy = (
+            "add `forbid:` rules to it"
+            if self.derived_from_archy_yaml
+            else "add an import-linter contract section to it"
+        )
+        return f"no contracts defined{where}, so nothing was checked; {remedy}"
 
 
 class ContractsNotAvailable(RuntimeError):
@@ -194,7 +220,9 @@ def run_contracts(
             stacklevel=2,
         )
         with _ProjectOnSysPath(project_dir):
-            return _drive_import_linter(user_options=user_options)
+            return _drive_import_linter(
+                user_options=user_options, derived_from=str(archy_yaml_path)
+            )
 
     raise ContractsConfigError(
         f"no contracts config found in {project_dir}: expected `.importlinter` "
@@ -209,6 +237,7 @@ def _drive_import_linter(
     *,
     config_path: Path | None = None,
     user_options: UserOptions | None = None,
+    derived_from: str | None = None,
 ) -> ContractsResult:
     """The narrow surface we depend on inside import-linter.
 
@@ -287,6 +316,8 @@ def _drive_import_linter(
             )
         )
     return ContractsResult(
+        source=str(config_path) if config_path is not None else derived_from,
+        derived_from_archy_yaml=config_path is None and derived_from is not None,
         unscanned_dirs=_unscanned_dirs(_root_packages(user_options)),
         kept=int(report.kept_count),
         broken=int(report.broken_count),

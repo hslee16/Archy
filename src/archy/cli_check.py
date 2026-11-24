@@ -229,6 +229,7 @@ def _check_payload(run: _CheckRun) -> dict:
                 list(run.violations),
                 no_verdict_error=_no_verdict_error(run.contracts),
                 unverifiable=_unverifiable_contracts(run.contracts),
+                no_contracts=_no_contracts_reason(run.contracts),
             )
         ),
     }
@@ -375,7 +376,8 @@ def _transitive_checked(outcome: ContractsOutcome | None) -> bool:
     """
     if outcome is None or outcome.result is None:
         return False
-    return outcome.result.unverifiable == 0
+    # Zero contracts is no verdict either (#775): nothing was evaluated.
+    return outcome.result.unverifiable == 0 and outcome.result.unverified_reason is None
 
 
 def _no_verdict_error(outcome: ContractsOutcome | None) -> str | None:
@@ -397,13 +399,19 @@ def _unverifiable_contracts(outcome: ContractsOutcome | None) -> int:
     return outcome.result.unverifiable if outcome is not None and outcome.result else 0
 
 
+def _no_contracts_reason(outcome: ContractsOutcome | None) -> str | None:
+    """Why a run that defined no contract verified nothing, or None (#775)."""
+    return outcome.result.unverified_reason if outcome is not None and outcome.result else None
+
+
 def _transitive_unverified_reason(
-    config: LayerConfig,
-    coverage: LayerCoverage,
+    config: LayerConfig | None,
+    coverage: LayerCoverage | None,
     violations: list[Violation],
     *,
     no_verdict_error: str | None = None,
     unverifiable: int = 0,
+    no_contracts: str | None = None,
 ) -> str | None:
     """The text handoff's reason, for a reader that cannot parse prose.
 
@@ -421,13 +429,20 @@ def _transitive_unverified_reason(
     checked before the coverage stem for that reason, or a project whose direct
     edges are fully governed would report `transitive_checked: false` with no
     reason at all.
+
+    `no_contracts` is the fourth, checked first for the same reason: the config
+    is present but defines no contract, so nothing was evaluated (#775).
     """
+    if no_contracts is not None:
+        return f"{no_contracts}."
     if unverifiable:
         return (
             f"{unverifiable} contract(s) could not have failed: their module patterns "
             "matched nothing, so the rule holds whatever the code does. Fix the patterns "
             "or drop the rule; `archy contracts` names the expressions that matched no module."
         )
+    if config is None or coverage is None:
+        return None
     stem = _unverified_forbid_rules(config, coverage, violations)
     if stem is None:
         return None

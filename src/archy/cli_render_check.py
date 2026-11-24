@@ -487,6 +487,8 @@ def _contracts_to_dict(result: ContractsResult) -> dict:
         # have failed" (#435).
         "verified": result.verified,
         "unverifiable": result.unverifiable,
+        # Set when no contract was defined, so `verified: false` has a reason (#775).
+        "unverified_reason": result.unverified_reason,
         # Directories the engine does not read; a pass says nothing about them.
         "unscanned_dirs": list(result.unscanned_dirs),
         "contracts": [
@@ -525,6 +527,8 @@ def _contracts_to_text(result: ContractsResult) -> str:
     if result.unverifiable:
         summary += f", {result.unverifiable} unverifiable"
     lines = [summary]
+    if result.unverified_reason:
+        lines.append(f"# not verified: {result.unverified_reason}")
     if result.unscanned_dirs:
         n = len(result.unscanned_dirs)
         noun, pronoun = ("directory", "it") if n == 1 else ("directories", "them")

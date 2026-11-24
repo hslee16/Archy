@@ -108,6 +108,9 @@ class ContractsPayload(BaseModel):
     # have failed, which `all_kept` cannot express (#435).
     verified: bool | None = None
     unverifiable: int | None = None
+    # Set when the config defines no contract, so `verified` is False with a
+    # reason rather than True over nothing (#775).
+    unverified_reason: str | None = None
     kept: int | None = None
     broken: int | None = None
     module_count: int | None = None
