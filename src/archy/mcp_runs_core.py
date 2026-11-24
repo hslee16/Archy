@@ -18,6 +18,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TypeVar
 
+from archy.entrypoints import repo_root
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     ScanTooLargeError,
@@ -26,6 +27,7 @@ from archy.graph import (
     internal_subgraph,
     parse_project,
 )
+from archy.layers import discover_config
 from archy.scan_config import (
     graph_kwargs,
     resolve_max_modules,
@@ -99,8 +101,45 @@ def _manager_cache_key(root: Path, kwargs: dict) -> _ManagerKey:
     return (str(root), ignored, extra)
 
 
-def _manager_for(path: Path, *, max_modules: int | None = None, **kwargs) -> IndexManager:
+def _project_root(path: Path) -> Path:
+    """The directory a project's one manager and its cache are anchored on (#753).
+
+    The directory holding the discovered archy.yaml, else the VCS root (the
+    ceiling `entrypoints` uses), else `path` itself. An archy.yaml above the VCS
+    root is a stray file in a parent directory, not this project's, so it does
+    not move the anchor out of the repository.
+    """
+    start = path.resolve()
+    vcs = repo_root(start)
+    config = discover_config(start)
+    if config is not None and (vcs is None or config.parent.is_relative_to(vcs)):
+        return config.parent
+    return vcs or start
+
+
+def _owns_manager(root: Path) -> bool:
+    """Whether `root` (resolved) may hold a manager and its `.archy/index.db` (#753).
+
+    Read from the file system, not from the live managers, so the answer does
+    not depend on which path a tool was called with first. `root` must be its
+    own project root with no repository above it: a subfolder holding its own
+    archy.yaml belongs to its repository's tree, and so does a repository
+    nested in another one (a submodule, a vendored checkout).
+    """
+    if _project_root(root) != root:
+        return False
+    return root == root.parent or repo_root(root.parent) is None
+
+
+def _manager_for(path: Path, *, max_modules: int | None = None, **kwargs) -> IndexManager | None:
     """Get-or-create the per-(root, config) IndexManager, starting its watcher once.
+
+    Returns None when `path` does not own its tree (see `_owns_manager`): a
+    subdirectory, a subfolder holding its own archy.yaml, a repository nested
+    in another, or a path inside the root of a live manager.
+    A manager there would put a second `.archy/index.db` and a second recursive
+    watcher inside the source tree, below the root's `/.archy/` ignore (#753), so
+    the caller builds that subtree cold instead.
 
     Managers live for the server's lifetime: one persistent cache connection
     and one debounced watcher per project, so repeated tool calls reuse a warm,
@@ -118,6 +157,11 @@ def _manager_for(path: Path, *, max_modules: int | None = None, **kwargs) -> Ind
     root = path.resolve()
     key = _manager_cache_key(root, kwargs)
     with _MANAGERS_LOCK:
+        live_roots = {Path(k[0]) for k in _MANAGERS}
+        if not _owns_manager(root) or any(
+            root != live and root.is_relative_to(live) for live in live_roots
+        ):
+            return None
         manager = _MANAGERS.get(key)
         if manager is None:
             if max_modules and max_modules > 0:
@@ -182,14 +226,18 @@ def _warm_or_cold(
 
     `kwargs` carries `max_modules` and the scan options to both routes.
 
-    Only a cache failure (`sqlite3.Error`, `OSError`) takes the cold path. A
-    `ScanTooLargeError` from the guard is not one, so it propagates rather than
-    being retried by a cold scan that would raise it again.
+    The cold path runs for a subtree that gets no manager (see `_manager_for`)
+    and on a cache failure (`sqlite3.Error`, `OSError`). A `ScanTooLargeError`
+    from the guard is neither, so it propagates rather than being retried by a
+    cold scan that would raise it again.
     """
     try:
-        return warm(_manager_for(path, **kwargs))
+        manager = _manager_for(path, **kwargs)
+        if manager is not None:
+            return warm(manager)
     except (sqlite3.Error, OSError):
-        return cold(path, **kwargs)
+        pass
+    return cold(path, **kwargs)
 
 
 def _load_graph(path: Path, *, internal_only: bool):
