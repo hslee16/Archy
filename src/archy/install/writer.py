@@ -14,7 +14,7 @@ stay rare: the bulk of the suite drives the pure render functions through the
 dry-run system on a single Linux runner.
 
 archy:owns        DryRunWriteSystem, InstallError, RealWriteSystem, WriteRecord,
-                  WriteSystem
+                  WriteSystem, check_writable, write_target
 archy:mirrored-by DryRunWriteSystem -> archy.cli_install, archy.install.runner,
                   InstallError -> archy.cli_install, archy.install, archy.install.base,
                   archy.install.merge, archy.install.runner,
@@ -24,7 +24,10 @@ archy:mirrored-by DryRunWriteSystem -> archy.cli_install, archy.install.runner,
 from __future__ import annotations
 
 import os
+import stat
+import sys
 import tempfile
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -60,6 +63,39 @@ class WriteSystem(Protocol):
     def remove(self, path: Path) -> None:
         """Delete the file. A missing file is a no-op (uninstall is idempotent)."""
         ...
+
+
+def write_target(path: Path) -> Path:
+    """Return where a write to ``path`` lands: a symlink's target, else ``path``.
+
+    Refuses a dangling link and a target that is not a regular file.
+    """
+    try:
+        target = path.resolve(strict=True) if path.is_symlink() else path
+    except (OSError, RuntimeError) as error:
+        raise InstallError(f"{path}: cannot resolve write target ({error})") from error
+    try:
+        mode = target.stat().st_mode
+    except FileNotFoundError:
+        pass
+    except OSError as error:
+        raise InstallError(f"{path}: cannot inspect write target {target} ({error})") from error
+    else:
+        if not stat.S_ISREG(mode):
+            kind = "is a directory; " if stat.S_ISDIR(mode) else ""
+            raise InstallError(
+                f"{path}: target {target} {kind}not a regular file; archy will not edit it"
+            )
+    return target
+
+
+def check_writable(path: Path) -> None:
+    """Refuse ``path`` when its write target is refused or sits in an unwritable folder."""
+    target = write_target(path)
+    if target.parent.exists() and not os.access(target.parent, os.W_OK):
+        raise InstallError(
+            f"{path}: cannot write target {target}: folder {target.parent} is not writable"
+        )
 
 
 def _read_text(path: Path) -> str | None:
@@ -104,18 +140,37 @@ class RealWriteSystem:
         self.removed.append(path)
 
     def write_text(self, path: Path, content: str) -> None:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Write to a temp file in the same directory, then atomically rename.
-        # Same-directory keeps the rename on one filesystem (cross-device
-        # os.replace raises). Text mode with the default newline translation,
-        # per the spec: we never hand-format line endings.
-        fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-        tmp = Path(tmp_name)
+        target = write_target(path)
+        # A private directory keeps the temp on the target's filesystem and lets
+        # new files inherit the umask without changing process-wide state.
+        # Text mode uses the platform's default newline translation, per spec.
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as fh:
-                fh.write(content)
+            mode = None
+            if sys.platform != "win32":
+                with suppress(FileNotFoundError):
+                    mode = stat.S_IMODE(target.stat().st_mode)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            staging = tempfile.TemporaryDirectory(dir=target.parent, prefix=f".{target.name}.")
+        except OSError as error:
+            raise InstallError(
+                f"{path}: cannot stage write to target {target} ({error})"
+            ) from error
+        with staging as tmp_dir:
             try:
-                os.replace(tmp, path)
+                # An umask can remove owner access from the staging directory too.
+                if sys.platform != "win32":
+                    # Keep setgid, so a new file takes a shared folder's group.
+                    Path(tmp_dir).chmod(stat.S_IMODE(Path(tmp_dir).stat().st_mode) | 0o700)
+                tmp = Path(tmp_dir) / target.name
+                tmp.write_text(content, encoding="utf-8")
+                if mode is not None:
+                    tmp.chmod(mode)
+            except OSError as error:
+                raise InstallError(
+                    f"{path}: cannot stage write to target {target} ({error})"
+                ) from error
+            try:
+                os.replace(tmp, target)
             except PermissionError as exc:
                 # Windows holds an exclusive handle while an Electron client is
                 # running, so the rename onto an open target fails. Surface a
@@ -124,9 +179,6 @@ class RealWriteSystem:
                     f"Could not write {path}: the file may be open in a running "
                     "client. Close the client and re-run `archy install`."
                 ) from exc
-        finally:
-            if tmp.exists():
-                tmp.unlink()
         self.written.append(path)
 
 

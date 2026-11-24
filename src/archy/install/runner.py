@@ -36,6 +36,7 @@ from archy.install.writer import (
     InstallError,
     RealWriteSystem,
     WriteSystem,
+    write_target,
 )
 
 # Named so callers and tests never depend on the raw "auto"/"all" string literals.
@@ -372,6 +373,8 @@ def preview_config(
     )
     previews: list[ConfigPreview] = []
     for action in plan:
+        if not action.retire:
+            write_target(action.path)
         existing_text = ws.read_text(action.path)
         if action.retire:
             _refuse_if_install_would(action, existing_text)

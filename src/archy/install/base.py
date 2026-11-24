@@ -30,7 +30,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from archy.install import paths
-from archy.install.writer import InstallError, WriteSystem
+from archy.install.writer import InstallError, WriteSystem, check_writable
 
 # The MCP server every adapter wires in. `uvx archy mcp` runs the server over
 # stdio without a global install, matching the manual snippet in the README and
@@ -331,6 +331,10 @@ def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple
     """
     rendered: list[tuple[Path, str | None]] = []
     for action in plan:
+        # Refuse a dangling link before anything is written. A retire action, like
+        # uninstall, reads one as an absent file.
+        if not action.retire:
+            check_writable(action.path)
         existing = write_system.read_text(action.path)
         try:
             if action.retire:
