@@ -95,7 +95,7 @@ ARCHY_SIMULATE_DESCRIPTION = (
     "Counterfactual pre-edit check: given a proposed import-edge delta "
     "(`add` / `remove` lists of {from, to} module-or-path pairs), return "
     "the structural consequence BEFORE any file is written -- new/resolved "
-    "cycles, new back-edges, new layer/SDP violations, per-axis score "
+    "cycles, cycle-closing edges, new layer/SDP violations, per-axis score "
     "delta, and the propagation_cost change -- with a risk-ranked "
     "`summary` phrased conditionally ('would form a cycle'). Use it to "
     "test a refactoring hypothesis and reshape the plan before editing. "
@@ -331,5 +331,6 @@ ARCHY_DSM_DESCRIPTION = (
     "projects with `focus` (qualname + focus_depth-hop neighborhood) or "
     "`package` (qualname prefix). When `baseline_path` (relative to `path`) is provided, "
     "returns a DSMDiff regardless of response_format (`new_back_edges` "
-    "flags cycles the edit just introduced)."
+    "lists the added edges that close a cycle, whatever the ordering; not self-loops or "
+    "additions inside a cycle that is there without them)."
 )

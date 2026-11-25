@@ -483,7 +483,7 @@ def simulate(
     """Predict the structural consequence of an import-edge delta, no files written.
 
     Apply a hypothetical `--add`/`--remove` of import edges to an in-memory copy
-    of the graph and report the new/resolved cycles, new back-edges, new layer
+    of the graph and report the new/resolved cycles, cycle-closing edges, new layer
     rules broken, per-axis score delta, and blast-radius change, before you edit.
     """
     g, full = _load_graph_pair(path)

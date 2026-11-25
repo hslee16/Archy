@@ -77,8 +77,9 @@ structure, counts, and the back-edges, without the full cell list);
 pass `response_format='full'` for the complete matrix. Narrow large
 projects with `focus=<qualname>` or `package=<prefix>`. Passing
 `baseline_path` to a previously saved DSM JSON returns a structured
-diff whose `new_back_edges` field flags cycles the most recent edit
-just introduced.
+diff whose `new_back_edges` field lists the added edges that close a
+cycle, whatever the ordering. Self-loops and additions inside a cycle that is
+there without them are left out. Use the same filters for both snapshots.
 """
 
 

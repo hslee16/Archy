@@ -6,7 +6,7 @@ import pytest
 
 from archy.diff import compute_diff, take_snapshot
 from archy.graph import UnresolvedHint, build_graph
-from archy.simulate import find_simulate
+from archy.simulate import EdgeSpec, find_simulate
 
 
 def _internal(root: Path):
@@ -52,6 +52,27 @@ def test_remove_edge_that_breaks_a_cycle_is_reported(tmp_path: Path):
     result = find_simulate(g, add=[], remove=[("app.a", "app.b")], project_root=project)
     [cycle] = result.cycles.resolved
     assert set(cycle.modules) == {"app.a", "app.b"}
+
+
+@pytest.mark.parametrize(("source", "target"), [("app.b", "app.a"), ("app.a", "app.z")])
+def test_run_simulate_serializes_cycle_closing_edge_in_both_name_orders(
+    tmp_path: Path, source: str, target: str
+):
+    from archy.mcp_runs import run_simulate
+
+    project = _make_pkg(
+        tmp_path,
+        {
+            source.rsplit(".", 1)[1] + ".py": "X = 1\n",
+            target.rsplit(".", 1)[1] + ".py": f"from app import {source.rsplit('.', 1)[1]}\n",
+        },
+    )
+
+    payload = run_simulate(
+        project, add=[EdgeSpec.model_validate({"from": source, "to": target})], remove=[]
+    ).model_dump()
+
+    assert payload["new_back_edges"] == ({"source": source, "target": target},)
 
 
 def test_unresolved_endpoint_reported_and_skipped(tmp_path: Path):

@@ -124,8 +124,9 @@ class SimulateReport(BaseModel):
 
     `score_delta` / `cycles` / `violations` / `sdp_violations` / `summary` are
     the same fields `archy_diff` returns, computed against the hypothetical
-    graph. `new_back_edges` and `propagation_cost` add the topological-ordering
-    and blast-radius views. Nothing here was written to disk.
+    graph. `new_back_edges` names the added edges that close a cycle and
+    `propagation_cost` adds the blast-radius view. Nothing here was written to
+    disk.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -299,7 +300,7 @@ def _resolve_delta(
 
 
 def _new_back_edges(before: nx.DiGraph, after: nx.DiGraph) -> tuple[EdgeRef, ...]:
-    """Edges that became topological back-edges, as `source -> target` names.
+    """Added edges that close a cycle, as `source -> target` names.
 
     `DSMDiff.new_back_edges` are positional `(row, col)` cells into the after-DSM
     ordering; an agent needs names, so translate them here.

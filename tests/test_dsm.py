@@ -58,7 +58,7 @@ def test_summarize_dsm_derives_counts_and_back_edges():
     assert sum(g.size for g in summary.groups) == summary.module_count
 
     # Back-edges: cells whose source sits later than the target in the ordering
-    # (row > col) -- the same test diff_dsm uses. Recompute to cross-check.
+    # (row > col). Recompute to cross-check this layout measure.
     expected_back = [(dsm.ordering[c.row], dsm.ordering[c.col]) for c in dsm.cells if c.row > c.col]
     assert summary.back_edge_count == len(expected_back)
     assert set(summary.back_edges) <= set(expected_back)
@@ -414,6 +414,102 @@ def test_diff_dsm_detects_new_back_edge():
     assert diff.new_back_edges, "introducing c->a (a cycle) must be flagged"
 
 
+@pytest.mark.parametrize(("source", "target"), [("pkg.b", "pkg.a"), ("pkg.a", "pkg.z")])
+def test_diff_dsm_cycle_closing_edge_is_independent_of_name_order(source: str, target: str):
+    """The reverse edge exists; adding source -> target closes exactly one 2-cycle."""
+    before = build_dsm(_g((target, source)), group_by="topological")
+    after = build_dsm(_g((target, source), (source, target)), group_by="topological")
+    after_pos = {name: i for i, name in enumerate(after.ordering)}
+    if source == "pkg.a":
+        assert after_pos[source] < after_pos[target]
+    else:
+        assert after_pos[source] > after_pos[target]
+
+    diff = diff_dsm(before, after)
+
+    assert [(after.ordering[c.row], after.ordering[c.col]) for c in diff.new_back_edges] == [
+        (source, target)
+    ]
+
+
+@pytest.mark.parametrize("edge", [("a", "c"), ("c", "a")])
+def test_diff_dsm_addition_within_existing_scc_is_not_a_new_back_edge(edge: tuple[str, str]):
+    graph = _g(("a", "b"), ("b", "c"), ("c", "d"), ("d", "a"))
+    before = build_dsm(graph, group_by="topological")
+    graph.add_edge(*edge)
+    after = build_dsm(graph, group_by="topological")
+
+    diff = diff_dsm(before, after)
+
+    assert len(diff.added) == 1
+    assert diff.new_back_edges == ()
+
+
+@pytest.mark.parametrize(
+    ("before_edges", "after_edges", "expected"),
+    [
+        # Both additions join a new module to a previously isolated module.
+        ([], [("a", "z"), ("z", "a")], {("a", "z"), ("z", "a")}),
+        # Both endpoints can be absent from the baseline.
+        ([], [("x", "z"), ("z", "x")], {("x", "z"), ("z", "x")}),
+        # Neither addition closes the 3-cycle on its own; both must be named.
+        ([("c", "a")], [("c", "a"), ("a", "b"), ("b", "c")], {("a", "b"), ("b", "c")}),
+        # Merge two cyclic components, previously joined in only one direction.
+        (
+            [("a", "b"), ("b", "a"), ("b", "c"), ("c", "d"), ("d", "c")],
+            [("a", "b"), ("b", "a"), ("b", "c"), ("c", "d"), ("d", "c"), ("d", "a")],
+            {("d", "a")},
+        ),
+        # Removing b also removes its cycle; the new a -> c remains acyclic.
+        ([("a", "b"), ("b", "a")], [("a", "c")], set()),
+        # Break one cycle while closing a different one.
+        (
+            [("a", "b"), ("b", "a"), ("c", "d")],
+            [("b", "a"), ("c", "d"), ("d", "c")],
+            {("d", "c")},
+        ),
+        # A self-loop on a new module is excluded, just as on an existing one.
+        ([], [("z", "z")], set()),
+        # A cycle made inside the members of one the edit also broke.
+        (
+            [("a", "b"), ("b", "c"), ("c", "a")],
+            [("a", "b"), ("b", "c"), ("b", "a")],
+            {("b", "a")},
+        ),
+        # A cycle that only split off a larger one has no closing edge.
+        (
+            [("a", "b"), ("b", "a"), ("b", "c"), ("c", "a")],
+            [("a", "b"), ("b", "a"), ("b", "c")],
+            set(),
+        ),
+    ],
+)
+def test_diff_dsm_component_changes(before_edges, after_edges, expected):
+    graph = _g(*before_edges)
+    graph.add_node("a")
+    before = build_dsm(graph, group_by="topological")
+    after = build_dsm(_g(*after_edges), group_by="topological")
+
+    diff = diff_dsm(before, after)
+
+    assert {(after.ordering[c.row], after.ordering[c.col]) for c in diff.new_back_edges} == expected
+
+
+@pytest.mark.parametrize("group_by", ["community", "layer", "topological"])
+@pytest.mark.parametrize("filters", [{}, {"package": "pkg"}, {"focus": "pkg.a", "focus_depth": 1}])
+def test_diff_dsm_cycle_closing_edge_ignores_layout_with_filters(group_by, filters):
+    graph = _g(("pkg.z", "pkg.a"), ("other.x", "other.y"))
+    before = build_dsm(graph, group_by=group_by, **filters)
+    graph.add_edge("pkg.a", "pkg.z")
+    after = build_dsm(graph, group_by=group_by, **filters)
+
+    diff = diff_dsm(before, after)
+
+    assert [(after.ordering[c.row], after.ordering[c.col]) for c in diff.new_back_edges] == [
+        ("pkg.a", "pkg.z")
+    ]
+
+
 def test_diff_dsm_detects_weight_change():
     before = build_dsm(_g(("a", "b"), calls={("a", "b"): 1}), weight="calls")
     after = build_dsm(_g(("a", "b"), calls={("a", "b"): 5}), weight="calls")
@@ -449,7 +545,7 @@ def test_render_diff_text_mentions_new_back_edges():
     after = build_dsm(_g(("a", "b"), ("b", "c"), ("c", "a")), group_by="topological")
     diff = diff_dsm(before, after)
     text = render_diff_text(diff, after, before)
-    assert "back-edge" in text.lower()
+    assert "Cycle-closing edges (1):" in text
     assert "c -> a" in text or "c -&gt; a" in text
 
 
@@ -518,9 +614,8 @@ def test_back_edge_count_is_strict_and_excludes_self_loops():
 
     Every other test of this number recomputes `c.row > c.col` from the same
     cells `build_dsm` produced, so it moves with the implementation. #438
-    verified that loosening the predicate to `>=` left the whole suite green,
-    which matters because this count is what `archy dsm --diff` uses for
-    back-edge regression detection and what `archy render` prints.
+    verified that loosening the predicate to `>=` left the whole suite green.
+    This count is the layout measure that `archy render` prints.
 
     The self-loop is the discriminating half: `b -> b` sits on the diagonal,
     where `row == col`. It is not a back edge, and only a fixture containing
