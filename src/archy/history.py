@@ -4,22 +4,25 @@ Each row captures the score, its components, the git context (commit and
 branch where available), and rough scale inputs. The file is append-only
 and line-oriented so it is trivial to diff, grep, jq, and hand-merge.
 
-archy:owns        HistoryRow, append, git_metadata, read, row_from_score
+archy:owns        HistoryRow, append, git_metadata, has_mixed_scopes, read,
+                  row_from_score, score_gate
 archy:mirrored-by HistoryRow -> archy.render, archy.trend, append -> archy.cli_history,
                   archy.mcp_runs_check, git_metadata -> archy.cli_history,
-                  archy.mcp_runs_check, read -> archy.cli_app, archy.cli_graph,
-                  archy.cli_history, archy.mcp_runs_check,
-                  row_from_score -> archy.cli_history, archy.mcp_runs_check
+                  archy.mcp_runs_check, has_mixed_scopes -> archy.render, archy.trend,
+                  read -> archy.cli_graph, archy.cli_history, archy.mcp_runs_check,
+                  row_from_score -> archy.cli_history, archy.mcp_runs_check,
+                  score_gate -> archy.cli_history, archy.mcp_runs_check
 """
 
 from __future__ import annotations
 
 import datetime as dt
 import json
+import shlex
 import subprocess
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictBool
 
 from archy.score import Score
 
@@ -30,6 +33,7 @@ class HistoryRow(BaseModel):
     timestamp: str  # ISO-8601 UTC, second precision, suffixed Z.
     commit: str | None
     branch: str | None
+    internal_only: StrictBool | None = None
     overall: float
     modularity: float
     acyclicity: float
@@ -46,6 +50,12 @@ class HistoryRow(BaseModel):
     tangle_ratio: float
     max_depth: int
     community_count: int
+
+    @property
+    def scope_label(self) -> str:
+        if self.internal_only is None:
+            return "unknown"
+        return "internal-only" if self.internal_only else "all"
 
 
 def append(history_path: Path, row: HistoryRow) -> None:
@@ -83,6 +93,7 @@ def row_from_score(
     *,
     commit: str | None,
     branch: str | None,
+    internal_only: bool | None = None,
     now: dt.datetime | None = None,
 ) -> HistoryRow:
     moment = now or dt.datetime.now(dt.timezone.utc)
@@ -90,6 +101,7 @@ def row_from_score(
         timestamp=moment.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         commit=commit,
         branch=branch,
+        internal_only=internal_only,
         overall=score.overall,
         modularity=score.modularity,
         acyclicity=score.acyclicity,
@@ -103,6 +115,49 @@ def row_from_score(
         max_depth=score.inputs.max_depth,
         community_count=score.inputs.community_count,
     )
+
+
+def has_mixed_scopes(rows: list[HistoryRow]) -> bool:
+    """Whether the rows hold scores of both scopes; a legacy row's scope is unknown, not other."""
+    return {True, False} <= {r.internal_only for r in rows}
+
+
+def score_gate(
+    history_path: Path, current: float, tolerance: float, *, internal_only: bool, record: bool
+) -> dict:
+    """Prefer a known scope match, even when a legacy row is newer.
+
+    `record` says the caller is about to append this score, which seeds the scope.
+
+    Legacy fallback preserves old histories, with the uncertainty on the wire.
+    """
+    rows = read(history_path)
+    previous = next((r for r in reversed(rows) if r.internal_only is internal_only), None)
+    if previous is None:
+        previous = next((r for r in reversed(rows) if r.internal_only is None), None)
+    scope = "internal-only" if internal_only else "all modules"
+    project = shlex.quote(str(history_path.parent.parent))
+    flag = "--internal-only" if internal_only else "--all"
+    advice = f"Run `archy score {flag} --record -- {project}` to seed the baseline."
+    if record:
+        advice = "This run records one."
+    reason = f"Compared with the most recent {scope} score."
+    if previous is not None and previous.internal_only is None:
+        reason = f"Legacy baseline: scope unknown; comparison may include a scope switch. {advice}"
+    elif previous is None:
+        missing = f"no recorded score for {scope}" if rows else "no prior score recorded"
+        reason = f"{missing}; nothing to compare. {advice}"
+    delta = current - previous.overall if previous is not None else None
+    return {
+        "previous": previous.overall if previous else None,
+        "previous_commit": previous.commit if previous else None,
+        "previous_timestamp": previous.timestamp if previous else None,
+        "current": current,
+        "delta": delta,
+        "tolerance": tolerance,
+        "passed": delta >= -tolerance if delta is not None else record or not rows,
+        "reason": reason,
+    }
 
 
 def git_metadata(path: Path) -> tuple[str | None, str | None]:
@@ -149,6 +204,7 @@ def _row_to_dict(row: HistoryRow) -> dict:
         "timestamp": row.timestamp,
         "commit": row.commit,
         "branch": row.branch,
+        "internal_only": row.internal_only,
         "score": {
             "overall": row.overall,
             "modularity": row.modularity,
@@ -177,11 +233,15 @@ def _row_from_dict(data: object) -> HistoryRow | None:
     timestamp = top.get("timestamp")
     if score is None or inputs is None or not isinstance(timestamp, str):
         return None
+    internal_only = top.get("internal_only")
+    if internal_only is not None and not isinstance(internal_only, bool):
+        return None
     try:
         return HistoryRow(
             timestamp=timestamp,
             commit=_optional_str(top.get("commit")),
             branch=_optional_str(top.get("branch")),
+            internal_only=internal_only,
             overall=_as_float(score["overall"]),
             modularity=_as_float(score["modularity"]),
             acyclicity=_as_float(score["acyclicity"]),

@@ -271,7 +271,7 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 **Score vs. snapshot/diff:**
 
 - Active editing session → snapshot + diff (no history pollution)
-- CI gate or pre-commit hook → `archy_score(strict=True, record=True)` against `.archy/history.jsonl`
+- CI gate or pre-commit hook → `archy_score(strict=True, record=True)` against `.archy/history.jsonl`: newest same-scope baseline, or newest legacy row with a scope-unknown reason; only opposite-scope history fails with recording advice, unless the run records. History rows carry `internal_only` (`null` for legacy rows); compare trends within a scope.
 - Long-term trend question → `archy_score(view="history")`
 
 **SDP (Stable Dependencies Principle) violations:**

@@ -44,7 +44,7 @@ Default hook behavior is **advisory**: run the gate, surface the result, never f
 
 ### The gate command
 
-One universal command, run from the project root: `archy score --strict` (regression gate against the last recorded run) or, richer, `archy diff` (localizes what regressed). `--strict` degrades gracefully: with no recorded baseline it passes and prints "nothing to compare." The hook wrapper maps a regression to the client's block contract only in blocking mode.
+One universal command, run from the project root: `archy score --strict` (regression gate against the last recorded run) or, richer, `archy diff` (localizes what regressed). `--strict` degrades gracefully: with an empty history it passes and prints "nothing to compare." The hook wrapper maps a regression to the client's block contract only in blocking mode.
 
 ### Reuse the adapter registry
 

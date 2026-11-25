@@ -71,6 +71,7 @@ class ScoreGate(BaseModel):
     delta: float | None
     tolerance: float
     passed: bool
+    reason: str
 
 
 class ScorePayload(BaseModel):
@@ -334,6 +335,7 @@ class TrendRow(BaseModel):
     timestamp: str
     commit: str | None
     branch: str | None
+    internal_only: bool | None = None
     score: TrendRowScore
     inputs: TrendRowInputs
 

@@ -40,6 +40,8 @@ orphan branch, so it shares no history with your code and does not show up in yo
 code's `git log`. Rows are the same ones `archy score --record` writes locally, so
 `archy trend` and `archy render --view trend` read them unchanged.
 
+New CI rows record `internal_only=true`; older rows have unknown scope. Trend tables label the scope and omit charts for a window holding both scopes.
+
 Why a branch and not something else GitHub gives away free:
 
 | Option | Why not |

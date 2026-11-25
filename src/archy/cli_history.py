@@ -1,8 +1,7 @@
 """Commands over a project's score and findings: score, trend, snapshot, diff, cycles, simulate.
 
 archy:owns        cycles, diff, score, simulate, snapshot, trend
-archy:gates       exit 1 (config:result.strict), exit 1 (flag:--strict),
-                  exit 1 (flag:--strict-tolerance)
+archy:gates       exit 1 (config:result.strict), exit 1 (flag:--strict)
 """
 
 from __future__ import annotations
@@ -14,7 +13,6 @@ from pathlib import Path
 import click
 
 from archy.cli_app import (
-    _gate_against_history,
     _layer_config_errors,
     _load_graph,
     _load_graph_pair,
@@ -51,7 +49,7 @@ from archy.graph import (
     zero_modules_reason,
 )
 from archy.history import append as append_history
-from archy.history import git_metadata, row_from_score
+from archy.history import git_metadata, row_from_score, score_gate
 from archy.history import read as read_history
 from archy.layers import (
     discover_config,
@@ -91,8 +89,8 @@ from archy.trend import render_text as render_trend
     "--strict",
     is_flag=True,
     help=(
-        "Compare against the most recent recorded score; exit 1 if the overall "
-        "score drops by more than --strict-tolerance."
+        "Compare against the most recent same-scope score (legacy fallback); exit 1 "
+        "on a scope mismatch (unless --record) or a drop beyond --strict-tolerance."
     ),
 )
 @click.option(
@@ -125,7 +123,13 @@ def score(
     history_path = path / ".archy" / "history.jsonl"
     # Strict reads BEFORE recording so the comparison is against the truly
     # previous run rather than the row we are about to append.
-    gate = _gate_against_history(s, history_path) if strict else None
+    gate = (
+        score_gate(
+            history_path, s.overall, strict_tolerance, internal_only=internal_only, record=record
+        )
+        if strict
+        else None
+    )
 
     _echo_score(
         s,
@@ -135,8 +139,8 @@ def score(
         namespace_gaps=tuple(g.graph.get("namespace_gaps", ())),
     )
     if record:
-        _record_score(path, s, history_path)
-    if gate is not None and gate["delta"] is not None and gate["delta"] < -strict_tolerance:
+        _record_score(path, s, history_path, internal_only=internal_only)
+    if strict and gate is not None and not gate["passed"]:
         sys.exit(1)
 
 
@@ -165,9 +169,11 @@ def _echo_score(
         click.echo(_gate_to_text(gate, strict_tolerance))
 
 
-def _record_score(path: Path, s, history_path: Path) -> None:
+def _record_score(path: Path, s, history_path: Path, *, internal_only: bool) -> None:
     commit, branch = git_metadata(path)
-    append_history(history_path, row_from_score(s, commit=commit, branch=branch))
+    append_history(
+        history_path, row_from_score(s, commit=commit, branch=branch, internal_only=internal_only)
+    )
 
 
 @main.command()
@@ -205,6 +211,7 @@ def trend(path: Path, last_n: int, fmt: str) -> None:
                         "timestamp": r.timestamp,
                         "commit": r.commit,
                         "branch": r.branch,
+                        "internal_only": r.internal_only,
                         "score": {
                             "overall": r.overall,
                             "modularity": r.modularity,

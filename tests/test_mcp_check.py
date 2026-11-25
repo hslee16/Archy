@@ -474,8 +474,8 @@ def test_score_gate_passes_at_exactly_the_tolerance_and_fails_just_past_it(tmp_p
         ),
     )
 
-    at_tolerance = _score_gate(history, 0.5, 0.25)
-    past_tolerance = _score_gate(history, 0.5, 0.125)
+    at_tolerance = _score_gate(history, 0.5, 0.25, internal_only=True, record=False)
+    past_tolerance = _score_gate(history, 0.5, 0.125, internal_only=True, record=False)
 
     assert at_tolerance.delta == -0.25
     assert at_tolerance.passed is True

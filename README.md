@@ -391,7 +391,9 @@ archy trend path/to/project --last 30 --format json
 
 ### Regression gate
 
-Fail if the current score drops more than `--strict-tolerance` (default 0.02) below the most recent recorded run.
+Fail if the current score drops more than `--strict-tolerance` (default 0.02) below the most recent recorded run of the same scope (`--internal-only` or `--all`).
+
+Known matching rows take precedence over legacy rows, regardless of order. If no match exists, the newest legacy row is used with a `scope unknown` reason. History containing only the other scope fails with recording advice, or passes and seeds the scope with `--record`; empty history passes without a comparison. New rows store `internal_only`; old rows read as `null`. Trend text, JSON, MCP history and HTML label each row's scope, and a window holding both scopes omits sparklines and charts.
 
 ```bash
 archy score path/to/project --strict
@@ -534,7 +536,7 @@ The lowest-friction path specifically on Claude Code is the bundled plugin at [`
 
 ### Regression-gate semantics
 
-`--strict` reads the last row from `.archy/history.jsonl` and compares the current score against it. Drops beyond the tolerance fail with exit code 1. The default tolerance (0.02) matches the threshold sentrux's `gate` uses. This gives archy parity with sentrux's regression-gate use case while keeping the long-term JSONL history for `archy trend`.
+`--strict` reads the most recent same-scope row from `.archy/history.jsonl` (with the legacy fallback described above). Drops beyond the tolerance fail with exit code 1. The default tolerance (0.02) matches the threshold sentrux's `gate` uses. This gives archy parity with sentrux's regression-gate use case while keeping the long-term JSONL history for `archy trend`.
 
 ## CI integration
 
@@ -576,7 +578,7 @@ repos:
     rev: v0.56.0
     hooks:
       - id: archy-check          # layer rules from archy.yaml
-      - id: archy-score-strict   # regression gate against last recorded score
+      - id: archy-score-strict   # regression gate against last same-scope score
       - id: archy-cycles         # fail on any import cycle
       - id: archy-no-new-cycles  # fail only on cycles/violations the baseline lacks
 ```

@@ -44,24 +44,22 @@ def _gate_to_dict(gate: dict, tolerance: float) -> dict:
         "current": gate["current"],
         "delta": delta,
         "tolerance": tolerance,
-        "passed": delta is None or delta >= -tolerance,
+        "passed": gate["passed"],
+        "reason": gate["reason"],
     }
 
 
 def _gate_to_text(gate: dict, tolerance: float) -> str:
+    verdict = "PASS" if gate["passed"] else "FAIL"
     if gate["delta"] is None:
-        return (
-            "# strict: no prior score recorded; nothing to compare. "
-            "Pass `--record` to seed the baseline."
-        )
+        return f"# strict: {verdict}  {gate['reason']}"
     delta = gate["delta"]
     direction = "improved" if delta >= 0 else "dropped"
-    verdict = "PASS" if delta >= -tolerance else "FAIL"
     prev_label = (gate.get("previous_commit") or "?")[:7]
     return (
         f"# strict: {verdict}  "
         f"{gate['previous']:.3f} ({prev_label}) -> {gate['current']:.3f}  "
-        f"({direction} {delta:+.3f}, tolerance {tolerance:.3f})"
+        f"({direction} {delta:+.3f}, tolerance {tolerance:.3f}) {gate['reason']}"
     )
 
 
