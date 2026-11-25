@@ -322,6 +322,13 @@ class AgentAdapter(ABC):
         """
 
 
+def _check_targets(plan: list[FileAction]) -> None:
+    """Refuse a dangling link first. A retire, like uninstall, reads one as absent."""
+    for action in plan:
+        if not action.retire:
+            check_writable(action.path)
+
+
 def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple[Path, str | None]]:
     """Render each action against the write system without writing. Returns pairs.
 
@@ -329,12 +336,9 @@ def render_plan(plan: list[FileAction], write_system: WriteSystem) -> list[tuple
     only when it would change something: an absent file, or one holding none of
     archy's text, yields nothing.
     """
+    _check_targets(plan)
     rendered: list[tuple[Path, str | None]] = []
     for action in plan:
-        # Refuse a dangling link before anything is written. A retire action, like
-        # uninstall, reads one as an absent file.
-        if not action.retire:
-            check_writable(action.path)
         existing = write_system.read_text(action.path)
         try:
             if action.retire:
