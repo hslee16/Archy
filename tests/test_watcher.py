@@ -106,6 +106,20 @@ def test_is_watched_py_filters(project: Path, tmp_path: Path):
         m.stop()
 
 
+def test_is_watched_py_skips_a_worktree_but_not_when_rooted_in_it(tmp_path: Path):
+    """#743: the watcher and the scan agree about hidden directories."""
+    worktree = tmp_path / ".claude" / "worktrees" / "feat"
+    target = worktree / "pkg" / "a.py"
+    target.parent.mkdir(parents=True)
+    target.write_text("x = 1\n")
+    for root, watched in ((tmp_path, False), (worktree, True)):
+        m = IndexManager(root.resolve(), db_path=tmp_path / f"index-{watched}.db")
+        try:
+            assert m._is_watched_py(target.resolve()) is watched
+        finally:
+            m.stop()
+
+
 def test_is_watched_py_keeps_files_under_an_ignored_ancestor(tmp_path: Path):
     """#517: a project living under build/ must still watch its own .py files."""
     proj = tmp_path / "build" / "proj"
@@ -122,6 +136,23 @@ def test_is_watched_py_keeps_files_under_an_ignored_ancestor(tmp_path: Path):
         ignored.parent.mkdir(parents=True)
         ignored.write_text("")
         assert m._is_watched_py(ignored.resolve()) is False
+    finally:
+        m.stop()
+
+
+def test_is_watched_py_keeps_a_declared_root_under_a_hidden_directory(tmp_path: Path):
+    """#743: opting in to actions/ must warm its index after edits too."""
+    _write(tmp_path, ".github/actions/t.py", "import os\n")
+    _write(tmp_path, ".github/other/t.py", "")
+    _write(tmp_path, ".github/actions/.nested/t.py", "")
+    m = IndexManager(tmp_path, extra_roots=(".github/actions",))
+    try:
+        assert m._is_watched_py(tmp_path / ".github/actions/t.py") is True
+        assert m._is_watched_py(tmp_path / ".github/other/t.py") is False
+        assert m._is_watched_py(tmp_path / ".github/actions/.nested/t.py") is False
+        g = m.build_graph()
+        assert set(g.nodes) == {"actions.t", "os"}
+        assert set(g.edges) == {("actions.t", "os")}
     finally:
         m.stop()
 

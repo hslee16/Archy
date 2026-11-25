@@ -660,6 +660,8 @@ A rule that derives nothing is reported as a violation. So is a `pyproject.toml`
 
 *Always*, whatever they hold: `.git`, `__pycache__`, `.mypy_cache`, `.pytest_cache`, `.ruff_cache`, `.tox`, `.eggs`, `.venv`, `node_modules`.
 
+Other directories whose names start with a dot (`.claude/worktrees/`, `.nox`, `.github`) are skipped by default. An explicit `roots: [.github/actions]` keeps that root scanned and watched, while hidden siblings and hidden directories below it remain skipped. Only directories below the scanned one count, so running archy inside `.claude/worktrees/feat` scans that worktree. Hard skips and explicit `exclude:` names still apply to declared roots.
+
 *Only when the directory is not a package* (no `__init__.py`): `build`, `dist`, `venv`, `site-packages`. Build output has no `__init__.py` at its top level (setuptools writes `build/lib/pkg/`), so this keeps artifacts out, while a first-party package that happens to be called `build` (pip keeps one at `src/pip/_internal/operations/build/`) is scanned instead of vanishing. Before #518 those four names were dropped unconditionally, which made `archy impact` report zero dependents for code that has them.
 
 Add an optional `exclude:` list of directory basenames for anything else (codegen output, vendored code) to skip. Each name is matched anywhere in the project tree:

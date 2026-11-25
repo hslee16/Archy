@@ -146,6 +146,68 @@ def test_build_dir_inside_the_scan_root_is_still_skipped(tmp_path: Path):
     assert not any(n.startswith("noise") or n.startswith("build") for n in internal)
 
 
+def _project_with_agent_worktree(root: Path) -> Path:
+    """`pkg` in `src/`, and another branch of it in a worktree under `.claude/`."""
+    worktree = root / ".claude" / "worktrees" / "feat"
+    for src in (root / "src" / "pkg", worktree / "src" / "pkg"):
+        src.mkdir(parents=True)
+        (src / "__init__.py").write_text("")
+    (root / "src" / "pkg" / "a.py").write_text("import os\n")
+    (worktree / "src" / "pkg" / "a.py").write_text("from pkg import b\n")
+    (worktree / "src" / "pkg" / "b.py").write_text("from pkg import a\n")
+    return worktree
+
+
+def test_hidden_directory_below_the_root_is_not_scanned(tmp_path: Path):
+    """#743: an agent's worktree must not add its branch to the main checkout."""
+    worktree = _project_with_agent_worktree(tmp_path)
+    assert (worktree / "src" / "pkg" / "b.py").is_file()
+    assert not (tmp_path / "src" / "pkg" / "b.py").exists()
+
+    g = build_graph(tmp_path.resolve())
+
+    assert _internal_nodes(g) == {"pkg", "pkg.a"}
+    assert set(g.edges) == {("pkg.a", "os")}
+    paths = [d["path"] for _, d in g.nodes(data=True) if not d.get("external")]
+    assert not any("/.claude/" in Path(p).as_posix() for p in paths)
+
+
+def test_scan_rooted_inside_a_hidden_directory_still_finds_its_modules(tmp_path: Path):
+    """#743: hidden ancestors of the root must not count, as in #517."""
+    worktree = _project_with_agent_worktree(tmp_path)
+
+    g = build_graph(worktree.resolve())
+
+    assert _internal_nodes(g) == {"pkg", "pkg.a", "pkg.b"}
+    assert g.has_edge("pkg.a", "pkg.b") and g.has_edge("pkg.b", "pkg.a")
+
+
+@pytest.mark.parametrize("suffix", [".py", ".pyi", ".so", ".pyd"])
+def test_declared_root_under_a_hidden_directory_is_scanned(tmp_path: Path, suffix: str):
+    """#743: explicit roots keep their modules without admitting hidden siblings."""
+    root = tmp_path.resolve()
+    actions = root / ".github" / "actions"
+    actions.mkdir(parents=True)
+    (actions / f"t{suffix}").write_text("", encoding="utf-8")
+    for noise in (root / ".github" / "other", actions / ".nested" / "noise"):
+        noise.mkdir(parents=True)
+        (noise / "__init__.py").write_text("", encoding="utf-8")
+        (noise / f"t{suffix}").write_text("", encoding="utf-8")
+
+    assert _internal_nodes(build_graph(root)) == set()
+    assert _internal_nodes(build_graph(root, extra_roots=(".github/actions",))) == {"actions.t"}
+    assert (
+        _internal_nodes(
+            build_graph(
+                root,
+                extra_roots=(".github/actions",),
+                ignored_dirs=DEFAULT_IGNORED_DIRS | {".github"},
+            )
+        )
+        == set()
+    )
+
+
 def test_build_output_without_a_top_level_init_is_still_skipped(tmp_path: Path):
     """#518: the soft skip must keep real build output out of the graph.
 

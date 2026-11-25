@@ -78,7 +78,7 @@ def _discover_modules(
     resolve to the leaf rather than collapsing onto the package (#665).
     """
     package_roots = _find_package_roots(root, ignored, extra_roots)
-    modules, outside = _package_modules(root, ignored, package_roots)
+    modules, outside = _package_modules(root, ignored, package_roots, extra_roots)
 
     # Test files no package root names (an init-less `tests/` beside a `src/`
     # layout) get their path from the scan root, as a flat layout already gives
@@ -92,19 +92,19 @@ def _discover_modules(
     _raise_on_qualname_collision(modules, root)
 
     seen = {m.qualname for m in modules}
-    modules.extend(_leaf_modules(root, ignored, package_roots, seen))
+    modules.extend(_leaf_modules(root, ignored, package_roots, seen, extra_roots))
 
     modules.sort(key=lambda m: m.qualname)
     return modules
 
 
 def _package_modules(
-    root: Path, ignored: frozenset[str], package_roots: list[Path]
+    root: Path, ignored: frozenset[str], package_roots: list[Path], extra_roots: tuple[str, ...]
 ) -> tuple[list[Module], list[Path]]:
     """Modules a package root names, and the `.py` files none of them does."""
     modules: list[Module] = []
     outside: list[Path] = []
-    for py_file in _iter_python_files(root, ignored):
+    for py_file in _iter_python_files(root, ignored, extra_roots):
         qualname = _qualname_for(py_file, package_roots)
         if qualname is None:
             outside.append(py_file)
@@ -129,11 +129,15 @@ def _fallback_test_modules(outside: list[Path], root: Path) -> list[Module]:
 
 
 def _leaf_modules(
-    root: Path, ignored: frozenset[str], package_roots: list[Path], seen: set[str]
+    root: Path,
+    ignored: frozenset[str],
+    package_roots: list[Path],
+    seen: set[str],
+    extra_roots: tuple[str, ...],
 ) -> list[Module]:
     """Extension and stub leaves whose qualname no `.py` module already holds."""
     leaves: list[Module] = []
-    for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored):
+    for leaf_path, stem in _iter_extension_and_stub_leaves(root, ignored, extra_roots):
         qualname = _qualname_for_stem(leaf_path, stem, package_roots)
         if qualname is None or qualname in seen:
             continue
@@ -182,10 +186,12 @@ def _extension_module_stem(filename: str) -> str | None:
     return None
 
 
-def _stub_leaves(root: Path, ignored: frozenset[str]) -> dict[tuple[Path, str], Path]:
+def _stub_leaves(
+    root: Path, ignored: frozenset[str], extra_roots: tuple[str, ...]
+) -> dict[tuple[Path, str], Path]:
     chosen: dict[tuple[Path, str], Path] = {}
     for path in sorted(root.rglob("*.pyi")):
-        if is_ignored_path(path, ignored, root):
+        if is_ignored_path(path, ignored, root, extra_roots=extra_roots):
             continue
         if path.with_suffix(".py").is_file():
             continue
@@ -199,13 +205,15 @@ def _stub_leaves(root: Path, ignored: frozenset[str]) -> dict[tuple[Path, str], 
     return chosen
 
 
-def _extension_leaves(root: Path, ignored: frozenset[str]) -> dict[tuple[Path, str], Path]:
+def _extension_leaves(
+    root: Path, ignored: frozenset[str], extra_roots: tuple[str, ...]
+) -> dict[tuple[Path, str], Path]:
     chosen: dict[tuple[Path, str], Path] = {}
     # WHY: EXTENSION_SUFFIXES lists only this host's tags, so a Windows .pyd
     # (or non-host .so) would be missed on POSIX without these broad globs.
     for pattern in ("*.so", "*.pyd"):
         for path in sorted(root.rglob(pattern)):
-            if is_ignored_path(path, ignored, root):
+            if is_ignored_path(path, ignored, root, extra_roots=extra_roots):
                 continue
             stem = _extension_module_stem(path.name)
             if stem is None:
@@ -217,6 +225,7 @@ def _extension_leaves(root: Path, ignored: frozenset[str]) -> dict[tuple[Path, s
 def _iter_extension_and_stub_leaves(
     root: Path,
     ignored: frozenset[str],
+    extra_roots: tuple[str, ...],
 ) -> list[tuple[Path, str]]:
     """Paths that define an internal leaf with no ``.py`` twin.
 
@@ -224,8 +233,8 @@ def _iter_extension_and_stub_leaves(
     module is recorded once. A ``.pyi`` whose ``.py`` twin exists is skipped
     here; discovery of the ``.py`` already owns that qualname.
     """
-    chosen = _stub_leaves(root, ignored)
-    chosen.update(_extension_leaves(root, ignored))
+    chosen = _stub_leaves(root, ignored, extra_roots)
+    chosen.update(_extension_leaves(root, ignored, extra_roots))
     return sorted(
         ((path, stem) for (_parent, stem), path in chosen.items()),
         key=lambda item: (item[0].as_posix(), item[1]),
@@ -305,11 +314,11 @@ def _is_extension_or_stub_leaf(path: Path) -> bool:
     return _extension_module_stem(name) is not None
 
 
-def _package_dirs(root: Path, ignored: frozenset[str]) -> set[Path]:
+def _package_dirs(root: Path, ignored: frozenset[str], extra_roots: tuple[str, ...]) -> set[Path]:
     return {
         path.parent.resolve()
         for path in root.rglob("__init__.py")
-        if not is_ignored_path(path, ignored, root)
+        if not is_ignored_path(path, ignored, root, extra_roots=extra_roots)
     }
 
 
@@ -324,7 +333,7 @@ def _find_package_roots(
     extra_roots: tuple[str, ...],
 ) -> list[Path]:
     """Return absolute paths to top-level package directories under root."""
-    package_dirs = _package_dirs(root, ignored)
+    package_dirs = _package_dirs(root, ignored, extra_roots)
 
     # User-declared namespace package roots: treat the directory as a package
     # even without __init__.py, so descendants get qualnames rooted there.
@@ -338,14 +347,18 @@ def _find_package_roots(
     return roots
 
 
-def _iter_python_files(root: Path, ignored: frozenset[str]) -> Iterable[Path]:
+def _iter_python_files(
+    root: Path, ignored: frozenset[str], extra_roots: tuple[str, ...] = ()
+) -> Iterable[Path]:
     for path in sorted(root.rglob("*.py")):
-        if is_ignored_path(path, ignored, root):
+        if is_ignored_path(path, ignored, root, extra_roots=extra_roots):
             continue
         yield path
 
 
-def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
+def is_ignored_path(
+    path: Path, ignored: frozenset[str], root: Path, *, extra_roots: tuple[str, ...] = ()
+) -> bool:
     """Return True when the scan must not read ``path``.
 
     A hard-skipped name is refused at any depth. A soft-skipped name is refused
@@ -355,12 +368,19 @@ def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
     ``__init__.py`` at its top level, stays out. A name the caller excludes
     itself is refused unconditionally.
 
+    Hidden directories (``.claude/worktrees/``, ``.nox``) are skipped by default
+    so an agent's second checkout cannot collide with this one's modules (#743).
+    Explicit ``extra_roots`` admit their hidden ancestors, but not hidden
+    descendants or siblings. Hard and user exclusions still take precedence.
+
     Ancestors of ``root`` itself must not count: a project that merely lives
     under a directory named ``build`` / ``dist`` / ``venv`` would otherwise
     scan as empty when given an absolute path (#517).
     """
+    resolved_path = path.resolve()
+    resolved_root = root.resolve()
     try:
-        rel = path.resolve().relative_to(root.resolve())
+        rel = resolved_path.relative_to(resolved_root)
     except ValueError:
         # Path is outside the scan root (watcher unit tests pass synthetic
         # absolutes). Fall back to the full path so in-path ignored names like
@@ -368,15 +388,31 @@ def is_ignored_path(path: Path, ignored: frozenset[str], root: Path) -> bool:
         rel = path
         current: Path | None = None
     else:
-        current = root.resolve()
+        current = resolved_root
     user_ignored = ignored - DEFAULT_IGNORED_DIRS
     for part in rel.parts[:-1]:
         current = None if current is None else current / part
         if part in HARD_IGNORED_DIRS or part in user_ignored:
             return True
+        if (
+            current is not None
+            and part.startswith(".")
+            and not _leads_to_declared_root(current, resolved_path, resolved_root, extra_roots)
+        ):
+            return True
         if part in SOFT_IGNORED_DIRS and _holds_no_package(current):
             return True
     return False
+
+
+def _leads_to_declared_root(
+    hidden: Path, path: Path, root: Path, extra_roots: tuple[str, ...]
+) -> bool:
+    """True when a declared root is ``hidden`` or below it, and holds ``path``."""
+    return any(
+        declared.is_relative_to(hidden) and path.is_relative_to(declared)
+        for declared in _declared_roots(root, extra_roots)
+    )
 
 
 def _holds_no_package(directory: Path | None) -> bool:

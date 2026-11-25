@@ -163,7 +163,9 @@ class IndexManager:
         """
         if path.suffix != ".py":
             return False
-        return not is_ignored_path(path, self._ignored_dirs, self.root)
+        return not is_ignored_path(
+            path, self._ignored_dirs, self.root, extra_roots=self._extra_roots
+        )
 
     def _reset_timer(self) -> None:
         with self._lock:
