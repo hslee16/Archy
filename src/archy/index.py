@@ -152,9 +152,10 @@ def load_cached_parse(parse_json: str) -> ParseResult | None:
 
     A row can become corrupt (interrupted write, disk fault), schema-stale (a
     `ParseResult` change shipped without a `SCHEMA_VERSION` bump) or come from
-    another archy or tree-sitter version. The DB is a pure cache, so an
-    unusable row is a miss, not a fatal error: returning `None` lets `sync()` fall through to a reparse that overwrites it. Mirrors how
-    `history.read()` skips a corrupt line rather than crashing.
+    another archy or tree-sitter version. The DB is a pure cache, so an unusable
+    row is a miss, not a fatal error: returning `None` lets `sync()` fall through
+    to a reparse that overwrites it. Mirrors how `history.read()` skips a corrupt
+    line rather than crashing.
     """
     try:
         row = _CacheRow.model_validate_json(parse_json)
