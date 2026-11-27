@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "b8c712b7abd7",
+  "strategy": "manual-commit",
+  "branch": "alee/704-pin-mcp-refusals",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/b8/c712b7abd7/0/metadata.json",
+      "transcript": "/b8/c712b7abd7/0/full.jsonl",
+      "content_hash": "/b8/c712b7abd7/0/content_hash.txt",
+      "prompt": "/b8/c712b7abd7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 788,
+    "cache_creation_tokens": 693426,
+    "cache_read_tokens": 140477860,
+    "output_tokens": 324697,
+    "api_call_count": 322
+  }
+}
