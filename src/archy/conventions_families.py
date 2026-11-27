@@ -6,7 +6,8 @@ import ast
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 
-from archy.conventions_collect import _assign_targets, _assigned_names, _dotted, _ModuleFacts
+from archy.conventions_classes import ClassIndex, ClassKey
+from archy.conventions_collect import _assign_targets, _assigned_names, _ModuleFacts
 from archy.conventions_models import (
     BaseFamily,
     ModelCensus,
@@ -17,6 +18,7 @@ from archy.conventions_models import (
     SurfaceFamily,
     camel_suffix,
 )
+from archy.conventions_namespace import _dotted
 
 # Base names that mark a class as a declared value type rather than a plain
 # object. Matched on the last dotted segment, so `pydantic.BaseModel` and a
@@ -69,54 +71,53 @@ def _base_families(facts: Iterable[_ModuleFacts], *, min_count: int) -> tuple[Ba
     plumbing that every project uses identically, they out-count every real
     family, and they say nothing an agent could act on. Requiring a local
     definition removes them without a stop-list to maintain.
+
+    A family is rooted at one class, not one name: see `conventions_classes`.
     """
-    home_of, node_of, parents = _class_index(list(facts))
-    members = _family_members(node_of, parents)
-    out: list[BaseFamily] = []
-    for base, names in members.items():
+    return tuple(family for family, _ in _rooted_families(ClassIndex(facts), facts, min_count))
+
+
+def _rooted_families(
+    index: ClassIndex, facts: Iterable[_ModuleFacts], min_count: int
+) -> list[tuple[BaseFamily, frozenset[ClassKey]]]:
+    """Each family with the classes in it, for checks that must not match on name."""
+    out: list[tuple[BaseFamily, frozenset[ClassKey]]] = []
+    for root, keys in _family_members(index, _parents(index, facts)).items():
+        names = {name for _, name in keys}
         if len(names) < min_count:
             continue
-        by_module = Counter(home_of[n] for n in names if n in home_of)
-        if not by_module:
-            continue
-        home, home_count = _home_module(by_module)
-        out.append(
-            BaseFamily(
-                base=base,
-                count=len(names),
-                home_module=home,
-                home_count=home_count,
-                members=tuple(sorted(names)),
-                suffixes=tuple(sorted({camel_suffix(n) for n in names})),
-                shared_constants=_shared_constants(
-                    [node_of[n] for n in sorted(names) if n in node_of], min_count=min_count
-                ),
-            )
+        # One home per member name, so `home_count` never exceeds `count`.
+        homes = {name: module for module, name in sorted(keys, reverse=True)}
+        home, home_count = _home_module(Counter(homes.values()))
+        family = BaseFamily(
+            base=root[1],
+            count=len(names),
+            home_module=home,
+            home_count=home_count,
+            members=tuple(sorted(names)),
+            suffixes=tuple(sorted({camel_suffix(n) for n in names})),
+            shared_constants=_shared_constants(
+                [index.nodes[k] for k in sorted(keys, key=lambda k: (k[1], k[0]))],
+                min_count=min_count,
+            ),
         )
-    out.sort(key=lambda b: (-b.count, b.base))
-    return tuple(out)
+        out.append((family, frozenset(keys)))
+    out.sort(key=lambda pair: (-pair[0].count, pair[0].base, pair[0].home_module))
+    return out
 
 
-def _class_index(
-    facts: list[_ModuleFacts],
-) -> tuple[dict[str, str], dict[str, ast.ClassDef], dict[str, set[str]]]:
-    """Home module, definition node and direct base names, each keyed by class name."""
-    home_of: dict[str, str] = {}
-    node_of: dict[str, ast.ClassDef] = {}
-    parents: dict[str, set[str]] = defaultdict(set)
+def _parents(index: ClassIndex, facts: Iterable[_ModuleFacts]) -> dict[ClassKey, set[ClassKey]]:
+    parents: dict[ClassKey, set[ClassKey]] = defaultdict(set)
     for f in facts:
         for cls in f.classes:
-            home_of.setdefault(cls.name, f.qualname)
-            node_of.setdefault(cls.name, cls)
-            bases = set(_declared_bases(cls))
-            if bases:
-                parents[cls.name] |= bases
-    return home_of, node_of, parents
+            found = (index.base_of(f.qualname, cls, base) for base in cls.bases)
+            parents[f.qualname, cls.name] |= {key for key in found if key is not None}
+    return parents
 
 
-def _ancestors(parents: dict[str, set[str]], name: str) -> set[str]:
-    seen: set[str] = set()
-    stack = list(parents.get(name, ()))
+def _ancestors(parents: dict[ClassKey, set[ClassKey]], key: ClassKey) -> set[ClassKey]:
+    seen: set[ClassKey] = set()
+    stack = list(parents.get(key, ()))
     while stack:
         cur = stack.pop()
         if cur in seen:
@@ -127,20 +128,18 @@ def _ancestors(parents: dict[str, set[str]], name: str) -> set[str]:
 
 
 def _family_members(
-    node_of: dict[str, ast.ClassDef], parents: dict[str, set[str]]
-) -> dict[str, set[str]]:
-    members: dict[str, set[str]] = defaultdict(set)
-    for name in node_of:
-        for base in _ancestors(parents, name):
-            if base in node_of:  # local definitions only; see `_base_families`
-                members[base].add(name)
-                # The class that names the family belongs to it. Without this the
-                # root's own declarations are invisible, and the root is exactly
-                # where a family states its defaults: `click` sets
-                # `exit_code = 1` on `ClickException` and `2` on `UsageError`,
-                # which is the whole severity convention and reads as a single
-                # unexplained override if the base is left out.
-                members[base].add(base)
+    index: ClassIndex, parents: dict[ClassKey, set[ClassKey]]
+) -> dict[ClassKey, set[ClassKey]]:
+    members: dict[ClassKey, set[ClassKey]] = defaultdict(set)
+    for key in index.nodes:
+        for root in _ancestors(parents, key):
+            # The class that names the family belongs to it. Without this the
+            # root's own declarations are invisible, and the root is exactly
+            # where a family states its defaults: `click` sets
+            # `exit_code = 1` on `ClickException` and `2` on `UsageError`,
+            # which is the whole severity convention and reads as a single
+            # unexplained override if the base is left out.
+            members[root] |= {key, root}
     return members
 
 
@@ -505,8 +504,8 @@ def _collection_fields(cls: ast.ClassDef) -> tuple[int, int]:
 def _declared_bases(cls: ast.ClassDef) -> list[str]:
     """The last dotted segment of each base class expression, non-empty only.
 
-    The one definition of a class's base names. A list, so a base named twice is
-    counted twice by the census; `_class_index` wants the set and wraps it.
+    A list, so a base named twice is counted twice by the census. Which class a
+    base means is a different question: see `conventions_classes`.
     """
     return [name for b in cls.bases if (name := _dotted(b).rsplit(".", 1)[-1])]
 

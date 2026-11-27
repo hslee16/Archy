@@ -3,7 +3,8 @@
 archy:owns        resolve_from_import, resolve_relative_import
 archy:mirrored-by _follow_reexport_chains -> archy.conventions_collect, archy.graph,
                   resolve_from_import -> archy.conventions_collect, archy.graph,
-                  resolve_relative_import -> archy.conventions_collect, archy.graph
+                  resolve_relative_import -> archy.conventions_classes,
+                  archy.conventions_collect, archy.graph
 """
 
 from __future__ import annotations

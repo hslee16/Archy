@@ -3,7 +3,6 @@
 archy:owns        censused_modules
 archy:mirrored-by _ModuleFacts -> archy.conventions, archy.conventions_docs,
                   archy.conventions_families, archy.conventions_gates,
-                  _dotted -> archy.conventions_families, archy.conventions_gates,
                   censused_modules -> archy.conventions, archy.headers
 """
 
@@ -23,16 +22,6 @@ from archy.graph import (
     resolve_from_import,
     resolve_relative_import,
 )
-
-
-def _dotted(node: ast.expr) -> str:
-    """Render `a.b.c` / `a` from an expression, or "" for anything else."""
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        prefix = _dotted(node.value)
-        return f"{prefix}.{node.attr}" if prefix else node.attr
-    return ""
 
 
 class _ModuleFacts:
@@ -70,6 +59,8 @@ class _ModuleFacts:
         # submodule, a re-export or a plain symbol depends on the project's
         # module set; see `_resolved_imports`.
         self.import_froms: list[tuple[str, tuple[tuple[str, str], ...]]] = []
+        # The module's top-level statements, for what a name means at that scope.
+        self.body: list[ast.stmt] = []
         # Whether this module is a package's `__init__.py`. Only those can
         # re-export, so only those contribute to the re-export map.
         self.is_package = False
@@ -82,6 +73,7 @@ class _ModuleFacts:
 def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _ModuleFacts:
     facts = _ModuleFacts(qualname)
     facts.is_package = is_package
+    facts.body = tree.body
     _collect_definitions(tree, facts)
     _collect_imports(tree, facts, qualname, is_package)
     _collect_assignments(tree, facts)

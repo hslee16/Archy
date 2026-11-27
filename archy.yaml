@@ -55,6 +55,7 @@ layers:
     modules:
       - "archy.affected"
       - "archy.conventions"
+      - "archy.conventions_classes"
       - "archy.conventions_collect"
       - "archy.conventions_docs"
       - "archy.conventions_exports"
@@ -62,6 +63,7 @@ layers:
       - "archy.conventions_families"
       - "archy.conventions_gates"
       - "archy.conventions_models"
+      - "archy.conventions_namespace"
       - "archy.contracts"
       - "archy.coupling"
       - "archy.diff"
