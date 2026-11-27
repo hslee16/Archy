@@ -1,0 +1,42 @@
+<task-notification>
+<task-id>a39e6632201abaaa7</task-id>
+<tool-use-id>toolu_014FRD84HXhK9r3fXDX3Lwmy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a39e6632201abaaa7.output</output-file>
+<status>completed</status>
+<summary>Agent "Bounded review of e2e assertions" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** the check can still pass on a broken install. I found no definite new false-failure path. I did not run either client.
+
+**1. The answer sits in the client's working directory (main finding)**
+- The "Record the expected score" step writes `expected.json`, containing `"overall": 0.5995...`, into the repo root, which is the client's cwd.
+- With the MCP server broken or missing, a client told to report the score only has to list the directory and read that file. `--allowedTools` only adds approvals and does not restrict tools, and Claude's Read, Glob and Grep need no approval inside the cwd.
+- Replying `0.600` then passes the assert.
+- Writing the file to `$RUNNER_TEMP`, or computing it after the client runs, closes this route.
+
+**2. The assert does not prove the MCP tool was called**
+- A shell run of `uvx archy score .` prints the same number. `uvx` is on PATH and the step has just warmed its cache.
+- In default `-p` mode Claude should deny unapproved Bash. Cursor's print mode is documented as having shell access (from memory, not verified).
+- **Stronger fix:** use `--output-format stream-json` (Claude also needs `--verbose`) and require an `mcp__archy__archy_score` tool call with a non-error result containing the score. At minimum, also pass `--disallowedTools "Bash,Read,Glob,Grep"` to Claude and move `expected.json` out of the workspace.
+- The module docstring ("Did the client really call `archy_score`?") claims more than the script checks.
+
+**3. Possible false failure on Cursor (from memory, unverified)**
+- `cursor-agent -p` may need `--approve-mcps` to load MCP servers headlessly, and `--trust` (or `--force`) for an untrusted workspace. The step passes neither.
+- If so, a correct install now fails. Before, it could pass on the error text or on a shell fallback.
+- Check `cursor-agent --help` or the docs before the keys are added.
+
+**4. Minor**
+- A subdirectory path gives a different score: `src` and `src/archy` give 0.5921 against 0.5996 for `.`. The 0.005 tolerance rejects that. The prompt says "current directory", so a failure there needs the model to pick a different path.
+- The regex searches all of stdout and stderr, so an unrelated `0.60`, such as a timing in a log line, would match by chance. This is unlikely, and the structured-output check in item 2 removes it.
+
+**Checked, no problem found**
+- **Score parity:** published `archy@latest` (0.56.0) and the branch code both give 0.5995971515886712.
+- **Determinism:** three `PYTHONHASHSEED` values gave the same score, as did `.` and the absolute path (run with a locally cached 0.48.1, same value).
+- **Earlier-step files:** adding `expected.json`, `out.txt`, `.archy/` and a `.venv/*.py` file did not change the score.
+- **Defaults:** the CLI and the MCP tool both default to `internal_only=True`. I compared the `run_score` source with the CLI path but did not call the MCP tool itself.
+- **Version resolution:** the expected score and the MCP server both come from `uvx archy` on the same runner. A lagging PyPI publish on a tag push therefore affects both alike. This also means the E2E tests the previously published archy if the new release is not up yet, which predates this PR.
+- **Windows git-bash and `uv run` after `uv sync`:** by reading only, nothing there looks likely to fail.
+- **Linters:** actionlint is clean. zizmor's default persona reports one low finding, `adhoc-packages` on the pinned `npm install -g`. The auditor persona adds `secrets-outside-env` warnings, among 8 findings in total (4 low, 4 medium).
+
+I did not run the new tests. The working tree is unchanged apart from the untracked `bench/diff_duplicates_precision.jsonl`, which was there before. I extracted a copy of the branch under `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/e2e/repo`.</result>
+<usage><subagent_tokens>83171</subagent_tokens><tool_uses>11</tool_uses><duration_ms>77153</duration_ms></usage>
+</task-notification>
