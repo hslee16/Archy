@@ -1,0 +1,106 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a672b58403fb1b2fb</task-id>
+<tool-use-id>toolu_01XXvH1vrGxuTawcN8Lujs4m</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a672b58403fb1b2fb.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of class resolution" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>## Adversarial review of `alee/758-qualified-base-families` (#758)
+
+The branch fixes the issue's own reproduction. Its docstring claim, "The cost is a missing link, never a merged family", is false, and several cases link to the wrong class.
+
+**Oracle.** I compared `ClassIndex.base_of` with real `__orig_bases__`/`__bases__` for django, sqlalchemy, click, pydantic, networkx, mcp, rich and _pytest on CPython 3.10.
+- 3,204 links verified correct.
+- Function-local classes and classes that failed to import were not checked (390 django bases, mostly modules with missing apps or dependencies).
+
+### Findings, ranked
+
+**1. Wrong links to the wrong project class (synthetic fixtures, each confirmed in CPython).** None showed up in the eight real packages.
+
+All are in `conventions_classes.py` (`resolve`, `_bindings`, `_from_stars`):
+
+| Case | Links to | CPython uses |
+|---|---|---|
+| `from p.a import Error`, plus a function-local `from p.b import Error` | `p.b` | `p.a` |
+| `if not TYPE_CHECKING:` import a, `else:` import b | b | a |
+| `try:` import a, `except ImportError:` import b | b | a |
+| `from p.b import Error` placed after the class statement | b | a |
+| `from p.a import *` then `from p.b import *` (later star wins) | a | b |
+| nested `class H: class Error` beside an imported `Error` | the nested one | the import |
+| function-local `class Error` beside an imported `Error` | the local one | the import |
+| local `class Error`, then `from p.a import Error` | local | import |
+| `Error = b.Error` rebinding an import | the old import | b |
+
+- The scope cases are the worst. `_collect_imports` and `_collect_definitions` use `ast.walk`, so inner-scope bindings override or shadow module-level ones.
+- The first-match star rule is a plain bug; iterate `_stars` in reverse.
+- Related: `from json import *; class X(JSONDecodeError)` links to an unrelated project `JSONDecodeError`.
+
+**2. Links to a class that is not a base, in real packages (the `_only` fallback).**
+- `django.core.management.commands.dumpdata.ProxyModelWarning(Warning)` uses the builtin. It is linked to `django.core.checks.messages.Warning`.
+  - The branch then reports a new, false export gap: `django.core.checks CheckMessage 6/7 missing ProxyModelWarning`. Main had the false membership but not this row.
+- `sqlalchemy.exc.SATestSuiteWarning(Warning)` uses the builtin. It is linked to a nested driver class `Warning` in `dialects.postgresql.asyncpg`.
+  - The branch emits a family `Warning`, home asyncpg, members `SATestSuiteWarning, Warning`.
+- Also reproduced: a builtin `TimeoutError` linking to a project `TimeoutError`, and `Error = ValueError; class X(Error)` linking to a project `Error`.
+- `_only` fires only 4 times across all eight packages, and 2 of those are the false links above.
+  - Deleting it leaves all 180 `test_conventions*` tests green.
+  - I recommend deleting it, or at least excluding builtin names and nested classes.
+
+**3. Links lost relative to main.**
+- **PEP 420 namespace parent.** With `ns/` lacking `__init__.py`, `ns/sub/` having one, and `from ns.sub.a import Error`:
+  - Modules are named `sub.a`, so the import does not resolve and the whole family disappears. Main reports it.
+  - This is probably the largest practical regression (google.*-style layouts), though I did not measure how often it occurs in real projects.
+- **Dotted nested bases** such as `sqltypes.JSON.JSONIndexType` or `MinHeap._Item`.
+  - 18 in sqlalchemy and 2 in networkx where main's name match was right. Of the sqlalchemy ones, 12 had ambiguous names and 6 unique. There were none in the other six packages.
+  - One of the networkx two is `nx.reportviews.DegreeView`, the documented star-submodule gap.
+- **Minor, from fixtures.** `Base = a.Error` aliases are unresolved. So is `class Error(Error)` when `Error` came from a star import.
+
+**4. Consumers still match or display by bare name.**
+- **Export gap with nothing missing.** `listed` is resolved by class, but `missing` is `members - names`.
+  - If `__all__` has `Error, NotFound` from db and `Timeout` from http, the row is `exported 2, defined 3, missing ()`.
+  - This is a fixture only; none occurred in the eight packages.
+- **Duplicate doc gaps.** Two `Error` families with the same members produce two identical `doc_gaps` rows.
+- **Indistinct families.** `BaseFamily` does not carry the root's module, so CLI, JSON and MCP can show two entries with the same `base` and `home_module`.
+  - sqlalchemy has 3 such pairs (`JSON`, `TIME`, `VARBINARY`).
+  - Two roots `a.Error` and `b.Error` with subclasses in `c` both read `Error @ p.c`.
+  - Export and doc gap rows also name only the bare base.
+
+**5. Recursion crash (low).** A chain of 200 `from next import *` modules raises `RecursionError` from `_follow`/`_from_stars`, and so does a dense 200-module star graph. This is unlikely in real code.
+- There is no exponential blowup, because `seen` is shared, so each lookup is linear.
+- Lookups are not memoised.
+
+**6. Untested behaviour.** These mutations applied and survived all `test_conventions*.py` (I did not run the full suite against them):
+- removing the `if rest: _follow(dotted)` fallback
+- removing the `_only` fallback
+- removing the bare-name star lookup
+- reversing star precedence
+- removing the per-name home dedupe
+- reversing the home sort order
+- dropping the `home_module` sort tiebreak
+- changing `missing` to `members - listed`
+- dropping the `shared_constants` ordering
+
+Mutations to local-first lookup, import bindings, module aliases, self-name handling, re-export and star following, and export matching were all caught.
+
+**Pre-existing, file separately.** Nested classes with the same name in one module share a key, so two `Meta` classes with different bases merge on both main and the branch.
+
+### Gates
+| Command | Exit |
+|---|---|
+| `uv run archy check .` | 0 |
+| `uv run archy cycles . --strict` | 0 |
+| `uv run archy contracts .` | 0 |
+| `git diff main...HEAD --name-only \| uv run archy affected . --stdin -q` | 0 (62 files listed) |
+
+Running pytest on those 62 files gave 1361 passed, 1 skipped.
+
+I did not edit, commit or post anything. The only untracked file is the one that was there before (`bench/diff_duplicates_precision.jsonl`). The oracle and fixture scripts are in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/w/`.</result>
+<usage><subagent_tokens>126435</subagent_tokens><tool_uses>21</tool_uses><duration_ms>701547</duration_ms></usage>
+</task-notification>
