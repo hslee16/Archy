@@ -327,10 +327,13 @@ def _similarity_toward(floor: float, a: _Weighed, b: _Weighed) -> float:
     """`_jaccard_of_totals`, or 0.0 for a pair that cannot reach `floor`.
 
     The overlap is at most the smaller bag and the union at least the larger, so
-    the totals alone rule some pairs out.
+    the totals alone rule some pairs out. Divide, as the similarity itself does:
+    `smaller < floor * larger` rounds differently and loses pairs sitting exactly
+    on a floor such as 0.28.
     """
     total_a, total_b = a[1], b[1]
-    if min(total_a, total_b) < floor * max(total_a, total_b):
+    larger = max(total_a, total_b)
+    if larger and min(total_a, total_b) / larger < floor:
         return 0.0
     return _jaccard_of_totals(a[0], total_a, b[0], total_b)
 
