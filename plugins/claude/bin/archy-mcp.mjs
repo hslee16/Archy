@@ -23,7 +23,7 @@
 
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { delimiter, isAbsolute, join } from "node:path";
 
 // Keep in sync with plugins/claude/README.md and tests/test_plugin.py. The lower
 // bound guarantees the full current tool set; the `<1.0` cap stops a breaking
@@ -38,6 +38,9 @@ const PY_IMPORT = "import sys; sys.path[:] = [p for p in sys.path if p]; from ar
 const PY_RUN = `${PY_IMPORT}; main()`;
 
 const isWindows = process.platform === "win32";
+// By full path: a bare `cmd` is also searched for in the working directory.
+const CMD_EXE =
+  process.env.ComSpec || join(process.env.SystemRoot || "C:\\Windows", "System32", "cmd.exe");
 // Only extensions we can actually launch: .exe/.com directly, .cmd/.bat via
 // cmd.exe. Deliberately NOT the full PATHEXT -- a .ps1/.vbs on PATH is not
 // directly spawnable and would only waste a candidate slot.
@@ -60,7 +63,9 @@ function isLaunchable(file) {
 }
 
 function which(cmd) {
-  for (const dir of (process.env.PATH || "").split(delimiter).filter(Boolean)) {
+  // Absolute entries only. This runs from the user's project directory, where
+  // "." or "bin" on PATH would hand us the project's own `python3` or `uvx`.
+  for (const dir of (process.env.PATH || "").split(delimiter).filter(isAbsolute)) {
     for (const ext of pathExts) {
       const candidate = join(dir, cmd + ext);
       if (isLaunchable(candidate)) return candidate;
@@ -88,7 +93,7 @@ function spawnArgs(path, args) {
   // directly, where the spec is a clean argv element needing no escaping.
   if (isWindows && /\.(cmd|bat)$/i.test(path)) {
     const line = [path, ...args].map((t) => `"${t}"`).join(" ");
-    return { command: "cmd", argv: ["/d", "/s", "/c", `"${line}"`], verbatim: true };
+    return { command: CMD_EXE, argv: ["/d", "/s", "/c", `"${line}"`], verbatim: true };
   }
   return { command: path, argv: args, verbatim: false };
 }

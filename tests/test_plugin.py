@@ -211,6 +211,7 @@ LAUNCHER_ARGV = ["node", str(PLUGIN_LAUNCHER)]
 
 
 def _launcher_env(path_dir: Path, **extra: str) -> dict[str, str]:
+    """The environment for a launcher run: `PATH` is `path_dir` unless `extra` says."""
     return {**os.environ, "PATH": str(path_dir), **extra}
 
 
@@ -460,3 +461,34 @@ def test_plugin_launcher_forwards_termination(posix_bin_dir: Path, tmp_path: Pat
     finally:
         if proc.poll() is None:
             proc.kill()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
+@pytest.mark.parametrize("entry", [".", "tools"], ids=["dot", "relative-dir"])
+@pytest.mark.parametrize("name", ["archy", "uvx", "python3"])
+def test_plugin_launcher_ignores_relative_path_entries(
+    posix_bin_dir: Path, tmp_path: Path, entry: str, name: str
+):
+    """#1020: the shim runs from the user's project, whose files are not launchers."""
+    project = tmp_path / "project"
+    (project / "tools").mkdir(parents=True)
+    marker = tmp_path / "project-code-ran"
+    _fake_exe(project / entry / name, f': > "{marker}"')
+
+    result = subprocess.run(
+        LAUNCHER_ARGV,
+        capture_output=True,
+        text=True,
+        cwd=project,
+        env=_launcher_env(posix_bin_dir, PATH=f"{entry}{os.pathsep}{posix_bin_dir}"),
+    )
+
+    assert not marker.exists()
+    assert result.returncode == 1 and "could not start" in result.stderr, result.stderr
+
+
+def test_plugin_launcher_never_spawns_a_bare_cmd():
+    """Windows searches the working directory for a bare `cmd`; only runnable there."""
+    source = PLUGIN_LAUNCHER.read_text(encoding="utf-8")
+
+    assert 'command: "cmd"' not in source and "process.env.ComSpec" in source
