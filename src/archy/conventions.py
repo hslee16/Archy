@@ -63,6 +63,7 @@ from pathlib import Path
 
 import networkx as nx
 
+from archy.conventions_classes import ClassIndex
 from archy.conventions_collect import (
     _classify_module,
     _collect_all,
@@ -74,10 +75,10 @@ from archy.conventions_collect import (
 )
 from archy.conventions_docs import _doc_gaps, _export_gaps, _harvest_docs
 from archy.conventions_families import (
-    _base_families,
     _model_census,
     _naming_families,
     _registries,
+    _rooted_families,
     _surface_families,
 )
 from archy.conventions_gates import _gates
@@ -145,7 +146,9 @@ def compute_conventions(
     facts, skipped = _collect_all(modules, root)
 
     gates, errors = _gates(facts)
-    bases = _base_families(facts, min_count=min_family)
+    classes = ClassIndex(facts)
+    rooted = _rooted_families(classes, facts, min_family)
+    bases = tuple(family for family, _ in rooted)
     registries = _registries(facts, min_count=min_family)
     docs, docs_seen = _harvest_docs(root, frozenset(ignored_dirs))
     return ConventionsReport(
@@ -160,7 +163,7 @@ def compute_conventions(
         models=_model_census(facts),
         bases=bases,
         registries=registries,
-        export_gaps=_export_gaps(facts, bases),
+        export_gaps=_export_gaps(facts, classes, rooted),
         doc_gaps=_doc_gaps(bases, registries, docs),
         docs_scanned=docs_seen,
         partition=ModulePartition(

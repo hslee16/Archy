@@ -7,6 +7,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
+from archy.conventions_classes import ClassIndex, ClassKey
 from archy.conventions_collect import _ModuleFacts
 from archy.conventions_models import BaseFamily, DocGap, ExportGap, RegistryEntry
 
@@ -183,27 +184,51 @@ def _doc_gaps(
 
 
 def _export_gaps(
-    facts: Iterable[_ModuleFacts], families: tuple[BaseFamily, ...]
+    facts: Iterable[_ModuleFacts],
+    index: ClassIndex,
+    families: list[tuple[BaseFamily, frozenset[ClassKey]]],
 ) -> tuple[ExportGap, ...]:
-    """Family members missing from an ``__all__`` that already lists their siblings."""
-    # A partly read `__all__` would report members as missing that it does list.
-    exports = {f.qualname: names for f in facts if (names := f.whole_exports()) is not None}
-    if not exports:
-        return ()
-    out: list[ExportGap] = []
-    for family in families:
-        for module, names in exports.items():
-            listed = [m for m in family.members if m in names]
-            if not _is_partial_coverage(len(listed), len(family.members), min_count=2):
-                continue
-            out.append(
-                ExportGap(
-                    export_module=module,
-                    family=family.base,
-                    exported=len(listed),
-                    defined=len(family.members),
-                    missing=tuple(sorted(set(family.members) - set(names))),
-                )
-            )
+    """Family members missing from an ``__all__`` that already lists their siblings.
+
+    A sibling is listed only if the exported name resolves to a class of this
+    family: another package's `Error` is not a reason to export this one's.
+    """
+    exports = _exported_classes(facts, index)
+    found = (
+        _family_gap(family, module, names, {name for _, name in keys & classes})
+        for family, keys in families
+        for module, (names, classes) in exports.items()
+    )
+    out = [gap for gap in found if gap is not None]
     out.sort(key=lambda g: (-(g.defined - g.exported), g.export_module))
     return tuple(out)
+
+
+def _exported_classes(
+    facts: Iterable[_ModuleFacts], index: ClassIndex
+) -> dict[str, tuple[frozenset[str], set[ClassKey | None]]]:
+    """Each module's `__all__`, with the classes its names refer to."""
+    # A partly read `__all__` would report members as missing that it does list.
+    exports = {f.qualname: names for f in facts if (names := f.whole_exports()) is not None}
+    return {
+        module: (names, {index.resolve(module, name) for name in names})
+        for module, names in exports.items()
+    }
+
+
+def _family_gap(
+    family: BaseFamily, module: str, names: frozenset[str], listed: set[str]
+) -> ExportGap | None:
+    """The gap one module's `__all__` leaves in one family, if it leaves one.
+
+    `listed` holds the family's members the exported names resolve to.
+    """
+    if not _is_partial_coverage(len(listed), len(family.members), min_count=2):
+        return None
+    return ExportGap(
+        export_module=module,
+        family=family.base,
+        exported=len(listed),
+        defined=len(family.members),
+        missing=tuple(sorted(set(family.members) - names)),
+    )
