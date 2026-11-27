@@ -197,3 +197,81 @@ def test_detect_true_when_cli_on_path(simulate_os, monkeypatch):
 @pytest.mark.parametrize("scope", [Scope.GLOBAL, Scope.LOCAL])
 def test_scope_enum_values(scope):
     assert scope.value in {"global", "local"}
+
+
+def test_an_end_marker_quoted_in_the_users_prose_does_not_end_the_block():
+    """#945: the lines before the quoted marker were removed with archy's text."""
+    quoted = f"I wrote `{INSTRUCTIONS_END}` here."
+    existing = f"{INSTRUCTIONS_BEGIN}\nprecious\n{quoted}\nmore\n"
+
+    # No real end marker, so nothing says where archy's text stops.
+    with pytest.raises(InstallError, match="on a line of its own"):
+        remove_instructions(existing)
+    with pytest.raises(InstallError):
+        upsert_instructions(existing)
+
+
+def test_a_quoted_end_marker_inside_the_block_goes_with_the_real_one():
+    inside = f"I wrote `{INSTRUCTIONS_END}` here."
+    existing = f"top\n\n{INSTRUCTIONS_BEGIN}\n{inside}\n{INSTRUCTIONS_END}\nbottom\n"
+
+    assert remove_instructions(existing) == "top\nbottom\n"
+    assert upsert_instructions(existing) == f"top\n\n{instructions_block()}bottom\n"
+
+
+@pytest.mark.parametrize("marker", [INSTRUCTIONS_BEGIN, INSTRUCTIONS_END])
+def test_a_marker_quoted_in_prose_with_no_block_is_just_text(marker: str):
+    existing = f"Archy uses `{marker}` as a fence.\n"
+
+    assert remove_instructions(existing) == existing
+    assert upsert_instructions(existing) == f"{existing}\n{instructions_block()}"
+    assert remove_instructions(upsert_instructions(existing)) == existing
+
+
+@pytest.mark.parametrize("space", ["  ", "\t", "\u00a0", "\f"], ids=["spaces", "tab", "nbsp", "ff"])
+def test_whitespace_round_a_marker_still_leaves_it_alone_on_its_line(space: str):
+    existing = f"{space}{INSTRUCTIONS_BEGIN}{space}\nold\n{INSTRUCTIONS_END}{space}\nmine\n"
+
+    out = upsert_instructions(existing)
+
+    assert "old" not in out and "mine" in out
+    assert out.count(INSTRUCTIONS_BEGIN) == 1
+
+
+@pytest.mark.parametrize("marker", [INSTRUCTIONS_BEGIN, INSTRUCTIONS_END])
+@pytest.mark.parametrize("line", ["{} (managed)", "managed {}", "- {}", "{}\u200b"])
+def test_a_marker_that_would_fence_and_has_text_on_one_side_is_refused(marker: str, line: str):
+    """It could be a damaged fence or a quotation; guessing either loses lines."""
+    existing = f"{INSTRUCTIONS_BEGIN}\nold\n{line.format(marker)}\nUSER\n{INSTRUCTIONS_END}\n"
+
+    with pytest.raises(InstallError, match="shares its line"):
+        upsert_instructions(existing)
+    with pytest.raises(InstallError, match="shares its line"):
+        remove_instructions(existing)
+
+
+@pytest.mark.parametrize(
+    "note", [f"{INSTRUCTIONS_END} is the closing fence", f"- {INSTRUCTIONS_END}"]
+)
+def test_an_end_marker_outside_any_block_does_not_block_a_reinstall(note: str):
+    """Install used to succeed on such a file and then refuse every later run."""
+    existing = f"{note}\n"
+
+    installed = upsert_instructions(existing)
+
+    assert upsert_instructions(installed) == installed
+    assert remove_instructions(installed) == existing
+    assert upsert_instructions(f"{installed}{note}\n") == f"{installed}{note}\n"
+
+
+def test_a_bom_before_the_begin_marker_is_not_text():
+    existing = f"\ufeff{instructions_block()}mine\n"
+
+    assert upsert_instructions(existing) == existing
+    assert remove_instructions(existing) == "\ufeffmine\n"
+
+
+def test_removal_takes_the_marker_and_not_the_users_indentation_before_it():
+    existing = f"mine\n  {INSTRUCTIONS_BEGIN}\nold\n{INSTRUCTIONS_END}\n"
+
+    assert remove_instructions(existing) == "mine\n  "

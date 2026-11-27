@@ -55,7 +55,10 @@ unrelated config in shared files is preserved. A shared rules file (`CLAUDE.md`,
 `AGENTS.md`) with an `<!-- archy:begin -->` line that has no `<!-- archy:end -->`
 of its own is refused and left as it is: `archy install` and `archy uninstall`
 name the file and the line. Delete that marker, or add the end marker right after
-archy's text and before anything of yours, then re-run. Install writes nothing
+archy's text and before anything of yours, then re-run. A marker counts only
+when it is alone on its line. Quoted with text on both sides (in backticks, say)
+it is your text and is ignored; with text on one side only the file is refused,
+since it could be either. Install writes nothing
 when it refuses; uninstall has already done the steps before the refusal, and the
 re-run finishes the rest. Cursor's and Continue's rules files are archy's own:
 install refuses the same way, and uninstall deletes them whatever they hold.
