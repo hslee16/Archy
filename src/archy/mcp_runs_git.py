@@ -15,10 +15,12 @@ from archy.coupling import (
 )
 from archy.duplicates import (
     DuplicateGroup,
+    NearDuplicates,
     classify_variants,
     compute_duplicates,
-    compute_near_duplicates,
     demote_independent,
+    find_near_duplicates,
+    with_truncation,
 )
 from archy.gitlog import (
     resolve_repo_root,
@@ -93,7 +95,12 @@ def run_duplicates(
             rows = demote_independent(
                 rows, counts=cochange.counts, pair_support=cochange.pair_support
             )
-    near = compute_near_duplicates(modules, results, min_size=min_nodes) if near_miss else []
+    found = (
+        find_near_duplicates(modules, results, min_size=min_nodes)
+        if near_miss
+        else NearDuplicates()
+    )
+    near = list(found.groups)
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
 
@@ -114,7 +121,10 @@ def run_duplicates(
         duplicates=_shape(dups),
         variants=_shape(variants),
         near_miss=_shape(near),
-        note=_duplicates_note(len(dups), len(variants), min_nodes),
+        near_truncated=found.truncated,
+        note=with_truncation(
+            _duplicates_note(len(dups), len(variants), min_nodes), found.truncated
+        ),
     )
 
 

@@ -248,6 +248,8 @@ ARCHY_DUPLICATES_DESCRIPTION = (
     "exact shape-hash cannot see - found by token-multiset overlap, each "
     "with a `similarity`. LOWER confidence than the shape tiers; use it "
     "for recall (the exact hash finds ~0% of Type-3). "
+    "`near_truncated=true` means that pass hit its comparison budget, so "
+    "`near_total` is only a lower bound. "
     "`response_format='summary'` (the DEFAULT) returns each cluster's "
     "ranking fields plus one sample member; `response_format='full'` "
     "returns the complete member lists. `co_change=false` skips the git "

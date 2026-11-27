@@ -488,7 +488,9 @@ class DuplicatesPayload(BaseModel):
     `near_miss` is the opt-in (`co_change` unrelated; `near_miss=True`) Type-3
     tier: gapped clones found by token overlap, each with a `similarity`, LOWER
     confidence. `total` / `variant_total` / `near_total` count each tier; `shown`
-    is how many of the primary tier are returned (capped by `top_n`). An empty
+    is how many of the primary tier are returned (capped by `top_n`).
+    `near_truncated` means the near-miss pass stopped early, so `near_total` is a
+    lower bound and `note` says so. An empty
     `duplicates` with a `note` is a real answer. Advisory only, never a score
     axis; refactorability is a semantic call (see the tool description).
     """
@@ -505,4 +507,6 @@ class DuplicatesPayload(BaseModel):
     duplicates: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
     variants: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
     near_miss: tuple[DuplicateGroupSummary | DuplicateGroup, ...]
+    # The near-miss pass stopped at its budget: `near_total` is a lower bound.
+    near_truncated: bool = False
     note: str | None

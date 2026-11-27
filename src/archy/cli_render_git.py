@@ -16,7 +16,9 @@ from archy.coupling import (
     CouplingPair,
 )
 from archy.duplicates import (
+    NEAR_TRUNCATED_NOTE,
     DuplicateGroup,
+    with_truncation,
 )
 from archy.hotspots import Hotspot
 from archy.refactor import (
@@ -186,7 +188,9 @@ def _duplicate_group_lines(group: DuplicateGroup, *, with_reason: bool) -> list[
     return lines
 
 
-def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> dict:
+def _duplicates_to_dict(
+    rows: list[DuplicateGroup], *, top_n: int, min_nodes: int, near_truncated: bool = False
+) -> dict:
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
     near = [g for g in rows if g.category == "near_miss"]
@@ -201,7 +205,11 @@ def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
         "duplicates": [g.model_dump() for g in dups[:top_n]],
         "variants": [g.model_dump() for g in variants[:top_n]],
         "near_miss": [g.model_dump() for g in near[:top_n]],
-        "note": _duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants)),
+        "near_truncated": near_truncated,
+        "note": with_truncation(
+            _duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants)),
+            near_truncated,
+        ),
     }
 
 
@@ -236,7 +244,9 @@ def _duplicates_section(
         out.extend(_duplicate_group_lines(g, with_reason=with_reason))
 
 
-def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> str:
+def _duplicates_to_text(
+    rows: list[DuplicateGroup], *, top_n: int, min_nodes: int, near_truncated: bool = False
+) -> str:
     exact = [g for g in rows if g.category == "duplicate" and g.exact]
     near = [g for g in rows if g.category == "duplicate" and not g.exact]
     variants = [g for g in rows if g.category == "variant"]
@@ -275,6 +285,9 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
             f"showing top {min(top_n, len(near))})",
             near[:top_n],
         )
+    if near_truncated:
+        # Also with no near-miss section at all, where silence would read as "none".
+        out += ["", f"# {NEAR_TRUNCATED_NOTE}"]
     return "\n".join(out)
 
 
