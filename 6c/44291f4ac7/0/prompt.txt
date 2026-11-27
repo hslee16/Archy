@@ -1,0 +1,96 @@
+<task-notification>
+<task-id>a9b17c8f4c8e03d9d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a9b17c8f4c8e03d9d.output</output-file>
+<status>completed</status>
+<summary>Agent "Review test_workflow_pins.py Python" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: PASS**, with zero violations of the listed criteria in `/Users/hosanglee/archy/tests/test_workflow_pins.py`.
+
+I marked review `python_code_review--tests-test_workflow_pins.py--853378413760` as passed. I checked the file contents as quoted in the instruction file and did not run any linters or tests.</result>
+<usage><subagent_tokens>20735</subagent_tokens><tool_uses>2</tool_uses><duration_ms>6189</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a4d359ab357f386fd</task-id>
+<tool-use-id>toolu_01CmXazKQ4EBXP12ENvNaM1D</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a4d359ab357f386fd.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of CI pinning" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** I found no run-time breakage introduced by this diff. The Cursor pin does not hold at run time, though, so I would not close #607 as the branch stands.
+
+The repo currently has no Actions secrets (`total: 0`), and both headless steps were skipped in the v0.56.0 run's listed jobs. The key exposure below is therefore latent until someone adds the secrets.
+
+## Findings, ranked
+
+**1. The pinned `cursor-agent` updates itself, and runs the new version, in the step that holds `CURSOR_API_KEY`** (`.github/workflows/install-e2e.yml`, "Headless reachability (Cursor)"). I read this in the pinned linux-x64 tarball and did not execute it.
+- `7000.index.js`, before the print/headless branch: `s.disableAutoUpdate||"static"===ts.channel||setTimeout((()=&gt;{(0,L.NB)({... isAutoUpdate:!0 ...})}),2e3).unref()`
+- `2141.index.js`: when a newer release exists, it downloads it and repoints `~/.local/bin/{agent,cursor-agent}`. The expected checksum comes from the update server (`packageDigests`) and is optional in the code, not from your pin.
+- It then runs `spawn(&lt;new version&gt;/cursor-agent, ["cleanup-install-versions", ...], {detached:!0, stdio:"ignore"})`. No `env` is passed, so the new code inherits `CURSOR_API_KEY`.
+- This applies once Cursor ships a newer release and the `-p` call lives longer than 2s. I did not check that the update server accepts an API-key login.
+- Fix: pass the hidden flag, `cursor-agent --disable-auto-update -p ...`, and assert it in the test. The flag is defined in `index.js`.
+
+**2. `tests/test_workflow_pins.py` passes while the property is violated.** I mutated scratch copies of the workflows. The unmodified copy passed, and the controls (unpinned `npm install -g`, an added `curl | bash` step) failed as they should. All of these still passed:
+- **Checksum:** replacing the `shasum -c` line with `true`. Nothing tests the main new protection.
+- **npm spellings, added beside the pinned install:** `npm i -g x`, `npm install --global x`, `npm install x -g`.
+- **Remote shell, as an extra step:**
+  - `bash &lt;(curl ...)` and `bash -c "$(curl ...)"`
+  - `curl ... | env bash` and `| /bin/bash`
+  - `curl ... | tee i | bash`
+  - `curl -o i ...; bash i`
+  - `iwr ... | iex`
+  - a `\` line continuation before `| bash`
+- **Keys:**
+  - `secrets['ANTHROPIC_API_KEY']` at workflow level or in an install step's `env`
+  - `${{ secrets.X }}` inside a `run:` or a `uses` step's `with:`
+  - a job env value of `${{ secrets.CURSOR_API_KEY }}-${{ 'a' != '' }}`, which satisfies the `endswith` check
+  - a second job holding the key
+  - an `npm install` moved into the key-holding step
+- **Other:**
+  - a `.yaml` workflow file is never scanned
+  - reverting a step `if` to `env.ANTHROPIC_API_KEY != ''` passes, and that would silently skip the reachability check forever
+
+The most useful tightening:
+- Search the whole serialized step and workflow for `secrets\b`, not just `env` for `secrets.`.
+- Require the exact job env expressions.
+- Assert the `if` conditions, the `shasum -c` line before `tar`, and `--disable-auto-update`.
+
+**3. Smaller, inferred rather than verified: unpinned code can still run under the client's key.** `archy install` wires the MCP server as `uvx archy mcp` (`src/archy/install/base.py:38-39`). During the headless step the client would resolve archy and its dependencies unpinned from PyPI. That is a problem if the client passes its environment to MCP servers, which I did not check. Claude Code's own auto-updater in `-p` mode is also unchecked; setting `DISABLE_AUTOUPDATER=1` on that step would be cheap insurance.
+
+## Pre-existing, worth a separate ticket
+- **Windows:** the Claude headless step has no `shell: bash`, so pwsh gets bash `\` continuations. I expect a parse error once the Anthropic secret exists. The lines are unchanged from `main`.
+- **False passes:** that step and the Cursor one use `| tee` under the default shell (no `pipefail` on Linux and macOS), and `grep "[0-9]"` would match most error messages.
+- **zizmor:** `setup-uv` `enable-cache: true` in a job that uses secrets (cache poisoning, high), and `checkout` without `persist-credentials: false`.
+
+## Checked and found fine
+- **GitHub semantics:** job `env` built from `secrets.X != ''` and the step `if` comparing to `'true'` are valid.
+- **Cursor install:**
+  - Both SHA256 values match fresh downloads.
+  - The tarball's top directory is `dist-package/`, so `--strip-components=1` is right.
+  - The launcher resolves the symlink, and the layout matches the official installer. The only difference in links is that the `agent` alias is not created, and the workflow does not use it.
+  - I ran the install step on darwin/arm64 with a fake `HOME`: exit 0, checksum OK, link and `GITHUB_PATH` correct. I did not run it on Linux, and no vendor code was executed.
+- **Claude pin:** `@anthropic-ai/claude-code@2.1.323` exists, was published 2026-11-12, and pins its platform packages exactly. It declares Node &gt;=22; I did not check the runners' Node or npm versions.
+
+## Gate results
+
+| Command | Result |
+|---|---|
+| `uv run archy check .` | exit 0 |
+| `uv run archy cycles . --strict` | exit 0 |
+| `uv run archy contracts .` | exit 0 |
+| `uv run archy affected . &lt;3 changed files&gt;` | exit 0; only `tests.test_workflow_pins` changed, 0 affected; the YAML and Markdown files do not map to modules |
+| `uv run pytest tests/test_workflow_pins.py` | 3 passed |
+| actionlint on `install-e2e.yml` (shellcheck installed) | exit 0 |
+| zizmor 1.33.1, offline | exit 14: 1 high, 1 medium, 1 low, with the same three visible findings on `main` |
+| U+2014 in the diff | 0 |
+
+The working tree is unchanged (only the untracked `bench/diff_duplicates_precision.jsonl` that was already there). Nothing was committed, pushed, triggered or posted. Scratch files, including the mutation script `mut.py`, are in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad`.</result>
+<usage><subagent_tokens>117508</subagent_tokens><tool_uses>18</tool_uses><duration_ms>288658</duration_ms></usage>
+</task-notification>

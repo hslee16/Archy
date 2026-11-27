@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "6c44291f4ac7",
+  "strategy": "manual-commit",
+  "branch": "alee/607-pin-e2e-installers",
+  "checkpoints_count": 2,
+  "files_touched": [
+    ".github/workflows/install-e2e.yml",
+    "tests/test_workflow_pins.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/6c/44291f4ac7/0/metadata.json",
+      "transcript": "/6c/44291f4ac7/0/full.jsonl",
+      "content_hash": "/6c/44291f4ac7/0/content_hash.txt",
+      "prompt": "/6c/44291f4ac7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 7441,
+    "cache_read_tokens": 833172,
+    "output_tokens": 5339,
+    "api_call_count": 5
+  }
+}
