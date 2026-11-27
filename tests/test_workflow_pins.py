@@ -104,11 +104,7 @@ def test_a_failing_client_fails_the_headless_step(name: str):
 
     assert step["shell"] == "bash"
     assert "grep" not in step["run"]
-    assert (
-        step["run"]
-        .rstrip()
-        .endswith("uv run python tests/install/e2e_assert_score.py expected.json out.txt")
-    )
+    assert step["run"].rstrip().endswith("| tee out.txt")
 
 
 def test_the_key_holding_job_restores_no_cache_and_keeps_no_token():
@@ -146,3 +142,24 @@ def test_only_the_real_score_counts_as_reachability(tmp_path: Path, reply: str, 
     )
 
     assert (result.returncode == 0) is passes, result.stdout + result.stderr
+
+
+def test_the_expected_score_does_not_exist_while_a_client_runs():
+    """A file in the checkout holding the answer would pass with no MCP server."""
+    names = [step.get("name") for step in JOB["steps"]]
+    check = STEPS["Assert the reply reports the score"]
+
+    assert names.index("Assert the reply reports the score") > max(
+        names.index(f"Headless reachability ({c})") for c in ("Claude Code", "Cursor")
+    )
+    assert [n for n, s in STEPS.items() if "expected.json" in s.get("run", "")] == [check["name"]]
+    assert check["run"].count('"$RUNNER_TEMP/expected.json"') == 2
+    assert "secrets" not in str(check)
+    for client, key in (("claude-code", "HAS_ANTHROPIC_KEY"), ("cursor", "HAS_CURSOR_KEY")):
+        assert f"(matrix.client == '{client}' && env.{key} == 'true')" in check["if"]
+
+
+def test_claude_cannot_get_the_number_around_the_server():
+    run = STEPS["Headless reachability (Claude Code)"]["run"]
+
+    assert '--disallowedTools "Bash,Read,Glob,Grep"' in run

@@ -1,9 +1,12 @@
-"""Did the client really call `archy_score`? (gated E2E, #1018)
+"""Does the client's reply report the real score? (gated E2E, #1018)
 
 Run as `python tests/install/e2e_assert_score.py <score.json> <reply.txt>`.
 The reply must contain the overall score `archy score --format json` computed,
 to at least two decimals. An error message has numbers too, but not that one.
-Needs no archy import, so it checks the published server the client ran.
+Needs no archy import, so it matches the published server the client ran.
+
+It reads the reply, not a tool trace, so it cannot tell the MCP tool from
+another way of getting the number; the workflow keeps those out of reach.
 """
 
 from __future__ import annotations
