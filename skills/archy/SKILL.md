@@ -235,7 +235,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists the added edges that close a cy
 
 The MCP server also exposes a `loop` **prompt** containing the canonical playbook in archy's own words. Fetch it via `prompts/get name="loop"` for the always-current version.
 
-**Error model (recovery contract).** A failure is one of two kinds. A **usage error** (bad argument value like `response_format="xml"` or `last_n=0`, a malformed `archy.yaml`, or a project over the scan ceiling) comes back as `isError: true` (a raised error); fix the call or the environment. A **recoverable condition** comes back as a normal `isError: false` result you branch on: either a payload with an `error` field and no success data (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no `archy.yaml` → `CheckErrorPayload`), or an advisory field on a still-valid result (`available=false`, `note`, `git_available`). So `archy_check` on a project with no config returns an in-band `CheckErrorPayload`, not an error: create a config or move on.
+**Error model (recovery contract).** A failure is one of two kinds. A **usage error** (bad argument value like `response_format="xml"` or `last_n=0`, a malformed `archy.yaml`, or a project over the scan ceiling) comes back as `isError: true` (a raised error); fix the call or the environment. A **recoverable condition** comes back as a normal `isError: false` result you branch on: either a payload with an `error` field and no success data (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no `archy.yaml` → `CheckErrorPayload`), or an advisory field on a still-valid result (`available=false`, `note`, `git_available`). So `archy_check` on a project with no config returns an in-band `CheckErrorPayload`, not an error: tell the user the rules are not active here (see "Reporting what a check covered") and move on.
 
 ## Decision rules
 
@@ -245,6 +245,12 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 - Project has `.importlinter` (or `archy[contracts]` installed and the user wants transitive enforcement) → `archy_check(contracts=True)`
 - Failed direct-edge check (`archy_check`) → fix or revert before continuing
 - Passed direct-edge check but a nested `contracts` result fails → an indirect path violates the rules; do not weaken the rule, restructure the path
+
+**Reporting what a check covered.** A verdict is only as wide as the rules. Pass the scope on with it:
+
+- **No `archy.yaml`** → do not create one unprompted. Tell the user archy's declared-intent checks (layers, `forbid`, `required`) are inactive here, and offer to draft a config for them to confirm.
+- **A pass** → never a bare "passed". Read `coverage` (from `archy_check` or `archy_brief`) and say what the rules reach: `module_ratio` and `edge_ratio` (for example "passed; rules reach 21% of modules and 9% of edges"), any `empty_layers`, and `modules_outside_declared_roots` when it is not zero (those are not counted in the ratios). If `governs_nothing` or `governs_no_edges` is true, say the pass carries no information. If `transitive_checked` is false, quote `transitive_unverified_reason`.
+- **The user asks for a draft** → propose candidate layers as a proposal, since layers read off today's code describe it and do not say what the user intends. Canary every rule: add one deliberately violating import, confirm the check fails, revert. Never widen a pattern only to raise coverage.
 
 **Which graph tool to reach for:**
 
