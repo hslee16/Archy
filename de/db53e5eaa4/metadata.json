@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "dedb53e5eaa4",
+  "strategy": "manual-commit",
+  "branch": "alee/758-qualified-base-families",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/archy/conventions_classes.py",
+    "src/archy/conventions_collect.py",
+    "src/archy/conventions_families.py",
+    "src/archy/conventions_gates.py",
+    "src/archy/conventions_namespace.py",
+    "src/archy/graph_resolve.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/de/db53e5eaa4/0/metadata.json",
+      "transcript": "/de/db53e5eaa4/0/full.jsonl",
+      "content_hash": "/de/db53e5eaa4/0/content_hash.txt",
+      "prompt": "/de/db53e5eaa4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 16,
+    "cache_creation_tokens": 11721,
+    "cache_read_tokens": 3905201,
+    "output_tokens": 7228,
+    "api_call_count": 7
+  }
+}
