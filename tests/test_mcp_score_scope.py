@@ -115,28 +115,43 @@ def test_strict_record_compares_before_append_and_writes_scope(scoped_project: P
     assert len(rows) == 4 and rows[-1].internal_only is True
 
 
-def test_mixed_recording_and_trend_surfaces(scoped_project: Path):
+MIXED_ROWS: list[tuple[bool | None, float]] = [(True, 0.1), (False, 0.9), (None, 0.5)]
+SCOPE_LABELS = ("internal-only", "all", "unknown")
+
+
+def test_recording_both_scopes_labels_each_row(scoped_project: Path):
     for scope in (True, False):
         run_score(
             scoped_project, internal_only=scope, record=True, strict=False, strict_tolerance=0.0
         )
     assert _run(scoped_project, True)["gate"]["delta"] == 0.0
     assert [r.internal_only for r in read(scoped_project / ".archy/history.jsonl")] == [True, False]
-    _seed(scoped_project, [(True, 0.1), (False, 0.9), (None, 0.5)])
-    runner = CliRunner()
-    text = runner.invoke(main, ["trend", str(scoped_project)]).output
-    assert all(label in text for label in ("internal-only", "all", "unknown"))
-    assert "mixed scopes" in text and "0.100 -> 0.500" not in text
-    cli = json.loads(runner.invoke(main, ["trend", str(scoped_project), "--format", "json"]).output)
-    assert [row["internal_only"] for row in cli] == [True, False, None]
-    assert [row.model_dump()["internal_only"] for row in run_trend(scoped_project, last_n=10)] == [
-        True,
-        False,
-        None,
-    ]
-    html = runner.invoke(main, ["render", str(scoped_project), "--view", "trend"]).output
-    assert "mixed scopes" in html and "<polyline" not in html
-    assert all(label in html for label in ("internal-only", "all", "unknown"))
+
+
+def test_trend_text_labels_mixed_scopes_and_draws_no_line(scoped_project: Path):
+    _seed(scoped_project, MIXED_ROWS)
+    text = CliRunner().invoke(main, ["trend", str(scoped_project)]).output
+    for label in SCOPE_LABELS:
+        assert label in text
+    assert "mixed scopes" in text
+    assert "0.100 -> 0.500" not in text
+
+
+def test_trend_json_and_mcp_keep_each_scope(scoped_project: Path):
+    _seed(scoped_project, MIXED_ROWS)
+    result = CliRunner().invoke(main, ["trend", str(scoped_project), "--format", "json"])
+    assert [row["internal_only"] for row in json.loads(result.output)] == [True, False, None]
+    rows = run_trend(scoped_project, last_n=10)
+    assert [row.model_dump()["internal_only"] for row in rows] == [True, False, None]
+
+
+def test_trend_html_labels_mixed_scopes_and_draws_no_line(scoped_project: Path):
+    _seed(scoped_project, MIXED_ROWS)
+    html = CliRunner().invoke(main, ["render", str(scoped_project), "--view", "trend"]).output
+    for label in SCOPE_LABELS:
+        assert label in html
+    assert "mixed scopes" in html
+    assert "<polyline" not in html
 
 
 @pytest.mark.parametrize("bad", ["false", 0, 1, [], {}])
