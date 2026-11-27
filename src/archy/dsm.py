@@ -651,14 +651,22 @@ def _changes_in_after(
         before_cell = before_edges.get(key)
         if before_cell is None:
             added.append(after_cell)
-            source, target = key
-            if source != target and (
-                kept_scc[source] != kept_scc[target] and after_scc[source] == after_scc[target]
-            ):
+            if _closes_cycle(key, kept_scc, after_scc):
                 new_back_edges.append(after_cell)
         elif before_cell.weight != after_cell.weight:
             weight_changed.append((before_cell, after_cell))
     return added, weight_changed, new_back_edges
+
+
+def _closes_cycle(
+    key: tuple[str, str], kept_scc: dict[str, int], after_scc: dict[str, int]
+) -> bool:
+    """True when the edge joins two modules into one component only the additions made."""
+    source, target = key
+    if source == target:
+        return False
+    joined_after = after_scc[source] == after_scc[target]
+    return joined_after and kept_scc[source] != kept_scc[target]
 
 
 def _scc_index(nodes: Iterable[str], edges: Iterable[tuple[str, str]]) -> dict[str, int]:

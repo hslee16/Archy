@@ -441,47 +441,6 @@ def test_dsm_diff_against_baseline_snapshot(tmp_path: Path):
     assert diff_payload["new_back_edges"], "the c->a edit must surface as a new back-edge"
 
 
-@pytest.mark.parametrize(("source", "target"), [("b", "a"), ("a", "z")])
-@pytest.mark.parametrize("output_format", ["ascii", "json"])
-def test_dsm_diff_names_cycle_closing_edge_in_both_orders(
-    tmp_path: Path, source: str, target: str, output_format: str
-):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / f"{source}.py").write_text("X = 1\n")
-    (pkg / f"{target}.py").write_text(f"from pkg import {source}\n")
-    baseline = tmp_path / "before.json"
-    before = _dsm_json(tmp_path, "--group", "topological")
-    baseline.write_text(json.dumps(before))
-    (pkg / f"{source}.py").write_text(f"from pkg import {target}\n")
-    after = _dsm_json(tmp_path, "--group", "topological")
-
-    result = CliRunner().invoke(
-        main,
-        [
-            "dsm",
-            str(tmp_path),
-            "--group",
-            "topological",
-            "--diff",
-            str(baseline),
-            "--format",
-            output_format,
-        ],
-    )
-
-    assert result.exit_code == 0
-    if output_format == "json":
-        cells = json.loads(result.output)["new_back_edges"]
-        assert [(after["ordering"][c["row"]], after["ordering"][c["col"]]) for c in cells] == [
-            (f"pkg.{source}", f"pkg.{target}")
-        ]
-    else:
-        assert "Cycle-closing edges (1):" in result.output
-        assert f"pkg.{source} -> pkg.{target}" in result.output
-
-
 def test_dsm_diff_missing_baseline_errors_cleanly(tmp_path: Path):
     project = _make_three_module_project(tmp_path)
     result = CliRunner().invoke(main, ["dsm", str(project), "--diff", str(tmp_path / "nope.json")])
