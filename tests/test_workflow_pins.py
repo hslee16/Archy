@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
-WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
+ROOT = Path(__file__).resolve().parents[1]
+WORKFLOWS = ROOT / ".github" / "workflows"
 E2E = yaml.safe_load((WORKFLOWS / "install-e2e.yml").read_text(encoding="utf-8"))
 JOB = E2E["jobs"]["e2e"]
 
@@ -88,3 +92,74 @@ def test_headless_steps_are_gated_on_the_booleans():
     assert STEPS["Headless reachability (Cursor)"]["if"] == (
         "matrix.client == 'cursor' && env.HAS_CURSOR_KEY == 'true'"
     )
+
+
+@pytest.mark.parametrize(
+    "name", ["Headless reachability (Claude Code)", "Headless reachability (Cursor)"]
+)
+def test_a_failing_client_fails_the_headless_step(name: str):
+    """#1018: without pipefail the `tee` swallowed the exit code, and almost any
+    error text satisfied the grep."""
+    step = STEPS[name]
+
+    assert step["shell"] == "bash"
+    assert "grep" not in step["run"]
+    assert step["run"].rstrip().endswith("| tee out.txt")
+
+
+def test_the_key_holding_job_restores_no_cache_and_keeps_no_token():
+    uses = {
+        step["uses"].split("@")[0]: step.get("with", {}) for step in JOB["steps"] if "uses" in step
+    }
+
+    assert uses["actions/checkout"]["persist-credentials"] is False
+    assert uses["astral-sh/setup-uv"]["enable-cache"] is False
+
+
+@pytest.mark.parametrize(
+    ("reply", "passes"),
+    [
+        ("0.600", True),
+        ("The overall score is **0.60**.", True),
+        ("overall: 0.5999435989246736", True),
+        ("0.612", False),
+        ("0.6", False),
+        ("Error 401: invalid API key", False),
+        ("archy_score failed after 0 tools", False),
+        ("Windows 10.0.19041 overall", False),
+        ("claude 2.1.323", False),
+        ("", False),
+    ],
+)
+def test_only_the_real_score_counts_as_reachability(tmp_path: Path, reply: str, passes: bool):
+    expected, out = tmp_path / "expected.json", tmp_path / "out.txt"
+    expected.write_text('{"overall": 0.5999435989246736}', encoding="utf-8")
+    out.write_text(reply, encoding="utf-8")
+    script = ROOT / "tests" / "install" / "e2e_assert_score.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), str(expected), str(out)], capture_output=True, text=True
+    )
+
+    assert (result.returncode == 0) is passes, result.stdout + result.stderr
+
+
+def test_the_expected_score_does_not_exist_while_a_client_runs():
+    """A file in the checkout holding the answer would pass with no MCP server."""
+    names = [step.get("name") for step in JOB["steps"]]
+    check = STEPS["Assert the reply reports the score"]
+
+    assert names.index("Assert the reply reports the score") > max(
+        names.index(f"Headless reachability ({c})") for c in ("Claude Code", "Cursor")
+    )
+    assert [n for n, s in STEPS.items() if "expected.json" in s.get("run", "")] == [check["name"]]
+    assert check["run"].count('"$RUNNER_TEMP/expected.json"') == 2
+    assert "secrets" not in str(check)
+    for client, key in (("claude-code", "HAS_ANTHROPIC_KEY"), ("cursor", "HAS_CURSOR_KEY")):
+        assert f"(matrix.client == '{client}' && env.{key} == 'true')" in check["if"]
+
+
+def test_claude_cannot_get_the_number_around_the_server():
+    run = STEPS["Headless reachability (Claude Code)"]["run"]
+
+    assert '--disallowedTools "Bash,Read,Glob,Grep"' in run
