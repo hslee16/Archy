@@ -1,0 +1,160 @@
+<task-notification>
+<task-id>a85ef430339f9611a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a85ef430339f9611a.output</output-file>
+<status>completed</status>
+<summary>Agent "Review conventions_exports.py Python" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: PASS.** There are zero violations of the listed criteria in `/Users/hosanglee/archy/src/archy/conventions_exports.py`, which is a new file in this changeset. I marked review `python_code_review--src-archy-conventions_exports.py--d7fde2df6dcd` as passed.</result>
+<usage><subagent_tokens>26228</subagent_tokens><tool_uses>3</tool_uses><duration_ms>19189</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae86e66aa2139b0aa</task-id>
+<tool-use-id>toolu_01LD2pPogbhnK4GR7Qb4tFyK</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/ae86e66aa2139b0aa.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL.** I found four false or stale prose claims, so I did not call `mark_review_as_passed` for `docstring_accuracy--7_files--9b82f03210fe`.
+
+**1. `/Users/hosanglee/archy/src/archy/conventions_exports.py:5-6`**
+- **Claim:** "any other write to `__all__`, wherever it sits, makes the result incomplete rather than guessed at."
+- **Actual:** `_writes_all` (lines 146-154) only catches non-Load uses of the name or a subscript of it, direct calls to a method in `_MUTATORS`, and imports that bind it. I ran `read_exports` on `__all__=["a"]` followed by each of these, and all returned `names={'a'}, complete=True`:
+  - `globals()["__all__"] = ["b"]` (also with `+=`)
+  - `setattr(sys.modules[__name__], "__all__", ["b"])`
+  - `x = __all__; x.append("b")`
+  - `add = __all__.append; add("b")`
+  - `register(__all__)`
+  - `__all__.__iadd__(["b"])`
+- **Impact:** for these forms the view also prints "every list above is COMPLETE ... absence is an answer" (`cli_render_conventions.py:80-81`). That is a behaviour gap as well as a wording problem.
+- **Rewrite** (if the detection stays as it is): "any other direct write to the name `__all__` (rebinding, item assignment, a mutating method call, an import that binds it), wherever it sits, makes the result incomplete. Indirect writes (through an alias or bound method, a helper it is passed to, `globals()` or `setattr`) are not detected."
+
+**2. `/Users/hosanglee/archy/src/archy/conventions_exports.py:34-35`**
+- **Claim:** "`complete=False` means there may be others (or, after an unreadable removal, fewer)."
+- **Actual:** listed names can also be wrong after an unreadable rebinding, not only a removal. `__all__=["a"]` then `if x: __all__ = ["b"]` returns `names={'a'}, complete=False`. The walk at lines 69-70 only marks the earlier result unsure, so `a` stays listed even when the module ends with just `["b"]`.
+- **Rewrite:** "`complete=False` means the names may not be the whole or exact set: there may be others, and after an unreadable removal or rebinding some listed names may be gone."
+
+**3. `/Users/hosanglee/archy/src/archy/cli_render_conventions.py:52`** (docstring unchanged, but the function body changed)
+- **Claim:** "Terse and COMPLETE. Every list is the whole list; see ModuleView."
+- **Actual:** the new branch at lines 74-75 renders `exports` as `... (partial)` or `(unknown)` when `exports_complete` is false.
+- **Rewrite:** "Terse and COMPLETE. Every list is the whole list unless marked otherwise (`exports` can be partial or unknown, and unparsed modules make lists incomplete); see ModuleView."
+
+**4. `exports_complete` false is explained only as a dynamic `__all__`**
+- **Where:**
+  - `/Users/hosanglee/archy/src/archy/conventions_models.py:344-346`: "when `exports_complete` is false: `__all__` is built in a way not read statically, so the names listed are only those that were"
+  - `/Users/hosanglee/archy/src/archy/mcp_tool_descriptions.py:198-200`: "false when `__all__` is built dynamically: the names are only those read statically"
+- **Actual:** `_unparsed_module_view` (`/Users/hosanglee/archy/src/archy/conventions.py:295-296`) also sets `exports=None, exports_complete=False` when the module did not parse. No `__all__` was read at all, and `exports` is null, which the MCP text says means the module declares no `__all__`.
+- **Rewrite for the model docstring:** "The exception is `exports` when `exports_complete` is false: either `__all__` is built in a way not read statically, so the names listed are only those that were (#755), or the module did not parse and `exports` is null."
+- **Rewrite for the MCP description:** "`exports_complete` (false when `__all__` is built dynamically, so the names are only those read statically, or when the module could not be parsed, so `exports` is null; either way absence from `exports` is not an answer)".
+- **Related file outside this review:** `/Users/hosanglee/archy/skills/archy/SKILL.md:233` uses the same wording.
+
+The other changed comments and docstrings I traced did not turn up further findings.</result>
+<usage><subagent_tokens>42061</subagent_tokens><tool_uses>5</tool_uses><duration_ms>48609</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>aed172a719c177eeb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/aed172a719c177eeb.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of __all__ fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: do not merge yet.** The invariant is broken: archy can report `exports_complete=true` with a set that differs from CPython's. The branch also adds a crash that takes down whole commands. I reproduced everything below, except where marked as not run.
+
+## Findings, ranked
+
+All are in `/Users/hosanglee/archy/src/archy/conventions_exports.py`. My 115 runnable small modules gave 58 `complete=true` mismatches.
+
+**1. `__all__` escaping by reference is not detected (top severity).** `_writes_all` only sees Store/Del names, subscript writes and direct `__all__.&lt;mutator&gt;()` calls. Each of these reports `{A}` as complete, while runtime is `{A, B}` (or `{B}` for the slice write):
+- Helper call: `def f(x): x.append("B")` then `f(__all__)`, or `f(x=__all__)`.
+- Alias: `a = __all__; a.append("B")`, `a += ["B"]` or `x[:] = ["B"]`.
+- Chained assignment: `__all__ = a = ["A"]` or `a = __all__ = ["A"]`, then `a.append("B")`. The statement counts as handled and the alias is missed.
+- Other escapes: `add = __all__.append`, `getattr(__all__, "append")`, `map(__all__.append, ...)`, `list.append(__all__, "B")`, `heapq.heappush`, `bisect.insort`, `(x := __all__).append`, `(__all__ or []).append`, `for l in (__all__,)`, `b = [__all__]; b[0].append`.
+- Dunder calls: `__all__.__iadd__` and `__all__.__setitem__`.
+
+**2. Writes through the namespace or module object are not detected.**
+- `globals()["__all__"] = / += / .append`, and `globals().update(...)`.
+- The same through `vars()` or `locals()`.
+- `setattr(sys.modules[__name__], "__all__", ...)`, `sys.modules[__name__].__all__ ...` and `.__dict__["__all__"]`.
+- `exec` and `eval`, and self-import then mutate.
+- When this is the only write, the result is `exports=null, complete=true` ("no `__all__`").
+- Across modules: `pkg/__init__.py` doing `ext.__all__.append("Z")` leaves `pkg.ext` reported as `P`, complete, while runtime is `['P','Z']`. A per-file reader cannot see this without extra work, so at least document it.
+
+**3. Folded operations give wrong sets.**
+- `__all__ = ["A","A"]; __all__.remove("A")` prints `exports (none)` as complete; runtime is `['A']`. The `frozenset` loses how many times a name appears. The same happens after `["A"] + ["A"]` or `.extend(["A"])`.
+- `difference_update`, `intersection_update` and `symmetric_difference_update` are missing from `_MUTATORS`, so the old set is reported as complete.
+- A shadowed wrapper (`def sorted(x): return ["Z"]`, or `from helper import list`) is trusted as the builtin.
+
+**4. New crash: `RecursionError` on a long `+` chain.**
+- `_read` recurses once per `BinOp`. `__all__ = ["a"] + ["a"] + ...` fails at 1000 terms (900 is fine).
+- With one such file in a project, `archy conventions .`, `archy brief .` and `--module &lt;any other module&gt;` all exit 1 with a traceback.
+- `main` handles the same project (I checked `--module pkg.ext` with a 3000-term file present).
+- CPython compiles 2000 terms; at 3000 and 100000 it can fail too. I did not run the MCP surface for this, but it shares the compute path.
+- Flatten iteratively, or catch the error and mark the module incomplete.
+
+**5. Module `__getattr__` supplying `__all__` (found in a real package).**
+- 14 modules fail this way: the `numpy.core.*` shims, `numpy.linalg.linalg` and `numpy.fft.helper`.
+- For `numpy.core.umath`, archy says `exports=None, complete=True`, but `getattr(m, "__all__")` returns the forwarded list.
+- A module-level `def __getattr__` with no static `__all__` should probably be reported as incomplete.
+
+**6. Binding forms that carry the name as a string are missed (contrived, low).**
+- `match` captures (`case __all__`, `[*__all__]`, `{**__all__}`).
+- `except ... as __all__`, `def __all__` and `class __all__`.
+- `from x import *` where `x` exports `"__all__"`.
+
+**7. Tests that cannot fail.** I mutated a copy and ran all `test_conventions*.py` (baseline 113 passed). These mutations survived and each changes behaviour:
+- Treating any augmented operator, including `-=`, as add.
+- Dropping `insert`, `pop` and `clear` from `_MUTATORS`.
+- Ignoring a nested `from y import __all__`.
+- Treating a non-string element (`["A", name]`) as complete.
+- Dropping set literals, or `|` in `_read`.
+- `remove` resetting `complete` to true.
+- `_unparsed_module_view` returning `exports_complete=True`.
+
+A ninth survivor ("mutator unsure" returning `None`) is equivalent, because the later walk catches it, so it is not a gap.
+
+**Suggested direction for 1 and 2:** invert the rule. Any use of `__all__` that is not on a short list of known read-only forms, including inside handled statements, should mark the result incomplete. So should the string `"__all__"` used in a subscript, `setattr` or `update`, any `.__all__` write on the module itself, and `exec` or `eval`.
+
+## Real packages
+These ran on Python 3.10, with `test` and `tests` directories skipped.
+
+| Corpus | Compared | Unimportable or skipped | Declare `__all__` | `complete=false` | Real mismatches | Reader crashes |
+|---|---|---|---|---|---|---|
+| `.venv` site-packages | 2432 | 66 | 1268 | 56 (4.4%) | 14 (all finding 5) | 0 |
+| stdlib | 546 | 9 | 248 | 33 (13%) | 0 | 0 |
+
+The scan flagged a 15th site-packages mismatch (`cryptography...serialization`). It is an artifact of my harness, since that module is wrapped in a proxy. I found none of findings 1-3 in these corpora, so they are reachable but not shown to be common.
+
+## Surfaces
+CLI text, CLI JSON and the `ModuleView` model carry `exports_complete`. I did not call the MCP tool itself. `_export_gaps` is the only other consumer of `facts.exports`, and it filters partial modules. It inherits findings 1-3, so it can still suggest adding names that are already exported.
+
+## Gates
+| Command | Exit |
+|---|---|
+| `archy check .` | 0 |
+| `archy cycles . --strict` | 0 |
+| `archy contracts .` | 0 |
+| `archy diff .` | 0 (overall -0.013, depth -0.067, no new cycles or violations) |
+| `archy affected .` on changed `.py` files | 0 |
+| `conventions . --emit-headers --check` | 0 |
+| `ruff check`, `ruff format --check` | 0 |
+| `ty check` | passed |
+
+I did not run the full `pytest` suite. The diff adds no U+2014 characters.
+
+The working tree is unchanged; the only untracked file is `bench/diff_duplicates_precision.jsonl`, which was already there. The scripts are `fuzz.py`, `real.py` and `mut.py` in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/`.</result>
+<usage><subagent_tokens>111476</subagent_tokens><tool_uses>15</tool_uses><duration_ms>791768</duration_ms></usage>
+</task-notification>
