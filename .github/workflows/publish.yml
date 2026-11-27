@@ -27,6 +27,18 @@ jobs:
       - name: Set up Python
         run: uv python install 3.10
 
+      # PyPI only refuses a version that already exists, so a tag that disagrees
+      # with pyproject.toml would publish, with provenance naming the wrong
+      # release (#772). A `workflow_dispatch` from a branch has no tag to compare.
+      - name: Check the tag matches the project version
+        if: github.ref_type == 'tag'
+        run: |
+          have="$(uv version --short)"
+          if [ "${GITHUB_REF_NAME#v}" != "$have" ]; then
+            echo "tag $GITHUB_REF_NAME does not match project version $have" >&2
+            exit 1
+          fi
+
       - name: Build sdist and wheel
         run: uv build
 
