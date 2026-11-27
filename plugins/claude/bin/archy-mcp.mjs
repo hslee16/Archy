@@ -21,7 +21,7 @@
 // termination signals to the child so a Claude Code restart cannot orphan it,
 // and propagates the child's exit status.
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
@@ -31,8 +31,9 @@ import { delimiter, join } from "node:path";
 const SPEC = "archy>=0.51,<1.0";
 
 // `-c` and `-m` both put the working directory, here the user's project, first on
-// sys.path, so a project with its own `archy/` folder would be executed. Dropping
-// the "" entry first prevents that. No double quotes: see spawnArgs.
+// sys.path, so a project with its own `archy/` folder would be executed; the
+// "" entry is dropped for that. `-E` covers the other route, a PYTHONPATH such
+// as "." that Python resolves into the project. No double quotes: see spawnArgs.
 const PY_IMPORT = "import sys; sys.path[:] = [p for p in sys.path if p]; from archy.cli import main";
 const PY_RUN = `${PY_IMPORT}; main()`;
 
@@ -74,7 +75,7 @@ function candidates() {
   if ((p = which("archy"))) out.push({ path: p, args: ["mcp"] });
   if ((p = which("uvx"))) out.push({ path: p, args: [SPEC, "mcp"] });
   for (const py of ["python3", "python"]) {
-    if ((p = which(py))) out.push({ path: p, args: ["-c", PY_RUN, "mcp"], probe: ["-c", PY_IMPORT] });
+    if ((p = which(py))) out.push({ path: p, args: ["-E", "-c", PY_RUN, "mcp"], probe: ["-E", "-c", PY_IMPORT] });
   }
   return out;
 }
@@ -92,19 +93,6 @@ function spawnArgs(path, args) {
   return { command: path, argv: args, verbatim: false };
 }
 
-// Nearly every machine has some python3, so its presence says nothing: spawning
-// it without archy would exit with "No module named archy" and hide the hint.
-function passesProbe({ path, probe }) {
-  if (!probe) return true;
-  const { command, argv, verbatim } = spawnArgs(path, probe);
-  const result = spawnSync(command, argv, {
-    stdio: "ignore",
-    timeout: 15000,
-    windowsVerbatimArguments: verbatim,
-  });
-  return result.status === 0;
-}
-
 const FAIL_MESSAGE =
   "archy MCP server could not start: found no `archy` or `uvx` on PATH, and no " +
   "Python that has archy installed.\nInstall any one of these, then restart Claude Code:\n" +
@@ -115,6 +103,7 @@ const FAIL_MESSAGE =
 const SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"];
 const list = candidates();
 let active = null;
+let probing = null;
 let terminating = false;
 
 // Re-raise `signal` on ourselves with the DEFAULT action (terminate by signal),
@@ -130,7 +119,11 @@ function dieBySignal(signal) {
 // killed only itself, leaking a stranded archy/uvx/python on every restart.
 function onSignal(signal) {
   terminating = true;
-  if (active && active.exitCode === null && active.signalCode === null) {
+  if (probing) {
+    // Nothing to shut down gracefully, and a hung interpreter may ignore `signal`.
+    probing.kill("SIGKILL");
+    dieBySignal(signal);
+  } else if (active && active.exitCode === null && active.signalCode === null) {
     active.kill(signal); // child's `exit` handler then propagates the signal up
   } else {
     dieBySignal(signal); // no live child to carry it: terminate ourselves now
@@ -146,7 +139,28 @@ function start(i) {
     process.stderr.write(FAIL_MESSAGE);
     return process.exit(1);
   }
-  if (!passesProbe(list[i])) return start(i + 1);
+  if (!list[i].probe) return launch(i);
+  // Nearly every machine has some python3, so its presence says nothing: running
+  // it without archy would exit with "No module named archy" and hide the hint.
+  // Asynchronous, so a termination signal is still handled while it runs.
+  const { command, argv, verbatim } = spawnArgs(list[i].path, list[i].probe);
+  probing = spawn(command, argv, {
+    stdio: "ignore",
+    timeout: 15000,
+    killSignal: "SIGKILL",
+    windowsVerbatimArguments: verbatim,
+  });
+  const next = (passed) => {
+    probing = null;
+    if (passed) launch(i);
+    else start(i + 1);
+  };
+  probing.on("error", () => next(false));
+  probing.on("exit", (code) => next(code === 0));
+}
+
+function launch(i) {
+  if (terminating) return process.exit(0);
   const { command, argv, verbatim } = spawnArgs(list[i].path, list[i].args);
   const child = spawn(command, argv, { stdio: "inherit", windowsVerbatimArguments: verbatim });
   active = child;
