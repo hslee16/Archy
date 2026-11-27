@@ -27,7 +27,7 @@ needs_bash = pytest.mark.skipif(sys.platform == "win32", reason="runs the step u
 def _run(tag: str, bin_dir: Path | None) -> subprocess.CompletedProcess[str]:
     path = os.environ["PATH"] if bin_dir is None else f"{bin_dir}{os.pathsep}{os.environ['PATH']}"
     return subprocess.run(
-        ["bash", "-e", "-c", STEP["run"]]  # a step with no `shell:` gets `bash -e`,
+        ["bash", "-e", "-c", STEP["run"]],  # a step with no `shell:` gets `bash -e`
         capture_output=True,
         text=True,
         cwd=ROOT,
