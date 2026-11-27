@@ -298,8 +298,24 @@ def _jaccard(a: Counter[str], b: Counter[str]) -> float:
     instead drops as the sizes diverge, which is the behavior a near-clone
     threshold needs.
     """
-    inter = sum((a & b).values())
-    union = sum((a | b).values())
+    return _jaccard_of_totals(a, a.total(), b, b.total())
+
+
+def _jaccard_of_totals(a: Counter[str], total_a: int, b: Counter[str], total_b: int) -> float:
+    """`_jaccard` for bags whose totals are already known.
+
+    The pass runs millions of these, and `a & b` and `a | b` each build a new
+    Counter (#812). |a | b| is |a| + |b| - |a & b|, so only the overlap needs
+    walking, over the smaller bag.
+    """
+    small, large = (a, b) if len(a) <= len(b) else (b, a)
+    get = large.get
+    inter = 0
+    for token, count in small.items():
+        other = get(token)
+        if other:
+            inter += count if count < other else other
+    union = total_a + total_b - inter
     return inter / union if union else 0.0
 
 
@@ -397,6 +413,7 @@ def _cluster_by_similarity(
     edge_weight: dict[frozenset[int], float] = {}
     budget = max_comparisons
     truncated = False
+    totals = [item.bag.total() for item in items]
     for i in range(len(items)):
         limit = items[i].fn.size / min_similarity  # sizes above this cannot reach the floor
         for j in range(i + 1, len(items)):
@@ -406,7 +423,11 @@ def _cluster_by_similarity(
                 truncated = True
                 break
             budget -= 1
-            sim = _jaccard(items[i].bag, items[j].bag)
+            # The overlap is at most the smaller bag and the union at least the
+            # larger, so some pairs cannot reach the floor whatever they hold.
+            if min(totals[i], totals[j]) < min_similarity * max(totals[i], totals[j]):
+                continue
+            sim = _jaccard_of_totals(items[i].bag, totals[i], items[j].bag, totals[j])
             if sim >= min_similarity:
                 parent[find(i)] = find(j)
                 edge_weight[frozenset((i, j))] = sim
