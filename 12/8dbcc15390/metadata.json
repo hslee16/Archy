@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "128dbcc15390",
+  "strategy": "manual-commit",
+  "branch": "alee/739-skill-report-coverage",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/12/8dbcc15390/0/metadata.json",
+      "transcript": "/12/8dbcc15390/0/full.jsonl",
+      "content_hash": "/12/8dbcc15390/0/content_hash.txt",
+      "prompt": "/12/8dbcc15390/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 756,
+    "cache_creation_tokens": 669855,
+    "cache_read_tokens": 130466082,
+    "output_tokens": 314096,
+    "api_call_count": 308
+  }
+}
