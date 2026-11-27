@@ -13,13 +13,19 @@ from __future__ import annotations
 import json
 import os
 import time
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
+from click.testing import CliRunner
 
+from archy import __version__
+from archy import index as index_module
+from archy.cli import main
 from archy.graph import build_graph, discover_modules, graph_to_dict
 from archy.index import (
     SCHEMA_VERSION,
+    SyncStats,
     build_graph_cached,
     default_db_path,
     open_index,
@@ -317,19 +323,97 @@ def test_build_graph_cached_survives_vanished_file(project: Path, tmp_path: Path
     """If a file vanishes after hashing but before parse, sync drops it; the
     cached build must keep assemble_graph's module list aligned with the parse
     results so it does not KeyError on the dropped module."""
-    import archy.index as index_mod
-
-    real_parse_file = index_mod.parse_file
+    real_parse_file = index_module.parse_file
 
     def flaky_parse_file(path: Path):
         if path.name == "b.py":
             raise FileNotFoundError(path)
         return real_parse_file(path)
 
-    monkeypatch.setattr(index_mod, "parse_file", flaky_parse_file)
+    monkeypatch.setattr(index_module, "parse_file", flaky_parse_file)
 
     g = build_graph_cached(project, db_path=tmp_path / "index.db")  # must not raise
 
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
     assert "pkg.b" not in internal
     assert "pkg.a" in internal
+
+
+def _resync(project: Path, db: Path) -> SyncStats:
+    conn = open_index(db)
+    _results, stats = sync(conn, discover_modules(project))
+    conn.close()
+    return stats
+
+
+def _forge_a_without_imports(db: Path, **overrides: object) -> None:
+    """Rewrite `pkg/a.py`'s row to a wrong parse, keeping its stat and sha256.
+
+    Only a re-parse can bring the imports back. An override of `None` drops the key.
+    """
+    conn = open_index(db)
+    row = conn.execute("SELECT path, parse_json FROM files WHERE path LIKE '%a.py'").fetchone()
+    payload = {**json.loads(row["parse_json"]), "imports": [], **overrides}
+    payload = {key: value for key, value in payload.items() if value is not None}
+    conn.execute(
+        "UPDATE files SET parse_json = ? WHERE path = ?", (json.dumps(payload), row["path"])
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_row_from_this_build_is_served(project: Path, tmp_path: Path):
+    """Control for the test below: the forged row reaches the graph."""
+    db = tmp_path / "index.db"
+    build_graph_cached(project, db_path=db)
+    _forge_a_without_imports(db)
+
+    assert not build_graph_cached(project, db_path=db).has_edge("pkg.a", "pkg.b")
+
+
+@pytest.mark.parametrize(
+    "built_by",
+    ["archy=0.0.1 tree-sitter=0.1 tree-sitter-python=0.1", None],
+    ids=["another-build", "unstamped-as-archy-0.56-wrote-it"],
+)
+def test_row_from_another_build_is_reparsed(project: Path, tmp_path: Path, built_by: str | None):
+    """#740: a parser fix must reach a file an older archy already cached."""
+    db = tmp_path / "index.db"
+    build_graph_cached(project, db_path=db)
+    _forge_a_without_imports(db, built_by=built_by)
+
+    stats = _resync(project, db)
+
+    # Five modules in the fixture; only the forged row is from elsewhere.
+    assert (stats.reparsed, stats.unchanged) == (1, 4)
+    assert build_graph_cached(project, db_path=db).has_edge("pkg.a", "pkg.b")
+
+
+def test_a_new_archy_version_reparses_everything(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    db = tmp_path / "index.db"
+    build_graph_cached(project, db_path=db)
+    monkeypatch.setattr("archy.index._BUILT_BY", "archy=999")
+
+    stats = _resync(project, db)
+
+    assert (stats.reparsed, stats.unchanged) == (5, 0)
+
+
+def test_build_stamp_names_archy_and_the_grammar():
+    for package in ("tree-sitter", "tree-sitter-python"):
+        assert f"{package}={version(package)}" in index_module._BUILT_BY
+    assert f"archy={__version__} " in index_module._BUILT_BY
+
+
+def test_status_counts_rows_from_another_build_as_stale(project: Path):
+    db = default_db_path(project)
+    build_graph_cached(project, db_path=db)
+    assert "stale: 0\n" in CliRunner().invoke(main, ["index", "status", str(project)]).output
+    _forge_a_without_imports(db, built_by="archy=0.0.1")
+
+    result = CliRunner().invoke(main, ["index", "status", str(project)])
+
+    assert result.exit_code == 0, result.output
+    assert "stale: 1\n" in result.output
