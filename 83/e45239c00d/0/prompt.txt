@@ -1,0 +1,8 @@
+<task-notification>
+<task-id>by8b9d73g</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/by8b9d73g.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI results on main after merging six PRs" stream ended</summary>
+<event>main f00110966d1512102c8b33a0a4f824433a079a0d: all 20 checks passed</event>
+</task-notification>

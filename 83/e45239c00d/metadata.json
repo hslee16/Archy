@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "83e45239c00d",
+  "strategy": "manual-commit",
+  "branch": "alee/812-faster-near-miss",
+  "checkpoints_count": 10,
+  "files_touched": [
+    "src/archy/duplicates.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/83/e45239c00d/0/metadata.json",
+      "transcript": "/83/e45239c00d/0/full.jsonl",
+      "content_hash": "/83/e45239c00d/0/content_hash.txt",
+      "prompt": "/83/e45239c00d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 10,
+    "cache_creation_tokens": 9274,
+    "cache_read_tokens": 3402955,
+    "output_tokens": 4730,
+    "api_call_count": 5
+  }
+}
