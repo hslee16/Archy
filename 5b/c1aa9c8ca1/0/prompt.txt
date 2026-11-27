@@ -1,0 +1,87 @@
+<task-notification>
+<task-id>a4a5ca0bed84324cb</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a4a5ca0bed84324cb.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of #777 fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Adversarial review of `alee/777-near-miss-truncated` (15b1d7b7).** The core fix works: mutating the CLI JSON flag, CLI JSON note, CLI text line, MCP flag or MCP note each turns a test red. The findings, ranked:
+
+**1. "`near_total` is a lower bound" is false.**
+- `near_total` counts clusters (connected components), and comparisons skipped by truncation can be the ones that merge two clusters.
+- Reproduced with `_cluster_by_similarity` on four size-10 token bags (windows at offsets 0, 9, 3, 6; threshold 0.5):
+  - budget 5 gives **2 clusters**, `truncated=True`
+  - budget 6 gives **1 cluster**, `truncated=False`
+- So a truncated run can report more clusters than a complete one, with clusters split and members missing.
+- The claim appears in the `DuplicatesPayload` docstring and field comment (`mcp_payloads.py`), `mcp_tool_descriptions.py`, and both `SKILL.md` copies.
+- Suggested wording: "the near-miss tier is incomplete; clusters may be missing, partial or split, so don't read `near_total` as a count." `NEAR_TRUNCATED_NOTE` could mention partial clusters too.
+
+**2. The note can give opposite `min_nodes` advice in one string.**
+- With no exact duplicates and a truncated pass, the real MCP output is: "...found; **lower min_nodes** to widen the search. Near-miss results are INCOMPLETE ... A **higher min_nodes** (CLI: --min-nodes) leaves fewer pairs to compare."
+- CLI JSON and CLI text compose the same two sentences. This is also the case the issue reproduces.
+- When truncated, drop the "lower it" clause or scope each sentence to its tier.
+- The "higher helps" claim itself holds: raising it only removes candidates, so the pair count cannot rise.
+
+**3. Tests miss several mutations** (all 120 tests in `test_duplicates`, `test_mcp_git`, `test_cli_git` and `test_diff_duplicates_precision` stayed green):
+- **Budget used up exactly:** setting `truncated` when the budget reaches 0 with nothing skipped survives. Add a case with 3 pairs and budget 3 that asserts `not truncated` and no warning.
+- **Out-of-band pair:** setting the flag before the size-band `break` survives. Use budget 0 or an exhausted budget with only out-of-band pairs left.
+- **Partial results:** showing the text warning only when there is no near-miss section (`if near_truncated and not near`) survives. Every truncated test uses budget 0, so truncated with a non-empty tier is never exercised.
+- **Base note lost:** `with_truncation` returning only the warning, dropping the original note, survives.
+- **No base note:** `with_truncation` returning `None` when there is no base note survives, so nothing covers a truncated run that has exact duplicates.
+
+The current off-by-one logic is correct: the flag is set only when an in-band pair is actually skipped.
+
+**4. `SKILL.md` sentence is misplaced** (`skills/` and `plugins/claude/skills/`). The `near_truncated` parenthetical is the first thing in the `archy_duplicates` description, before the tool or `near_miss` is introduced. Move it after the `near_miss=True` sentence.
+
+**5. Minor: the library warning now points inside archy.** `compute_near_duplicates` now goes through one more frame while `stacklevel=3` is unchanged. A direct caller's warning is attributed to `duplicates.py:332` instead of their own line. Direct `find_near_duplicates` callers are attributed correctly.
+
+**Checked with no finding**
+- **Other surfaces:** `what-to-refactor-next` and `brief` do not run the duplicates pass.
+- **MCP summary and full:** both set the flag from the same line.
+- **`near_miss` off:** reports `false`.
+- **Output schema:** `near_truncated` is present as a boolean with default `false`, not in `required`.
+- **Bench scripts:** `bench/diff_duplicates_precision.py` matches the substring "token-comparison budget", which is unchanged.
+- **Em dashes:** none in the diff or commit message.
+- **Duplicated logic:** nothing worth flagging. The two `_duplicates_note` copies predate this change.
+
+**Exit codes**
+
+| Command | Exit |
+|---|---|
+| `archy check .` | 0 |
+| `archy cycles . --strict` | 0 |
+| `archy contracts .` | 0 |
+| `archy affected . --stdin` on the changed files | 0 (22 impacted modules, 55 test files, 2 unresolved) |
+| `archy conventions . --emit-headers --check` | 0 |
+| `ruff check`, `ruff format --check`, `ty check` | 0 |
+| `pytest` on the 55 affected files | **1** (1132 passed, 1 failed) |
+
+The failure is `tests/install/unit/test_writer_symlinks.py::test_new_file_takes_a_setgid_folders_bit_into_staging`. The diff touches no install code, so it looks unrelated, but I did not confirm it also fails on `main`.
+
+I did not edit, commit or switch anything in the working tree; mutations ran in a copy under the scratchpad. The untracked `bench/diff_duplicates_precision.jsonl` was already there.</result>
+<usage><subagent_tokens>102225</subagent_tokens><tool_uses>14</tool_uses><duration_ms>272491</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b2tlz4ql5</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/b2tlz4ql5.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene results for PR 1022 after refactor" stream ended</summary>
+<event>CodeScene Code Health Review (main)|completed|failure
+CodeScene Code Health Review (main)|completed|failure</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b2nlppk0g</task-id>
+<tool-use-id>toolu_01EF5vX1Zj14V4Myyz4H4fhZ</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/b2nlppk0g.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for PR 1022 on the pushed refactor" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>

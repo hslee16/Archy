@@ -1,0 +1,38 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "5bc1aa9c8ca1",
+  "strategy": "manual-commit",
+  "branch": "alee/777-near-miss-truncated",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "bench/diff_duplicates_precision.py",
+    "bench/near_duplicates_sweep.py",
+    "plugins/claude/skills/archy/SKILL.md",
+    "skills/archy/SKILL.md",
+    "src/archy/cli_git.py",
+    "src/archy/cli_render.py",
+    "src/archy/cli_render_git.py",
+    "src/archy/duplicates.py",
+    "src/archy/mcp_payloads.py",
+    "src/archy/mcp_runs_git.py",
+    "src/archy/mcp_tool_descriptions.py",
+    "tests/test_duplicates.py",
+    "tests/test_duplicates_truncation.py",
+    "tests/test_embedding_oracle_canary.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/5b/c1aa9c8ca1/0/metadata.json",
+      "transcript": "/5b/c1aa9c8ca1/0/full.jsonl",
+      "content_hash": "/5b/c1aa9c8ca1/0/content_hash.txt",
+      "prompt": "/5b/c1aa9c8ca1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 40,
+    "cache_creation_tokens": 44417,
+    "cache_read_tokens": 6844047,
+    "output_tokens": 29366,
+    "api_call_count": 20
+  }
+}
