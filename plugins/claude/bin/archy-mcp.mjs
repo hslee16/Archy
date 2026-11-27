@@ -38,6 +38,10 @@ const PY_IMPORT = "import sys; sys.path[:] = [p for p in sys.path if p]; from ar
 const PY_RUN = `${PY_IMPORT}; main()`;
 
 const isWindows = process.platform === "win32";
+// Absolute entries only, here and for every child. This runs from the user's
+// project directory, where "." or "bin" on PATH would hand us, or `uvx` or
+// archy after us, the project's own `python3`, `bash` or `git`.
+process.env.PATH = (process.env.PATH || "").split(delimiter).filter(isAbsolute).join(delimiter);
 // By full path: a bare `cmd` is also searched for in the working directory.
 const CMD_EXE =
   process.env.ComSpec || join(process.env.SystemRoot || "C:\\Windows", "System32", "cmd.exe");
@@ -63,9 +67,7 @@ function isLaunchable(file) {
 }
 
 function which(cmd) {
-  // Absolute entries only. This runs from the user's project directory, where
-  // "." or "bin" on PATH would hand us the project's own `python3` or `uvx`.
-  for (const dir of (process.env.PATH || "").split(delimiter).filter(isAbsolute)) {
+  for (const dir of process.env.PATH.split(delimiter).filter(Boolean)) {
     for (const ext of pathExts) {
       const candidate = join(dir, cmd + ext);
       if (isLaunchable(candidate)) return candidate;

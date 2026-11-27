@@ -489,6 +489,34 @@ def test_plugin_launcher_ignores_relative_path_entries(
 
 def test_plugin_launcher_never_spawns_a_bare_cmd():
     """Windows searches the working directory for a bare `cmd`; only runnable there."""
-    source = PLUGIN_LAUNCHER.read_text(encoding="utf-8")
+    source = " ".join(PLUGIN_LAUNCHER.read_text(encoding="utf-8").split())
 
-    assert 'command: "cmd"' not in source and "process.env.ComSpec" in source
+    assert (
+        'const CMD_EXE = process.env.ComSpec || join(process.env.SystemRoot || "C:\\\\Windows", '
+        '"System32", "cmd.exe");'
+    ) in source
+    assert source.count("command: ") == 2
+    assert "{ command: CMD_EXE, argv:" in source and "{ command: path, argv:" in source
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
+def test_plugin_launcher_children_do_not_inherit_relative_path_entries(
+    posix_bin_dir: Path, tmp_path: Path
+):
+    """An absolute `archy` that calls `git` by name must not get the project's."""
+    project = tmp_path / "project"
+    project.mkdir()
+    marker = tmp_path / "project-code-ran"
+    _fake_exe(project / "git", f': > "{marker}"')
+    _fake_exe(posix_bin_dir / "archy", 'git version\necho "PATH=$PATH"')
+
+    result = subprocess.run(
+        LAUNCHER_ARGV,
+        capture_output=True,
+        text=True,
+        cwd=project,
+        env=_launcher_env(posix_bin_dir, PATH=f".{os.pathsep}{posix_bin_dir}"),
+    )
+
+    assert not marker.exists()
+    assert f"PATH={posix_bin_dir}\n" in result.stdout, result.stdout + result.stderr
