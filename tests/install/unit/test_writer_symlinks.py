@@ -6,6 +6,7 @@ import json
 import os
 import stat
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -121,6 +122,13 @@ def test_new_file_takes_a_setgid_folders_bit_into_staging(tmp_path, monkeypatch)
     folder.chmod(0o2775)
     if not folder.stat().st_mode & stat.S_ISGID:
         pytest.skip("filesystem drops setgid")
+    # Linux copies setgid to a new child directory; macOS does not, and
+    # gives new files the folder's group anyway, so there is nothing to keep.
+    probe = Path(tempfile.mkdtemp(dir=folder))
+    inherits = probe.stat().st_mode & stat.S_ISGID
+    probe.rmdir()
+    if not inherits:
+        pytest.skip("new directories do not inherit setgid here")
     seen = []
     write = Path.write_text
 
