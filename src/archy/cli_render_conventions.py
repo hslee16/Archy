@@ -48,6 +48,34 @@ def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
     return payload
 
 
+def _listed(items: tuple[str, ...], *, partial: bool) -> str:
+    """One field's members; a partly read one must not look like the whole list."""
+    if partial:
+        return f"{', '.join(items)} (partial)" if items else "(unknown)"
+    return ", ".join(items) if items else "(none)"
+
+
+def _completeness_line(view: ModuleView) -> str:
+    """Whether absence from the lists above is an answer."""
+    if view.census_complete and view.exports_complete:
+        return "  🔴 every list above is COMPLETE for this module; absence is an answer"
+    if view.census_complete:
+        return (
+            "  🔴 every list above except exports is COMPLETE for this module; "
+            "__all__ is built dynamically, so absence from exports is not an answer"
+        )
+    skipped = view.unparsed_modules
+    detail = (
+        "; ".join(f"{u.module} ({u.path}): {u.reason} [Python {u.python}]" for u in skipped)
+        or "(unparsed modules not listed)"
+    )
+    return (
+        "  ⚠ lists may be INCOMPLETE: "
+        f"{len(skipped)} module(s) could not be parsed and were skipped: "
+        f"{detail}"
+    )
+
+
 def _module_view_to_text(view: ModuleView) -> str:
     """Terse and COMPLETE. Every list is the whole list unless the text says
     otherwise (a partial `exports`, unparsed modules); see ModuleView."""
@@ -71,31 +99,12 @@ def _module_view_to_text(view: ModuleView) -> str:
         # "(none)" is a real answer here and must not be silence: it is what
         # makes "does this import that" answerable in the negative.
         count = f" ({len(items)})" if len(items) > 6 else ""
-        listed = ", ".join(items) if items else "(none)"
-        if label == "exports" and not view.exports_complete:
-            listed = f"{', '.join(items)} (partial)" if items else "(unknown)"
-        lines.append(f"  {label + count:<13} {listed}")
+        partial = label == "exports" and not view.exports_complete
+        lines.append(f"  {label + count:<13} {_listed(items, partial=partial)}")
     if view.gates:
         lines.append("  exits")
         lines += [_gate_row(g) for g in view.gates]
-    if view.census_complete and view.exports_complete:
-        lines.append("  🔴 every list above is COMPLETE for this module; absence is an answer")
-    elif view.census_complete:
-        lines.append(
-            "  🔴 every list above except exports is COMPLETE for this module; "
-            "__all__ is built dynamically, so absence from exports is not an answer"
-        )
-    else:
-        skipped = view.unparsed_modules
-        detail = (
-            "; ".join(f"{u.module} ({u.path}): {u.reason} [Python {u.python}]" for u in skipped)
-            or "(unparsed modules not listed)"
-        )
-        lines.append(
-            "  ⚠ lists may be INCOMPLETE: "
-            f"{len(skipped)} module(s) could not be parsed and were skipped: "
-            f"{detail}"
-        )
+    lines.append(_completeness_line(view))
     return "\n".join(lines)
 
 

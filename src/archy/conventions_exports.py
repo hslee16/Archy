@@ -18,29 +18,25 @@ archy:owns        Exports, read_exports
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator
+from typing import TypeGuard
 
 from pydantic import BaseModel, ConfigDict
 
-_NAME = "__all__"
-# Wrappers that keep a sequence's members, as in `__all__ = sorted(__all__)`.
-_SAME_MEMBERS = frozenset({"list", "tuple", "sorted", "set"})
-# Builtins that read a sequence and keep no reference a caller could write through.
-_READERS = _SAME_MEMBERS | {
-    "len",
-    "iter",
-    "enumerate",
-    "frozenset",
-    "print",
-    "isinstance",
-    "reversed",
-    "zip",
-}
-_READING_METHODS = frozenset({"index", "count", "copy"})
-_COPYING_METHODS = frozenset({"join", "extend", "fromkeys"})
+from archy.conventions_exports_uses import (
+    SAME_MEMBERS,
+    accounted_uses,
+    binds_all,
+    bound_names,
+    called_name,
+    is_all,
+    may_write,
+    string_value,
+    this_module_names,
+)
+
 _REORDERS = frozenset({"sort", "reverse"})
-# Calls that hand out the module's namespace, so a key can rebind `__all__`.
-_NAMESPACES = frozenset({"globals", "locals", "vars"})
+# `__all__` after a statement, and the use of the name that statement accounts for.
+_Folded = tuple["Exports", ast.AST] | None
 
 
 class Exports(BaseModel):
@@ -64,68 +60,99 @@ class Exports(BaseModel):
 
 def read_exports(tree: ast.Module) -> Exports | None:
     """`__all__` as the module leaves it, or None when nothing declares one."""
-    shadowed = _bound_names(tree)
-    current: Exports | None = None
-    # The uses of the name the fold below has accounted for.
-    accounted: set[ast.AST] = set()
-    for node in tree.body:
-        if isinstance(node, ast.AnnAssign) and node.value is None:
-            accounted.add(node.target)  # declares a type and binds nothing
-            continue
-        folded = _fold(node, current, shadowed)
-        if folded is not None:
-            current, use = folded
-            accounted.add(use)
-    accounted.update(_reading_uses(tree, shadowed))
-    this_module = _this_module_names(tree)
-    accounted.update(_read_only_strings(tree, this_module))
-    if any(_may_write(node, accounted, this_module) for node in ast.walk(tree)):
-        current = (current or Exports()).unsure()
+    shadowed = bound_names(tree)
+    current, accounted = _fold_body(tree, shadowed)
+    accounted |= accounted_uses(tree, shadowed)
+    this_module = this_module_names(tree)
+    if any(n not in accounted and may_write(n, this_module) for n in ast.walk(tree)):
+        return (current or Exports()).unsure()
     return current
 
 
-def _fold(
-    node: ast.stmt, current: Exports | None, shadowed: frozenset[str]
-) -> tuple[Exports, ast.AST] | None:
-    """`__all__` after this statement and the use of the name it accounts for,
-    or None when it is not a form read here."""
+def _fold_body(tree: ast.Module, shadowed: frozenset[str]) -> tuple[Exports | None, set[ast.AST]]:
+    """The top-level statements applied in order, and the uses that accounts for."""
+    current: Exports | None = None
+    accounted: set[ast.AST] = set()
+    for node in tree.body:
+        if _only_declares(node):
+            accounted.add(node.target)
+        elif (folded := _fold(node, current, shadowed)) is not None:
+            current, use = folded
+            accounted.add(use)
+    return current, accounted
+
+
+def _only_declares(node: ast.stmt) -> TypeGuard[ast.AnnAssign]:
+    """`__all__: list[str]` states a type and binds nothing."""
+    return isinstance(node, ast.AnnAssign) and node.value is None
+
+
+def _fold(node: ast.stmt, current: Exports | None, shadowed: frozenset[str]) -> _Folded:
+    """Apply one top-level statement, or None when it is not a form read here."""
     if isinstance(node, ast.Assign | ast.AnnAssign):
-        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-        target = next((t for t in targets if _is_all(t)), None)
-        if node.value is None or target is None:
-            return None
-        value = _read(node.value, current, shadowed)
-        # `__all__ = other = [...]` leaves a second name for the same list.
-        return (value if len(targets) == 1 else value.unsure()), target
-    if isinstance(node, ast.ImportFrom) and any(_binds_all(a) for a in node.names):
-        return Exports(complete=False), next(a for a in node.names if _binds_all(a))
-    if current is None:
-        return None
-    if isinstance(node, ast.AugAssign) and _is_all(node.target):
-        if isinstance(node.op, ast.Add):
-            return current.plus(_read(node.value, current, shadowed)), node.target
-        return current.unsure(), node.target
+        return _fold_assign(node, current, shadowed)
+    if isinstance(node, ast.ImportFrom):
+        return _fold_import(node)
+    return None if current is None else _fold_change(node, current, shadowed)
+
+
+def _fold_change(node: ast.stmt, current: Exports, shadowed: frozenset[str]) -> _Folded:
+    """A statement that edits an `__all__` already declared."""
+    if isinstance(node, ast.AugAssign):
+        return _fold_augment(node, current, shadowed)
     if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
         return _fold_method(node.value, current, shadowed)
     return None
 
 
-def _fold_method(
-    call: ast.Call, current: Exports, shadowed: frozenset[str]
-) -> tuple[Exports, ast.AST] | None:
+def _fold_assign(
+    node: ast.Assign | ast.AnnAssign, current: Exports | None, shadowed: frozenset[str]
+) -> _Folded:
+    targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+    target = next((t for t in targets if is_all(t)), None)
+    if node.value is None or target is None:
+        return None
+    value = _read(node.value, current, shadowed)
+    # `__all__ = other = [...]` leaves a second name for the same list.
+    return (value if len(targets) == 1 else value.unsure()), target
+
+
+def _fold_import(node: ast.ImportFrom) -> _Folded:
+    alias = next((a for a in node.names if binds_all(a)), None)
+    return None if alias is None else (Exports(complete=False), alias)
+
+
+def _fold_augment(node: ast.AugAssign, current: Exports, shadowed: frozenset[str]) -> _Folded:
+    if not is_all(node.target):
+        return None
+    if not isinstance(node.op, ast.Add):
+        return current.unsure(), node.target
+    return current.plus(_read(node.value, current, shadowed)), node.target
+
+
+def _fold_method(call: ast.Call, current: Exports, shadowed: frozenset[str]) -> _Folded:
     """The in-place methods whose effect on the members is certain.
 
     `remove` is not one: names are a set here, so a duplicate would be lost.
     """
     func = call.func
-    if not isinstance(func, ast.Attribute) or not _is_all(func.value):
+    if not isinstance(func, ast.Attribute) or not is_all(func.value):
         return None
     if func.attr in _REORDERS:
         return current, func.value
-    if func.attr == "extend" and len(call.args) == 1:
-        return current.plus(_read(call.args[0], current, shadowed)), func.value
-    if func.attr == "append" and len(call.args) == 1:
-        return current.plus(_element(call.args[0], current, shadowed)), func.value
+    added = _added_by(func.attr, call.args, current, shadowed)
+    return None if added is None else (current.plus(added), func.value)
+
+
+def _added_by(
+    method: str, args: list[ast.expr], current: Exports, shadowed: frozenset[str]
+) -> Exports | None:
+    if len(args) != 1:
+        return None
+    if method == "extend":
+        return _read(args[0], current, shadowed)
+    if method == "append":
+        return _read(ast.List(elts=[args[0]]), current, shadowed)
     return None
 
 
@@ -137,205 +164,38 @@ def _read(node: ast.expr, current: Exports | None, shadowed: frozenset[str]) -> 
     # deep as it is long.
     pending = [node]
     while pending:
-        part = pending.pop()
-        if isinstance(part, ast.List | ast.Tuple | ast.Set):
-            for element in part.elts:
-                if isinstance(element, ast.Starred):
-                    pending.append(element.value)
-                elif (name := _string(element)) is not None:
-                    names.add(name)
-                else:
-                    complete = False
-        elif isinstance(part, ast.BinOp) and isinstance(part.op, ast.Add):
-            pending += [part.left, part.right]
-        elif _is_all(part) and current is not None:
-            names |= current.names
-            complete = complete and current.complete
-        elif (wrapped := _wrapped(part, shadowed)) is not None:
-            pending.append(wrapped)
-        else:
-            complete = False
+        parts, found = _expand(pending.pop(), current, shadowed)
+        pending += parts
+        names |= found.names
+        complete = complete and found.complete
     return Exports(names=frozenset(names), complete=complete)
+
+
+def _expand(
+    node: ast.expr, current: Exports | None, shadowed: frozenset[str]
+) -> tuple[list[ast.expr], Exports]:
+    """One step of `_read`: the sub-expressions still to read, and what this one gave."""
+    if isinstance(node, ast.List | ast.Tuple | ast.Set):
+        return _expand_display(node.elts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return [node.left, node.right], Exports()
+    if is_all(node) and current is not None:
+        return [], current
+    wrapped = _wrapped(node, shadowed)
+    if wrapped is not None:
+        return [wrapped], Exports()
+    return [], Exports(complete=False)
+
+
+def _expand_display(elements: list[ast.expr]) -> tuple[list[ast.expr], Exports]:
+    starred = [e.value for e in elements if isinstance(e, ast.Starred)]
+    plain = [string_value(e) for e in elements if not isinstance(e, ast.Starred)]
+    names = frozenset(name for name in plain if name is not None)
+    return starred, Exports(names=names, complete=None not in plain)
 
 
 def _wrapped(node: ast.expr, shadowed: frozenset[str]) -> ast.expr | None:
     """The sequence inside `sorted(...)` and its kind, or None for anything else."""
-    if (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in _SAME_MEMBERS - shadowed
-        and len(node.args) == 1
-    ):
-        return node.args[0]
-    return None
-
-
-def _element(node: ast.expr, current: Exports, shadowed: frozenset[str]) -> Exports:
-    return _read(ast.List(elts=[node]), current, shadowed)
-
-
-def _string(node: ast.AST) -> str | None:
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return node.value
-    return None
-
-
-def _is_all(node: ast.expr) -> bool:
-    return isinstance(node, ast.Name) and node.id == _NAME
-
-
-def _bound_names(tree: ast.Module) -> frozenset[str]:
-    """Names the module binds anywhere, which therefore may not be the builtins.
-
-    Methods are left out: `class C: def set(...)` shadows nothing outside it.
-    """
-    methods = {
-        member
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ClassDef)
-        for member in node.body
-        if isinstance(member, ast.FunctionDef | ast.AsyncFunctionDef)
-    }
-    bound: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            if node not in methods:
-                bound.add(node.name)
-        elif isinstance(node, ast.alias):
-            bound.add(node.asname or node.name)
-        elif isinstance(node, ast.arg):
-            bound.add(node.arg)
-        elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
-            bound.add(node.id)
-    return frozenset(bound)
-
-
-def _reading_uses(tree: ast.Module, shadowed: frozenset[str]) -> Iterator[ast.AST]:
-    """Expressions in positions that read a sequence without keeping a handle on it."""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Compare):
-            yield from (node.left, *node.comparators)
-        elif isinstance(node, ast.For | ast.AsyncFor | ast.comprehension):
-            yield node.iter
-        elif isinstance(node, ast.If | ast.While | ast.Assert | ast.IfExp):
-            yield node.test
-        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
-            yield node.operand
-        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-            yield from (node.left, node.right)
-        elif isinstance(node, ast.Starred | ast.Subscript) and isinstance(node.ctx, ast.Load):
-            yield node.value
-        elif isinstance(node, ast.Call):
-            yield from _read_by_call(node, shadowed)
-        elif isinstance(node, ast.FunctionDef) and node.name == "__dir__":
-            yield from (n.value for n in ast.walk(node) if isinstance(n, ast.Return) and n.value)
-
-
-def _read_by_call(call: ast.Call, shadowed: frozenset[str]) -> Iterator[ast.AST]:
-    func = call.func
-    if isinstance(func, ast.Name) and func.id in _READERS - shadowed:
-        yield from call.args
-    elif isinstance(func, ast.Attribute) and func.attr in _READING_METHODS:
-        yield func.value
-    elif isinstance(func, ast.Attribute) and func.attr in _COPYING_METHODS:
-        yield from call.args
-
-
-def _read_only_strings(tree: ast.Module, this_module: frozenset[str]) -> Iterator[ast.AST]:
-    """The places a `"__all__"` string only asks about the name."""
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Compare):
-            for operand in (node.left, *node.comparators):
-                yield from (
-                    ast.walk(operand)
-                    if isinstance(operand, ast.Tuple | ast.List | ast.Set)
-                    else (operand,)
-                )
-        elif isinstance(node, ast.Call):
-            yield from _asked_about(node, this_module)
-
-
-def _asked_about(call: ast.Call, this_module: frozenset[str]) -> list[ast.expr]:
-    """The name argument of a `hasattr` or `getattr` that cannot hand out our list."""
-    func = call.func.id if isinstance(call.func, ast.Name) else None
-    if func not in {"getattr", "hasattr"} or not call.args:
-        return []
-    # Another module's `__all__` may be read; this one's would be a handle.
-    if func == "getattr" and _is_this_module(call.args[0], this_module):
-        return []
-    return call.args[1:2]
-
-
-def _may_write(node: ast.AST, accounted: set[ast.AST], this_module: frozenset[str]) -> bool:
-    """Whether this node can change what `__all__` holds in a way not folded."""
-    if node in accounted:
-        return False
-    if isinstance(node, ast.Name):
-        return node.id == _NAME
-    if isinstance(node, ast.alias):
-        return _binds_all(node)
-    if _string(node) == _NAME or (isinstance(node, ast.keyword) and node.arg == _NAME):
-        return True
-    return _binds_by_string(node) or _writes_through_namespace(node, this_module)
-
-
-def _binds_by_string(node: ast.AST) -> bool:
-    """Binding forms that carry the name as a plain string, not a `Name`."""
-    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-        return node.name == _NAME
-    if isinstance(node, ast.ExceptHandler | ast.MatchAs | ast.MatchStar):
-        return node.name == _NAME
-    return isinstance(node, ast.MatchMapping) and node.rest == _NAME
-
-
-def _writes_through_namespace(node: ast.AST, this_module: frozenset[str]) -> bool:
-    """`sys.modules[__name__].__all__`, and `exec` into this module's namespace."""
-    if isinstance(node, ast.Attribute):
-        return node.attr == _NAME and _is_this_module(node.value, this_module)
-    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
-        return False
-    # No positional argument means this is some other function called `exec`.
-    if node.func.id != "exec" or not node.args:
-        return False
-    return len(node.args) == 1 or _is_namespace(node.args[1])
-
-
-def _is_namespace(node: ast.expr) -> bool:
-    return (
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id in _NAMESPACES
-    )
-
-
-def _is_this_module(node: ast.expr, aliases: frozenset[str]) -> bool:
-    """`sys.modules[...]` keyed by `__name__` or a literal, or a name bound to it.
-
-    A literal key may name another module; treating it as this one only costs an
-    "incomplete".
-    """
-    if isinstance(node, ast.Name):
-        return node.id in aliases
-    if not isinstance(node, ast.Subscript):
-        return False
-    key = node.slice
-    return (isinstance(key, ast.Name) and key.id == "__name__") or (
-        isinstance(node.value, ast.Attribute)
-        and node.value.attr == "modules"
-        and _string(key) is not None
-    )
-
-
-def _this_module_names(tree: ast.Module) -> frozenset[str]:
-    """Names assigned from `sys.modules[__name__]`."""
-    return frozenset(
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign) and _is_this_module(node.value, frozenset())
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    )
-
-
-def _binds_all(alias: ast.alias) -> bool:
-    return (alias.asname or alias.name) == _NAME
+    if not isinstance(node, ast.Call) or len(node.args) != 1:
+        return None
+    return node.args[0] if called_name(node) in SAME_MEMBERS - shadowed else None
