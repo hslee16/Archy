@@ -80,11 +80,45 @@ CASES = {
             "module_attr": 'sys.modules[__name__].__all__.append("B")',
             "module_dict": 'sys.modules[__name__].__dict__["__all__"] = []',
             "exec": "exec(code)",
+            "setdefault": 'globals().setdefault("__all__", []).append("B")',
+            "globals_alias": 'g = globals()\ng["__all__"] = ["B"]',
+            "update_keyword": 'globals().update(__all__=["B"])',
+            "update_dict_keyword": 'globals().update(dict(__all__=["B"]))',
+            "globals_pop": 'globals().pop("__all__")',
+            "module_alias": 'this = sys.modules[__name__]\nthis.__all__ = ["B"]',
+            "module_by_name": 'sys.modules["modx"].__all__.append("B")',
+            "own_getattr": 'getattr(sys.modules[__name__], "__all__").append("B")',
+            "reader_as_parameter": "def f(print):\n    print(__all__)",
             "match": "match x:\n    case __all__:\n        pass",
             "except_as": "try:\n    pass\nexcept E as __all__:\n    pass",
             "def": "def __all__():\n    pass",
         }.items()
     },
+    "more_reads": (
+        "\n".join(
+            [
+                '__all__ = ["B", "A"]',
+                "assert __all__ != sorted(__all__)",
+                "x = not __all__",
+                "y = 1 if __all__ else 2",
+                "z = dict.fromkeys(__all__)",
+                "for a, b in zip(__all__, reversed(__all__)):",
+                "    pass",
+                "other = []",
+                "other.extend(__all__)",
+                'if hasattr(other, "__all__"):',
+                '    getattr(other, "__all__")',
+                'ok = "__all__" in ("__all__",)',
+            ]
+        ),
+        {"A", "B"},
+        True,
+    ),
+    "a_method_named_like_a_wrapper": (
+        'class C:\n    def set(self):\n        pass\n__all__ = sorted(set(["A"]))',
+        {"A"},
+        True,
+    ),
     "second_name_for_the_literal": ('__all__ = other = ["A"]', {"A"}, False),
     "shadowed_wrapper": ('def sorted(x):\n    return []\n__all__ = sorted(["A"])', set(), False),
 }
@@ -200,3 +234,17 @@ def test_an_unparsed_module_does_not_claim_its_exports(tmp_path: Path):
     view = compute_module_view(root, "pkg.bad")
 
     assert (view.exports, view.exports_complete) == (None, False)
+
+
+@pytest.mark.parametrize("source", ["exec()", 'def exec(cmd=""):\n    pass\nexec(cmd="ls")'])
+def test_a_project_function_named_exec_does_not_crash(source: str):
+    assert read_exports(ast.parse(source)) is None
+
+
+@pytest.mark.parametrize(
+    "line", ['globals().setdefault("__all__", [])', 'globals().update(__all__=["B"])']
+)
+def test_a_namespace_method_alone_is_a_declaration(line: str):
+    declared = read_exports(ast.parse(line))
+
+    assert declared is not None and not declared.complete

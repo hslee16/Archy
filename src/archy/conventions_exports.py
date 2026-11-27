@@ -2,13 +2,15 @@
 
 The module view promises that absence from a list is an answer, so a partly
 read `__all__` has to say it is partial. Top-level statements are folded in
-order. Every other use of the name has to be one known only to read it, or the
-result is incomplete: listing the ways to write a list (aliases, helpers,
-dunder calls) never finishes, and the miss is a confident wrong answer.
+order. Every other use of the name, or of the string "__all__", has to be one
+known only to read it, or the result is incomplete: listing the ways to write a
+list (aliases, helpers, dunder calls) never finishes, and the miss is a
+confident wrong answer.
 
 Not detected, from one file's syntax: another module editing this one's
-`__all__`, a module `__getattr__` supplying it, and `globals().update` or a
-star import carrying it in without the name appearing.
+`__all__`, a module `__getattr__` supplying it, `globals().update` or a star
+import carrying it in without the name appearing, and an operand class whose
+own operators keep a reference to the list.
 
 archy:owns        Exports, read_exports
 """
@@ -24,8 +26,18 @@ _NAME = "__all__"
 # Wrappers that keep a sequence's members, as in `__all__ = sorted(__all__)`.
 _SAME_MEMBERS = frozenset({"list", "tuple", "sorted", "set"})
 # Builtins that read a sequence and keep no reference a caller could write through.
-_READERS = _SAME_MEMBERS | {"len", "iter", "enumerate", "frozenset", "print", "isinstance"}
+_READERS = _SAME_MEMBERS | {
+    "len",
+    "iter",
+    "enumerate",
+    "frozenset",
+    "print",
+    "isinstance",
+    "reversed",
+    "zip",
+}
 _READING_METHODS = frozenset({"index", "count", "copy"})
+_COPYING_METHODS = frozenset({"join", "extend", "fromkeys"})
 _REORDERS = frozenset({"sort", "reverse"})
 # Calls that hand out the module's namespace, so a key can rebind `__all__`.
 _NAMESPACES = frozenset({"globals", "locals", "vars"})
@@ -65,7 +77,9 @@ def read_exports(tree: ast.Module) -> Exports | None:
             current, use = folded
             accounted.add(use)
     accounted.update(_reading_uses(tree, shadowed))
-    if any(_may_write(node, accounted) for node in ast.walk(tree)):
+    this_module = _this_module_names(tree)
+    accounted.update(_read_only_strings(tree, this_module))
+    if any(_may_write(node, accounted, this_module) for node in ast.walk(tree)):
         current = (current or Exports()).unsure()
     return current
 
@@ -171,13 +185,26 @@ def _is_all(node: ast.expr) -> bool:
 
 
 def _bound_names(tree: ast.Module) -> frozenset[str]:
-    """Names the module defines or imports, which therefore are not the builtins."""
+    """Names the module binds anywhere, which therefore may not be the builtins.
+
+    Methods are left out: `class C: def set(...)` shadows nothing outside it.
+    """
+    methods = {
+        member
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+        for member in node.body
+        if isinstance(member, ast.FunctionDef | ast.AsyncFunctionDef)
+    }
     bound: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
-            bound.add(node.name)
+            if node not in methods:
+                bound.add(node.name)
         elif isinstance(node, ast.alias):
             bound.add(node.asname or node.name)
+        elif isinstance(node, ast.arg):
+            bound.add(node.arg)
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
             bound.add(node.id)
     return frozenset(bound)
@@ -187,11 +214,13 @@ def _reading_uses(tree: ast.Module, shadowed: frozenset[str]) -> Iterator[ast.AS
     """Expressions in positions that read a sequence without keeping a handle on it."""
     for node in ast.walk(tree):
         if isinstance(node, ast.Compare):
-            yield from node.comparators
+            yield from (node.left, *node.comparators)
         elif isinstance(node, ast.For | ast.AsyncFor | ast.comprehension):
             yield node.iter
-        elif isinstance(node, ast.If | ast.While | ast.Assert):
+        elif isinstance(node, ast.If | ast.While | ast.Assert | ast.IfExp):
             yield node.test
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            yield node.operand
         elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
             yield from (node.left, node.right)
         elif isinstance(node, ast.Starred | ast.Subscript) and isinstance(node.ctx, ast.Load):
@@ -208,11 +237,36 @@ def _read_by_call(call: ast.Call, shadowed: frozenset[str]) -> Iterator[ast.AST]
         yield from call.args
     elif isinstance(func, ast.Attribute) and func.attr in _READING_METHODS:
         yield func.value
-    elif isinstance(func, ast.Attribute) and func.attr == "join":
+    elif isinstance(func, ast.Attribute) and func.attr in _COPYING_METHODS:
         yield from call.args
 
 
-def _may_write(node: ast.AST, accounted: set[ast.AST]) -> bool:
+def _read_only_strings(tree: ast.Module, this_module: frozenset[str]) -> Iterator[ast.AST]:
+    """The places a `"__all__"` string only asks about the name."""
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            for operand in (node.left, *node.comparators):
+                yield from (
+                    ast.walk(operand)
+                    if isinstance(operand, ast.Tuple | ast.List | ast.Set)
+                    else (operand,)
+                )
+        elif isinstance(node, ast.Call):
+            yield from _asked_about(node, this_module)
+
+
+def _asked_about(call: ast.Call, this_module: frozenset[str]) -> list[ast.expr]:
+    """The name argument of a `hasattr` or `getattr` that cannot hand out our list."""
+    func = call.func.id if isinstance(call.func, ast.Name) else None
+    if func not in {"getattr", "hasattr"} or not call.args:
+        return []
+    # Another module's `__all__` may be read; this one's would be a handle.
+    if func == "getattr" and _is_this_module(call.args[0], this_module):
+        return []
+    return call.args[1:2]
+
+
+def _may_write(node: ast.AST, accounted: set[ast.AST], this_module: frozenset[str]) -> bool:
     """Whether this node can change what `__all__` holds in a way not folded."""
     if node in accounted:
         return False
@@ -220,7 +274,9 @@ def _may_write(node: ast.AST, accounted: set[ast.AST]) -> bool:
         return node.id == _NAME
     if isinstance(node, ast.alias):
         return _binds_all(node)
-    return _binds_by_string(node) or _writes_through_namespace(node)
+    if _string(node) == _NAME or (isinstance(node, ast.keyword) and node.arg == _NAME):
+        return True
+    return _binds_by_string(node) or _writes_through_namespace(node, this_module)
 
 
 def _binds_by_string(node: ast.AST) -> bool:
@@ -232,30 +288,19 @@ def _binds_by_string(node: ast.AST) -> bool:
     return isinstance(node, ast.MatchMapping) and node.rest == _NAME
 
 
-def _writes_through_namespace(node: ast.AST) -> bool:
-    """`globals()["__all__"]`, `setattr(m, "__all__", v)`, `exec` and the like."""
-    if isinstance(node, ast.Subscript):
-        return _string(node.slice) == _NAME and _is_namespace(node.value)
+def _writes_through_namespace(node: ast.AST, this_module: frozenset[str]) -> bool:
+    """`sys.modules[__name__].__all__`, and `exec` into this module's namespace."""
     if isinstance(node, ast.Attribute):
-        return node.attr == _NAME and _is_this_module(node.value)
-    if not isinstance(node, ast.Call):
+        return node.attr == _NAME and _is_this_module(node.value, this_module)
+    if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
         return False
-    name = node.func.id if isinstance(node.func, ast.Name) else None
-    if name == "setattr":
-        return len(node.args) > 1 and _string(node.args[1]) == _NAME
-    if name == "exec":
-        return len(node.args) == 1 or _is_namespace(node.args[1])
-    return (
-        isinstance(node.func, ast.Attribute)
-        and node.func.attr == "update"
-        and _is_namespace(node.func.value)
-        and any(_string(n) == _NAME for a in node.args for n in ast.walk(a))
-    )
+    # No positional argument means this is some other function called `exec`.
+    if node.func.id != "exec" or not node.args:
+        return False
+    return len(node.args) == 1 or _is_namespace(node.args[1])
 
 
 def _is_namespace(node: ast.expr) -> bool:
-    if isinstance(node, ast.Attribute):
-        return node.attr == "__dict__" and _is_this_module(node.value)
     return (
         isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
@@ -263,12 +308,32 @@ def _is_namespace(node: ast.expr) -> bool:
     )
 
 
-def _is_this_module(node: ast.expr) -> bool:
-    """`sys.modules[__name__]`."""
-    return (
-        isinstance(node, ast.Subscript)
-        and isinstance(node.slice, ast.Name)
-        and node.slice.id == "__name__"
+def _is_this_module(node: ast.expr, aliases: frozenset[str]) -> bool:
+    """`sys.modules[...]` keyed by `__name__` or a literal, or a name bound to it.
+
+    A literal key may name another module; treating it as this one only costs an
+    "incomplete".
+    """
+    if isinstance(node, ast.Name):
+        return node.id in aliases
+    if not isinstance(node, ast.Subscript):
+        return False
+    key = node.slice
+    return (isinstance(key, ast.Name) and key.id == "__name__") or (
+        isinstance(node.value, ast.Attribute)
+        and node.value.attr == "modules"
+        and _string(key) is not None
+    )
+
+
+def _this_module_names(tree: ast.Module) -> frozenset[str]:
+    """Names assigned from `sys.modules[__name__]`."""
+    return frozenset(
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign) and _is_this_module(node.value, frozenset())
+        for target in node.targets
+        if isinstance(target, ast.Name)
     )
 
 
