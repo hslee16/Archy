@@ -32,11 +32,14 @@ jobs:
             client: cursor
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
-          enable-cache: true
+          # No cache in a job that holds API keys: a poisoned entry would run here.
+          enable-cache: false
 
       - name: Set up Python
         run: uv python install 3.10
@@ -87,21 +90,30 @@ jobs:
         # produced a config the client could load.
         run: uv run python tests/install/e2e_assert_config.py ${{ matrix.client == 'claude-code' && 'claude' || 'cursor' }}
 
+      # What a real `archy_score` answers. The client's server is `uvx archy mcp`,
+      # so the expectation comes from the same published archy.
+      - name: Record the expected score
+        shell: bash
+        run: uvx archy score . --format json > expected.json
+
       - name: Headless reachability (Claude Code)
         if: matrix.client == 'claude-code' && env.HAS_ANTHROPIC_KEY == 'true'
+        # `bash` on every OS, which also sets pipefail: a failing client fails.
+        shell: bash
         run: |
-          claude -p "Call the archy_score tool on the current directory and print only the overall number." \
+          claude -p "Call the archy_score tool on the current directory and print only the overall number, to three decimal places." \
             --allowedTools "mcp__archy__archy_score" 2>&1 | tee out.txt
-          grep -qiE "archy|overall|[0-9]" out.txt
+          uv run python tests/install/e2e_assert_score.py expected.json out.txt
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           DISABLE_AUTOUPDATER: "1"
 
       - name: Headless reachability (Cursor)
         if: matrix.client == 'cursor' && env.HAS_CURSOR_KEY == 'true'
+        shell: bash
         run: |
-          cursor-agent --disable-auto-update -p "Call the archy_score tool on the current directory and print the overall number." 2>&1 | tee out.txt
-          grep -qiE "archy|overall|[0-9]" out.txt
+          cursor-agent --disable-auto-update -p "Call the archy_score tool on the current directory and print the overall number, to three decimal places." 2>&1 | tee out.txt
+          uv run python tests/install/e2e_assert_score.py expected.json out.txt
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
 
