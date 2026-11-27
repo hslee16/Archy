@@ -77,33 +77,6 @@ def test_output_schema_advertises_every_computed_field():
     assert missing == []
 
 
-@pytest.mark.parametrize("name", sorted(_PROJECT_PATH_ARGS))
-def test_mcp_tool_rejects_a_nonexistent_project_path(tmp_path: Path, name: str):
-    """A typo path fails the call and is not created on disk (#552).
-
-    The fixture is absent before the call. The CLI already rejects that with
-    click.Path(exists=True, file_okay=False). These tools used to pass the
-    string through, and open_index's mkdir(parents=True) created the path and
-    `.archy/index.db`, then scored the empty tree as 1.0.
-    """
-    missing = tmp_path / "no-such-project"
-    assert not missing.exists()
-
-    from archy.mcp_compat import ToolError
-
-    # mcp 2.x wraps the ValueError as ToolError("Error executing tool <name>")
-    # without the underlying message; 1.x keeps it. Assert the raise + no mkdir.
-    with pytest.raises(ToolError):
-        _call_tool(
-            create_server(),
-            name,
-            {"path": str(missing), **_PROJECT_PATH_ARGS[name]},
-        )
-
-    assert not missing.exists()
-    assert not (missing / ".archy" / "index.db").exists()
-
-
 def test_project_path_guard_covers_every_registered_tool():
     server = create_server()
     names = {tool.name for tool in asyncio.run(server.list_tools())}

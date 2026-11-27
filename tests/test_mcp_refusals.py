@@ -13,21 +13,9 @@ import pytest
 
 from archy.mcp import create_server
 from archy.mcp_compat import ToolError
-from tests.mcp_helpers import _list_tools
+from archy.mcp_runs import run_graph
+from tests.mcp_helpers import _PROJECT_PATH_ARGS
 from tests.mcp_helpers import call_tool as _call_tool
-
-# A value for each argument, besides `path`, that some tool requires.
-_REQUIRED = {"module": "pkg", "files": ["pkg/a.py"]}
-
-
-def _tools() -> dict[str, dict]:
-    """Every tool, with the arguments it requires besides `path`."""
-    found = {}
-    for tool in _list_tools(create_server()):
-        schema = tool.model_dump(by_alias=True)["inputSchema"]
-        assert "path" in schema.get("required", []), f"{tool.name} takes no path"
-        found[tool.name] = {k: _REQUIRED[k] for k in schema["required"] if k != "path"}
-    return found
 
 
 @pytest.fixture
@@ -39,29 +27,39 @@ def project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-@pytest.mark.parametrize("tool", sorted(_tools()))
+@pytest.mark.parametrize("tool", sorted(_PROJECT_PATH_ARGS))
 def test_every_tool_refuses_a_directory_that_does_not_exist(tool: str, tmp_path: Path):
     missing = tmp_path / "typo"
 
     with pytest.raises(ToolError) as caught:
-        _call_tool(create_server(), tool, {"path": str(missing), **_tools()[tool]})
+        _call_tool(create_server(), tool, {"path": str(missing), **_PROJECT_PATH_ARGS[tool]})
 
     assert str(caught.value).endswith(f"Directory '{missing}' does not exist.")
     assert not missing.exists()
 
 
-@pytest.mark.parametrize("tool", sorted(_tools()))
+@pytest.mark.parametrize("tool", sorted(_PROJECT_PATH_ARGS))
 def test_every_tool_refuses_a_file_given_as_the_project(tool: str, project: Path):
     file = project / "pkg" / "a.py"
 
     with pytest.raises(ToolError) as caught:
-        _call_tool(create_server(), tool, {"path": str(file), **_tools()[tool]})
+        _call_tool(create_server(), tool, {"path": str(file), **_PROJECT_PATH_ARGS[tool]})
 
     assert str(caught.value).endswith(f"Directory '{file}' is a file.")
 
 
 def test_a_negative_graph_depth_is_refused_and_zero_is_not(project: Path):
     arguments = {"path": str(project), "focus": ["pkg.a"]}
+    with pytest.raises(ValueError, match=r"^depth must be >= 0; got -1$"):
+        run_graph(
+            project,
+            response_format="summary",
+            focus=["pkg.a"],
+            depth=-1,
+            internal_only=True,
+            max_nodes=500,
+            top_n=20,
+        )
 
     with pytest.raises(ToolError) as caught:
         _call_tool(create_server(), "archy_graph", {**arguments, "depth": -1})
