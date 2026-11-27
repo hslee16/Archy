@@ -1,0 +1,79 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>ad35aef80490a6edc</task-id>
+<tool-use-id>toolu_01XXcYSo7PLVwm9yLJbz1iLY</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/ad35aef80490a6edc.output</output-file>
+<status>completed</status>
+<summary>Agent "Second adversarial round for __all__" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** the invariant does not hold. There is one crash and several silent "complete but wrong" results. I reproduced each by executing the source under CPython 3.10 and comparing with `read_exports`.
+
+**1. Crash on a bare `exec` call with no positional arguments** (`src/archy/conventions_exports.py:247`)
+- `def exec(cmd=""): pass` followed by `exec(cmd="ls")`, or a plain `exec()`, raises `IndexError` on `node.args[1]`.
+- It does not need an `__all__` in the module. I confirmed `archy conventions &lt;dir&gt;` dies with a traceback, so one such file kills the whole run.
+- Realism is low to moderate: it needs a project function named `exec`, which command and SSH wrappers sometimes have.
+- Fix: return False when `node.args` is empty. No test covers this.
+
+**2. Namespace writes reported as complete** (`_writes_through_namespace`, `_is_namespace`, `_is_this_module`)
+
+Realistic, in rough order:
+
+| Source (after `__all__ = ["A"]`) | Runtime | archy says |
+|---|---|---|
+| `globals().setdefault("__all__", []).append("B")` | A, B | `["A"]`, True |
+| the same line with no prior `__all__` | B | `None`, "no `__all__`" |
+| `this = sys.modules[__name__]; this.__all__.append("B")` (or `this.__all__ = [...]`) | changed | `["A"]`, True |
+| `globals().update(__all__=["B"])` (also `update(dict(__all__=...))`) | B | `["A"]`, True |
+| `g = globals(); g["__all__"] = ["B"]` | B | `["A"]`, True |
+
+- The `setdefault` form is the usual body of a homegrown `@public` / `export` decorator, so I would fix it first.
+- The `update` keyword case is not covered by the docstring's exemption, because the name does appear. Only `call.args` is searched, not `call.keywords`.
+
+Less common, same result (`["A"]`, True, but runtime differs):
+- `globals().get("__all__").append(...)`
+- `globals().__setitem__("__all__", ...)`
+- `globals().pop("__all__")`
+- `getattr(sys.modules[__name__], "__all__").append(...)`
+- `sys.modules["modx"].__all__.append(...)` using the module's literal name
+
+Contrived: `eval("__all__").append(...)`, a self-import then `modx.__all__.append(...)`, and `exec(code, ns)` with `ns = globals()`.
+
+Suggested fix:
+- Treat any string constant `"__all__"` or keyword `__all__=` used with a namespace method as a write.
+- Treat any `.__all__` on a name assigned from `sys.modules[__name__]` as this module's.
+- A broader rule, "the string `"__all__"` anywhere outside a known read means incomplete", matches the approach already taken for `Name` uses.
+
+**3. Read-only allowlist holes, all contrived**
+
+Each gave `["A"]`, True while the runtime value was `["A", "B"]`. I would not expect any in real code:
+- **Shadowed readers:** `_bound_names` ignores function and lambda parameters (`ast.arg`), so `def f(print): print(__all__)` is trusted. A `from evil import *` that supplies `print` is also missed. The parameter case is a one-line fix.
+- **Custom operands:** `E() == __all__`, `__all__ + E()` through `__radd__`, `E() + __all__`, a custom `.join(__all__)`, and a metaclass `__instancecheck__`.
+- **Handles that escape:** `__dir__().append("B")` (module or method), and `iter(__all__).__reduce__()`.
+
+`for`, comprehensions, slicing, starred loads, walrus, `global` writes, `del`, and class or local `__all__` produced no wrong "complete".
+
+**4. False incompletes (safe direction)**
+- **Plausible in real code:**
+  - A method or local anywhere in the module named `set`, `list`, `tuple` or `sorted` disables that wrapper. For example, `class C: def set(...)` makes `__all__ = sorted(set(__all__))` read as `[]`, partial.
+  - `assert __all__ == sorted(__all__)` fails because only the right side of a comparison counts as a read.
+  - `not __all__`, `__all__ and x`, and a conditional expression testing `__all__`.
+  - `dict.fromkeys(__all__)` (including the dedupe idiom), `reversed`, `zip`, `map`, and `other.extend(__all__)`.
+- **Rare:** a class-body or function-local `__all__` turns a module with no `__all__` into "(unknown)".
+- **Seen at scale:** 108 of 174 incompletes in the venv's site-packages are scipy's `all=__all__` deprecation shim. That is defensible, since the list is handed to a helper.
+
+**5. Performance (low)**
+- Folding is quadratic in the number of `__all__ +=` or `.append` statements, because each one rebuilds the frozenset.
+- 2,000 statements take 0.15 to 0.26 s, 8,000 take 3 to 5 s, and 32,000 take 40 to 64 s.
+- A single large literal is fine (32,000 names in 0.13 s).
+- Only generated code would hit this. Accumulating into one mutable set fixes it.
+
+**Fold order:** I found no wrong results from conditional or early definitions, `del`, top-level `try`/`except`, or redefinition.
+
+**Real-code check:** across 214 importable stdlib modules marked complete, the runtime `__all__` matched in all 214. There were no crashes over the stdlib or the venv's packages.
+
+The working tree is unchanged. The scratch scripts `h.py` and `c.py` are in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r2/`.</result>
+<usage><subagent_tokens>84731</subagent_tokens><tool_uses>5</tool_uses><duration_ms>285638</duration_ms></usage>
+</task-notification>
