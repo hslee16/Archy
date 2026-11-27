@@ -354,12 +354,27 @@ def _emit_headers(
         include_tests=include_tests,
     )
     run = _sync_headers(headers, path, write=write, check=check)
+    if write or check:
+        errors = {**_unreadable(report, path), **run.errors}
+        run = run.model_copy(update={"errors": errors})
     if fmt == "json":
         click.echo(json.dumps(_headers_payload(run), indent=2, sort_keys=True))
     else:
         _echo_headers_text(run, write=write, check=check)
     if (check and run.stale) or run.errors:
         sys.exit(1)
+
+
+def _unreadable(report: ConventionsReport, root: Path) -> dict[str, str]:
+    """Modules the census skipped because they cannot be opened: neither checked
+    nor written, so silence about them would read as a clean tree."""
+    found: dict[str, str] = {}
+    for skipped in report.unparsed_modules:
+        try:
+            (root / skipped.path).open("rb").close()
+        except OSError as exc:
+            found[skipped.module] = str(exc)
+    return found
 
 
 class _HeaderRun(BaseModel):
