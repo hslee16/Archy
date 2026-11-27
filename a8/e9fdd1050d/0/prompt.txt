@@ -1,0 +1,98 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>af57c14db8732cf5a</task-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/af57c14db8732cf5a.output</output-file>
+<status>completed</status>
+<summary>Agent "Second review of class resolution" is waiting on its own background work</summary>
+<note>This agent stopped with background work of its own still running. It may resume on its own when that work completes or reports, and the same task-id notifies again if it does; the result below may be interim.</note>
+<result>That monitor timed out without events, but the job it was watching had already finished and its output is in the report above. Nothing is still pending, so I am not re-arming it.</result>
+<usage><subagent_tokens>113503</subagent_tokens><tool_uses>20</tool_uses><duration_ms>2325716</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>abcc35d2fefb1dc04</task-id>
+<tool-use-id>toolu_01YJPPtjRQR1w8Hqe5GAtxTh</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/abcc35d2fefb1dc04.output</output-file>
+<status>killed</status>
+<summary>Agent "Review plugin launcher PATH fix" was stopped by Claude</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ae237dbed57f51149</task-id>
+<tool-use-id>toolu_01LErAvLanFFioig1HgK7fx7</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/ae237dbed57f51149.output</output-file>
+<status>completed</status>
+<summary>Agent "Bounded review of launcher fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Yes, a project file can still be executed through this launcher.** The change stops the launcher itself from picking up project binaries, but its children still inherit the unfiltered `PATH`.
+
+## Belongs in this change
+
+**1. Children inherit relative `PATH` entries.** I reproduced this with `PATH=".:&lt;abs&gt;:/usr/bin:/bin"` and the project as the working directory:
+- **Real `uvx`:** the project's `./python3` ran during uv's interpreter discovery. I ran it offline with an empty managed-Python directory. A machine with a uv-managed Python may not search `PATH` at all.
+- **Wrapper with `#!/usr/bin/env bash`** (the shape pyenv and asdf shims take, using a stand-in `archy`): the project's `./bash` ran.
+- **Python child calling `git` by name** (stand-in script): the project's `./git` ran. archy does this itself in `gitlog.py`, `coupling.py`, `hotspots.py` and `history.py`.
+
+The fix is to sanitise the `PATH` passed on to children, for example near the top of the launcher:
+```js
+process.env.PATH = (process.env.PATH || "").split(delimiter).filter(isAbsolute).join(delimiter);
+```
+In a temp copy, this turned the real-`uvx` case from "project python ran" to clean. The `bash` and `git` cases use the same inherited `PATH`, but I did not re-run them with the patch. It needs a test where an absolute fake tool calls a bare command and the project plants that command.
+
+**2. The `cmd.exe` test is too weak.** I mutated only a temp copy:
+
+| Mutation | New tests |
+|---|---|
+| `.filter(Boolean)` (protection removed) | 6 fail (good) |
+| Block only `.` | 3 fail (good) |
+| Block only named relative directories | 3 fail (good) |
+| `command: "cmd"` | 1 fails (good) |
+| `command: 'cmd'` | **all pass** |
+| `command: "cmd.exe"` | **all pass** |
+| `CMD_EXE = process.env.ComSpec \|\| "cmd"` | **all pass** |
+
+The `PATH` tests are sound. The `cmd` test only matches source strings. Either assert the exact `CMD_EXE` definition and `command: CMD_EXE`, or run `spawnArgs` with a stubbed platform.
+
+## Separate ticket
+
+- **Windows batch wrappers (reasoned, not run):** inside a `.cmd` or `.bat` file, `cmd.exe` searches the working directory for bare commands whatever `PATH` says. So a shim that calls `python` or `node` by name could run the project's copy. Setting `NoDefaultCurrentDirectoryInExePath=1` in the child environment should close this. It is a one-liner, so it could also go in this change if you can check it on Windows.
+
+## Legitimate setups
+
+- **Relative `PATH` entries** such as `.venv/bin` or `node_modules/.bin`: an `archy`, `uvx` or `python` found only that way is no longer used. This is intended, but the error then says "found no `archy` or `uvx` on PATH", which could confuse. It is worth a line in the plugin README.
+- **Child tools under the suggested fix:** tools reachable only through a relative entry would also disappear for child processes.
+- **Quoted, `~` or unexpanded `%VAR%` entries:** I see no regression, since the old lookup did not expand them either.
+- **Absolute entries inside the project** (an activated venv, direnv's `PATH_add`): these still run. That is the user's own configuration.
+
+## Gates
+
+- `uv run archy check .`: exit 0
+- `uv run archy cycles . --strict`: exit 0 (no cycles)
+
+I did not edit the working tree; `git status` shows only the untracked `bench/diff_duplicates_precision.jsonl` that was there at the start. Temporary copies are in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/adv1020`. The files under review are `/Users/hosanglee/archy/plugins/claude/bin/archy-mcp.mjs` and `/Users/hosanglee/archy/tests/test_plugin.py`.</result>
+<usage><subagent_tokens>74487</subagent_tokens><tool_uses>8</tool_uses><duration_ms>96800</duration_ms></usage>
+</task-notification>
