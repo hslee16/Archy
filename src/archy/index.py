@@ -10,9 +10,11 @@ code path, which is what guarantees the cached graph is byte-identical to a cold
 incremental-resolution invalidation hazard entirely.
 
 The DB at `.archy/index.db` is a pure cache: deleting it only costs a cold
-reparse, never data. A schema-version bump drops and rebuilds it.
+reparse, never data. A schema-version bump drops and rebuilds it, and a row
+written by a different archy or tree-sitter version is re-parsed.
 
-archy:owns        SyncStats, build_graph_cached, default_db_path, open_index, sync
+archy:owns        SyncStats, build_graph_cached, default_db_path, load_cached_parse,
+                  open_index, sync
 archy:mirrored-by default_db_path -> archy.cli_install, archy.watcher,
                   open_index -> archy.cli_install, archy.watcher,
                   sync -> archy.cli_install, archy.watcher
@@ -24,11 +26,13 @@ import hashlib
 import sqlite3
 from collections.abc import Iterable
 from datetime import datetime, timezone
+from importlib.metadata import version
 from pathlib import Path
 
 import networkx as nx
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+from archy import __version__
 from archy.graph import (
     DEFAULT_IGNORED_DIRS,
     Module,
@@ -48,6 +52,24 @@ from archy.parser import ParseResult, parse_file
 # False and report every TYPE_CHECKING-guarded import as a runtime dependency
 # until the file happened to change.
 SCHEMA_VERSION = 4
+
+# A parser behaviour fix changes no shape, so no hand bump would catch it (#740).
+# Stamped on each row, not once per DB: a server still running the old version
+# after an upgrade keeps writing to the same file.
+_BUILT_BY = (
+    f"archy={__version__} tree-sitter={version('tree-sitter')} "
+    f"tree-sitter-python={version('tree-sitter-python')}"
+)
+
+
+class _CacheRow(ParseResult):
+    """The persisted form of a `ParseResult`.
+
+    `built_by` sits beside the parse fields, not around them, so an older archy
+    reading this row ignores it instead of loading an empty parse.
+    """
+
+    built_by: str
 
 
 class SyncStats(BaseModel):
@@ -121,19 +143,26 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _load_cached_parse(parse_json: str) -> ParseResult | None:
+def _dump_parse(result: ParseResult) -> str:
+    return _CacheRow(built_by=_BUILT_BY, **dict(result)).model_dump_json()
+
+
+def load_cached_parse(parse_json: str) -> ParseResult | None:
     """Deserialize a cached `parse_json`, or `None` if it is unusable.
 
-    A row can become corrupt (interrupted write, disk fault) or schema-stale (a
-    `ParseResult` change shipped without a `SCHEMA_VERSION` bump). The DB is a
-    pure cache, so an unusable row is a miss, not a fatal error: returning `None`
-    lets `sync()` fall through to a reparse that overwrites it. Mirrors how
+    A row can become corrupt (interrupted write, disk fault), schema-stale (a
+    `ParseResult` change shipped without a `SCHEMA_VERSION` bump) or come from
+    another archy or tree-sitter version. The DB is a pure cache, so an
+    unusable row is a miss, not a fatal error: returning `None` lets `sync()` fall through to a reparse that overwrites it. Mirrors how
     `history.read()` skips a corrupt line rather than crashing.
     """
     try:
-        return ParseResult.model_validate_json(parse_json)
+        row = _CacheRow.model_validate_json(parse_json)
     except ValidationError:
         return None
+    if row.built_by != _BUILT_BY:
+        return None
+    return ParseResult(**{name: getattr(row, name) for name in ParseResult.model_fields})
 
 
 def sync(
@@ -171,12 +200,12 @@ def sync(
         row = existing.get(path)
 
         if row is not None and row["mtime"] == mtime and row["size"] == size:
-            cached = _load_cached_parse(row["parse_json"])
+            cached = load_cached_parse(row["parse_json"])
             if cached is not None:
                 results[module.qualname] = cached
                 unchanged += 1
                 continue
-            # Corrupt/schema-incompatible row: fall through to a reparse, which
+            # Unusable row: fall through to a reparse, which
             # overwrites it. Keeps the docstring's "pure cache" promise intact.
 
         try:
@@ -184,7 +213,7 @@ def sync(
         except OSError:
             continue  # vanished after stat; skip this build, re-parsed next time
         if row is not None and row["sha256"] == sha:
-            cached = _load_cached_parse(row["parse_json"])
+            cached = load_cached_parse(row["parse_json"])
             if cached is not None:
                 # Stat changed (e.g. a git checkout touched mtime) but content
                 # did not: refresh the stat columns, reuse the cached parse.
@@ -205,7 +234,7 @@ def sync(
             "ON CONFLICT(path) DO UPDATE SET "
             "mtime = excluded.mtime, size = excluded.size, sha256 = excluded.sha256, "
             "parse_json = excluded.parse_json, last_parsed_at = excluded.last_parsed_at",
-            (path, mtime, size, sha, result.model_dump_json(), _now()),
+            (path, mtime, size, sha, _dump_parse(result), _now()),
         )
         results[module.qualname] = result
         reparsed += 1

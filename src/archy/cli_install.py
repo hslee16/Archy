@@ -112,14 +112,15 @@ def index_status(path: Path) -> None:
     analysis tool syncs on demand, so a result is never stale and an agent
     rarely needs this mid-task. Reports the db location, the cached file
     count, and how far the cache has drifted from the tree: `stale` (cached,
-    but the file's mtime or size changed, so the next sync rehashes it),
+    but the file's mtime or size changed, or another archy or tree-sitter
+    version wrote the row, so the next sync does not reuse it as is),
     `missing` (cached, but no longer on disk, so the next sync prunes it) and
     `unindexed` (on disk, not cached yet). The counts compare paths exactly as
     `archy index sync PATH` does. Nothing is parsed, but opening the cache may
     initialize an empty database or rebuild one from an older schema version.
     `watching` is an MCP-server-only concept and does not apply to a one-shot CLI call.
     """
-    from archy.index import default_db_path
+    from archy.index import default_db_path, load_cached_parse
 
     db = default_db_path(path)
     if not db.exists():
@@ -128,12 +129,13 @@ def index_status(path: Path) -> None:
     modules = discover_modules(path, **_graph_kwargs_or_exit(path))
     conn = _open_index_or_exit(db, path)
     try:
-        rows = conn.execute("SELECT path, mtime, size FROM files").fetchall()
+        rows = conn.execute("SELECT path, mtime, size, parse_json FROM files").fetchall()
     except sqlite3.DatabaseError as exc:
         raise _cache_error(db, path, exc) from exc
     finally:
         conn.close()
     cached = {row["path"]: (row["mtime"], row["size"]) for row in rows}
+    unusable = {row["path"] for row in rows if load_cached_parse(row["parse_json"]) is None}
     stale = unindexed = 0
     on_disk: set[str] = set()
     for module in modules:
@@ -145,7 +147,7 @@ def index_status(path: Path) -> None:
         on_disk.add(key)
         if key not in cached:
             unindexed += 1
-        elif cached[key] != (stat.st_mtime, stat.st_size):
+        elif key in unusable or cached[key] != (stat.st_mtime, stat.st_size):
             stale += 1
     missing = sum(1 for key in cached if key not in on_disk)
     click.echo(
