@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "a5f3959e9e43",
+  "strategy": "manual-commit",
+  "branch": "alee/766-plugin-python-fallback",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "plugins/claude/README.md",
+    "plugins/claude/bin/archy-mcp.mjs",
+    "tests/test_plugin.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a5/f3959e9e43/0/metadata.json",
+      "transcript": "/a5/f3959e9e43/0/full.jsonl",
+      "content_hash": "/a5/f3959e9e43/0/content_hash.txt",
+      "prompt": "/a5/f3959e9e43/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 18,
+    "cache_creation_tokens": 11916,
+    "cache_read_tokens": 1211921,
+    "output_tokens": 7931,
+    "api_call_count": 6
+  }
+}

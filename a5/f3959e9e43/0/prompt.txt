@@ -1,0 +1,123 @@
+<task-notification>
+<task-id>a2016073ed1f5c158</task-id>
+<tool-use-id>toolu_01DK7um3fhpgxmKMxApyRU1e</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a2016073ed1f5c158.output</output-file>
+<status>completed</status>
+<summary>Agent "Review test_plugin.py Python" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL** (1 minor finding). I did not call `mark_review_as_passed`.
+
+File: `/Users/hosanglee/archy/tests/test_plugin.py`
+
+1. **Lines:** 249-254, 347-355 and 413-416.
+   - **Criterion:** "DRY: no copy-pasted blocks that should be a shared helper".
+   - **Construct:** the launcher invocation, `["node", str(PLUGIN_LAUNCHER)]` with `env={**os.environ, "PATH": str(&lt;bin dir&gt;)}`, is written out three times. The copy in `test_plugin_launcher_serves_mcp_through_a_real_python` is new on this branch. The other two are in `_run_launcher` and `test_plugin_launcher_forwards_termination`.
+   - **Suggested fix:** add one helper for the shared parts and use it at all three sites, passing each site's own options (`capture_output`, pipes, `cwd`):
+
+     ```python
+     def _spawn_launcher(path_dir: Path, **kwargs) -&gt; subprocess.Popen[str]:
+         return subprocess.Popen(
+             ["node", str(PLUGIN_LAUNCHER)],
+             env={**os.environ, "PATH": str(path_dir)},
+             text=True,
+             **kwargs,
+         )
+     ```
+
+     `_run_launcher` uses `subprocess.run`, so a smaller alternative is a `_launcher_env(path_dir)` helper plus a `LAUNCHER_ARGV` constant, shared by all three.
+
+The other listed criteria had no violations I would report:
+- `from __future__ import annotations` is present.
+- The type syntax, naming, import grouping and `pathlib` use are all fine (`os` is not used for paths).
+- No line is over 100 characters.
+- There are no value objects in the file.
+
+**Judgment calls:**
+- The DRY finding is borderline, since each copy is only a couple of lines. It can reasonably be dismissed.
+- The numbered step comments in `test_plugin_launcher_resolution_order` (lines 270-292) partly restate the code. I read them as labels for the expected behaviour and did not count them.
+- I did not check the docstring claims about how the launcher behaves against `archy-mcp.mjs`, which is outside the files under review.
+
+If the finding is fixed or explicitly dismissed, the review ID to mark as passed is `python_code_review--tests-test_plugin.py--54c6657a686b`.</result>
+<usage><subagent_tokens>32141</subagent_tokens><tool_uses>2</tool_uses><duration_ms>20588</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a87ca9331b4e1068f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a87ca9331b4e1068f.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of plugin shim fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Review of `alee/766-plugin-python-fallback`**
+
+The core fix holds. In a project directory containing `archy/`, plus modules named after its dependencies and the stdlib (`click.py`, `mcp.py`, `json.py`, `re.py`, `site.py`, `sitecustomize.py` and others), no project code ran and the server initialized normally. The findings are about the edges, ranked below.
+
+**1. Signals are not handled while the probe runs (medium, introduced here)**
+`spawnSync` in `passesProbe` blocks the event loop, so the `onSignal` handler cannot run and `terminating` is never set in time.
+- With a hanging probe, SIGTERM was ignored for 15.1s. The shim then exited **1** with the install hint instead of dying by the signal.
+- With hanging `python3` and `python`, SIGTERM was sent at 0.7s. The second probe still started, and the shim exited 1 at 30.1s.
+- If the parent escalates to SIGKILL, the probe child is orphaned (confirmed alive afterwards).
+- The `if (terminating)` check in `start()` cannot catch a signal that arrives during a probe.
+- Fix: probe with async `spawn`, assign the child to `active`, and check `terminating` before moving on.
+
+**2. The probe timeout cannot stop a child that ignores SIGTERM (low)**
+`spawnSync` sends SIGTERM by default. A stub with `trap "" TERM; exec sleep 35` left the shim still running at 50s despite `timeout: 15000`. Add `killSignal: "SIGKILL"`, or cover it in the async rewrite.
+
+**3. No test checks that the probe actually imports archy (medium, test gap)**
+I ran mutations against `tests/test_plugin.py` in a copy:
+
+| Mutation | Result |
+|---|---|
+| Remove the `sys.path` filter | red |
+| Remove the probe | red |
+| Try only the first Python | red |
+| Probe without the filter | red |
+| Probe with inherited stdio | red |
+| **Probe is `-c pass`** | **13 passed** |
+| **No probe timeout** | **13 passed** |
+
+The "lacks archy" fixtures are stubs that always `exit 1`, so any probe command satisfies them. With `-c pass`, #766 is back for a real Python without archy. A fixture running a real interpreter that cannot import archy would catch it; assert first that the import fails. The issue's Test section asks for that precondition.
+
+**4. The new end-to-end test can hang forever (low to medium)**
+In `test_plugin_launcher_serves_mcp_through_a_real_python`, `server.stdout.readline()` has no timeout. With `PY_RUN` mutated to sleep instead of calling `main()`, the test was still hung when I gave up at 90s. The `timeout=30` on `communicate` is never reached. The mutated server also outlived the killed pytest, and I had to kill it by hand.
+
+**5. `PYTHONPATH` can still execute the project's `archy/` (low)**
+- `PYTHONPATH=.` and `PYTHONPATH=/nonexistent:` both ran the project's `archy/__init__.py`. Python turns these into the absolute cwd, which `if p` keeps.
+- `PYTHONPATH=.` also ran the project's `sitecustomize.py`, before the `-c` code starts.
+- This needs an unusual user environment, but the comment's "prevents that" overclaims.
+- Filtering entries equal to the cwd would fix the first case, and `-E` both. `-I` would also drop user site-packages and so break `pip install --user`.
+
+**6. The Python fallback runs any installed version (low, newly reachable)**
+With v0.30.0 importable, the probe passed and the shim served it (19 tools), below the `&gt;=0.51` floor. This path could never work before. The README still says "The lower bound guarantees the full current 0.x tool set". Either check the version in the probe or limit that claim to `uvx`.
+
+**Pre-existing, worth filing separately rather than adding to this PR**
+- **Relative `PATH` entries:** `PATH=.:...` or `PATH=rel:...` ran the project's `./python3` or `rel/python3`. The probe now takes that route too. Skipping non-absolute entries in `which()` would fix it.
+- **Windows `cmd` lookup (reasoned, not reproduced):** `spawnArgs` spawns a bare `cmd`, and libuv may search the cwd before `PATH`. This affects `.cmd`/`.bat` launchers, including the new probe. Using `process.env.ComSpec` would avoid it.
+
+**Checked with nothing to report**
+- **Windows quoting (reasoned only):** the `-c` strings contain no `"`, `%`, `!` or `^`, and `;[]()` are inside quotes. A timeout on a `.bat` probe would probably kill only `cmd.exe` and leave Python running.
+- **Import time:** `from archy.cli import main` took about 0.2s warm and 0.9s with an empty bytecode cache on this Mac, well under 15s.
+- **Text:** the diff has no U+2014. I found no docs still using `python -m archy` wrongly. Apart from items 5 and 6, I found no inaccurate comments or docstrings in the change.
+
+**Gate exit codes**
+
+| Command | Exit |
+|---|---|
+| `uv run archy check .` | 0 (it notes that its 26 forbid rules are not verified transitively by this check) |
+| `uv run archy cycles . --strict` | 0 |
+| `uv run archy contracts .` | 0 (prints the best-effort derivation warning) |
+| `git diff --name-only main...HEAD \| uv run archy affected . --stdin` | 0 |
+| `ruff check`, `ruff format --check`, `ty check`, `conventions --emit-headers --check` | 0 |
+| `pytest tests/test_plugin.py` | 13 passed |
+
+`affected` reports `archy.__main__` and `tests.test_plugin` as changed, with no further affected modules or tests. The `.mjs`, `.yaml` and `.md` files do not resolve to modules. I did not run the full test suite.
+
+I made no changes to the working tree; `git status` still shows only the untracked `bench/diff_duplicates_precision.jsonl`. Mutations ran in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r766/copy`.</result>
+<usage><subagent_tokens>99526</subagent_tokens><tool_uses>12</tool_uses><duration_ms>494429</duration_ms></usage>
+</task-notification>
