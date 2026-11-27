@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "cb1a544056a4",
+  "strategy": "manual-commit",
+  "branch": "alee/1018-e2e-headless-asserts",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/workflows/install-e2e.yml",
+    "tests/install/e2e_assert_score.py",
+    "tests/test_workflow_pins.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/cb/1a544056a4/0/metadata.json",
+      "transcript": "/cb/1a544056a4/0/full.jsonl",
+      "content_hash": "/cb/1a544056a4/0/content_hash.txt",
+      "prompt": "/cb/1a544056a4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 14,
+    "cache_creation_tokens": 12280,
+    "cache_read_tokens": 3738373,
+    "output_tokens": 7469,
+    "api_call_count": 6
+  }
+}
