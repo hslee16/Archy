@@ -1,0 +1,62 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>af57c14db8732cf5a</task-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/af57c14db8732cf5a.output</output-file>
+<status>completed</status>
+<summary>Agent "Second review of class resolution" is waiting on its own background work</summary>
+<note>This agent stopped with background work of its own still running. It may resume on its own when that work completes or reports, and the same task-id notifies again if it does; the result below may be interim.</note>
+<result>Round two found one new crash, several confirmed wrong links and some real family losses against main. I measured commit 7112d3c9. The crash and the wrong-link cases gave the same results on the newer 381d5cdf. I edited nothing in the repo.
+
+**Crash**
+
+1. **Long `elif` chain raises `RecursionError`** (regression, low to moderate realism, generated code only).
+   - At 330 `elif`s at module level, `archy conventions` dies on the branch while main completes; 300 still passes (Python 3.10).
+   - The cause is the recursion through `_bind_branches`, `_bind_all` and `_bind` in `conventions_namespace.py`, about 3 frames per `elif`.
+   - A `try`/`except RecursionError` is not enough; walk `orelse` iteratively.
+
+**Lost links against main (real installed packages)**
+
+2. **Optional override that cannot be followed drops the working definition** (high realism).
+   - `try: from ._speed import Base` / `except ImportError: from ._py import Base`, where `_speed` is a C extension, gives no link. The runtime fallback is `_py.Base`.
+   - `wrapt` has a variant: a pure-Python import first, then `if ...: try: from ._wrappers import ...` overrides it. 82 of 105 family memberships are gone, including the whole `FunctionWrapper` and `CallableObjectProxy` families.
+   - Possible fix: do not let a target in a nonexistent internal module replace, or block, a followable one.
+3. **Rebinding a class name by a call** (moderate). `gunicorn/config.py` does `Setting = SettingMeta('Setting', (Setting,), {})`. The name becomes `None`, so the 120-member `Setting` family disappears entirely. Linking to the original class would be correct.
+4. **Absolute imports that omit the scanned prefix** (documented limit, but larger than it reads).
+   - Running on the `poetry` package directory (a namespace package) loses the `Command` family (46 members).
+   - Sibling-script imports (`from fusion_base import Fusion`) lose 67 bases in `onnxruntime`; `debugpy`'s vendored `pydevd` is similar.
+   - A `backend/app` layout with `from app.b import Base` still works.
+
+**Wrong links (each executed against CPython)**
+
+| Input | archy links | Runtime base | Realism |
+|---|---|---|---|
+| `from .a import Error; from .b import *` (b also has `Error`) | a | b | moderate to low |
+| local `class Error`, then a `*` import that provides `Error` | local | star's | low to moderate (override modules) |
+| two stars; the later source's `__all__` excludes `Error` | later | earlier | low to moderate; `_from_stars` ignores `__all__` |
+| name used as a base, then re-imported or redefined further down | the later binding | the earlier one | low to moderate; the final namespace is used, not the one at the `class` statement |
+| class-body `class Base` or `from .b import Error` shadowing a top-level name | top-level | class-scope | low to moderate |
+| `if sys.version_info &lt; (3,): from .a ... else: from .b ...` | a | b | moderate in old compat code; harmless if both are external |
+| `Error, z = b.Error, 1`, a `for Error in` target, or a rebinding inside `match` | stale import | b | very low |
+| `from .a import TimeoutError; del TimeoutError` | a | builtin | very low |
+| `pkg/__init__` binds an attribute `config` that shadows submodule `config` | submodule class | attribute's nested class | very low |
+
+One related miss: `class O: class Error(Error)` with `Error` imported at the top gives no link, although the runtime base is the import.
+
+**Performance**
+- Across 415 installed packages, total time went from 676s to 702s (+4%), with 8 runs in parallel.
+- The worst real cases were `pipenv` (7.7s to 13.2s) and `django` (6.8s to 12.2s).
+- A synthetic package where every module star-imports a hub that star-imports all of them is quadratic: 600 modules take 6.5s against 1.0s on main. This is unlikely in practice.
+- There were no hangs.
+
+**Comparison across the 415 packages**
+- The only error was `langgraph`, a module-name collision that main hits too.
+- Family memberships by base name went from 198,790 on main to 74,022 lost and 5,441 gained. `jedi`'s vendored stubs account for 63,657 of the losses.
+- The `jedi` and `mypy` cases I sampled, and the `aws_cdk` `Protocol` family, were main linking external or stdlib names to same-named project classes, so losing them is correct. I did not audit every loss, including those in `transformers` and `django`.
+- `export_gaps` rows went from 2,295 to 2,020 and `doc_gaps` from 8 to 9. I did not verify those changes individually.
+
+Scripts and per-package results are in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r2adv/`; `h.py` reproduces the wrong-link, miss and crash cases.</result>
+<usage><subagent_tokens>113171</subagent_tokens><tool_uses>20</tool_uses><duration_ms>593346</duration_ms></usage>
+</task-notification>
