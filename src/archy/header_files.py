@@ -68,10 +68,11 @@ def rewritten(source: SourceFile, block: str) -> bytes | None:
 
     Raises ValueError rather than return bytes that change the module's code.
     """
-    newline = source.newline()
     updated = apply_header(source.text, block)
     if updated == source.text:
         return None
+    _require_round_trip(source)
+    newline = source.newline()
     try:
         data = updated.replace("\n", newline).encode(source.encoding)
     except UnicodeEncodeError as exc:
@@ -83,19 +84,48 @@ def rewritten(source: SourceFile, block: str) -> bytes | None:
     return data
 
 
+def _require_replaceable(target: Path, expected: bytes) -> None:
+    if not os.access(target, os.W_OK):
+        raise ValueError("file is not writable")
+    if target.stat().st_nlink > 1:
+        raise ValueError("file has other hard links; replacing it would detach them")
+    if target.read_bytes() != expected:
+        raise ValueError("file changed while archy was running; not rewritten")
+
+
+def _require_round_trip(source: SourceFile) -> None:
+    """Some codecs decode two byte spellings to one character (cp932, utf-7), so
+    re-encoding would change bytes far from the docstring."""
+    try:
+        same = source.raw.decode(source.encoding).encode(source.encoding) == source.raw
+    except UnicodeError:
+        same = False
+    if not same:
+        raise ValueError(f"{source.encoding} does not round-trip this file; not rewritten")
+
+
 def _code(data: bytes) -> str:
-    """The module's statements, docstring aside. Raises ValueError if it does not parse."""
+    """The module's statements, docstring aside. Raises ValueError if it cannot tell."""
     try:
         tree = ast.parse(data)
+        body = tree.body[1:] if ast.get_docstring(tree) is not None else tree.body
+        return ast.dump(ast.Module(body=body, type_ignores=[]))
     except SyntaxError as exc:
         raise ValueError(f"does not parse: {exc.msg}") from exc
-    body = tree.body[1:] if ast.get_docstring(tree) is not None else tree.body
-    return ast.dump(ast.Module(body=body, type_ignores=[]))
+    except RecursionError as exc:
+        # `ast.dump` recurses; a very long expression exhausts it.
+        raise ValueError("too deeply nested to verify; not rewritten") from exc
 
 
-def write_atomic(path: Path, data: bytes) -> None:
-    """Replace the file in one step, through a symlink and keeping its mode."""
+def write_atomic(path: Path, data: bytes, *, expected: bytes) -> None:
+    """Replace the file in one step, through a symlink and keeping its mode.
+
+    Refuses a file that no longer holds `expected` (someone saved it since it
+    was read), and one a replacement would treat differently from a write: not
+    writable, or hard-linked elsewhere.
+    """
     target = path.resolve()
+    _require_replaceable(target, expected)
     descriptor, name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
     staged = Path(name)
     try:

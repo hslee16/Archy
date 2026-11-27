@@ -39,7 +39,13 @@ from archy.graph import (
     build_graph,
     discover_modules,
 )
-from archy.header_files import header_is_current, read_source, rewritten, write_atomic
+from archy.header_files import (
+    SourceFile,
+    header_is_current,
+    read_source,
+    rewritten,
+    write_atomic,
+)
 from archy.headers import (
     ModuleHeader,
     compute_headers,
@@ -373,7 +379,7 @@ def _sync_headers(
     """Every rewrite is planned before any is made, so a file that cannot be
     handled is reported with the tree in one known state, not half way."""
     stale: list[str] = []
-    planned: list[tuple[str, Path, bytes]] = []
+    planned: list[tuple[str, SourceFile, bytes]] = []
     errors: dict[str, str] = {}
     for header in headers if check or write else ():
         try:
@@ -383,7 +389,7 @@ def _sync_headers(
                 if not header_is_current(source, block):
                     stale.append(header.module)
             elif (data := rewritten(source, block)) is not None:
-                planned.append((header.module, source.path, data))
+                planned.append((header.module, source, data))
         except (OSError, ValueError) as exc:
             errors[header.module] = str(exc)
     written = _write_planned(planned, errors)
@@ -391,13 +397,13 @@ def _sync_headers(
 
 
 def _write_planned(
-    planned: list[tuple[str, Path, bytes]], errors: dict[str, str]
+    planned: list[tuple[str, SourceFile, bytes]], errors: dict[str, str]
 ) -> tuple[str, ...]:
     written: list[str] = []
-    for module, target, data in planned:
+    for module, source, data in planned:
         try:
-            write_atomic(target, data)
-        except OSError as exc:
+            write_atomic(source.path, data, expected=source.raw)
+        except (OSError, ValueError) as exc:
             errors[module] = str(exc)
         else:
             written.append(module)

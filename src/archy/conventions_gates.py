@@ -18,8 +18,9 @@ _EXIT_CALLS = frozenset({"sys.exit", "os._exit", "exit"})
 _EXIT_RAISES = frozenset({"SystemExit", "ClickException", "UsageError", "Abort", "Exit"})
 
 
-# `--name`, `--on/--no-on` or `--name/-n`, and a bare argument name.
-_FLAG_SHAPED = re.compile(r"(--)?[\w-]+(/-{1,2}[\w-]+)?")
+# `--name`, `--on/--no-on` (click allows spaces round the slash) or `--name/-n`,
+# and a bare argument name.
+_FLAG_SHAPED = re.compile(r"(--)?[\w-]+( ?/ ?-{1,2}[\w-]+)?")
 
 
 def _click_flags(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:

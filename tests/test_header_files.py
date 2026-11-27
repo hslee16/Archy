@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -116,7 +117,7 @@ def test_write_atomic_goes_through_a_symlink_and_keeps_the_mode(tmp_path: Path):
     link = tmp_path / "a.py"
     link.symlink_to(real)
 
-    write_atomic(link, b"new\n")
+    write_atomic(link, b"new\n", expected=b"old\n")
 
     assert link.is_symlink()
     assert real.read_bytes() == b"new\n"
@@ -143,3 +144,91 @@ def test_option_text_never_reaches_a_header_or_a_payload(tmp_path: Path):
     written = (root / "pkg" / "tool.py").read_bytes()
     assert b"(param:verbose)" in written
     assert _code(written) == _code(cli)
+
+
+@pytest.mark.parametrize(
+    ("original", "reason"),
+    [
+        (b'# -*- coding: cp932 -*-\n"""Doc."""\nX = "\x87\x90"\n', "round-trip"),
+        (b'"""Doc."""\nX = ' + b" + ".join([b"1"] * 1500) + b"\n", "too deeply nested"),
+        (b"# -*- coding: rot13 -*-\nkey = 1\n", "cannot decode"),
+    ],
+    ids=["lossy-codec", "deep-expression", "not-a-text-codec"],
+)
+def test_a_file_archy_cannot_verify_is_left_alone(tmp_path: Path, original: bytes, reason: str):
+    path = tmp_path / "a.py"
+    path.write_bytes(original)
+
+    with pytest.raises(ValueError, match=reason):
+        rewritten(read_source(path), "archy:owns        key")
+
+
+def test_a_current_mixed_endings_file_is_not_an_error(tmp_path: Path):
+    path = tmp_path / "a.py"
+    path.write_bytes(b'"""archy:owns        public_fn\n"""\r\n' + FUNCTION)
+
+    assert rewritten(read_source(path), "archy:owns        public_fn") is None
+
+
+def test_an_edit_made_during_the_run_is_not_overwritten(tmp_path: Path):
+    path = tmp_path / "a.py"
+    path.write_bytes(b"USER_EDIT = 1\n")
+
+    with pytest.raises(ValueError, match="changed while archy was running"):
+        write_atomic(path, b"new\n", expected=b"old\n")
+
+    assert path.read_bytes() == b"USER_EDIT = 1\n"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permissions and links")
+@pytest.mark.parametrize(
+    ("protect", "reason"),
+    [
+        (lambda p: p.chmod(0o444), "not writable"),
+        (lambda p: os.link(p, p.with_name("other")), "hard links"),
+    ],
+    ids=["read-only", "hard-linked"],
+)
+def test_a_protected_file_is_not_replaced(
+    tmp_path: Path, protect: Callable[[Path], object], reason: str
+):
+    if os.geteuid() == 0:
+        pytest.skip("root may write anything")
+    path = tmp_path / "a.py"
+    path.write_bytes(b"old\n")
+    protect(path)
+
+    with pytest.raises(ValueError, match=reason):
+        write_atomic(path, b"new\n", expected=b"old\n")
+
+    assert path.read_bytes() == b"old\n"
+
+
+def test_a_failed_replace_reports_the_module_and_leaves_no_staging_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    root = _project(tmp_path, {"a.py": FUNCTION})
+
+    def refuse(source: str, target: str) -> None:
+        raise OSError("disk says no")
+
+    monkeypatch.setattr(os, "replace", refuse)
+    result = _emit(root, "--write")
+
+    assert result.exit_code == 1
+    assert "pkg.a: disk says no" in result.output
+    assert (root / "pkg" / "a.py").read_bytes() == FUNCTION
+    assert sorted(p.name for p in (root / "pkg").iterdir()) == ["__init__.py", "a.py"]
+
+
+@pytest.mark.parametrize("flag", ["--on/--no-on", "--on / --no-on", "--on/-n"])
+def test_slashed_flags_are_still_named(tmp_path: Path, flag: str):
+    cli = (
+        '"""CLI."""\nimport sys\n\nimport click\n\n\n@click.command()\n'
+        f'@click.option("{flag}", "on")\ndef main(on):\n    if on:\n        sys.exit(1)\n'
+    )
+    root = _project(tmp_path, {"tool.py": cli.encode()})
+
+    gates = run_conventions(root, min_family=3, include_tests=False).model_dump()["gates"]
+
+    assert [g["control"] for g in gates] == [f"flag:{flag}"]
