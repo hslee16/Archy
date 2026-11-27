@@ -1,10 +1,8 @@
 """Reading a project's modules into the facts every census works from.
 
 archy:owns        censused_modules
-archy:mirrored-by _ModuleFacts -> archy.conventions, archy.conventions_classes,
-                  archy.conventions_docs, archy.conventions_families,
-                  archy.conventions_gates, _dotted -> archy.conventions_classes,
-                  archy.conventions_families, archy.conventions_gates,
+archy:mirrored-by _dotted -> archy.conventions_classes, archy.conventions_families,
+                  archy.conventions_gates, archy.conventions_namespace,
                   censused_modules -> archy.conventions, archy.headers
 """
 
@@ -71,9 +69,8 @@ class _ModuleFacts:
         # submodule, a re-export or a plain symbol depends on the project's
         # module set; see `_resolved_imports`.
         self.import_froms: list[tuple[str, tuple[tuple[str, str], ...]]] = []
-        # What each `import` statement binds locally: `as` names to the module
-        # imported, and otherwise the top package to itself.
-        self.module_aliases: dict[str, str] = {}
+        # The module's top-level statements, for what a name means at that scope.
+        self.body: list[ast.stmt] = []
         # Whether this module is a package's `__init__.py`. Only those can
         # re-export, so only those contribute to the re-export map.
         self.is_package = False
@@ -86,6 +83,7 @@ class _ModuleFacts:
 def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _ModuleFacts:
     facts = _ModuleFacts(qualname)
     facts.is_package = is_package
+    facts.body = tree.body
     _collect_definitions(tree, facts)
     _collect_imports(tree, facts, qualname, is_package)
     _collect_assignments(tree, facts)
@@ -120,16 +118,10 @@ def _collect_imports(
     pkg = qualname if is_package else (qualname.rsplit(".", 1)[0] if "." in qualname else "")
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            _collect_import(node, facts)
+            for alias in node.names:
+                facts.imported_modules.add(alias.name)
         elif isinstance(node, ast.ImportFrom):
             _collect_import_from(node, facts, pkg)
-
-
-def _collect_import(node: ast.Import, facts: _ModuleFacts) -> None:
-    for alias in node.names:
-        facts.imported_modules.add(alias.name)
-        top = alias.name.split(".")[0]
-        facts.module_aliases[alias.asname or top] = alias.name if alias.asname else top
 
 
 def _collect_import_from(node: ast.ImportFrom, facts: _ModuleFacts, pkg: str) -> None:

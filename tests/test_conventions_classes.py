@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 
 from archy.conventions import compute_conventions
+from archy.conventions_classes import ClassIndex
+from archy.conventions_collect import _collect
 
 HTTP = "class Error(Exception): pass\nclass NotFound(Error): pass\nclass Timeout(Error): pass\n"
 DB = "class Error(Exception): pass\nclass Deadlock(Error): pass\nclass Integrity(Error): pass\n"
@@ -26,6 +28,18 @@ def _report(root: Path, files: dict[str, str]) -> dict:
         if not init.exists():
             init.write_text("", encoding="utf-8")
     return compute_conventions(root).model_dump()
+
+
+def _index(root: Path) -> ClassIndex:
+    files = sorted((root / "pkg").rglob("*.py"))
+    return ClassIndex(
+        _collect(
+            ast.parse(path.read_bytes()),
+            ".".join(path.relative_to(root).with_suffix("").parts).removesuffix(".__init__"),
+            is_package=path.name == "__init__.py",
+        )
+        for path in files
+    )
 
 
 def _families(report: dict) -> set[tuple[str, str, tuple[str, ...]]]:
@@ -194,3 +208,162 @@ def test_a_star_import_of_nothing_does_not_pick_between_two_names(tmp_path: Path
     )
 
     assert report["bases"] == ()
+
+
+TWO_ROOTS = {"a.py": "class Error(Exception): pass\n", "b.py": "class Error(Exception): pass\n"}
+CHILDREN = "class B(Error): pass\nclass C(Error): pass\n"
+
+
+@pytest.mark.parametrize(
+    "preamble",
+    [
+        "from pkg.a import Error\ndef f():\n    from pkg.b import Error\n",
+        "from pkg.a import Error\nclass H:\n    class Error: pass\n",
+        "from pkg.a import Error\ndef f():\n    class Error: pass\n",
+        "if flag:\n    from pkg.a import Error\nelse:\n    from pkg.b import Error\n",
+        "try:\n    from pkg.a import Error\nexcept ImportError:\n    from pkg.b import Error\n",
+        "from pkg.b import *\nfrom pkg.a import *\n",
+        "class Error: pass\nfrom pkg.a import Error\n",
+        "from pkg import a, b\nfrom pkg.b import Error\nError = a.Error\n",
+        "from pkg import a\nRoot = a.Error\nError = Root\n",
+        "with ctx():\n    from pkg.a import Error\n",
+    ],
+    ids=[
+        "function-import",
+        "nested-class",
+        "function-class",
+        "if-else",
+        "try-except",
+        "later-star",
+        "import-after-class",
+        "rebound",
+        "alias-chain",
+        "with",
+    ],
+)
+def test_module_scope_decides_which_class_a_base_names(tmp_path: Path, preamble: str):
+    report = _report(tmp_path, {**TWO_ROOTS, "child.py": preamble + CHILDREN})
+
+    (family,) = [b for b in report["bases"] if "B" in b["members"]]
+    # Rooted in `a`: its definition is what the family's other members name.
+    assert family["members"] == ("B", "C", "Error")
+    assert family["home_module"] == "pkg.child"
+    index = _index(tmp_path)
+    assert index.resolve("pkg.child", "Error") == ("pkg.a", "Error")
+
+
+@pytest.mark.parametrize(
+    "child",
+    [
+        "class X(TimeoutError): pass\nclass Y(TimeoutError): pass\n",
+        "Error = ValueError\n" + CHILDREN,
+        "from vendor import Error\n" + CHILDREN,
+        "from json import *\nclass X(JSONDecodeError): pass\nclass Y(JSONDecodeError): pass\n",
+        CHILDREN,
+    ],
+    ids=["builtin", "builtin-alias", "outside", "outside-star", "unbound"],
+)
+def test_a_name_nothing_in_the_project_explains_links_nowhere(tmp_path: Path, child: str):
+    others = (
+        "class Error(Exception): pass\nclass JSONDecodeError(Exception): pass\n"
+        "class H:\n    class TimeoutError(Exception): pass\n"
+    )
+
+    report = _report(tmp_path, {"other.py": others, "child.py": child})
+
+    assert report["bases"] == ()
+
+
+@pytest.mark.parametrize(
+    "child",
+    [
+        "from pkg import base\nclass B(base.Outer.Error): pass\nclass C(base.Outer.Error): pass\n",
+        "from pkg.base import Outer\nclass B(Outer.Error): pass\nclass C(Outer.Error): pass\n",
+    ],
+    ids=["through-module", "through-class"],
+)
+def test_a_class_nested_in_a_class_is_followed(tmp_path: Path, child: str):
+    base = "class Outer:\n    class Error(Exception): pass\n"
+
+    report = _report(tmp_path, {"base.py": base, "child.py": child})
+
+    assert _families(report) == {("Error", "pkg.child", ("B", "C", "Error"))}
+
+
+def test_a_long_star_chain_ends_without_exhausting_the_stack(tmp_path: Path):
+    files = {f"m{i}.py": f"from pkg.m{i + 1} import *\n" for i in range(200)}
+    files["child.py"] = "from pkg.m0 import *\n" + CHILDREN
+
+    assert _report(tmp_path, files)["bases"] == ()
+
+
+def test_no_export_gap_with_nothing_to_add(tmp_path: Path):
+    report = _report(
+        tmp_path,
+        {
+            "http/errors.py": HTTP,
+            "db/errors.py": HTTP,
+            "http/__init__.py": (
+                "from pkg.db.errors import Error, NotFound\nfrom pkg.http.errors import Timeout\n"
+                '__all__ = ["Error", "NotFound", "Timeout"]\n'
+            ),
+        },
+    )
+
+    assert report["export_gaps"] == ()
+
+
+def test_two_families_with_one_doc_gap_report_it_once(tmp_path: Path):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "errors.md").write_text("`Error` and `NotFound`\n", encoding="utf-8")
+
+    report = _report(tmp_path, {"http/errors.py": HTTP, "db/errors.py": HTTP})
+
+    assert len(report["bases"]) == 2
+    assert len(report["doc_gaps"]) == 1
+
+
+def test_a_wide_package_does_not_use_up_the_chain_limit(tmp_path: Path):
+    """The cap counted every module looked in, so 60 star imports hid the 61st."""
+    files = {f"lib/m{i}.py": "X = 1\n" for i in range(60)}
+    files["lib/errors.py"] = "class Error(Exception): pass\n"
+    # The last star is tried first, so the real source goes first.
+    stars = ["errors", *(f"m{i}" for i in range(60))]
+    files["lib/__init__.py"] = "".join(f"from pkg.lib.{name} import *\n" for name in stars)
+    files["child.py"] = (
+        "import pkg.lib as lib\nclass B(lib.Error): pass\nclass C(lib.Error): pass\n"
+    )
+
+    assert _families(_report(tmp_path, files)) == {("Error", "pkg.child", ("B", "C", "Error"))}
+
+
+@pytest.mark.parametrize("test", ["TYPE_CHECKING", "typing.TYPE_CHECKING"])
+def test_under_type_checking_the_else_branch_is_the_class(tmp_path: Path, test: str):
+    child = (
+        f"if {test}:\n    from uuid import UUID as Base\nelse:\n"
+        "    class Base: pass\n" + "class B(Base): pass\nclass C(Base): pass\n"
+    )
+
+    assert _families(_report(tmp_path, {"child.py": child})) == {
+        ("Base", "pkg.child", ("B", "Base", "C"))
+    }
+
+
+def test_a_hierarchy_inside_a_function_is_still_a_family(tmp_path: Path):
+    child = (
+        "def build():\n    class Error(Exception): pass\n"
+        "    class B(Error): pass\n    class C(Error): pass\n"
+    )
+
+    assert _families(_report(tmp_path, {"child.py": child})) == {
+        ("Error", "pkg.child", ("B", "C", "Error"))
+    }
+
+
+def test_a_builtin_is_not_replaced_by_a_nested_class_of_that_name(tmp_path: Path):
+    child = (
+        "class H:\n    class TimeoutError(Exception): pass\n"
+        "class X(TimeoutError): pass\nclass Y(TimeoutError): pass\n"
+    )
+
+    assert _report(tmp_path, {"child.py": child})["bases"] == ()

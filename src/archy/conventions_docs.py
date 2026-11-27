@@ -177,7 +177,8 @@ def _doc_gaps(
         if len(public) < min_documented:
             continue
         best = _best_doc_gap(name, public, docs, min_documented)
-        if best is not None:
+        # Two families can share a name and members; one row says it.
+        if best is not None and best not in out:
             out.append(best)
     out.sort(key=lambda g: (-(g.defined - g.documented), g.doc_root, g.family))
     return tuple(out)
@@ -223,12 +224,14 @@ def _family_gap(
 
     `listed` holds the family's members the exported names resolve to.
     """
-    if not _is_partial_coverage(len(listed), len(family.members), min_count=2):
+    # A name already exported, from whatever class, is not something to add.
+    missing = tuple(sorted(set(family.members) - names))
+    if not missing or not _is_partial_coverage(len(listed), len(family.members), min_count=2):
         return None
     return ExportGap(
         export_module=module,
         family=family.base,
         exported=len(listed),
         defined=len(family.members),
-        missing=tuple(sorted(set(family.members) - names)),
+        missing=missing,
     )

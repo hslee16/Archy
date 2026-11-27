@@ -63,6 +63,7 @@ layers:
       - "archy.conventions_families"
       - "archy.conventions_gates"
       - "archy.conventions_models"
+      - "archy.conventions_namespace"
       - "archy.contracts"
       - "archy.coupling"
       - "archy.diff"
