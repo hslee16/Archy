@@ -18,8 +18,8 @@ from archy.duplicates import (
     NearDuplicates,
     classify_variants,
     compute_duplicates,
+    compute_near_duplicates,
     demote_independent,
-    find_near_duplicates,
     with_truncation,
 )
 from archy.gitlog import (
@@ -96,7 +96,7 @@ def run_duplicates(
                 rows, counts=cochange.counts, pair_support=cochange.pair_support
             )
     found = (
-        find_near_duplicates(modules, results, min_size=min_nodes)
+        compute_near_duplicates(modules, results, min_size=min_nodes)
         if near_miss
         else NearDuplicates()
     )

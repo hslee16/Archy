@@ -42,6 +42,8 @@ from archy.cli_render_git import (
     _hotspots_to_text,
     _refactor_to_dict,
     _refactor_to_text,
+    _text_with_truncation,
+    _truncation_marked,
 )
 from archy.cli_render_graph import (
     _affected_to_dict,
@@ -110,6 +112,8 @@ __all__ = [
     "_sdp_violations_to_text",
     "_simulate_to_text",
     "_snapshot_to_text",
+    "_text_with_truncation",
+    "_truncation_marked",
     "_unverified_forbid_rules",
     "_violations_to_json",
     "_violations_to_text",

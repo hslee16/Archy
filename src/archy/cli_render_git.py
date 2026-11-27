@@ -7,7 +7,9 @@ archy:mirrored-by _coupling_to_dict -> archy.cli_git, archy.cli_render,
                   _hotspots_to_dict -> archy.cli_git, archy.cli_render,
                   _hotspots_to_text -> archy.cli, archy.cli_git, archy.cli_render,
                   _refactor_to_dict -> archy.cli_git, archy.cli_render,
-                  _refactor_to_text -> archy.cli_git, archy.cli_render
+                  _refactor_to_text -> archy.cli_git, archy.cli_render,
+                  _text_with_truncation -> archy.cli_git, archy.cli_render,
+                  _truncation_marked -> archy.cli_git, archy.cli_render
 """
 
 from __future__ import annotations
@@ -173,6 +175,17 @@ def _duplicates_note(
     return note
 
 
+def _truncation_marked(payload: dict, truncated: bool) -> dict:
+    """The duplicates JSON, saying whether the near-miss pass got to the end."""
+    note = with_truncation(payload["note"], truncated)
+    return {**payload, "near_truncated": truncated, "note": note}
+
+
+def _text_with_truncation(text: str, truncated: bool) -> str:
+    # Also when there is no near-miss section, where silence would read as "none".
+    return f"{text}\n\n# {NEAR_TRUNCATED_NOTE}" if truncated else text
+
+
 def _duplicate_group_lines(group: DuplicateGroup, *, with_reason: bool) -> list[str]:
     """Render one cluster: a header row for the first member, then one row per other."""
     reason = f"  {(group.variant_reason or ''):<10}" if with_reason else ""
@@ -188,9 +201,7 @@ def _duplicate_group_lines(group: DuplicateGroup, *, with_reason: bool) -> list[
     return lines
 
 
-def _duplicates_to_dict(
-    rows: list[DuplicateGroup], *, top_n: int, min_nodes: int, near_truncated: bool = False
-) -> dict:
+def _duplicates_to_dict(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> dict:
     dups = [g for g in rows if g.category == "duplicate"]
     variants = [g for g in rows if g.category == "variant"]
     near = [g for g in rows if g.category == "near_miss"]
@@ -205,11 +216,7 @@ def _duplicates_to_dict(
         "duplicates": [g.model_dump() for g in dups[:top_n]],
         "variants": [g.model_dump() for g in variants[:top_n]],
         "near_miss": [g.model_dump() for g in near[:top_n]],
-        "near_truncated": near_truncated,
-        "note": with_truncation(
-            _duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants)),
-            near_truncated,
-        ),
+        "note": _duplicates_note(dups, min_nodes=min_nodes, variant_count=len(variants)),
     }
 
 
@@ -244,9 +251,7 @@ def _duplicates_section(
         out.extend(_duplicate_group_lines(g, with_reason=with_reason))
 
 
-def _duplicates_to_text(
-    rows: list[DuplicateGroup], *, top_n: int, min_nodes: int, near_truncated: bool = False
-) -> str:
+def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: int) -> str:
     exact = [g for g in rows if g.category == "duplicate" and g.exact]
     near = [g for g in rows if g.category == "duplicate" and not g.exact]
     variants = [g for g in rows if g.category == "variant"]
@@ -285,9 +290,6 @@ def _duplicates_to_text(
             f"showing top {min(top_n, len(near))})",
             near[:top_n],
         )
-    if near_truncated:
-        # Also with no near-miss section at all, where silence would read as "none".
-        out += ["", f"# {NEAR_TRUNCATED_NOTE}"]
     return "\n".join(out)
 
 

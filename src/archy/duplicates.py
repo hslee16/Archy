@@ -52,18 +52,17 @@ from `archy.graph.parse_project` instead.
 
 archy:owns        DuplicateGroup, DuplicateMember, NearDuplicates, classify_variants,
                   compute_duplicates, compute_near_duplicates, demote_independent,
-                  find_near_duplicates, is_test_path, with_truncation
+                  is_test_path, with_truncation
 archy:mirrored-by DuplicateGroup -> archy.cli_render_git, archy.mcp_payloads,
                   archy.mcp_runs_git, bench.diff_duplicates_precision,
                   classify_variants -> archy.cli_git, archy.mcp_runs_git,
                   bench.diff_duplicates_precision, bench.duplicates_cochange_sweep,
                   compute_duplicates -> archy.cli_git, archy.mcp_runs_git,
                   bench.diff_duplicates_precision, bench.duplicates_cochange_sweep,
-                  compute_near_duplicates -> bench.diff_duplicates_precision,
-                  bench.near_duplicates_sweep, demote_independent -> archy.cli_git,
-                  archy.mcp_runs_git, bench.diff_duplicates_precision,
-                  bench.duplicates_cochange_sweep,
-                  find_near_duplicates -> archy.cli_git, archy.mcp_runs_git,
+                  compute_near_duplicates -> archy.cli_git, archy.mcp_runs_git,
+                  bench.diff_duplicates_precision, bench.near_duplicates_sweep,
+                  demote_independent -> archy.cli_git, archy.mcp_runs_git,
+                  bench.diff_duplicates_precision, bench.duplicates_cochange_sweep,
                   with_truncation -> archy.cli_render_git, archy.mcp_runs_git
 """
 
@@ -127,8 +126,9 @@ DEFAULT_MAX_NEAR_COMPARISONS = 5_000_000
 # caller has.
 NEAR_TRUNCATED_NOTE = (
     "Near-miss results are INCOMPLETE: the pass stopped at its token-comparison "
-    "budget, so more near-miss clones may exist. A higher min_nodes (CLI: "
-    "--min-nodes) leaves fewer pairs to compare."
+    "budget, so clusters may be missing, partial or split, and near_total is not "
+    "a count. For the near-miss tier, a higher min_nodes (CLI: --min-nodes) "
+    "leaves fewer pairs to compare."
 )
 
 
@@ -321,25 +321,6 @@ class NearDuplicates(BaseModel):
 
 
 def compute_near_duplicates(
-    modules: list[Module],
-    parse_results: dict[str, ParseResult],
-    *,
-    min_size: int = DEFAULT_MIN_SIZE,
-    min_similarity: float = DEFAULT_MIN_SIMILARITY,
-    max_comparisons: int = DEFAULT_MAX_NEAR_COMPARISONS,
-) -> list[DuplicateGroup]:
-    """The groups of `find_near_duplicates`, for callers that only rank them."""
-    found = find_near_duplicates(
-        modules,
-        parse_results,
-        min_size=min_size,
-        min_similarity=min_similarity,
-        max_comparisons=max_comparisons,
-    )
-    return list(found.groups)
-
-
-def find_near_duplicates(
     modules: list[Module],
     parse_results: dict[str, ParseResult],
     *,

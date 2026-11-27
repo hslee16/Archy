@@ -93,7 +93,7 @@ def a_cluster_members(tmp_path: Path, files: dict[str, str]) -> list[set[str]]:
     modules, results = parse_project(tmp_path, max_modules=100)
     groups = [
         *compute_duplicates(modules, results, min_size=MIN_NODES),
-        *compute_near_duplicates(modules, results, min_size=MIN_NODES),
+        *compute_near_duplicates(modules, results, min_size=MIN_NODES).groups,
     ]
     return [{m.qualified_name for m in g.members} for g in groups]
 
