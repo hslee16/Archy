@@ -240,7 +240,7 @@ def test_whitespace_round_a_marker_still_leaves_it_alone_on_its_line(space: str)
 
 @pytest.mark.parametrize("marker", [INSTRUCTIONS_BEGIN, INSTRUCTIONS_END])
 @pytest.mark.parametrize("line", ["{} (managed)", "managed {}", "- {}", "{}\u200b"])
-def test_a_marker_with_text_on_one_side_is_refused(marker: str, line: str):
+def test_a_marker_that_would_fence_and_has_text_on_one_side_is_refused(marker: str, line: str):
     """It could be a damaged fence or a quotation; guessing either loses lines."""
     existing = f"{INSTRUCTIONS_BEGIN}\nold\n{line.format(marker)}\nUSER\n{INSTRUCTIONS_END}\n"
 
@@ -248,6 +248,27 @@ def test_a_marker_with_text_on_one_side_is_refused(marker: str, line: str):
         upsert_instructions(existing)
     with pytest.raises(InstallError, match="shares its line"):
         remove_instructions(existing)
+
+
+@pytest.mark.parametrize(
+    "note", [f"{INSTRUCTIONS_END} is the closing fence", f"- {INSTRUCTIONS_END}"]
+)
+def test_an_end_marker_outside_any_block_does_not_block_a_reinstall(note: str):
+    """Install used to succeed on such a file and then refuse every later run."""
+    existing = f"{note}\n"
+
+    installed = upsert_instructions(existing)
+
+    assert upsert_instructions(installed) == installed
+    assert remove_instructions(installed) == existing
+    assert upsert_instructions(f"{installed}{note}\n") == f"{installed}{note}\n"
+
+
+def test_a_bom_before_the_begin_marker_is_not_text():
+    existing = f"\ufeff{instructions_block()}mine\n"
+
+    assert upsert_instructions(existing) == existing
+    assert remove_instructions(existing) == "\ufeffmine\n"
 
 
 def test_removal_takes_the_marker_and_not_the_users_indentation_before_it():

@@ -27,6 +27,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable
 from enum import Enum
 from pathlib import Path
+from typing import NamedTuple
 
 from pydantic import BaseModel, ConfigDict
 
@@ -112,39 +113,65 @@ def _drop_leading_newline(text: str) -> str:
     return text[1:] if text.startswith("\n") else text
 
 
-def _marker_spans(text: str, marker: str) -> list[tuple[int, int]]:
-    """Where `marker` fences a block, as opposed to being quoted.
+class _Marker(NamedTuple):
+    start: int
+    stop: int
+    # False when text shares its line on one side: a damaged fence or a quotation,
+    # and guessing wrong either way loses lines.
+    alone: bool
 
-    Alone on its line (whitespace aside) it is a fence, which is how archy writes
-    it. With text on both sides it is the user quoting it (#945). With text on one
-    side only it could be either, and guessing wrong either way loses lines: take
-    it for text and a later quoted marker closes the block instead.
 
-    Raises:
-        InstallError: a marker has text on one side only.
+def _markers(text: str, marker: str) -> list[_Marker]:
+    """Each `marker` that may be a fence.
+
+    Alone on its line (whitespace and a BOM aside) it is one, which is how archy
+    writes it. With text on both sides it is the user quoting it and is left out
+    (#945).
     """
-    spans: list[tuple[int, int]] = []
+    found: list[_Marker] = []
     for match in re.finditer(re.escape(marker), text):
         line_start = text.rfind("\n", 0, match.start()) + 1
         newline = text.find("\n", match.end())
-        before = text[line_start : match.start()].strip()
+        before = text[line_start : match.start()].lstrip("\ufeff").strip()
         after = text[match.end() : len(text) if newline == -1 else newline].strip()
-        if not before and not after:
-            spans.append(match.span())
-        elif not before or not after:
-            line = text.count("\n", 0, match.start()) + 1
-            raise InstallError(
-                f"{marker} at line {line} shares its line with other text; put the marker "
-                "on a line of its own, or wrap it in backticks if you are quoting it, "
-                "then re-run"
-            )
-    return spans
+        if not before or not after:
+            found.append(_Marker(*match.span(), alone=not before and not after))
+    return found
+
+
+def _refuse(text: str, marker: str, at: int, why: str) -> InstallError:
+    line = text.count("\n", 0, at) + 1
+    return InstallError(f"{marker} at line {line} {why}, then re-run")
+
+
+def _require_alone(text: str, marker: str, found: _Marker) -> None:
+    if not found.alone:
+        why = (
+            "shares its line with other text; put the marker on a line of its own, "
+            "or wrap it in backticks if you are quoting it"
+        )
+        raise _refuse(text, marker, found.start, why)
+
+
+def _closing_marker(text: str, ends: list[_Marker], begin: _Marker, limit: int) -> int:
+    """Where the block opened at `begin` stops, looking no further than `limit`."""
+    close = next((end for end in ends if begin.start < end.start < limit), None)
+    if close is None:
+        why = (
+            f"has no matching {INSTRUCTIONS_END} on a line of its own; delete that marker, "
+            "or add the end marker on its own line right after archy's text and before "
+            "anything of yours"
+        )
+        raise _refuse(text, INSTRUCTIONS_BEGIN, begin.start, why)
+    _require_alone(text, INSTRUCTIONS_END, close)
+    return close.stop
 
 
 def _marker_block_range(text: str) -> tuple[int, int] | None:
     """Locate the archy-owned marker block.
 
-    Only a marker on a line of its own counts; see :func:`_marker_spans`.
+    An end marker outside any block is left alone however its line looks; see
+    :func:`_markers` for which occurrences count.
 
     Returns:
         (start, end) where end is exclusive.
@@ -152,26 +179,22 @@ def _marker_block_range(text: str) -> tuple[int, int] | None:
     Raises:
         InstallError: an opening marker has no closing marker before the next
             opening marker or end of file, so nothing says where archy's text
-            stops and the user's begins; or a marker shares its line with text.
+            stops and the user's begins; or an opening marker, or the one that
+            would close a block, shares its line with text.
     """
-    begins = [start for start, _ in _marker_spans(text, INSTRUCTIONS_BEGIN)]
+    begins = _markers(text, INSTRUCTIONS_BEGIN)
     if not begins:
         return None
-    ends = _marker_spans(text, INSTRUCTIONS_END)
-    closes: list[int] = []
-    # Every begin needs its own end before the next begin, or nothing says where
-    # that block stops.
-    for begin, next_begin in zip(begins, [*begins[1:], len(text)], strict=True):
-        close = next((stop for start, stop in ends if begin < start < next_begin), None)
-        if close is None:
-            line = text.count("\n", 0, begin) + 1
-            raise InstallError(
-                f"{INSTRUCTIONS_BEGIN} at line {line} has no matching {INSTRUCTIONS_END} "
-                "on a line of its own; delete that marker, or add the end marker on its "
-                "own line right after archy's text and before anything of yours, then re-run"
-            )
-        closes.append(close)
-    return (begins[0], closes[0])
+    for begin in begins:
+        _require_alone(text, INSTRUCTIONS_BEGIN, begin)
+    ends = _markers(text, INSTRUCTIONS_END)
+    limits = [*(begin.start for begin in begins[1:]), len(text)]
+    # Every block is checked, not just the one rewritten.
+    closes = [
+        _closing_marker(text, ends, begin, limit)
+        for begin, limit in zip(begins, limits, strict=True)
+    ]
+    return (begins[0].start, closes[0])
 
 
 def upsert_instructions(existing: str | None) -> str:
