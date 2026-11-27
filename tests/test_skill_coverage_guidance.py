@@ -24,8 +24,12 @@ COVERAGE_FIELDS = {
     "modules_outside_declared_roots",
     "governs_nothing",
     "governs_no_edges",
+    "modules_in_ruled_layer",
+    "external_edges_governed",
 }
 PAYLOAD_FIELDS = {"coverage", "transitive_checked", "transitive_unverified_reason"}
+# Config keys and tool names the section also puts in backticks.
+OTHER_NAMES = {"archy_check", "archy_brief", "min_layers_present"}
 
 
 def _serialized_fields(model: type[BaseModel]) -> set[str]:
@@ -34,13 +38,13 @@ def _serialized_fields(model: type[BaseModel]) -> set[str]:
 
 def test_every_field_the_guidance_names_is_on_the_wire():
     named = {name for name in re.findall(r"`([a-z_]+)`", SECTION) if "_" in name}
-    tools = {"archy_check", "archy_brief"}
 
     assert named >= COVERAGE_FIELDS
-    assert named - tools - {"forbid", "required"} <= COVERAGE_FIELDS | PAYLOAD_FIELDS
+    assert named - OTHER_NAMES <= COVERAGE_FIELDS | PAYLOAD_FIELDS | {"coverage_error"}
     assert _serialized_fields(LayerCoverage) >= COVERAGE_FIELDS
     for payload in (CheckPayload, BriefPayload):
         assert _serialized_fields(payload) >= PAYLOAD_FIELDS, payload.__name__
+    assert "coverage_error" in _serialized_fields(BriefPayload)
 
 
 def test_both_readme_rows_point_at_the_guidance():
