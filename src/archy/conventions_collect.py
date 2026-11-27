@@ -74,6 +74,10 @@ class _ModuleFacts:
         # re-export, so only those contribute to the re-export map.
         self.is_package = False
 
+    def whole_exports(self) -> frozenset[str] | None:
+        """`__all__` only when it was read in full, so absence from it means something."""
+        return self.exports if self.exports_complete else None
+
 
 def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _ModuleFacts:
     facts = _ModuleFacts(qualname)
