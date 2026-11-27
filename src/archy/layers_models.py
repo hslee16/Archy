@@ -158,8 +158,8 @@ class LayerConfig(BaseModel):
     # the layers are there. A codebase that collapsed four layers into one file
     # satisfies every `forbid` rule by having no cross-layer edges at all. The
     # floor counts a layer present when any module matches, an empty
-    # `__init__.py` included, so it catches that only once the layer packages are
-    # gone too (#762); the coverage figures show it before then.
+    # `__init__.py` included, so it does not catch that collapse while the layer
+    # packages remain (#762).
     # The Constraint Decay paper (arxiv:2605.06445) reports that is exactly what
     # agents produce under architectural constraints. Its verifier pairs
     # dependency direction with a presence floor of "at least 3 of 4 layers", so
