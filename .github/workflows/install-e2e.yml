@@ -44,15 +44,40 @@ jobs:
       - name: Install archy
         run: uv sync
 
+      # Both clients are pinned (#607): whatever is installed here runs in the
+      # same job as the API keys. Dependabot sees neither pin, so bump by hand.
       - name: Install Claude Code CLI
         if: matrix.client == 'claude-code'
-        run: npm install -g @anthropic-ai/claude-code
+        run: npm install -g @anthropic-ai/claude-code@2.1.323
 
       - name: Install Cursor CLI
+        # An auto-update would replace the pin in the step that holds the key,
+        # hence --disable-auto-update below.
         # Cursor is Unix-only in this matrix (the windows-latest x cursor cell
-        # is excluded above), so a single bash install step covers it.
+        # is excluded above), so a single bash install step covers it. This
+        # replaces `curl https://cursor.com/install | bash`: the version and
+        # both checksums come from that script, so bump all three together.
         if: matrix.client == 'cursor'
-        run: curl -fsS https://cursor.com/install | bash
+        shell: bash
+        env:
+          CURSOR_VERSION: 2026.11.22-e9042b2
+          SHA256_LINUX_X64: 7663b1c5d1b56e095ef8e23bef38d66df6cfd665c4873470214e0e411f0f97b3
+          SHA256_DARWIN_ARM64: 92f39e448218897538bd801cdb01d69106ab37a86aaf3dc0e6b55159c79b75e2
+        run: |
+          case "$(uname -s)/$(uname -m)" in
+            Linux/x86_64) platform=linux/x64 sha=$SHA256_LINUX_X64 ;;
+            Darwin/arm64) platform=darwin/arm64 sha=$SHA256_DARWIN_ARM64 ;;
+            *) echo "no pinned Cursor CLI for $(uname -s)/$(uname -m)" >&2; exit 1 ;;
+          esac
+          curl -fsSL -o cursor.tar.gz \
+            "https://downloads.cursor.com/lab/$CURSOR_VERSION/$platform/agent-cli-package.tar.gz"
+          echo "$sha  cursor.tar.gz" | shasum -a 256 -c -
+          dest="$HOME/.local/share/cursor-agent/versions/$CURSOR_VERSION"
+          mkdir -p "$dest" "$HOME/.local/bin"
+          tar --strip-components=1 -xzf cursor.tar.gz -C "$dest"
+          rm cursor.tar.gz
+          ln -sf "$dest/cursor-agent" "$HOME/.local/bin/cursor-agent"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run archy install
         run: uv run archy install --target ${{ matrix.client == 'claude-code' && 'claude' || 'cursor' }} --yes
@@ -63,22 +88,25 @@ jobs:
         run: uv run python tests/install/e2e_assert_config.py ${{ matrix.client == 'claude-code' && 'claude' || 'cursor' }}
 
       - name: Headless reachability (Claude Code)
-        if: matrix.client == 'claude-code' && env.ANTHROPIC_API_KEY != ''
+        if: matrix.client == 'claude-code' && env.HAS_ANTHROPIC_KEY == 'true'
         run: |
           claude -p "Call the archy_score tool on the current directory and print only the overall number." \
             --allowedTools "mcp__archy__archy_score" 2>&1 | tee out.txt
           grep -qiE "archy|overall|[0-9]" out.txt
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DISABLE_AUTOUPDATER: "1"
 
       - name: Headless reachability (Cursor)
-        if: matrix.client == 'cursor' && env.CURSOR_API_KEY != ''
+        if: matrix.client == 'cursor' && env.HAS_CURSOR_KEY == 'true'
         run: |
-          cursor-agent -p "Call the archy_score tool on the current directory and print the overall number." 2>&1 | tee out.txt
+          cursor-agent --disable-auto-update -p "Call the archy_score tool on the current directory and print the overall number." 2>&1 | tee out.txt
           grep -qiE "archy|overall|[0-9]" out.txt
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
 
+    # Booleans only: the keys themselves are set on the one step that uses each,
+    # so no install step can read them.
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      HAS_ANTHROPIC_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      HAS_CURSOR_KEY: ${{ secrets.CURSOR_API_KEY != '' }}
