@@ -15,6 +15,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from pathlib import Path
 
+from archy.conventions_exports import read_exports
 from archy.conventions_models import UnparsedModule
 from archy.graph import (
     Module,
@@ -48,6 +49,8 @@ class _ModuleFacts:
         # None means the module declares no `__all__` at all, which is a
         # different fact from declaring an empty one.
         self.exports: frozenset[str] | None = None
+        # False when `__all__` is built in a way not read statically (#755).
+        self.exports_complete = True
         # Names this module pulls in by `from ... import X`. Kept unfiltered;
         # `_surface_families` decides which of them this project defines.
         # (source module, name). The module is "" for a relative import, which
@@ -78,7 +81,11 @@ def _collect(tree: ast.Module, qualname: str, *, is_package: bool = False) -> _M
     _collect_definitions(tree, facts)
     _collect_imports(tree, facts, qualname, is_package)
     _collect_assignments(tree, facts)
-    if facts.exports is None:
+    declared = read_exports(tree)
+    if declared is not None:
+        facts.exports = declared.names
+        facts.exports_complete = declared.complete
+    else:
         reexports = _redundant_alias_reexports(tree)
         if reexports:
             facts.exports = frozenset(reexports)
@@ -145,8 +152,6 @@ def _collect_assignments(tree: ast.Module, facts: _ModuleFacts) -> None:
         if not isinstance(node, ast.Assign | ast.AnnAssign):
             continue
         facts.body_assignments.append(node)
-        if "__all__" in _assigned_names(node):
-            facts.exports = _string_literals(node.value)
 
 
 def _redundant_alias_reexports(tree: ast.Module) -> set[str]:
@@ -176,16 +181,6 @@ def _resolve_relative(module: str | None, level: int, pkg: str) -> str:
     past the project root.
     """
     return resolve_relative_import(module, level, pkg) or ""
-
-
-def _string_literals(node: ast.expr | None) -> frozenset[str]:
-    """The string constants of a list/tuple literal. Anything dynamic yields
-    what could be read statically, never a guess about the rest."""
-    if not isinstance(node, ast.List | ast.Tuple):
-        return frozenset()
-    return frozenset(
-        e.value for e in node.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)
-    )
 
 
 # --------------------------------------------------------------------------

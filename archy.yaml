@@ -57,6 +57,7 @@ layers:
       - "archy.conventions"
       - "archy.conventions_collect"
       - "archy.conventions_docs"
+      - "archy.conventions_exports"
       - "archy.conventions_families"
       - "archy.conventions_gates"
       - "archy.conventions_models"

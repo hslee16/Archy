@@ -70,12 +70,20 @@ def _module_view_to_text(view: ModuleView) -> str:
         # "(none)" is a real answer here and must not be silence: it is what
         # makes "does this import that" answerable in the negative.
         count = f" ({len(items)})" if len(items) > 6 else ""
-        lines.append(f"  {label + count:<13} {', '.join(items) if items else '(none)'}")
+        listed = ", ".join(items) if items else "(none)"
+        if label == "exports" and not view.exports_complete:
+            listed = f"{', '.join(items)} (partial)" if items else "(unknown)"
+        lines.append(f"  {label + count:<13} {listed}")
     if view.gates:
         lines.append("  exits")
         lines += [_gate_row(g) for g in view.gates]
-    if view.census_complete:
+    if view.census_complete and view.exports_complete:
         lines.append("  🔴 every list above is COMPLETE for this module; absence is an answer")
+    elif view.census_complete:
+        lines.append(
+            "  🔴 every list above except exports is COMPLETE for this module; "
+            "__all__ is built dynamically, so absence from exports is not an answer"
+        )
     else:
         skipped = view.unparsed_modules
         detail = (
