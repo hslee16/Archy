@@ -319,6 +319,22 @@ def _jaccard_of_totals(a: Counter[str], total_a: int, b: Counter[str], total_b: 
     return inter / union if union else 0.0
 
 
+# A bag and its total, computed once per function rather than once per pair.
+_Weighed = tuple[Counter[str], int]
+
+
+def _similarity_toward(floor: float, a: _Weighed, b: _Weighed) -> float:
+    """`_jaccard_of_totals`, or 0.0 for a pair that cannot reach `floor`.
+
+    The overlap is at most the smaller bag and the union at least the larger, so
+    the totals alone rule some pairs out.
+    """
+    total_a, total_b = a[1], b[1]
+    if min(total_a, total_b) < floor * max(total_a, total_b):
+        return 0.0
+    return _jaccard_of_totals(a[0], total_a, b[0], total_b)
+
+
 class _Candidate(NamedTuple):
     qual: str
     path: str
@@ -396,6 +412,10 @@ def _near_miss_candidates(sized: list[tuple[str, str, FunctionComplexity]]) -> l
     return items
 
 
+def _weighed(items: list[_Candidate]) -> list[_Weighed]:
+    return [(item.bag, item.bag.total()) for item in items]
+
+
 def _cluster_by_similarity(
     items: list[_Candidate], min_similarity: float, max_comparisons: int
 ) -> tuple[dict[int, list[int]], dict[frozenset[int], float], bool]:
@@ -413,7 +433,7 @@ def _cluster_by_similarity(
     edge_weight: dict[frozenset[int], float] = {}
     budget = max_comparisons
     truncated = False
-    totals = [item.bag.total() for item in items]
+    weighed = _weighed(items)
     for i in range(len(items)):
         limit = items[i].fn.size / min_similarity  # sizes above this cannot reach the floor
         for j in range(i + 1, len(items)):
@@ -423,11 +443,7 @@ def _cluster_by_similarity(
                 truncated = True
                 break
             budget -= 1
-            # The overlap is at most the smaller bag and the union at least the
-            # larger, so some pairs cannot reach the floor whatever they hold.
-            if min(totals[i], totals[j]) < min_similarity * max(totals[i], totals[j]):
-                continue
-            sim = _jaccard_of_totals(items[i].bag, totals[i], items[j].bag, totals[j])
+            sim = _similarity_toward(min_similarity, weighed[i], weighed[j])
             if sim >= min_similarity:
                 parent[find(i)] = find(j)
                 edge_weight[frozenset((i, j))] = sim
