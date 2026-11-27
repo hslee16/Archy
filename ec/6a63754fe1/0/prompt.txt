@@ -1,0 +1,53 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a37345db343a0c94f</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a37345db343a0c94f.output</output-file>
+<status>completed</status>
+<summary>Agent "Second review round for marker fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I found two real problems, both new refusals or breakage compared with main. I found no new duplicate-block path and no realistic new data loss. The fuzz covered every sequence of up to 4 line tokens plus 200k random sequences of 5 to 9, comparing the branch with main. The working tree is unchanged; my only writes were in the scratchpad.
+
+**1. Install succeeds, then reinstall and uninstall are refused (medium; should fix)**
+```
+&lt;!-- archy:end --&gt; is the closing fence
+```
+- The first `upsert_instructions` succeeds, because with no fenced begin the function returns before checking end markers.
+- The appended block provides a begin, so every end marker is now checked. The next upsert and `remove_instructions` both raise "shares its line".
+- Main installs, re-installs and uninstalls this file cleanly.
+- `- &lt;!-- archy:end --&gt;` behaves the same way. A line with text on both sides, such as `- &lt;!-- archy:end --&gt; closes it`, is fine.
+- `--print-config` also fails on such a file, and its error omits the file path, even though a real first install succeeds. This comes from `_without_archy` calling remove on the rendered text.
+- The same refusal hits a file with a valid block and such a line anywhere outside it, which main handled.
+- **Realism:** low to moderate. It needs the user to write the raw HTML comment at the start or end of a line, for example in notes about archy's fences.
+- **Possible fix:** raise for a one-sided end marker only when it lies between a fenced begin and its chosen close, or when no close is found. A damaged real closing fence is still caught, and prose outside the block is ignored.
+
+**2. A UTF-8 BOM before the begin marker is now refused (medium; one-line fix)**
+```
+"\ufeff&lt;!-- archy:begin --&gt;\n...\n&lt;!-- archy:end --&gt;\nmine\n"
+```
+- Main upserts and removes this correctly. The branch raises "shares its line with other text", and the text it means is invisible.
+- `read_text(encoding="utf-8")` keeps the BOM, and `str.strip()` does not remove U+FEFF.
+- **Realism:** the most plausible of these. A CLAUDE.md or AGENTS.md that archy created holds the block at byte 0. Re-saving it with Windows PowerShell 5 `Set-Content -Encoding utf8`, or an editor set to "UTF-8 with BOM", triggers it.
+- **Fix:** ignore a leading `\ufeff` when computing `before`. Keep the BOM in the output; note that replacing or removing from the marker's offset already leaves it in place.
+
+**Minor, probably acceptable**
+- **Newly refused, and main accepted:**
+  - An empty placeholder, `&lt;!-- archy:begin --&gt;&lt;!-- archy:end --&gt;`, or both markers separated only by a space.
+  - A hand-annotated fence such as `&lt;!-- archy:begin --&gt; (managed)`.
+  - The second follows the new documented rule. Both are unlikely, and archy's own install never writes either.
+- **Deletes more than main:**
+  - A fenced begin, a backtick-quoted end, user text, then a fenced end: removes through the real end. This is the intended #945 behaviour.
+  - The same shape with a quoted *begin* in the middle: main refused, the branch deletes through the later end. It needs an orphan begin plus a stray end alone on its line, so it is very unlikely.
+
+**Clean in the fuzz:** no crashes, no extra copies of the block compared with main, and no new non-idempotent or inexact round trips apart from class 1. I saw nothing where a file produced by archy's own install is refused unless it was edited afterwards or already held a line like the one in class 1.
+
+Relevant file: `/Users/hosanglee/archy/src/archy/install/base.py` (`_marker_spans`, `_marker_block_range`). The fuzzer and repro scripts are `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r2/fuzz.py` and `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r2/v.py`.</result>
+<usage><subagent_tokens>99613</subagent_tokens><tool_uses>6</tool_uses><duration_ms>90302</duration_ms></usage>
+</task-notification>
+
+---
+
+lets merge the PRs
