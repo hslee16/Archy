@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "94f61a5896b4",
+  "strategy": "manual-commit",
+  "branch": "alee/945-marker-own-line",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/archy/install/base.py",
+    "tests/install/unit/test_base.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/94/f61a5896b4/0/metadata.json",
+      "transcript": "/94/f61a5896b4/0/full.jsonl",
+      "content_hash": "/94/f61a5896b4/0/content_hash.txt",
+      "prompt": "/94/f61a5896b4/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 12,
+    "cache_creation_tokens": 11676,
+    "cache_read_tokens": 2056780,
+    "output_tokens": 5424,
+    "api_call_count": 5
+  }
+}
