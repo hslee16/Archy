@@ -30,6 +30,7 @@ jobs:
       # PyPI only refuses a version that already exists, so a tag that disagrees
       # with pyproject.toml would publish, with provenance naming the wrong
       # release (#772). A `workflow_dispatch` from a branch has no tag to compare.
+      # uv prints the PEP 440 form, so tag a pre-release `v1.0.0rc1`, not `-rc1`.
       - name: Check the tag matches the project version
         if: github.ref_type == 'tag'
         run: |
