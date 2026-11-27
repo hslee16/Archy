@@ -50,9 +50,9 @@ Unlike module-grained diagnostics (`hotspots`, `dsm`) that read the shared
 aggregates, so `compute_duplicates` consumes the `(modules, parse_results)` pair
 from `archy.graph.parse_project` instead.
 
-archy:owns        DuplicateGroup, DuplicateMember, classify_variants,
+archy:owns        DuplicateGroup, DuplicateMember, NearDuplicates, classify_variants,
                   compute_duplicates, compute_near_duplicates, demote_independent,
-                  is_test_path
+                  is_test_path, with_truncation
 archy:mirrored-by DuplicateGroup -> archy.cli_render_git, archy.mcp_payloads,
                   archy.mcp_runs_git, bench.diff_duplicates_precision,
                   classify_variants -> archy.cli_git, archy.mcp_runs_git,
@@ -62,7 +62,8 @@ archy:mirrored-by DuplicateGroup -> archy.cli_render_git, archy.mcp_payloads,
                   compute_near_duplicates -> archy.cli_git, archy.mcp_runs_git,
                   bench.diff_duplicates_precision, bench.near_duplicates_sweep,
                   demote_independent -> archy.cli_git, archy.mcp_runs_git,
-                  bench.diff_duplicates_precision, bench.duplicates_cochange_sweep
+                  bench.diff_duplicates_precision, bench.duplicates_cochange_sweep,
+                  with_truncation -> archy.cli_render_git, archy.mcp_runs_git
 """
 
 from __future__ import annotations
@@ -117,9 +118,25 @@ DEFAULT_COCHANGE_MIN_EVIDENCE = 5
 DEFAULT_MIN_SIMILARITY = 0.85
 # Global cap on pairwise token comparisons in the near-miss pass, the safety
 # valve against a size-band with thousands of same-sized functions on a giant
-# repo. If hit, the pass warns (never silently truncates) and returns what it
-# found within budget.
+# repo. If hit, the pass returns what it found within budget and says so, both as
+# `NearDuplicates.truncated` for payloads and as a warning for library callers.
+# Real repos do hit it (#812).
 DEFAULT_MAX_NEAR_COMPARISONS = 5_000_000
+# What every surface says when it did. `min_nodes` is the one lever a CLI or MCP
+# caller has.
+NEAR_TRUNCATED_NOTE = (
+    "Near-miss results are INCOMPLETE: the pass stopped at its token-comparison "
+    "budget, so clusters may be missing, partial or split, and near_total is not "
+    "a count. For the near-miss tier, a higher min_nodes (CLI: --min-nodes) "
+    "leaves fewer pairs to compare."
+)
+
+
+def with_truncation(note: str | None, truncated: bool) -> str | None:
+    """A payload `note`, plus the near-miss warning when the pass stopped early."""
+    if not truncated:
+        return note
+    return f"{note} {NEAR_TRUNCATED_NOTE}" if note else NEAR_TRUNCATED_NOTE
 
 
 class DuplicateMember(BaseModel):
@@ -293,6 +310,16 @@ class _Candidate(NamedTuple):
     bag: Counter[str]
 
 
+class NearDuplicates(BaseModel):
+    """The near-miss pass, with whether it got to the end."""
+
+    model_config = ConfigDict(frozen=True)
+
+    groups: tuple[DuplicateGroup, ...] = ()
+    # True when the comparison budget ran out, so an absent clone proves nothing.
+    truncated: bool = False
+
+
 def compute_near_duplicates(
     modules: list[Module],
     parse_results: dict[str, ParseResult],
@@ -300,7 +327,7 @@ def compute_near_duplicates(
     min_size: int = DEFAULT_MIN_SIZE,
     min_similarity: float = DEFAULT_MIN_SIMILARITY,
     max_comparisons: int = DEFAULT_MAX_NEAR_COMPARISONS,
-) -> list[DuplicateGroup]:
+) -> NearDuplicates:
     """Type-3 (gapped) clone clusters via token-multiset overlap (issue #246).
 
     The exact `shape_hash` finds Type-1/2 clones but nothing gapped (one inserted
@@ -317,12 +344,14 @@ def compute_near_duplicates(
     sorted by size and each is compared only forward while the size stays in
     band - the cheap prefilter that avoids the O(n^2) blow-up the tiny token
     vocabulary would otherwise cause (no rare tokens to index on). A global
-    `max_comparisons` budget bounds giant repos; exceeding it warns rather than
-    silently truncating.
+    `max_comparisons` budget bounds giant repos; exceeding it warns and sets
+    `truncated`.
     """
     sized = list(_sized_functions(modules, parse_results, min_size))
     items = _near_miss_candidates(sized)
-    components, edge_weight = _cluster_by_similarity(items, min_similarity, max_comparisons)
+    components, edge_weight, truncated = _cluster_by_similarity(
+        items, min_similarity, max_comparisons
+    )
 
     groups = [
         _near_miss_group(items, members_idx, edge_weight, min_similarity)
@@ -330,7 +359,7 @@ def compute_near_duplicates(
         if len(members_idx) >= DEFAULT_MIN_MEMBERS
     ]
     groups.sort(key=lambda g: (-(g.similarity or 0.0), -g.redundancy, -g.size))
-    return groups
+    return NearDuplicates(groups=tuple(groups), truncated=truncated)
 
 
 def _near_miss_candidates(sized: list[tuple[str, str, FunctionComplexity]]) -> list[_Candidate]:
@@ -353,10 +382,9 @@ def _near_miss_candidates(sized: list[tuple[str, str, FunctionComplexity]]) -> l
 
 def _cluster_by_similarity(
     items: list[_Candidate], min_similarity: float, max_comparisons: int
-) -> tuple[dict[int, list[int]], dict[frozenset[int], float]]:
-    """Connected components of the pairs at or above `min_similarity`, and each edge's weight.
-
-    Warns, rather than silently truncating, when the comparison budget runs out.
+) -> tuple[dict[int, list[int]], dict[frozenset[int], float], bool]:
+    """Connected components of the pairs at or above `min_similarity`, each edge's weight,
+    and whether the comparison budget ran out first (which also warns).
     """
     parent = list(range(len(items)))
 
@@ -387,14 +415,14 @@ def _cluster_by_similarity(
     if truncated:
         warnings.warn(
             f"near-miss: hit the {max_comparisons} token-comparison budget; results "
-            "may be incomplete. Raise max_comparisons or min_similarity to widen.",
+            "may be incomplete.",
             stacklevel=3,
         )
 
     components: dict[int, list[int]] = {}
     for idx in range(len(items)):
         components.setdefault(find(idx), []).append(idx)
-    return components, edge_weight
+    return components, edge_weight, truncated
 
 
 def _near_miss_group(

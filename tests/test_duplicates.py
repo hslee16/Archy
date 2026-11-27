@@ -741,7 +741,7 @@ def test_near_miss_clusters_gapped_clone(tmp_path: Path):
     (pkg / "b.py").write_text(_near_variant("beta"))
     modules, results = parse_project(tmp_path)
     assert compute_duplicates(modules, results, min_size=10) == []  # shapes differ
-    near = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8)
+    near = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8).groups
     assert len(near) == 1
     g = near[0]
     assert g.category == "near_miss"
@@ -767,7 +767,7 @@ def test_near_miss_members_order_by_module_then_line_then_name(tmp_path: Path):
     (pkg / "b.py").write_text(_near_variant("beta", after="total = 0", insert="count = 1"))
     modules, results = parse_project(tmp_path)
     assert compute_duplicates(modules, results, min_size=10) == []
-    (group,) = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8)
+    (group,) = compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8).groups
     assert [(m.module, m.line, m.qualified_name) for m in group.members] == [
         ("pkg.a", 1, "zeta"),
         ("pkg.a", 10, "alpha"),
@@ -788,7 +788,7 @@ def test_near_miss_excludes_unrelated(tmp_path: Path):
         "    return out\n"
     )
     modules, results = parse_project(tmp_path)
-    assert compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8) == []
+    assert compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8).groups == ()
 
 
 def test_near_miss_excludes_exact_clustered(tmp_path: Path):
@@ -799,7 +799,7 @@ def test_near_miss_excludes_exact_clustered(tmp_path: Path):
     (pkg / "b.py").write_text(_NEAR_BODY.format(n="beta"))
     modules, results = parse_project(tmp_path)
     assert len(compute_duplicates(modules, results, min_size=10)) == 1  # exact cluster
-    assert compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8) == []
+    assert compute_near_duplicates(modules, results, min_size=10, min_similarity=0.8).groups == ()
 
 
 def test_cli_duplicates_near_miss_json(tmp_path: Path):
@@ -838,8 +838,9 @@ def test_a_pair_exactly_at_the_floor_joins_when_its_size_is_exactly_the_band_lim
 
     items = [_cand("a", 10, {"x": 10}), _cand("b", 20, {"x": 10, "y": 10})]
 
-    components, weights = _cluster_by_similarity(items, 0.5, 100)
+    components, weights, truncated = _cluster_by_similarity(items, 0.5, 100)
 
+    assert not truncated
     assert sorted(len(c) for c in components.values()) == [2]
     assert list(weights.values()) == [0.5]
 
@@ -850,8 +851,9 @@ def test_the_comparison_budget_stops_at_exactly_max_comparisons_and_warns():
     items = [_cand("a", 10, same), _cand("b", 10, same), _cand("c", 10, same)]
 
     with pytest.warns(UserWarning, match="token-comparison budget"):
-        _components, weights = _cluster_by_similarity(items, 0.5, 1)
+        _components, weights, truncated = _cluster_by_similarity(items, 0.5, 1)
 
+    assert truncated
     assert len(weights) == 1  # a-b was compared; a-c and b-c were not
 
 

@@ -44,7 +44,7 @@ def run_project(root: Path) -> dict | None:
     row: dict = {"modules": len(modules)}
     for thr in THRESHOLDS:
         t0 = time.monotonic()
-        near = compute_near_duplicates(modules, results, min_similarity=thr)
+        near = compute_near_duplicates(modules, results, min_similarity=thr).groups
         row[thr] = {"count": len(near), "secs": round(time.monotonic() - t0, 1)}
     return row
 

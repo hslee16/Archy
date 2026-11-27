@@ -197,7 +197,7 @@ def detect_clusters(root: Path) -> list[DuplicateGroup]:
     if cochange is not None:
         rows = demote_independent(rows, counts=cochange.counts, pair_support=cochange.pair_support)
     exact = [g for g in rows if g.category == "duplicate"]
-    near = compute_near_duplicates(modules, parse_results, min_size=MIN_NODES)
+    near = list(compute_near_duplicates(modules, parse_results, min_size=MIN_NODES).groups)
     return _source_only(exact + near, root)
 
 

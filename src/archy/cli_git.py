@@ -20,6 +20,8 @@ from archy.cli_render import (
     _hotspots_to_text,
     _refactor_to_dict,
     _refactor_to_text,
+    _text_with_truncation,
+    _truncation_marked,
 )
 from archy.coupling import (
     DEFAULT_MIN_CONFIDENCE,
@@ -331,16 +333,22 @@ def duplicates(
             rows = demote_independent(
                 rows, counts=cochange.counts, pair_support=cochange.pair_support
             )
+    near_truncated = False
     if near_miss:
         # Type-3 recall layer (#246): opt-in token-overlap pass over the
         # singletons the exact hash missed, appended as `near_miss` groups the
         # renderers show in their own lower-confidence section.
-        rows = rows + compute_near_duplicates(modules, parse_results, min_size=min_nodes)
+        found = compute_near_duplicates(modules, parse_results, min_size=min_nodes)
+        rows = rows + list(found.groups)
+        near_truncated = found.truncated
     if fmt == "json":
-        payload = _duplicates_to_dict(rows, top_n=top_n, min_nodes=min_nodes)
+        payload = _truncation_marked(
+            _duplicates_to_dict(rows, top_n=top_n, min_nodes=min_nodes), near_truncated
+        )
         click.echo(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        click.echo(_duplicates_to_text(rows, top_n=top_n, min_nodes=min_nodes))
+        text = _duplicates_to_text(rows, top_n=top_n, min_nodes=min_nodes)
+        click.echo(_text_with_truncation(text, near_truncated))
 
 
 @main.command(name="what-to-refactor-next")
