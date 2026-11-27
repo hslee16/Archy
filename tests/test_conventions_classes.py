@@ -367,3 +367,56 @@ def test_a_builtin_is_not_replaced_by_a_nested_class_of_that_name(tmp_path: Path
     )
 
     assert _report(tmp_path, {"child.py": child})["bases"] == ()
+
+
+SPEED = "from pkg._speed import Error"
+PURE = "from pkg.a import Error"
+
+
+@pytest.mark.parametrize(
+    "preamble",
+    [
+        f"try:\n    {SPEED}\nexcept ImportError:\n    {PURE}\n",
+        f"{PURE}\nif speed:\n    {SPEED}\n",
+        f"{PURE}\nif x:\n    try:\n        {SPEED}\n    except ImportError:\n        pass\n",
+        f"if x:\n    {SPEED}\nelse:\n    {PURE}\n",
+    ],
+    ids=["try-fallback", "override-if", "override-nested", "if-else"],
+)
+def test_an_import_that_leads_nowhere_does_not_hide_the_one_that_does(
+    tmp_path: Path, preamble: str
+):
+    """`wrapt` overrides its Python classes with a C extension when it has one."""
+    _report(tmp_path, {"a.py": TWO_ROOTS["a.py"], "child.py": preamble + CHILDREN})
+
+    assert _index(tmp_path).resolve("pkg.child", "Error") == ("pkg.a", "Error")
+
+
+def test_a_later_plain_import_replaces_every_earlier_choice(tmp_path: Path):
+    preamble = (
+        "try:\n    from pkg.a import Error\nexcept ImportError:\n    from pkg.b import Error\n"
+        "from vendor import Error\n"
+    )
+
+    _report(tmp_path, {**TWO_ROOTS, "child.py": preamble + CHILDREN})
+
+    assert _index(tmp_path).resolve("pkg.child", "Error") is None
+
+
+def test_a_class_remade_by_a_call_keeps_its_family(tmp_path: Path):
+    child = (
+        "class Setting: pass\nSetting = Meta('Setting', (Setting,), {})\n"
+        "class B(Setting): pass\nclass C(Setting): pass\n"
+    )
+
+    assert _families(_report(tmp_path, {"child.py": child})) == {
+        ("Setting", "pkg.child", ("B", "C", "Setting"))
+    }
+
+
+def test_a_very_long_elif_chain_does_not_exhaust_the_stack(tmp_path: Path):
+    chain = "if x == 0:\n    pass\n" + "".join(f"elif x == {i}:\n    pass\n" for i in range(1, 600))
+
+    report = _report(tmp_path, {"a.py": TWO_ROOTS["a.py"], "child.py": chain})
+
+    assert report["modules_unparsed"] == 0

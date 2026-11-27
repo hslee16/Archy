@@ -10,6 +10,11 @@ known misses, each a link left out: a submodule that is a package attribute only
 through a star import (`nx.reportviews.X`), and imports that spell a namespace
 package archy names its modules without.
 
+It reads one final namespace per module, so it can pick the wrong class where
+order or scope decides: a star import after an explicit import of the same name,
+a star source whose `__all__` hides it, a name rebound after the class statement
+that used it, or one shadowed inside a class body.
+
 archy:owns        ClassIndex
 archy:mirrored-by ClassIndex -> archy.conventions, archy.conventions_docs,
                   archy.conventions_families
@@ -67,10 +72,13 @@ class ClassIndex:
         head, _, rest = dotted.partition(".")
         space = self._spaces.get(module, Namespace())
         if head in space.names:
-            target = space.names[head]
-            if target is None:
-                return None
-            return self._follow(f"{target}.{rest}" if rest else target, set())
+            targets = (space.names[head], *space.alternates.get(head, ()))
+            found = (
+                self._follow(f"{target}.{rest}" if rest else target, set())
+                for target in targets
+                if target is not None
+            )
+            return next((key for key in found if key is not None), None)
         if rest:
             return None
         return self._from_stars(module, head, set()) or self._nested(module, head)

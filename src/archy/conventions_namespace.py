@@ -2,8 +2,9 @@
 
 Only module scope binds here: an import inside a function says nothing about
 what a class statement at the top sees. Where two branches bind one name, the
-first (the `if` body, the `try` body) is kept, except under `if TYPE_CHECKING`,
-where the `else` is the one that runs.
+first (the `if` body, the `try` body) is tried first and the others kept as
+alternates, except under `if TYPE_CHECKING`, where the `else` is the one that
+runs.
 
 archy:owns        Namespace, module_namespace
 archy:mirrored-by _dotted -> archy.conventions_classes, archy.conventions_families,
@@ -36,6 +37,9 @@ class Namespace(BaseModel):
     """Local name to the dotted thing it means; None when that cannot be followed."""
 
     names: dict[str, str | None] = Field(default_factory=dict)
+    # Other things a branch could make the name mean, tried when the first
+    # leads nowhere (a C extension with a Python fallback).
+    alternates: dict[str, list[str]] = Field(default_factory=dict)
     # What a name meant before a `class` statement took it over.
     replaced: dict[str, str | None] = Field(default_factory=dict)
     # Modules taken `*` from, in order.
@@ -49,13 +53,24 @@ class _Scope(BaseModel):
     package: str
     relative: RelativeResolver
     space: Namespace
+    # Inside `if` or `try`, so an earlier binding may still be the one that runs.
+    conditional: bool = False
     fill_only: bool = False
 
     def bind(self, name: str, target: str | None) -> None:
-        if self.fill_only:
-            self.space.names.setdefault(name, target)
-        else:
-            self.space.names[name] = target
+        names = self.space.names
+        if self.conditional and name in names:
+            kept, other = (names[name], target) if self.fill_only else (target, names[name])
+            names[name] = kept
+            if other is not None and other != kept:
+                self.space.alternates.setdefault(name, []).append(other)
+            return
+        names[name] = target
+        self.space.alternates.pop(name, None)
+
+    def branch(self, *, fill_only: bool) -> _Scope:
+        update = {"conditional": True, "fill_only": self.fill_only or fill_only}
+        return self.model_copy(update=update)
 
 
 def module_namespace(
@@ -110,7 +125,10 @@ def _bind_assignment(node: ast.Assign | ast.AnnAssign, scope: _Scope) -> None:
     targets = node.targets if isinstance(node, ast.Assign) else [node.target]
     target = _aliased(node.value, scope.space)
     for name in (t.id for t in targets if isinstance(t, ast.Name)):
-        scope.bind(name, target)
+        # `Setting = Meta("Setting", (Setting,), {})` remakes the class in place.
+        own = scope.space.names.get(name) == f"{scope.module}.{name}"
+        if not (own and isinstance(node.value, ast.Call)):
+            scope.bind(name, target)
 
 
 def _aliased(value: ast.expr, space: Namespace) -> str | None:
@@ -126,11 +144,18 @@ def _aliased(value: ast.expr, space: Namespace) -> str | None:
 @_bind.register(ast.For)
 @_bind.register(ast.While)
 def _bind_branches(node: ast.If, scope: _Scope) -> None:
-    first, other = node.body, node.orelse
-    if _is_type_checking(node):
-        first, other = other, first
-    _bind_all(first, scope)
-    _bind_all(other, scope.model_copy(update={"fill_only": True}))
+    # A loop, not recursion: a generated `elif` chain nests as deep as it is long.
+    here = scope
+    while True:
+        first, other = node.body, node.orelse
+        if _is_type_checking(node):
+            first, other = other, first
+        _bind_all(first, here.branch(fill_only=False))
+        here = here.branch(fill_only=True)
+        if len(other) != 1 or not isinstance(other[0], ast.If):
+            _bind_all(other, here)
+            return
+        node = other[0]
 
 
 def _is_type_checking(node: ast.AST) -> bool:
@@ -145,8 +170,8 @@ def _bind_with(node: ast.With, scope: _Scope) -> None:
 
 @_bind.register(ast.Try)
 def _bind_try(node: ast.Try, scope: _Scope) -> None:
-    _bind_all([*node.body, *node.orelse], scope)
-    fallback = scope.model_copy(update={"fill_only": True})
+    _bind_all([*node.body, *node.orelse], scope.branch(fill_only=False))
+    fallback = scope.branch(fill_only=True)
     for handler in node.handlers:
         _bind_all(handler.body, fallback)
     _bind_all(node.finalbody, scope)
