@@ -21,6 +21,7 @@ archy:mirrored-by delete_file -> archy.install.adapters.continue_,
 
 from __future__ import annotations
 
+import re
 import shutil
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -111,8 +112,19 @@ def _drop_leading_newline(text: str) -> str:
     return text[1:] if text.startswith("\n") else text
 
 
+def _marker_spans(text: str, marker: str) -> list[tuple[int, int]]:
+    """Where `marker` stands on a line of its own; group 1 is the marker itself.
+
+    One quoted in the user's own prose is their text, not a fence (#945).
+    """
+    own_line = rf"(?m)^\ufeff?[ \t]*({re.escape(marker)})[ \t\r]*$"
+    return [match.span(1) for match in re.finditer(own_line, text)]
+
+
 def _marker_block_range(text: str) -> tuple[int, int] | None:
     """Locate the archy-owned marker block.
+
+    Only a marker on a line of its own counts, which is how archy writes both.
 
     Returns:
         (start, end) where end is exclusive.
@@ -122,23 +134,24 @@ def _marker_block_range(text: str) -> tuple[int, int] | None:
             opening marker or end of file, so nothing says where archy's text
             stops and the user's begins.
     """
-    start = text.find(INSTRUCTIONS_BEGIN)
-    if start == -1:
+    begins = [start for start, _ in _marker_spans(text, INSTRUCTIONS_BEGIN)]
+    if not begins:
         return None
-    first_end = text.find(INSTRUCTIONS_END, start)
-    begin = start
-    while begin != -1:
-        end = text.find(INSTRUCTIONS_END, begin)
-        next_begin = text.find(INSTRUCTIONS_BEGIN, begin + 1)
-        if end == -1 or -1 < next_begin < end:
+    ends = _marker_spans(text, INSTRUCTIONS_END)
+    closes: list[int] = []
+    # Every begin needs its own end before the next begin, or nothing says where
+    # that block stops.
+    for begin, next_begin in zip(begins, [*begins[1:], len(text)], strict=True):
+        close = next((stop for start, stop in ends if begin < start < next_begin), None)
+        if close is None:
             line = text.count("\n", 0, begin) + 1
             raise InstallError(
-                f"{INSTRUCTIONS_BEGIN} at line {line} has no matching {INSTRUCTIONS_END}; "
-                "delete that marker, or add the end marker right after archy's text and "
-                "before anything of yours, then re-run"
+                f"{INSTRUCTIONS_BEGIN} at line {line} has no matching {INSTRUCTIONS_END} "
+                "on a line of its own; delete that marker, or add the end marker on its "
+                "own line right after archy's text and before anything of yours, then re-run"
             )
-        begin = next_begin
-    return (start, first_end + len(INSTRUCTIONS_END))
+        closes.append(close)
+    return (begins[0], closes[0])
 
 
 def upsert_instructions(existing: str | None) -> str:

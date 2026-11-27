@@ -197,3 +197,46 @@ def test_detect_true_when_cli_on_path(simulate_os, monkeypatch):
 @pytest.mark.parametrize("scope", [Scope.GLOBAL, Scope.LOCAL])
 def test_scope_enum_values(scope):
     assert scope.value in {"global", "local"}
+
+
+def test_an_end_marker_quoted_in_the_users_prose_does_not_end_the_block():
+    """#945: the lines before the quoted marker were removed with archy's text."""
+    quoted = f"I wrote `{INSTRUCTIONS_END}` here."
+    existing = f"{INSTRUCTIONS_BEGIN}\nprecious\n{quoted}\nmore\n"
+
+    # No real end marker, so nothing says where archy's text stops.
+    with pytest.raises(InstallError, match="on a line of its own"):
+        remove_instructions(existing)
+    with pytest.raises(InstallError):
+        upsert_instructions(existing)
+
+
+def test_a_quoted_end_marker_inside_the_block_goes_with_the_real_one():
+    inside = f"I wrote `{INSTRUCTIONS_END}` here."
+    existing = f"top\n\n{INSTRUCTIONS_BEGIN}\n{inside}\n{INSTRUCTIONS_END}\nbottom\n"
+
+    assert remove_instructions(existing) == "top\nbottom\n"
+    assert upsert_instructions(existing) == f"top\n\n{instructions_block()}bottom\n"
+
+
+@pytest.mark.parametrize("marker", [INSTRUCTIONS_BEGIN, INSTRUCTIONS_END])
+def test_a_marker_quoted_in_prose_with_no_block_is_just_text(marker: str):
+    existing = f"Archy uses `{marker}` as a fence.\n"
+
+    assert remove_instructions(existing) == existing
+    assert upsert_instructions(existing) == f"{existing}\n{instructions_block()}"
+    assert remove_instructions(upsert_instructions(existing)) == existing
+
+
+@pytest.mark.parametrize(
+    ("before", "after"),
+    [("\ufeff", ""), ("  ", "  "), ("", "\r")],
+    ids=["bom", "indented", "carriage-return"],
+)
+def test_a_marker_line_may_carry_a_bom_or_surrounding_space(before: str, after: str):
+    existing = f"{before}{INSTRUCTIONS_BEGIN}{after}\nold\n{INSTRUCTIONS_END}{after}\nmine\n"
+
+    out = upsert_instructions(existing)
+
+    assert "old" not in out and "mine" in out
+    assert out.count(INSTRUCTIONS_BEGIN) == 1
