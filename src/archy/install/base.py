@@ -113,18 +113,38 @@ def _drop_leading_newline(text: str) -> str:
 
 
 def _marker_spans(text: str, marker: str) -> list[tuple[int, int]]:
-    """Where `marker` stands on a line of its own; group 1 is the marker itself.
+    """Where `marker` fences a block, as opposed to being quoted.
 
-    One quoted in the user's own prose is their text, not a fence (#945).
+    Alone on its line (whitespace aside) it is a fence, which is how archy writes
+    it. With text on both sides it is the user quoting it (#945). With text on one
+    side only it could be either, and guessing wrong either way loses lines: take
+    it for text and a later quoted marker closes the block instead.
+
+    Raises:
+        InstallError: a marker has text on one side only.
     """
-    own_line = rf"(?m)^\ufeff?[ \t]*({re.escape(marker)})[ \t\r]*$"
-    return [match.span(1) for match in re.finditer(own_line, text)]
+    spans: list[tuple[int, int]] = []
+    for match in re.finditer(re.escape(marker), text):
+        line_start = text.rfind("\n", 0, match.start()) + 1
+        newline = text.find("\n", match.end())
+        before = text[line_start : match.start()].strip()
+        after = text[match.end() : len(text) if newline == -1 else newline].strip()
+        if not before and not after:
+            spans.append(match.span())
+        elif not before or not after:
+            line = text.count("\n", 0, match.start()) + 1
+            raise InstallError(
+                f"{marker} at line {line} shares its line with other text; put the marker "
+                "on a line of its own, or wrap it in backticks if you are quoting it, "
+                "then re-run"
+            )
+    return spans
 
 
 def _marker_block_range(text: str) -> tuple[int, int] | None:
     """Locate the archy-owned marker block.
 
-    Only a marker on a line of its own counts, which is how archy writes both.
+    Only a marker on a line of its own counts; see :func:`_marker_spans`.
 
     Returns:
         (start, end) where end is exclusive.
@@ -132,7 +152,7 @@ def _marker_block_range(text: str) -> tuple[int, int] | None:
     Raises:
         InstallError: an opening marker has no closing marker before the next
             opening marker or end of file, so nothing says where archy's text
-            stops and the user's begins.
+            stops and the user's begins; or a marker shares its line with text.
     """
     begins = [start for start, _ in _marker_spans(text, INSTRUCTIONS_BEGIN)]
     if not begins:

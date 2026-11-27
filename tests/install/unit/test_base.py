@@ -228,15 +228,29 @@ def test_a_marker_quoted_in_prose_with_no_block_is_just_text(marker: str):
     assert remove_instructions(upsert_instructions(existing)) == existing
 
 
-@pytest.mark.parametrize(
-    ("before", "after"),
-    [("\ufeff", ""), ("  ", "  "), ("", "\r")],
-    ids=["bom", "indented", "carriage-return"],
-)
-def test_a_marker_line_may_carry_a_bom_or_surrounding_space(before: str, after: str):
-    existing = f"{before}{INSTRUCTIONS_BEGIN}{after}\nold\n{INSTRUCTIONS_END}{after}\nmine\n"
+@pytest.mark.parametrize("space", ["  ", "\t", "\u00a0", "\f"], ids=["spaces", "tab", "nbsp", "ff"])
+def test_whitespace_round_a_marker_still_leaves_it_alone_on_its_line(space: str):
+    existing = f"{space}{INSTRUCTIONS_BEGIN}{space}\nold\n{INSTRUCTIONS_END}{space}\nmine\n"
 
     out = upsert_instructions(existing)
 
     assert "old" not in out and "mine" in out
     assert out.count(INSTRUCTIONS_BEGIN) == 1
+
+
+@pytest.mark.parametrize("marker", [INSTRUCTIONS_BEGIN, INSTRUCTIONS_END])
+@pytest.mark.parametrize("line", ["{} (managed)", "managed {}", "- {}", "{}\u200b"])
+def test_a_marker_with_text_on_one_side_is_refused(marker: str, line: str):
+    """It could be a damaged fence or a quotation; guessing either loses lines."""
+    existing = f"{INSTRUCTIONS_BEGIN}\nold\n{line.format(marker)}\nUSER\n{INSTRUCTIONS_END}\n"
+
+    with pytest.raises(InstallError, match="shares its line"):
+        upsert_instructions(existing)
+    with pytest.raises(InstallError, match="shares its line"):
+        remove_instructions(existing)
+
+
+def test_removal_takes_the_marker_and_not_the_users_indentation_before_it():
+    existing = f"mine\n  {INSTRUCTIONS_BEGIN}\nold\n{INSTRUCTIONS_END}\n"
+
+    assert remove_instructions(existing) == "mine\n  "
