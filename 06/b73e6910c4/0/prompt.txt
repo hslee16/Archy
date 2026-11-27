@@ -1,0 +1,79 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a83f9c4bee7ffe534</task-id>
+<tool-use-id>toolu_01N3CDU1FWqx1Fd7orjc92Gr</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a83f9c4bee7ffe534.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of header writer" is waiting on its own background work</summary>
+<note>This agent stopped with background work of its own still running. It may resume on its own when that work completes or reports, and the same task-id notifies again if it does; the result below may be interim.</note>
+<result>I found five real defects in the branch, listed by severity. I could not get any rewrite to change a module's AST: the guard held in every probe, including random fuzzing of text before the docstring. I changed nothing in the working tree, and `--write` only ran on temp or scratchpad copies.
+
+**Findings**
+
+1. **High: edits made during a run are silently lost.**
+   - `_sync_headers` plans every file, then `_write_planned` replaces each one without checking that it still matches `source.raw`. The window now spans the whole tree's planning; `main` read and wrote one file at a time.
+   - Repro: wrap `cli_conventions._write_planned` so it appends `USER_EDIT = 1` to `a.py` before calling the original. Result is exit 0, "wrote 2", and the edit is gone.
+   - Fix: just before `os.replace`, compare `target.read_bytes()` with the planned `raw`, and report a per-module error if they differ.
+
+2. **High: bytes outside the docstring change with codecs that don't round-trip.**
+   - `# coding: cp932` with `X = "\x87\x90"` is rewritten to `X = "\x81\xe0"`.
+   - Under `utf-7`, the comment `# +AGEAYg-` becomes `# ab`.
+   - Under `iso2022_jp`, redundant escape sequences in a comment are dropped.
+   - All three report success. The AST guard cannot see this, because the decoded text is the same.
+   - For the ASCII-only utf-7 and iso2022 cases, `main` would have kept those bytes.
+   - Fix: in `read_source`, refuse when `decoded.encode(encoding) != raw`.
+
+3. **Medium: `write_atomic` overrides file protections.**
+   - A `0o444` file is now rewritten with exit 0 (the mode stays 444). `main` raised `PermissionError` and left it alone.
+   - A hardlink is broken: the other name keeps the old content.
+   - Extended attributes are lost (`xattr -w user.k v` is gone afterwards). By the same mechanism, ownership and ACLs would not carry over; I did not test those.
+   - Fix: at least refuse files that aren't writable (and perhaps `st_nlink &gt; 1`).
+
+4. **Medium: new traceback, a regression from `main`.**
+   - `_code` calls `ast.dump`, which recurses. A valid module with `X = 1 + 1 + ... + 1` (1500 terms), or an `if` with about 700 `elif`s, raises an uncaught `RecursionError`.
+   - `main` writes both fine; 600 terms still works on the branch. Tested on Python 3.10.
+   - The whole run aborts before any write.
+   - Fix: catch `RecursionError` in `_code` and re-raise it as `ValueError`.
+
+5. **Medium-low: `--check` passes but `--write` fails forever.**
+   - A mixed-endings file whose header is already current gives `--check` exit 0 and `--write` exit 1, "mixed line endings".
+   - `rewritten()` calls `source.newline()` before the `updated == source.text` early return. Move it below.
+
+**Tests that can't fail**
+
+These mutations survived `test_header_files`, `test_headers`, `test_conventions_gates` and `test_cli_conventions` (64 pass unmutated):
+- `os.replace(...)` replaced with `target.write_bytes(data)`, so atomicity is untested.
+- Removing the staged-file `unlink`.
+- Dropping `LookupError` from `read_source`.
+- Narrowing `except (OSError, ValueError)` in `_sync_headers` to `ValueError`.
+- Changing the `except OSError` in `_write_planned`, so no test covers a permission or write error.
+- Loosening the flag regex's slash part to `(/-{1,2}.+)?`, or removing it entirely, so `--on/--no-on` is never tested.
+
+**Pre-existing, worth filing rather than folding in** (check for existing tickets first)
+- An unreadable (`chmod 0`) module still tracebacks, in `compute_headers` at `path.read_bytes()`. This falls under #783's "never a traceback".
+- A form feed or U+2028 before or inside the docstring is refused with the misleading "must be a single string literal", because `_docstring_span` uses `str.splitlines`. `apply_header` on `main` does the same. Form feeds are legitimate Python, and `--write` can never succeed on such a file.
+
+**Minor:** the flag regex now rejects `--shout / --no-shout`, ` /--no-x`, `--a.b` and `--x;/y`, falling back to `param:&lt;name&gt;`. It rejected none of the 208 option or argument spellings in the venv's site-packages and `src`.
+
+**Gates**
+
+| Command | Result |
+|---|---|
+| `archy check .` | exit 0 |
+| `archy cycles . --strict` | exit 0 |
+| `archy contracts .` | exit 0 |
+| `archy affected .` on the changed files | exit 0; 58 tests and 25 modules affected, `archy.yaml` unresolved as expected |
+| `archy conventions . --emit-headers --check` | exit 0 |
+| `ruff check` | passed |
+| U+2014 in the diff | 0 matching lines |
+
+I did not run the full `pytest` suite, `ty` or `ruff format --check`.
+
+**Corpus run:** I ran `--write` on copies of `src`, click, rich, pydantic, networkx and mcp. All exited 0, nothing changed outside the docstring (compared line by line), the second run wrote 0, and `--check` exited 0.
+
+Probe scripts are in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/rv783/` (`probe.py`, `p2.py`, `mut.py`, `corp.py`, `flags.py`).</result>
+<usage><subagent_tokens>107912</subagent_tokens><tool_uses>14</tool_uses><duration_ms>490655</duration_ms></usage>
+</task-notification>
