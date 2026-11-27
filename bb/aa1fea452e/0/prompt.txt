@@ -1,0 +1,104 @@
+<task-notification>
+<task-id>a24bf15568c9a36a2</task-id>
+<tool-use-id>toolu_01SuCnWRoGoB9ZHFY93aWp16</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a24bf15568c9a36a2.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of marker fix" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: do not merge as is.** The #945 repro is fixed, but the branch adds one new data-loss path and one new duplicate-block path.
+
+## Findings, ranked
+
+**1. Data loss: a real end line with trailing text, plus a later lone end line (main kept the text).**
+```
+&lt;!-- archy:begin --&gt;
+old
+&lt;!-- archy:end --&gt; (managed)
+USER1
+&lt;!-- archy:end --&gt;
+USER2
+```
+- The branch skips the real end and closes at the later one. `USER1` is deleted on install and uninstall, with exit 0. I confirmed this through the real CLI.
+- The later end can be one shown inside a code fence.
+- A trailing NBSP on the real end line does the same.
+
+**2. Data loss: a stray begin that main refused is now accepted.**
+- `B / USER1 / B v1 / old / E / USER2` (`B` and `E` are the markers): main refused. The branch deletes `USER1` through `E`, because the second begin no longer bounds the search.
+- `B / USER1 / use `B` then / E / USER2` behaves the same way. This one is more contrived.
+
+**3. Duplicate block: a begin line that isn't alone is ignored, and a new block is appended (main replaced it).**
+- Affected inputs:
+  - `B (v1)`, or `B` followed by NBSP, form feed, U+2028 or ZWSP
+  - a leading ideographic space
+  - a one-line `BE`
+- The CLI result is two begin markers after install. After uninstall the old block is still there, with no warning.
+- A global-install retire would also leave it behind, since it goes through the same lookup (from reading the code, not run).
+- `## x B`, `&gt; B`, `- B` and `| B |` also now get a second block. For quotes, lists and tables that is arguably right, because it is the user's own text.
+
+**Suggested fix for 1, 3 and the first case in 2:** if a line *starts* with either marker (after BOM, spaces or tabs) but has other text after it, raise `InstallError` instead of ignoring it. Add tests for the inputs above.
+
+**4. New refusals where main worked (safe, no loss).**
+- These are real end lines such as `E keep`, `E## Mine`, `E` plus NBSP, or `text E`.
+- `docs/INSTALL.md` lines 54-58 still don't say the markers must be on their own lines. Someone following that text can be refused again.
+
+**5. Tests miss the core rule.** I ran these mutations on a copy of the tree against `test_base.py` (28 tests):
+
+| Mutation | Result |
+|---|---|
+| Remove the leading `^` anchor | all pass |
+| Remove the whole trailing `[ \t\r]*$` anchor | all pass |
+| `span(1)` changed to `span(0)` | all pass |
+
+- The quoted-marker tests have text on both sides of the marker, so either anchor alone satisfies them. Add one case with only leading text and one with only trailing text.
+- The other six mutations I tried were caught.
+
+**6. Minor: the BOM and `\r` handling is unreachable in real runs.**
+- `writer._read_text` refuses a BOM file (CLI exit 1, file untouched).
+- `read_text` converts CRLF and CR to LF before the regex sees them.
+- The `bom` and `carriage-return` tests therefore cover inputs the installer never passes in.
+
+## Same as main (not introduced here)
+- Own-line markers inside a fenced or indented code block are still treated as real, so a user's example there is overwritten or removed.
+- With two blocks, only the first is handled.
+- CRLF and CR files are rewritten as LF on macOS, so install then uninstall doesn't round-trip byte for byte.
+- An indented end or begin marker can leave its indentation on the user's next line after uninstall (from reading the code, not run).
+
+## Other markers readers
+I found marker handling only in `src/archy/install/base.py`. The other hits are tests, snapshots and `docs/INSTALL.md`. `runner.py` reaches it through `remove_instructions` and the actions' render functions.
+
+## Gates
+
+| Command | Exit code |
+|---|---|
+| `uv run archy check .` | 0 |
+| `uv run archy cycles . --strict` | 0 |
+| `uv run archy contracts .` | 0 |
+| `uv run archy affected . src/archy/install/base.py tests/install/unit/test_base.py` | 0 (13 modules, 57 tests listed) |
+| `uv run archy conventions . --emit-headers --check` | 0 |
+| `uv run ruff check` | 0 |
+| `uv run ruff format --check` | 0 |
+| `uv run ty check` | 0 |
+| `uv run pytest tests/install` | **1** (340 passed, 1 failed, 1 skipped) |
+
+- The failure is `test_writer_symlinks.py::test_new_file_takes_a_setgid_folders_bit_into_staging`. It exercises the writer, which this diff doesn't touch. I did not rerun it on main, and I did not run the full suite or the listed affected tests.
+- The diff contains no U+2014 characters.
+
+Install runs used a scratch HOME and temp project directories. The working tree is unchanged apart from the untracked `bench/diff_duplicates_precision.jsonl` that was already there. Repro scripts are `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r945/cmp.py`, `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r945/e2e.sh` and `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/r945/mut.py`.</result>
+<usage><subagent_tokens>99609</subagent_tokens><tool_uses>15</tool_uses><duration_ms>312762</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a83f9c4bee7ffe534</task-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a83f9c4bee7ffe534.output</output-file>
+<status>completed</status>
+<summary>Agent "Adversarial review of header writer" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The background corpus run has finished and adds one thing to my report. The wider flag-regex check, which also covered the uv package cache, rejected none of 11,542 real click option and argument spellings. This replaces the 208-spelling figure I gave before.
+
+That run covers only the branch regex, so I did not compare it side by side with `main`. With zero rejections, those spellings would be reported the same way as before. The only rejections were the made-up forms (spaced `/`, `.`, `;` and so on), so this stays a minor note.
+
+The corpus rewrite results are the same as reported, and the five findings are unchanged.</result>
+<usage><subagent_tokens>109239</subagent_tokens><tool_uses>15</tool_uses><duration_ms>1519412</duration_ms></usage>
+</task-notification>
