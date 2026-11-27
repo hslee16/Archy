@@ -1,0 +1,203 @@
+<task-notification>
+<task-id>acda2d6a66a941e4c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/acda2d6a66a941e4c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review no_em_dashes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: PASS, no findings.** None of the four files contains a U+2014 character:
+
+- `/Users/hosanglee/archy/README.md` (833 lines)
+- `/Users/hosanglee/archy/src/archy/cli_install.py` (467 lines)
+- `/Users/hosanglee/archy/src/archy/index.py` (277 lines)
+- `/Users/hosanglee/archy/tests/test_index.py` (418 lines)
+
+I marked review `no_em_dashes--README.md_AND_src-archy-cli_install.py_AND_src-archy-index.py_AND_tests-test_index.py--c0dc9d3ed215` as passed.</result>
+<usage><subagent_tokens>20031</subagent_tokens><tool_uses>3</tool_uses><duration_ms>7881</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>af05144540b24a45c</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/af05144540b24a45c.output</output-file>
+<status>completed</status>
+<summary>Agent "Review index.py Python" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: PASS.** I found no violations of the listed criteria in `/Users/hosanglee/archy/src/archy/index.py`, and marked review `python_code_review--src-archy-index.py--85e661d590f9` as passed.
+
+One non-blocking aside falls outside the listed criteria. The new `from importlib.metadata import version` import is shadowed by the existing local `version = _read_version(conn)` in `open_index`. It causes no bug today, because that function never calls the imported `version`. Renaming the local to `schema_version` would remove the trap.</result>
+<usage><subagent_tokens>30793</subagent_tokens><tool_uses>3</tool_uses><duration_ms>15370</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab120931f357b2f7e</task-id>
+<tool-use-id>toolu_01WSbDCpSv73vbvwdnAuJowD</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/ab120931f357b2f7e.output</output-file>
+<status>completed</status>
+<summary>Agent "Review cli_install.py Python" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL, with 1 non-blocking finding.** I did not call `mark_review_as_passed`.
+
+File: `/Users/hosanglee/archy/src/archy/cli_install.py`
+
+**1. Lines 115-117, the `index_status` docstring (non-blocking)**
+- **Criterion:** "Comment accuracy: every comment must explain WHY (a constraint, decision, or quirk), not WHAT". The conventions file also says to check that comments above edited code are still true.
+- **Construct:** the docstring defines `stale` as "cached, but the file's mtime or size changed, or another archy or tree-sitter version wrote the row".
+- **Problem:** this changeset counts every row where `load_cached_parse(...)` returns `None` as stale (`elif key in unusable or ...`). That includes corrupt and schema-incompatible rows, as the `load_cached_parse` docstring in `/Users/hosanglee/archy/src/archy/index.py` says. The listed causes leave those out, so a user could see `stale: 1` with the file unchanged and no version change. This docstring is also the `--help` text.
+- **Suggested fix:** "`stale` (cached, but the file's mtime or size changed, or the row is unreadable or was written by another archy or tree-sitter version, so the next sync does not reuse it as is)".
+
+I found no violations of the other listed criteria in the changed lines. No line exceeds 100 characters.</result>
+<usage><subagent_tokens>36352</subagent_tokens><tool_uses>3</tool_uses><duration_ms>18973</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>adf2e618993299370</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/adf2e618993299370.output</output-file>
+<status>completed</status>
+<summary>Agent "Review related documentation" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No documentation drift detected. The review `update_documents_relating_to_archy_package--README.md_AND_src-archy-cli_install.py_AND_src-archy-index.py--d4de1308fe15` is marked as passed.
+
+I searched the listed docs for claims about the cache, its invalidation and `archy index status`, and read the matching passages rather than every document end to end:
+
+- **README:** `/Users/hosanglee/archy/README.md` already describes the new re-parse behaviour for entries written by a different archy or tree-sitter version.
+- **Skill files:** `/Users/hosanglee/archy/skills/archy/SKILL.md` and `/Users/hosanglee/archy/plugins/claude/skills/archy/SKILL.md` are byte-identical. Line 18's "only files whose content changed are re-parsed" describes warm builds, so I did not count it as invalidated by the one-off re-parse after an upgrade.
+- **Roadmap and future docs:** the "keyed by content hash" and `SCHEMA_VERSION` mentions in `/Users/hosanglee/archy/docs/ROADMAP.md` and `/Users/hosanglee/archy/docs/FUTURE.md` are records of shipped work and remain accurate as history.</result>
+<usage><subagent_tokens>36641</subagent_tokens><tool_uses>7</tool_uses><duration_ms>24784</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a1b5de89cc8f4a0c1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a1b5de89cc8f4a0c1.output</output-file>
+<status>completed</status>
+<summary>Agent "Review test_index.py Python" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL** for `/Users/hosanglee/archy/tests/test_index.py`. I did not call `mark_review_as_passed`, because there are open findings.
+
+Line numbers are those of the file on disk. The diff against `main` adds lines 16, 20, 22-24 and 341-417.
+
+**In code this branch adds**
+
+1. **Lines 378-380 and 394-396**
+   - **Criterion:** "DRY: no copy-pasted blocks that should be a shared helper"
+   - **Construct:** both tests repeat `conn = open_index(db)`, then `_results, stats = sync(conn, discover_modules(project))`, then `conn.close()`.
+   - **Fix:** extract a helper such as `_resync(project, db)` that returns the stats and closes the connection, and call it from both tests. This one is minor.
+
+**Pre-existing (before line 341, or a function-local import the branch did not add)**
+
+Under the repository's "pre-existing findings get filed, not folded in" rule, these can be dismissed for this PR or filed separately.
+
+2. **Line 325**
+   - **Criterion:** "Imports grouped stdlib / third-party / local with single blank line between groups"
+   - **Construct:** a function-local `import archy.index as index_mod`. It now duplicates the module-level `from archy import index as index_module` that this branch adds.
+   - **Fix:** delete the local import and use `index_module` at lines 327 and 334. Because this branch introduces the redundancy, it is cheap to fix here.
+
+3. **Comments that say what the code does, not why**
+   - **Criterion:** "Comment accuracy: every comment must explain WHY (a constraint, decision, or quirk), not WHAT"
+
+| Line | Comment | Suggested fix |
+|---|---|---|
+| 130 | `# Rename b.py -&gt; renamed.py and repoint the importer.` | Delete it, or say why the importer must be repointed. |
+| 151 | `# Move sub.c's target: edit a.py to import a different module.` | Delete it. It also looks inaccurate, since the code changes what `a.py` imports, not a target of `sub.c`. |
+| 220 | `# same content` | Delete it. The comment at line 215 already gives the reason. |
+| 305 | `# round-trips cleanly now` | Delete it. |
+| 317 | `# vanished module skipped` | Delete it. |
+| 318 | `# the rest still parsed` | Delete it. |
+
+I found no violations of the other criteria: the `__future__` import, PEP 604 types, naming, value objects, `pathlib` and the 100-character line limit.</result>
+<usage><subagent_tokens>30213</subagent_tokens><tool_uses>3</tool_uses><duration_ms>26269</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aef3d1959b34e6f53</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/aef3d1959b34e6f53.output</output-file>
+<status>completed</status>
+<summary>Agent "Review docstring accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: FAIL, with 3 findings.** I did not call `mark_review_as_passed`, because the instructions allow it only when there are no findings or they have all been fixed or dismissed.
+
+**1. `/Users/hosanglee/archy/src/archy/index.py:68-69` (`_CacheRow` docstring)**
+- **Claim:** "`built_by` sits beside the parse fields, not around them, so an older archy reading this row ignores it instead of loading an empty parse."
+- **Actual:** a wrapped row could not load as an empty parse. `ParseResult.imports` and `has_errors` are required, with no defaults (`src/archy/parser.py:167-168`). I validated a wrapped `{"built_by":..., "parse":{...}}` payload against `ParseResult`, and it raised `ValidationError` for both missing fields.
+- **What the flat layout does achieve:** `ParseResult` does not forbid extra fields (`parser.py:165`), so an older reader ignores `built_by` and loads the parse. A wrapper would instead make it reject the row.
+- **Rewrite:** "`built_by` sits beside the parse fields, not around them, so an older archy reading this row ignores it and still loads the parse, instead of rejecting the row as invalid."
+
+**2. `/Users/hosanglee/archy/src/archy/index.py:174-175` (`sync` docstring; unchanged text, but the function's behaviour changed)**
+- **Claim:** "cheap stat first (mtime + size); only hash when those differ; only re-parse when the hash differs too."
+- **Actual:** a row written by another version is hashed and re-parsed even when mtime, size and hash all match. `load_cached_parse` returns `None` at `index.py:164-165`, so both reuse branches (`index.py:203-208` and `216-226`) fall through to `parse_file` at line 229. Corrupt rows already did this, but it now happens to every row after an upgrade.
+- **Rewrite:** "For each module: cheap stat first (mtime + size), and reuse the row if both match. Otherwise hash, and reuse the row if the hash matches. Re-parse when neither applies, or when the row is unusable (see `load_cached_parse`), even if the file is unchanged."
+
+**3. `/Users/hosanglee/archy/src/archy/cli_install.py:114-116` (`index_status` docstring)**
+- **Claim:** "`stale` (cached, but the file's mtime or size changed, or another archy or tree-sitter version wrote the row, so the next sync does not reuse it as is)".
+- **Actual:** `stale` also counts corrupt or schema-invalid rows written by the current version with matching mtime and size. `unusable` is every row where `load_cached_parse` returns `None` (`cli_install.py:138, 150`), and that includes any `ValidationError` (`index.py:160-163`). The two listed causes are therefore incomplete.
+- **Rewrite:** "`stale` (cached, but the file's mtime or size changed, or the row is unusable, e.g. corrupt or written by another archy or tree-sitter version, so the next sync does not reuse it as is)".
+
+**Other changed prose**
+I found no false claims in the rest:
+- the module docstring addition
+- the `load_cached_parse` docstring, including the `history.read()` comparison
+- the comment above `_BUILT_BY`
+- the "Unusable row" comment
+
+The derived header block also matches the tree: `archy conventions . --emit-headers --check` reports that all 150 headers match.</result>
+<usage><subagent_tokens>41142</subagent_tokens><tool_uses>7</tool_uses><duration_ms>64036</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>aba45f5a573badc60</task-id>
+<tool-use-id>toolu_01ATGuTX15cHodFjgGmLtULT</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/aba45f5a573badc60.output</output-file>
+<status>completed</status>
+<summary>Agent "Archy structural review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**PASS. No structural regressions; blast radius verified via archy.** I marked review `archy_grounded_structural_review--src-archy-cli_install.py_AND_src-archy-index.py--7f6425afb9f5` as passed.
+
+**Blast radius**
+
+| Changed file | `uv run archy impact . --file &lt;path&gt;` | `uv run archy affected . &lt;path&gt;` (depth 5) |
+|---|---|---|
+| `/Users/hosanglee/archy/src/archy/cli_install.py` | 42 transitive dependents | 41 tests; the one other module touched is `archy.cli` |
+| `/Users/hosanglee/archy/src/archy/index.py` | 69 transitive dependents | 55 tests and 14 other modules |
+
+The 14 modules reached from `index.py` are:
+- `archy.cli` and `archy.cli_install`
+- `archy.watcher`
+- `archy.mcp`
+- `archy.mcp_runs` and its `_check`, `_core`, `_git` and `_graph` variants
+- `archy.mcp_tool_descriptions`
+- `archy.mcp_tools_check`, `_conventions`, `_git` and `_graph`
+
+**Structural checks**
+- `uv run archy cycles .` found no cycles, including with the new `from archy import __version__` import.
+- `uv run archy check .` found no layer violations (92 of 93 modules covered).
+- `uv run archy what-to-refactor-next . --top 10` lists neither changed module.
+- `uv run archy conventions . --emit-headers --check` reports that all 150 headers match the tree, including the newly public `load_cached_parse`.
+
+**Contract checks**
+- `ParseResult` does not forbid extra fields, so an older archy ignores the new `built_by` key, as the code comment says.
+- `sync()` returns plain `ParseResult` objects, not the private `_CacheRow`, so its dependents see the same type as before.
+- An unstamped, mismatched or invalid row is treated as a cache miss and re-parsed.
+- `index status` now counts those rows as `stale`, using the same loader as `sync()`.
+
+I ran `tests/test_index.py`, `test_watcher.py`, `test_cli_misc.py` and `test_qualname_collision.py`, and all passed. This is only part of the affected test set, not the full suite. I did not mutate any code to check that the new tests can fail.</result>
+<usage><subagent_tokens>45937</subagent_tokens><tool_uses>6</tool_uses><duration_ms>115904</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
