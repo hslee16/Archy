@@ -66,7 +66,8 @@ class _CacheRow(ParseResult):
     """The persisted form of a `ParseResult`.
 
     `built_by` sits beside the parse fields, not around them, so an older archy
-    reading this row ignores it instead of loading an empty parse.
+    reading this row ignores it and still loads the parse, rather than rejecting
+    the row as invalid.
     """
 
     built_by: str
@@ -105,17 +106,17 @@ def open_index(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Conn
     conn = sqlite3.connect(db_path, check_same_thread=check_same_thread)
     conn.row_factory = sqlite3.Row
     try:
-        version = _read_version(conn)
-        if version is not None and version != SCHEMA_VERSION:
+        schema = _read_version(conn)
+        if schema is not None and schema != SCHEMA_VERSION:
             conn.executescript("DROP TABLE IF EXISTS files; DROP TABLE IF EXISTS schema_version;")
-            version = None
+            schema = None
         conn.execute(
             "CREATE TABLE IF NOT EXISTS files ("
             "path TEXT PRIMARY KEY, mtime REAL, size INTEGER, "
             "sha256 TEXT, parse_json TEXT, last_parsed_at TEXT)"
         )
         conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER)")
-        if version is None:
+        if schema is None:
             conn.execute("DELETE FROM schema_version")
             conn.execute("INSERT INTO schema_version (version) VALUES (?)", (SCHEMA_VERSION,))
         conn.commit()
@@ -171,8 +172,10 @@ def sync(
 ) -> tuple[dict[str, ParseResult], SyncStats]:
     """Bring the cache in line with `modules` and return parse results by qualname.
 
-    For each module: cheap stat first (mtime + size); only hash when those
-    differ; only re-parse when the hash differs too. Rows for files no longer in
+    For each module: cheap stat first (mtime + size), and reuse the row if both
+    match. Otherwise hash, and reuse the row if the hash matches. Re-parse when
+    neither does, or when the row is unusable (see `load_cached_parse`), even if
+    the file is unchanged. Rows for files no longer in
     `modules` are pruned. The returned dict is keyed by qualname, ready to hand
     straight to `assemble_graph`.
     """

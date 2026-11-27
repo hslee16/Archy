@@ -488,7 +488,7 @@ archy mcp
 
 ## MCP server (`archy mcp`)
 
-The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. The graph is always re-derived from the current files, and an entry written by a different archy or tree-sitter version is re-parsed, so upgrading never serves the old version's parse. `archy index sync` warms it explicitly; `archy index clear` removes it.
+The server is backed by a persistent parse cache (`.archy/index.db`): each tool call re-parses only the files whose content changed since the last call, so warm graph builds stay in the low seconds even on very large repos (benchmarked: 21.5s cold to 2.5s warm on Home Assistant's 17,299 modules). The cache is transparent and disposable; deleting `.archy/index.db` only costs one cold rebuild. Resolution is re-derived on every call, and an entry written by a different archy or tree-sitter version is re-parsed, so upgrading to a new release does not serve the old release's parse. Two cases can still be stale until `archy index clear`: a same-size edit that keeps the file's mtime, and a source or editable install whose parser changed without a version bump. `archy index sync` warms it explicitly; `archy index clear` removes it.
 
 `archy mcp` exposes fourteen tools and one prompt to MCP-aware AI agents (Claude Code, the Anthropic API, etc.):
 

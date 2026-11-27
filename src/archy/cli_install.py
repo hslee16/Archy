@@ -112,8 +112,9 @@ def index_status(path: Path) -> None:
     analysis tool syncs on demand, so a result is never stale and an agent
     rarely needs this mid-task. Reports the db location, the cached file
     count, and how far the cache has drifted from the tree: `stale` (cached,
-    but the file's mtime or size changed, or another archy or tree-sitter
-    version wrote the row, so the next sync does not reuse it as is),
+    but the file's mtime or size changed, or the row is unusable, such as one
+    that is corrupt or written by another archy or tree-sitter version, so the
+    next sync does not reuse it as is),
     `missing` (cached, but no longer on disk, so the next sync prunes it) and
     `unindexed` (on disk, not cached yet). The counts compare paths exactly as
     `archy index sync PATH` does. Nothing is parsed, but opening the cache may

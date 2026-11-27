@@ -25,6 +25,7 @@ from archy.cli import main
 from archy.graph import build_graph, discover_modules, graph_to_dict
 from archy.index import (
     SCHEMA_VERSION,
+    SyncStats,
     build_graph_cached,
     default_db_path,
     open_index,
@@ -322,22 +323,27 @@ def test_build_graph_cached_survives_vanished_file(project: Path, tmp_path: Path
     """If a file vanishes after hashing but before parse, sync drops it; the
     cached build must keep assemble_graph's module list aligned with the parse
     results so it does not KeyError on the dropped module."""
-    import archy.index as index_mod
-
-    real_parse_file = index_mod.parse_file
+    real_parse_file = index_module.parse_file
 
     def flaky_parse_file(path: Path):
         if path.name == "b.py":
             raise FileNotFoundError(path)
         return real_parse_file(path)
 
-    monkeypatch.setattr(index_mod, "parse_file", flaky_parse_file)
+    monkeypatch.setattr(index_module, "parse_file", flaky_parse_file)
 
     g = build_graph_cached(project, db_path=tmp_path / "index.db")  # must not raise
 
     internal = {n for n, d in g.nodes(data=True) if not d.get("external")}
     assert "pkg.b" not in internal
     assert "pkg.a" in internal
+
+
+def _resync(project: Path, db: Path) -> SyncStats:
+    conn = open_index(db)
+    _results, stats = sync(conn, discover_modules(project))
+    conn.close()
+    return stats
 
 
 def _forge_a_without_imports(db: Path, **overrides: object) -> None:
@@ -376,9 +382,7 @@ def test_row_from_another_build_is_reparsed(project: Path, tmp_path: Path, built
     build_graph_cached(project, db_path=db)
     _forge_a_without_imports(db, built_by=built_by)
 
-    conn = open_index(db)
-    _results, stats = sync(conn, discover_modules(project))
-    conn.close()
+    stats = _resync(project, db)
 
     # Five modules in the fixture; only the forged row is from elsewhere.
     assert (stats.reparsed, stats.unchanged) == (1, 4)
@@ -392,9 +396,7 @@ def test_a_new_archy_version_reparses_everything(
     build_graph_cached(project, db_path=db)
     monkeypatch.setattr("archy.index._BUILT_BY", "archy=999")
 
-    conn = open_index(db)
-    _results, stats = sync(conn, discover_modules(project))
-    conn.close()
+    stats = _resync(project, db)
 
     assert (stats.reparsed, stats.unchanged) == (5, 0)
 
