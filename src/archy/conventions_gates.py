@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from collections.abc import Iterable
 
 from archy.conventions_collect import _dotted, _ModuleFacts
@@ -15,6 +16,11 @@ _EXIT_CALLS = frozenset({"sys.exit", "os._exit", "exit"})
 
 
 _EXIT_RAISES = frozenset({"SystemExit", "ClickException", "UsageError", "Abort", "Exit"})
+
+
+# `--name`, `--on/--no-on` (click allows spaces round the slash) or `--name/-n`,
+# and a bare argument name.
+_FLAG_SHAPED = re.compile(r"(--)?[\w-]+( ?/ ?-{1,2}[\w-]+)?")
 
 
 def _click_flags(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:
@@ -40,7 +46,9 @@ def _click_flags(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, str]:
         )
         explicit = [s for s in literals if not s.startswith("-")]
         display = longs[0] if longs else (explicit[0] if explicit else "")
-        if not display:
+        # The text reaches source headers and agents, so only flag-shaped text is
+        # repeated; anything else is reported by parameter name instead.
+        if not _FLAG_SHAPED.fullmatch(display):
             continue
         dest = explicit[0] if explicit else longs[0].lstrip("-").replace("-", "_")
         flags[dest] = display

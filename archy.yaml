@@ -67,6 +67,7 @@ layers:
       - "archy.diff"
       - "archy.diff_summary"
       - "archy.duplicates"
+      - "archy.header_files"
       - "archy.headers"
       - "archy.hotspots"
       - "archy.impact"

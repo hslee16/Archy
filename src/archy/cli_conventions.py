@@ -39,11 +39,16 @@ from archy.graph import (
     build_graph,
     discover_modules,
 )
+from archy.header_files import (
+    SourceFile,
+    header_is_current,
+    read_source,
+    rewritten,
+    write_atomic,
+)
 from archy.headers import (
     ModuleHeader,
-    apply_header,
     compute_headers,
-    existing_block,
     render_header,
 )
 from archy.layers import (
@@ -371,27 +376,38 @@ class _HeaderRun(BaseModel):
 def _sync_headers(
     headers: tuple[ModuleHeader, ...], path: Path, *, write: bool, check: bool
 ) -> _HeaderRun:
+    """Every rewrite is planned before any is made, so a file that cannot be
+    handled is reported with the tree in one known state, not half way."""
     stale: list[str] = []
-    written: list[str] = []
+    planned: list[tuple[str, SourceFile, bytes]] = []
     errors: dict[str, str] = {}
-    for header in headers:
-        target = path / header.path
-        source = target.read_text(encoding="utf-8")
-        block = render_header(header)
-        if check:
-            if existing_block(source) != block:
-                stale.append(header.module)
-            continue
-        if write:
-            try:
-                updated = apply_header(source, block)
-            except ValueError as exc:
-                errors[header.module] = str(exc)
-                continue
-            if updated != source:
-                target.write_text(updated, encoding="utf-8")
-                written.append(header.module)
-    return _HeaderRun(headers=headers, stale=tuple(stale), written=tuple(written), errors=errors)
+    for header in headers if check or write else ():
+        try:
+            source = read_source(path / header.path)
+            block = render_header(header)
+            if check:
+                if not header_is_current(source, block):
+                    stale.append(header.module)
+            elif (data := rewritten(source, block)) is not None:
+                planned.append((header.module, source, data))
+        except (OSError, ValueError) as exc:
+            errors[header.module] = str(exc)
+    written = _write_planned(planned, errors)
+    return _HeaderRun(headers=headers, stale=tuple(stale), written=written, errors=errors)
+
+
+def _write_planned(
+    planned: list[tuple[str, SourceFile, bytes]], errors: dict[str, str]
+) -> tuple[str, ...]:
+    written: list[str] = []
+    for module, source, data in planned:
+        try:
+            write_atomic(source.path, data, expected=source.raw)
+        except (OSError, ValueError) as exc:
+            errors[module] = str(exc)
+        else:
+            written.append(module)
+    return tuple(written)
 
 
 def _headers_payload(run: _HeaderRun) -> dict:
@@ -403,6 +419,11 @@ def _headers_payload(run: _HeaderRun) -> dict:
     }
 
 
+def _echo_header_errors(run: _HeaderRun) -> None:
+    for module, reason in run.errors.items():
+        click.echo(f"#   {module}: {reason}")
+
+
 def _echo_headers_text(run: _HeaderRun, *, write: bool, check: bool) -> None:
     if check:
         if run.stale:
@@ -410,14 +431,14 @@ def _echo_headers_text(run: _HeaderRun, *, write: bool, check: bool) -> None:
             for module in run.stale:
                 click.echo(f"#   {module}")
             click.echo("# `archy conventions --emit-headers --write` regenerates them.")
-        else:
+        elif not run.errors:
             click.echo(f"# {len(run.headers)} header(s) match the tree.")
+        _echo_header_errors(run)
     elif write:
         click.echo(
             f"# wrote {len(run.written)} header(s) into {len(run.headers)} scanned module(s)."
         )
-        for module, reason in run.errors.items():
-            click.echo(f"#   {module}: {reason}")
+        _echo_header_errors(run)
     else:
         for header in run.headers:
             click.echo(f"# {header.path}")

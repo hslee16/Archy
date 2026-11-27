@@ -351,5 +351,8 @@ def apply_header(source: str, block: str) -> str:
     while prose_lines and not prose_lines[-1].strip():
         prose_lines.pop()
     prose = "\n".join(prose_lines)
-    rebuilt = f"{before}{prefix}{quote}{prose}\n\n{block}\n{quote}{after}"
+    # With no prose, the shape the no-docstring branch writes, so the next run
+    # finds nothing to change.
+    body = f"{prose}\n\n{block}" if prose else block
+    rebuilt = f"{before}{prefix}{quote}{body}\n{quote}{after}"
     return source[: span[0]] + rebuilt + source[span[1] :]
