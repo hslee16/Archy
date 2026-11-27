@@ -75,6 +75,7 @@ layers:
   cli:
     modules:
       - "archy.cli"
+      - "archy.__main__"
       - "archy.cli_app"
       - "archy.cli_check"
       - "archy.cli_conventions"
