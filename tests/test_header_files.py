@@ -276,3 +276,38 @@ def test_an_unreadable_module_is_named_not_a_traceback(tmp_path: Path, flag: str
     assert "pkg.locked: " in result.output and "Permission denied" in result.output
     assert "match the tree" not in result.output
     assert (b"archy:owns" in (root / "pkg" / "a.py").read_bytes()) == (flag == "--write")
+
+
+@pytest.mark.parametrize(
+    "lead", ["\x0c", "\u2028", "\u00a0", "\x1c"], ids=["ff", "ls", "nbsp", "fs"]
+)
+def test_a_line_after_the_block_that_only_looks_indented_is_kept(tmp_path: Path, lead: str):
+    prose = f"{lead}Hand-written warning: do not reorder."
+    original = f'"""Doc.\n\narchy:owns        old\n{prose}\n"""\n\n'.encode() + FUNCTION
+    root = _project(tmp_path, {"a.py": original})
+
+    assert _emit(root, "--write").exit_code == 0
+
+    written = (root / "pkg" / "a.py").read_bytes().decode()
+    assert prose in written
+    assert "public_fn" in written.split('"""')[1] and "owns        old" not in written
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX permissions")
+@pytest.mark.parametrize("flag", ["--write", "--check"])
+def test_a_module_in_an_unsearchable_directory_is_named(tmp_path: Path, flag: str):
+    if os.geteuid() == 0:
+        pytest.skip("root may read anything")
+    root = _project(tmp_path, {"a.py": FUNCTION})
+    sub = root / "pkg" / "sub"
+    sub.mkdir()
+    (sub / "__init__.py").write_bytes(b"")
+    (sub / "b.py").write_bytes(FUNCTION)
+    sub.chmod(0o600)  # listable, but nothing inside can be opened
+    try:
+        result = _emit(root, flag)
+    finally:
+        sub.chmod(0o755)
+
+    assert result.exit_code == 1, result.output
+    assert "pkg.sub.b: " in result.output

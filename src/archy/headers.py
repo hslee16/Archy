@@ -106,6 +106,7 @@ def _read_for_census(path: Path) -> str | None:
     try:
         raw = path.read_bytes()
     except OSError:
+        # Gone, not a file, or not openable: nothing to derive a header from.
         return None
     try:
         encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
@@ -171,7 +172,7 @@ def compute_headers(
     headers: list[ModuleHeader] = []
     for module in sorted({*by_module, *gates_by_module, *paths}):
         path = paths.get(module)
-        if path is None or not path.is_file():
+        if path is None:
             continue
         source = _read_for_census(path)
         if source is None:
@@ -290,7 +291,10 @@ def split_block(doc: str) -> tuple[list[str], list[str]]:
         if line.strip().startswith(MARKER):
             in_block = True
             block.append(line.rstrip())
-        elif in_block and line.strip() and line[:1].isspace():
+        # A space or tab, which is all `render_header` indents with. `isspace`
+        # also takes a form feed or U+2028, and a human's line starting with one
+        # would be dropped as part of the block.
+        elif in_block and line.strip() and line.startswith((" ", "\t")):
             block.append(line.rstrip())
         else:
             in_block = False
