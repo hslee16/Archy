@@ -51,6 +51,8 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code@2.1.323
 
       - name: Install Cursor CLI
+        # An auto-update would replace the pin in the step that holds the key,
+        # hence --disable-auto-update below.
         # Cursor is Unix-only in this matrix (the windows-latest x cursor cell
         # is excluded above), so a single bash install step covers it. This
         # replaces `curl https://cursor.com/install | bash`: the version and
@@ -93,11 +95,12 @@ jobs:
           grep -qiE "archy|overall|[0-9]" out.txt
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          DISABLE_AUTOUPDATER: "1"
 
       - name: Headless reachability (Cursor)
         if: matrix.client == 'cursor' && env.HAS_CURSOR_KEY == 'true'
         run: |
-          cursor-agent -p "Call the archy_score tool on the current directory and print the overall number." 2>&1 | tee out.txt
+          cursor-agent --disable-auto-update -p "Call the archy_score tool on the current directory and print the overall number." 2>&1 | tee out.txt
           grep -qiE "archy|overall|[0-9]" out.txt
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
