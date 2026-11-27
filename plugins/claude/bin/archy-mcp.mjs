@@ -11,8 +11,9 @@
 // Resolution order (first that actually starts wins):
 //   1. `archy` on PATH      -- any install method (pipx / uv tool / pip).
 //   2. `uvx`  on PATH       -- fetches the pinned archy on demand, no install.
-//   3. `python -m archy`    -- archy pip-installed but its console script not on
-//                              PATH (e.g. a venv whose Scripts/ dir is unlinked).
+//   3. `python3` / `python`  -- one that can import archy: pip-installed but its
+//                              console script not on PATH (e.g. a venv whose
+//                              Scripts/ dir is unlinked).
 //
 // It is a pure stdio shim: it execs the resolved command with stdio inherited so
 // the MCP stdio protocol passes straight through (the resolver only ever writes
@@ -20,7 +21,7 @@
 // termination signals to the child so a Claude Code restart cannot orphan it,
 // and propagates the child's exit status.
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { statSync } from "node:fs";
 import { delimiter, join } from "node:path";
 
@@ -28,6 +29,12 @@ import { delimiter, join } from "node:path";
 // bound guarantees the full current tool set; the `<1.0` cap stops a breaking
 // 1.0 from being auto-pulled into the stanza.
 const SPEC = "archy>=0.51,<1.0";
+
+// `-c` and `-m` both put the working directory, here the user's project, first on
+// sys.path, so a project with its own `archy/` folder would be executed. Dropping
+// the "" entry first prevents that. No double quotes: see spawnArgs.
+const PY_IMPORT = "import sys; sys.path[:] = [p for p in sys.path if p]; from archy.cli import main";
+const PY_RUN = `${PY_IMPORT}; main()`;
 
 const isWindows = process.platform === "win32";
 // Only extensions we can actually launch: .exe/.com directly, .cmd/.bat via
@@ -67,10 +74,7 @@ function candidates() {
   if ((p = which("archy"))) out.push({ path: p, args: ["mcp"] });
   if ((p = which("uvx"))) out.push({ path: p, args: [SPEC, "mcp"] });
   for (const py of ["python3", "python"]) {
-    if ((p = which(py))) {
-      out.push({ path: p, args: ["-m", "archy", "mcp"] });
-      break;
-    }
+    if ((p = which(py))) out.push({ path: p, args: ["-c", PY_RUN, "mcp"], probe: ["-c", PY_IMPORT] });
   }
   return out;
 }
@@ -88,9 +92,22 @@ function spawnArgs(path, args) {
   return { command: path, argv: args, verbatim: false };
 }
 
+// Nearly every machine has some python3, so its presence says nothing: spawning
+// it without archy would exit with "No module named archy" and hide the hint.
+function passesProbe({ path, probe }) {
+  if (!probe) return true;
+  const { command, argv, verbatim } = spawnArgs(path, probe);
+  const result = spawnSync(command, argv, {
+    stdio: "ignore",
+    timeout: 15000,
+    windowsVerbatimArguments: verbatim,
+  });
+  return result.status === 0;
+}
+
 const FAIL_MESSAGE =
-  "archy MCP server could not start: none of `archy`, `uvx`, or `python` were " +
-  "found on PATH.\nInstall any one of these, then restart Claude Code:\n" +
+  "archy MCP server could not start: found no `archy` or `uvx` on PATH, and no " +
+  "Python that has archy installed.\nInstall any one of these, then restart Claude Code:\n" +
   "  - uv (bootstraps its own Python): curl -LsSf https://astral.sh/uv/install.sh | sh\n" +
   "  - archy directly:                 pipx install archy   (or: uv tool install archy)\n" +
   "More: https://github.com/hslee16/archy/blob/main/plugins/claude/README.md\n";
@@ -129,6 +146,7 @@ function start(i) {
     process.stderr.write(FAIL_MESSAGE);
     return process.exit(1);
   }
+  if (!passesProbe(list[i])) return start(i + 1);
   const { command, argv, verbatim } = spawnArgs(list[i].path, list[i].args);
   const child = spawn(command, argv, { stdio: "inherit", windowsVerbatimArguments: verbatim });
   active = child;

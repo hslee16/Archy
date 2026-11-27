@@ -20,6 +20,7 @@ import os
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -147,7 +148,7 @@ def test_plugin_launcher_exists_and_pins_spec():
     """The Node launcher exists and resolves archy without a hard `uv` dependency.
 
     Guards the contract the manifest relies on: the shim must try a real `archy`,
-    then `uvx` (with the pinned spec), then `python -m archy`, and pin the same
+    then `uvx` (with the pinned spec), then a Python that has archy, and pin the same
     version specifier the README documents. If the manifest points at this file
     it must actually be here and carry that fallback chain.
     """
@@ -158,7 +159,7 @@ def test_plugin_launcher_exists_and_pins_spec():
     assert 'which("archy")' in src
     assert 'which("uvx")' in src
     # The last-resort branch for venvs whose archy console script is not on PATH.
-    assert '"-m", "archy", "mcp"' in src
+    assert '["python3", "python"]' in src
 
 
 def test_plugin_readme_pins_same_spec():
@@ -218,7 +219,7 @@ def test_plugin_launcher_resolution_order(posix_bin_dir: Path):
     """The shim resolves archy -> uvx -> python -> actionable error, in that order.
 
     The whole point of #150: with a real `archy` it uses that; else `uvx` with the
-    pinned spec; else `python -m archy`; with none it exits non-zero with a hint
+    pinned spec; else a Python with archy; with none it exits non-zero with a hint
     instead of failing silently.
     """
     # 1. A real `archy` wins and is called as `archy mcp`.
@@ -235,19 +236,98 @@ def test_plugin_launcher_resolution_order(posix_bin_dir: Path):
     assert r2.returncode == 0, r2.stderr
     assert f"FAKE-UVX [{EXPECTED_SPEC} mcp]" in r2.stdout
 
-    # 3. Only python3 -> `python3 -m archy mcp` (the last-resort fallback).
+    # 3. Only python3, and its probe passes -> it runs `mcp` (the last resort).
     uvx.unlink()
     py = posix_bin_dir / "python3"
     _fake_exe(py, 'echo "FAKE-PY [$*]"')
     r3 = _run_launcher(posix_bin_dir)
     assert r3.returncode == 0, r3.stderr
-    assert "FAKE-PY [-m archy mcp]" in r3.stdout
+    assert "FAKE-PY [-c " in r3.stdout and r3.stdout.rstrip().endswith("main() mcp]")
 
     # 4. Nothing resolvable -> actionable error, non-zero exit (not a silent hang).
     py.unlink()
     r4 = _run_launcher(posix_bin_dir)
     assert r4.returncode == 1
     assert "could not start" in r4.stderr and "astral.sh/uv/install.sh" in r4.stderr
+
+
+def _python_wrapper(path: Path) -> None:
+    """A PATH entry that runs this test's interpreter, which has archy installed."""
+    _fake_exe(path, f'exec "{sys.executable}" "$@"')
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
+def test_plugin_launcher_hints_when_python_lacks_archy(posix_bin_dir: Path):
+    """#766: a bare python3 must not swallow the install hint."""
+    _fake_exe(posix_bin_dir / "python3", 'echo "No module named archy" >&2; exit 1')
+
+    result = _run_launcher(posix_bin_dir)
+
+    assert result.returncode == 1
+    assert "could not start" in result.stderr and "astral.sh/uv/install.sh" in result.stderr
+    assert "No module named" not in result.stderr
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
+def test_plugin_launcher_tries_python_after_a_python3_without_archy(posix_bin_dir: Path):
+    _fake_exe(posix_bin_dir / "python3", "exit 1")
+    _fake_exe(posix_bin_dir / "python", 'echo "FAKE-PYTHON"')
+
+    result = _run_launcher(posix_bin_dir)
+
+    assert result.returncode == 0, result.stderr
+    assert "FAKE-PYTHON" in result.stdout
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
+def test_plugin_launcher_serves_mcp_through_a_real_python(posix_bin_dir: Path, tmp_path: Path):
+    """End to end, from a project whose own `archy/` folder must not be executed."""
+    _python_wrapper(posix_bin_dir / "python3")
+    project = tmp_path / "project"
+    (project / "archy").mkdir(parents=True)
+    marker = tmp_path / "project-code-ran"
+    (project / "archy" / "__init__.py").write_text(
+        f"open({str(marker)!r}, 'w').close()\n", encoding="utf-8"
+    )
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "test", "version": "0"},
+        },
+    }
+    server = subprocess.Popen(
+        ["node", str(PLUGIN_LAUNCHER)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        cwd=project,
+        env={**os.environ, "PATH": str(posix_bin_dir)},
+    )
+    try:
+        assert server.stdin and server.stdout
+        server.stdin.write(json.dumps(request) + "\n")
+        server.stdin.flush()
+        response = json.loads(server.stdout.readline())
+    finally:
+        server.kill()
+        server.communicate(timeout=30)
+
+    assert response["result"]["serverInfo"]["name"] == "archy"
+    assert not marker.exists()
+
+
+def test_python_dash_m_archy_runs_the_cli():
+    result = subprocess.run(
+        [sys.executable, "-m", "archy", "--help"], capture_output=True, text=True
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith("Usage: archy ")
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX fake-binary harness")
