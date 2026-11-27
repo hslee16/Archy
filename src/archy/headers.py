@@ -101,6 +101,24 @@ def _public_top_level(source: str) -> tuple[str, ...]:
     return tuple(sorted(out))
 
 
+def _read_for_census(path: Path) -> str | None:
+    """The module's text as far as it can be decoded, or None if it cannot be opened."""
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    try:
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
+    except (SyntaxError, ValueError):
+        encoding = "utf-8"  # broken cookie: keep the tolerant read below (#649)
+    try:
+        return raw.decode(encoding)
+    except (LookupError, UnicodeDecodeError):
+        # Bytes that do not match their cookie still get a header, via the
+        # tolerant decode this read site has always used (#649).
+        return raw.decode("utf-8", errors="replace")
+
+
 def compute_headers(
     report: ConventionsReport,
     root: Path,
@@ -155,17 +173,9 @@ def compute_headers(
         path = paths.get(module)
         if path is None or not path.is_file():
             continue
-        raw = path.read_bytes()
-        try:
-            encoding, _ = tokenize.detect_encoding(io.BytesIO(raw).readline)
-        except (SyntaxError, ValueError):
-            encoding = "utf-8"  # broken cookie: keep the tolerant read below (#649)
-        try:
-            source = raw.decode(encoding)
-        except (LookupError, UnicodeDecodeError):
-            # Bytes that do not match their cookie still get a header, via the
-            # tolerant decode this read site has always used (#649).
-            source = raw.decode("utf-8", errors="replace")
+        source = _read_for_census(path)
+        if source is None:
+            continue  # the caller names it; a header cannot be derived unread
         headers.append(
             ModuleHeader(
                 module=module,
@@ -209,6 +219,15 @@ def render_header(header: ModuleHeader, *, width: int = 88) -> str:
     return "\n".join(lines)
 
 
+def _physical_lines(source: str) -> list[str]:
+    """Lines as Python numbers them, ends kept.
+
+    `str.splitlines` also breaks on form feed and U+2028, which `ast` and
+    `tokenize` do not, so positions taken from them would land elsewhere.
+    """
+    return list(io.StringIO(source, newline=""))
+
+
 def _docstring_span(source: str) -> tuple[int, int] | None:
     """Character span of the module docstring's body, or None if there is none."""
     tree = _try_parse(source)
@@ -219,7 +238,7 @@ def _docstring_span(source: str) -> tuple[int, int] | None:
         return None
     if not isinstance(first.value.value, str):
         return None
-    lines = source.splitlines(keepends=True)
+    lines = _physical_lines(source)
     start = sum(len(x) for x in lines[: first.lineno - 1])
     end = sum(len(x) for x in lines[: (first.end_lineno or first.lineno)])
     return start, end
@@ -265,7 +284,9 @@ def split_block(doc: str) -> tuple[list[str], list[str]]:
     block: list[str] = []
     prose: list[str] = []
     in_block = False
-    for line in doc.splitlines():
+    # Not `splitlines`: a form feed or U+2028 inside the prose is not a line end,
+    # and rejoining on one would rewrite what a human wrote.
+    for line in doc.removesuffix("\n").split("\n") if doc else []:
         if line.strip().startswith(MARKER):
             in_block = True
             block.append(line.rstrip())
@@ -342,7 +363,7 @@ def apply_header(source: str, block: str) -> str:
     # spelling of escapes and the prefix: evaluating and re-encoding the value
     # would rewrite human prose even when it means the same thing.
     line_starts = [0]
-    for line in doc.splitlines(keepends=True):
+    for line in _physical_lines(doc):
         line_starts.append(line_starts[-1] + len(line))
     begin = line_starts[tokens[0].start[0] - 1] + tokens[0].start[1]
     finish = line_starts[tokens[0].end[0] - 1] + tokens[0].end[1]
