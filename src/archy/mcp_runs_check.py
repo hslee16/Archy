@@ -44,7 +44,7 @@ from archy.graph import (
     zero_modules_reason,
 )
 from archy.history import append as append_history
-from archy.history import git_metadata, row_from_score
+from archy.history import git_metadata, row_from_score, score_gate
 from archy.history import read as read_history
 from archy.layers import (
     LayerConfig,
@@ -241,11 +241,24 @@ def run_score(
         )
     history_path = path / ".archy" / "history.jsonl"
 
-    gate = _score_gate(history_path, score.overall, strict_tolerance) if strict else None
+    gate = (
+        _score_gate(
+            history_path,
+            score.overall,
+            strict_tolerance,
+            internal_only=internal_only,
+            record=record,
+        )
+        if strict
+        else None
+    )
 
     if record:
         commit, branch = git_metadata(path)
-        append_history(history_path, row_from_score(score, commit=commit, branch=branch))
+        append_history(
+            history_path,
+            row_from_score(score, commit=commit, branch=branch, internal_only=internal_only),
+        )
 
     return ScorePayload(
         overall=score.overall,
@@ -256,23 +269,11 @@ def run_score(
     )
 
 
-def _score_gate(history_path: Path, current: float, tolerance: float) -> ScoreGate:
-    """The strict gate against the last recorded score; a first run has nothing to fail."""
-    rows = read_history(history_path)
-    if not rows:
-        return ScoreGate(
-            previous=None, current=current, delta=None, tolerance=tolerance, passed=True
-        )
-    previous = rows[-1]
-    delta = current - previous.overall
+def _score_gate(
+    history_path: Path, current: float, tolerance: float, *, internal_only: bool, record: bool
+) -> ScoreGate:
     return ScoreGate(
-        previous=previous.overall,
-        previous_commit=previous.commit,
-        previous_timestamp=previous.timestamp,
-        current=current,
-        delta=delta,
-        tolerance=tolerance,
-        passed=delta >= -tolerance,
+        **score_gate(history_path, current, tolerance, internal_only=internal_only, record=record)
     )
 
 
@@ -562,6 +563,7 @@ def run_trend(path: Path, *, last_n: int) -> list[TrendRow]:
             timestamp=r.timestamp,
             commit=r.commit,
             branch=r.branch,
+            internal_only=r.internal_only,
             score=TrendRowScore(
                 overall=r.overall,
                 modularity=r.modularity,

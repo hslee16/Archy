@@ -25,7 +25,7 @@ from __future__ import annotations
 from html import escape
 
 from archy.dsm import DSM, summarize_dsm
-from archy.history import HistoryRow
+from archy.history import HistoryRow, has_mixed_scopes
 
 # HTML rendering stays useful far past the point ASCII does (a browser scrolls,
 # and a rect grid does not wrap), but a dense matrix still emits one SVG node
@@ -193,6 +193,11 @@ def render_trend_html(rows: list[HistoryRow], *, last_n: int) -> str:
     )
 
     body = f'<div class="charts">{charts}</div>\n<p class="note">{note}</p>\n{_trend_table(window)}'
+    if has_mixed_scopes(window):
+        body = (
+            '<p class="note">mixed scopes: scores are not comparable; charts omitted.</p>\n'
+            + _trend_table(window)
+        )
     return _page("archy trend", subtitle, body)
 
 
@@ -412,7 +417,7 @@ def _chart(label: str, values: list[float | None]) -> str:
 
 def _trend_table(window: list[HistoryRow]) -> str:
     head = (
-        "<tr><th>when</th><th>commit</th><th>score</th><th>mod</th><th>acy</th>"
+        "<tr><th>when</th><th>commit</th><th>scope</th><th>score</th><th>mod</th><th>acy</th>"
         "<th>dep</th><th>eq</th><th>cpx</th></tr>"
     )
     rows: list[str] = []
@@ -423,6 +428,7 @@ def _trend_table(window: list[HistoryRow]) -> str:
         rows.append(
             f'<tr><td class="mono">{escape(when)}</td>'
             f'<td class="mono">{escape(commit)}</td>'
+            f"<td>{row.scope_label}</td>"
             f"<td>{row.overall:.3f}</td><td>{row.modularity:.3f}</td>"
             f"<td>{row.acyclicity:.3f}</td><td>{row.depth:.3f}</td>"
             f"<td>{row.equality:.3f}</td><td>{cpx}</td></tr>"

@@ -5,7 +5,7 @@ archy:owns        render_text, sparkline
 
 from __future__ import annotations
 
-from archy.history import HistoryRow
+from archy.history import HistoryRow, has_mixed_scopes
 
 # Eight glyphs is enough vertical resolution to read drift in a single
 # terminal line without overwhelming the eye, and the standard Unicode
@@ -20,15 +20,19 @@ def render_text(rows: list[HistoryRow], *, last_n: int) -> str:
 
     window = rows[-last_n:] if last_n > 0 else rows
     spark = sparkline([r.overall for r in window])
+    summary = f"score: {spark}  ({window[0].overall:.3f} -> {window[-1].overall:.3f})"
+    if has_mixed_scopes(window):
+        summary = "# mixed scopes: scores are not comparable; sparkline omitted."
 
     lines = [
         f"# archy trend (last {len(window)} of {len(rows)} records)",
         "",
-        f"score: {spark}  ({window[0].overall:.3f} -> {window[-1].overall:.3f})",
+        summary,
         "",
-        f"{'when':<17} {'commit':<8} {'score':>6} "
+        f"{'when':<17} {'commit':<8} {'scope':<13} {'score':>6} "
         f"{'mod':>5} {'acy':>5} {'dep':>5} {'eq':>5} {'cpx':>5}",
-        f"{'-' * 17} {'-' * 8} {'-' * 6} {'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5}",
+        f"{'-' * 17} {'-' * 8} {'-' * 13} {'-' * 6} "
+        f"{'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5} {'-' * 5}",
     ]
     for row in window:
         when = row.timestamp[:16].replace("T", " ")
@@ -37,7 +41,7 @@ def render_text(rows: list[HistoryRow], *, last_n: int) -> str:
         # column still aligns rather than swallowing the row.
         cpx = f"{row.complexity:5.3f}" if row.complexity is not None else f"{'-':>5}"
         lines.append(
-            f"{when:<17} {commit:<8} "
+            f"{when:<17} {commit:<8} {row.scope_label:<13} "
             f"{row.overall:6.3f} {row.modularity:5.3f} {row.acyclicity:5.3f} "
             f"{row.depth:5.3f} {row.equality:5.3f} {cpx}"
         )

@@ -28,7 +28,6 @@ from archy.graph import (
     build_graph,
     internal_subgraph,
 )
-from archy.history import read as read_history
 from archy.layers import (
     LayerConfigError,
 )
@@ -36,7 +35,6 @@ from archy.scan_config import (
     graph_kwargs,
     resolve_max_modules,
 )
-from archy.score import Score
 
 
 class _ArchyGroup(click.Group):
@@ -140,17 +138,3 @@ def _load_graph_pair(path: Path) -> tuple[nx.DiGraph, nx.DiGraph]:
     """
     full = _load_graph(path, internal_only=False)
     return internal_subgraph(full), full
-
-
-def _gate_against_history(current: Score, history_path: Path) -> dict:
-    rows = read_history(history_path)
-    if not rows:
-        return {"previous": None, "current": current.overall, "delta": None}
-    previous = rows[-1]
-    return {
-        "previous": previous.overall,
-        "previous_commit": previous.commit,
-        "previous_timestamp": previous.timestamp,
-        "current": current.overall,
-        "delta": current.overall - previous.overall,
-    }

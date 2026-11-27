@@ -180,8 +180,8 @@ invalidates every later diff.
 
 ## When to use which gate
 
-`archy score --strict` is a one-shot gate against the last recorded
-run in `.archy/history.jsonl`, not against a session baseline. It's
+`archy score --strict` is a one-shot gate against the most recent
+run of the same scope in `.archy/history.jsonl`, not against a session baseline. It's
 the right tool for CI and pre-commit hooks. The snapshot/diff loop is
 the right tool for the *active editing* phase, when you want to see
 deltas after every change without polluting trend history.
