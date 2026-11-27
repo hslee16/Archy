@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "9e65d4cd954d",
+  "strategy": "manual-commit",
+  "branch": "alee/740-cache-build-identity",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "src/archy/cli_install.py",
+    "src/archy/index.py",
+    "tests/test_index.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/9e/65d4cd954d/0/metadata.json",
+      "transcript": "/9e/65d4cd954d/0/full.jsonl",
+      "content_hash": "/9e/65d4cd954d/0/content_hash.txt",
+      "prompt": "/9e/65d4cd954d/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 26,
+    "cache_creation_tokens": 82977,
+    "cache_read_tokens": 1119444,
+    "output_tokens": 13037,
+    "api_call_count": 12
+  }
+}
