@@ -128,7 +128,6 @@ def test_delete_file_pruned(project: Path, tmp_path: Path):
 def test_rename_module(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
     build_graph_cached(project, db_path=db)
-    # Rename b.py -> renamed.py and repoint the importer.
     (project / "pkg" / "b.py").rename(project / "pkg" / "renamed.py")
     _write(project / "pkg", "a.py", "from pkg import renamed\nfrom pkg.sub import c\n")
     assert _equal(project, db)
@@ -149,7 +148,6 @@ def test_delete_then_readd(project: Path, tmp_path: Path):
 def test_import_target_rename(project: Path, tmp_path: Path):
     db = tmp_path / "index.db"
     build_graph_cached(project, db_path=db)
-    # Move sub.c's target: edit a.py to import a different module.
     _write(project / "pkg", "e.py", "X = 1\n")
     _write(project / "pkg", "a.py", "from pkg import e\nfrom pkg.sub import c\n")
     assert _equal(project, db)
@@ -218,7 +216,7 @@ def test_touch_without_content_change_is_unchanged(project: Path, tmp_path: Path
     content = b.read_text()
     future = time.time() + 10
     os.utime(b, (future, future))
-    b.write_text(content, encoding="utf-8")  # same content
+    b.write_text(content, encoding="utf-8")
     os.utime(b, (future, future))
     _, stats = sync(conn, discover_modules(project))
     # mtime moved so it is re-hashed, but the sha matches -> reused, not reparsed.
@@ -303,7 +301,7 @@ def test_corrupt_cache_row_self_heals(project: Path, tmp_path: Path, corrupt_jso
     healed = conn.execute("SELECT parse_json FROM files WHERE path = ?", (path,)).fetchone()
     conn.close()
     assert healed["parse_json"] != corrupt_json
-    ParseResult.model_validate_json(healed["parse_json"])  # round-trips cleanly now
+    ParseResult.model_validate_json(healed["parse_json"])
 
 
 def test_sync_skips_file_that_vanishes_after_discovery(project: Path, tmp_path: Path):
@@ -315,8 +313,8 @@ def test_sync_skips_file_that_vanishes_after_discovery(project: Path, tmp_path: 
     conn = open_index(tmp_path / "index.db")
     results, _stats = sync(conn, modules)  # must not raise
     conn.close()
-    assert "pkg.b" not in results  # vanished module skipped
-    assert "pkg.a" in results  # the rest still parsed
+    assert "pkg.b" not in results
+    assert "pkg.a" in results
 
 
 def test_build_graph_cached_survives_vanished_file(project: Path, tmp_path: Path, monkeypatch):
