@@ -1,8 +1,8 @@
 """Reading a project's modules into the facts every census works from.
 
 archy:owns        censused_modules
-archy:mirrored-by _dotted -> archy.conventions_classes, archy.conventions_families,
-                  archy.conventions_gates, archy.conventions_namespace,
+archy:mirrored-by _ModuleFacts -> archy.conventions, archy.conventions_docs,
+                  archy.conventions_families, archy.conventions_gates,
                   censused_modules -> archy.conventions, archy.headers
 """
 
@@ -22,16 +22,6 @@ from archy.graph import (
     resolve_from_import,
     resolve_relative_import,
 )
-
-
-def _dotted(node: ast.expr) -> str:
-    """Render `a.b.c` / `a` from an expression, or "" for anything else."""
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        prefix = _dotted(node.value)
-        return f"{prefix}.{node.attr}" if prefix else node.attr
-    return ""
 
 
 class _ModuleFacts:

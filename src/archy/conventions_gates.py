@@ -6,8 +6,9 @@ import ast
 import re
 from collections.abc import Iterable
 
-from archy.conventions_collect import _dotted, _ModuleFacts
+from archy.conventions_collect import _ModuleFacts
 from archy.conventions_models import Gate
+from archy.conventions_namespace import _dotted
 
 # Call/raise targets that end the process non-zero. `ctx.exit` and a bare
 # `exit` are matched on their last dotted segment so any Click context

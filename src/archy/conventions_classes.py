@@ -20,9 +20,10 @@ from __future__ import annotations
 import ast
 import builtins
 from collections.abc import Iterable
+from typing import Protocol
 
-from archy.conventions_collect import _dotted, _ModuleFacts
-from archy.conventions_namespace import Namespace, module_namespace
+from archy.conventions_namespace import Namespace, _dotted, module_namespace
+from archy.graph import resolve_relative_import
 
 ClassKey = tuple[str, str]
 # The deepest re-export chain followed: longer than any real one, and short of
@@ -31,14 +32,30 @@ _MAX_DEPTH = 50
 _BUILTINS = frozenset(dir(builtins))
 
 
+class _Facts(Protocol):
+    """What is read of a collected module, stated here so that resolving names
+    does not depend on the collector."""
+
+    qualname: str
+    is_package: bool
+    body: list[ast.stmt]
+    classes: list[ast.ClassDef]
+
+
+def _relative(module: str | None, level: int, package: str) -> str:
+    return resolve_relative_import(module, level, package) or ""
+
+
 class ClassIndex:
     """Every class the project defines, and what each module's names point to."""
 
-    def __init__(self, facts: Iterable[_ModuleFacts]) -> None:
+    def __init__(self, facts: Iterable[_Facts]) -> None:
         self.nodes: dict[ClassKey, ast.ClassDef] = {}
         self._spaces: dict[str, Namespace] = {}
         for f in facts:
-            self._spaces[f.qualname] = module_namespace(f)
+            self._spaces[f.qualname] = module_namespace(
+                f.body, f.qualname, is_package=f.is_package, relative=_relative
+            )
             for cls in f.classes:
                 self.nodes.setdefault((f.qualname, cls.name), cls)
 

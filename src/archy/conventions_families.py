@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable
 
 from archy.conventions_classes import ClassIndex, ClassKey
-from archy.conventions_collect import _assign_targets, _assigned_names, _dotted, _ModuleFacts
+from archy.conventions_collect import _assign_targets, _assigned_names, _ModuleFacts
 from archy.conventions_models import (
     BaseFamily,
     ModelCensus,
@@ -18,6 +18,7 @@ from archy.conventions_models import (
     SurfaceFamily,
     camel_suffix,
 )
+from archy.conventions_namespace import _dotted
 
 # Base names that mark a class as a declared value type rather than a plain
 # object. Matched on the last dotted segment, so `pydantic.BaseModel` and a

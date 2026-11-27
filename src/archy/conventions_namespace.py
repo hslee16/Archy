@@ -6,17 +6,30 @@ first (the `if` body, the `try` body) is kept, except under `if TYPE_CHECKING`,
 where the `else` is the one that runs.
 
 archy:owns        Namespace, module_namespace
+archy:mirrored-by _dotted -> archy.conventions_classes, archy.conventions_families,
+                  archy.conventions_gates
 """
 
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from functools import singledispatch
 
 from pydantic import BaseModel, Field
 
-from archy.conventions_collect import _dotted, _ModuleFacts, _resolve_relative
+# `(module, level, package) -> dotted base`, "" when it walks past the root.
+RelativeResolver = Callable[[str | None, int, str], str]
+
+
+def _dotted(node: ast.expr) -> str:
+    """Render `a.b.c` / `a` from an expression, or "" for anything else."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _dotted(node.value)
+        return f"{prefix}.{node.attr}" if prefix else node.attr
+    return ""
 
 
 class Namespace(BaseModel):
@@ -34,6 +47,7 @@ class _Scope(BaseModel):
 
     module: str
     package: str
+    relative: RelativeResolver
     space: Namespace
     fill_only: bool = False
 
@@ -44,12 +58,13 @@ class _Scope(BaseModel):
             self.space.names[name] = target
 
 
-def module_namespace(facts: _ModuleFacts) -> Namespace:
-    module = facts.qualname
+def module_namespace(
+    body: list[ast.stmt], module: str, *, is_package: bool, relative: RelativeResolver
+) -> Namespace:
     parent = module.rsplit(".", 1)[0] if "." in module else ""
-    package = module if facts.is_package else parent
-    scope = _Scope(module=module, package=package, space=Namespace())
-    _bind_all(facts.body, scope)
+    package = module if is_package else parent
+    scope = _Scope(module=module, package=package, relative=relative, space=Namespace())
+    _bind_all(body, scope)
     return scope.space
 
 
@@ -79,7 +94,7 @@ def _bind_import(node: ast.Import, scope: _Scope) -> None:
 
 @_bind.register(ast.ImportFrom)
 def _bind_import_from(node: ast.ImportFrom, scope: _Scope) -> None:
-    base = _resolve_relative(node.module, node.level, scope.package)
+    base = scope.relative(node.module, node.level, scope.package)
     for alias in node.names:
         if alias.name == "*":
             scope.space.stars.append(base)
