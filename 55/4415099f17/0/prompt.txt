@@ -1,0 +1,44 @@
+<task-notification>
+<task-id>a7a030fe23e794408</task-id>
+<tool-use-id>toolu_01GdVtMvkhT2TXCEZkNzUtzM</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a7a030fe23e794408.output</output-file>
+<status>completed</status>
+<summary>Agent "Bounded review of header fixes" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Reviewed `git diff main...alee/1025-headers-unreadable-formfeed`. I found one new data-loss bug that should block the merge.
+
+**1. High, introduced by this branch: `--write` silently deletes hand-written prose** (`split_block`, `/Users/hosanglee/archy/src/archy/headers.py`)
+
+Input module docstring (`\f` is a literal form feed):
+```
+"""Doc.
+
+archy:owns        old
+\fHand-written warning: do not reorder.
+"""
+```
+- **main:** refuses with `docstring must be a single string literal`, rc=1, file untouched.
+- **branch:** reports `wrote 1 header(s)`, rc=0, and the warning line is gone.
+
+- **Cause:** the continuation rule is `line.strip() and line[:1].isspace()`, and `\f` counts as whitespace. The line is no longer split at the form feed, so the whole line is treated as part of the archy block and replaced.
+- **Same loss with other characters:** a line starting with a literal U+2028 is also dropped. By the same rule, `\x1c` and `\x85` should be too, though I did not run those two.
+- **Suggested fix:** require a continuation to start with a space or tab (`line[:1] in (" ", "\t")`), since `render_header` indents with spaces. Add a regression test; none of the new tests puts such a character right after an existing block.
+
+**2. Medium, same on main: an unsearchable directory still tracebacks**
+
+With `chmod 600 pkg/sub` (readable, not searchable), `--check`, `--write` and plain `--emit-headers` all die with `PermissionError`. It comes from `path.is_file()` in `compute_headers`, one line above the new `_read_for_census` handling. I reproduced this on Python 3.10. It fits #1025's "unreadable" theme, so fix it here or file it.
+
+**3. Low: a `chmod 000` subdirectory is skipped silently**
+
+`--write` exits 0 with `wrote 1 header(s) into 1 scanned module(s)` and never mentions `pkg/sub`. This is discovery behaviour that the diff does not touch, so I would file it separately. I did not run this case against main.
+
+**Checked and clean**
+- **Docstring shapes:** I compared 8,420 generated docstrings between main and the branch. Wherever both succeeded, the output was identical. The branch had no refusals and no non-idempotent results. The comparison did not flag finding 1 because main refuses those inputs.
+- **Form feed and `\x1c`-`\x1e`/`\x85` placements:** the ones I tried around the literal were accepted. Lone CR is normalised to `\n` by `read_source` before the splice.
+- **Round trip:** `--write`, `--check`, `--write` on copies of this repo's `src`, `click` and `rich` (105 files changed) passed. The code AST was unchanged, the prose before the block was preserved, and the second write changed nothing.
+- **Other unreadable cases:** unreadable `archy.yaml`, module or `__init__.py`, a read-only directory, and a directory named `q.py` are all reported without a traceback. A dangling symlink, an unreadable `.gitignore`, `pyproject.toml` or test module caused no traceback either.
+- **New tests:** they do fail without the fix. Reverting each of the three line-splitting changes, the `_unreadable` merge, or the `OSError` catch separately turned at least one test red.
+
+I did not change the working tree; `--write` ran only on copies in the scratchpad. The untracked `bench/diff_duplicates_precision.jsonl` was there before the review.</result>
+<usage><subagent_tokens>88491</subagent_tokens><tool_uses>9</tool_uses><duration_ms>105509</duration_ms></usage>
+</task-notification>

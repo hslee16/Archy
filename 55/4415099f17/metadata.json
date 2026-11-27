@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "554415099f17",
+  "strategy": "manual-commit",
+  "branch": "alee/1025-headers-unreadable-formfeed",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "src/archy/headers.py",
+    "tests/test_header_files.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/55/4415099f17/0/metadata.json",
+      "transcript": "/55/4415099f17/0/full.jsonl",
+      "content_hash": "/55/4415099f17/0/content_hash.txt",
+      "prompt": "/55/4415099f17/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 6,
+    "cache_creation_tokens": 3431,
+    "cache_read_tokens": 1226651,
+    "output_tokens": 2545,
+    "api_call_count": 2
+  }
+}
