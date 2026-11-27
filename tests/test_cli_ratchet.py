@@ -96,6 +96,17 @@ def test_simulate_cli_predicts_cycle(tmp_path: Path):
     assert "pkg.a" in result.output and "pkg.b" in result.output
 
 
+def test_simulate_cli_names_the_closing_edge_when_its_source_sorts_first(tmp_path: Path):
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / "a.py").write_text("X = 1\n")
+    (pkg / "z.py").write_text("from pkg import a\n")
+    result = CliRunner().invoke(main, ["simulate", str(tmp_path), "--add", "pkg.a:pkg.z"])
+    assert result.exit_code == 0
+    assert "# cycle-closing edges (+1):\n  + pkg.a -> pkg.z" in result.output
+
+
 def test_simulate_cli_json_is_valid(tmp_path: Path):
     project = _make_acyclic_project(tmp_path)
     result = CliRunner().invoke(

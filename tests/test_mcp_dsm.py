@@ -148,6 +148,43 @@ def test_dsm_diff_ignores_response_format(acyclic_project: Path, tmp_path: Path)
     assert isinstance(result, DSMDiff)
 
 
+@pytest.mark.parametrize(("source", "target"), [("b", "a"), ("a", "z")])
+def test_cycle_closing_edge_reaches_dsm_and_simulate_tools(
+    tmp_path: Path, source: str, target: str
+):
+    from archy.dsm import build_dsm, write_dsm
+
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    (pkg / f"{source}.py").write_text("X = 1\n")
+    (pkg / f"{target}.py").write_text(f"from pkg import {source}\n")
+    baseline = tmp_path / "before.json"
+    write_dsm(build_dsm(build_graph(tmp_path), group_by="topological"), baseline)
+    server = create_server()
+
+    _, simulated = _call_tool(
+        server,
+        "archy_simulate",
+        {"path": str(tmp_path), "add": [{"from": f"pkg.{source}", "to": f"pkg.{target}"}]},
+    )
+    assert simulated is not None
+    assert simulated["new_back_edges"] == [{"source": f"pkg.{source}", "target": f"pkg.{target}"}]
+
+    (pkg / f"{source}.py").write_text(f"from pkg import {target}\n")
+    after = build_dsm(build_graph(tmp_path), group_by="topological")
+    _, structured = _call_tool(
+        server,
+        "archy_dsm",
+        {"path": str(tmp_path), "group_by": "topological", "baseline_path": str(baseline)},
+    )
+    assert structured is not None
+    cells = structured["result"]["new_back_edges"]
+    assert [(after.ordering[c["row"]], after.ordering[c["col"]]) for c in cells] == [
+        (f"pkg.{source}", f"pkg.{target}")
+    ]
+
+
 def test_dsm_bad_baseline_returns_error_on_the_wire(acyclic_project: Path, tmp_path: Path):
     baseline = tmp_path / "bad.json"
     baseline.write_text("not json")

@@ -293,7 +293,8 @@ def _simulate_added_lines(result: SimulateReport) -> list[str]:
             f"# new cycles (+{len(cycles)}):", [f"  + {', '.join(c.modules)}" for c in cycles]
         ),
         *_added_block(
-            f"# new back-edges (+{len(back)}):", [f"  + {e.source} -> {e.target}" for e in back]
+            f"# cycle-closing edges (+{len(back)}):",
+            [f"  + {e.source} -> {e.target}" for e in back],
         ),
         *_added_block(
             f"# new layer violations (+{len(violations)}):",

@@ -160,15 +160,18 @@ invalidates every later diff.
    is the right starting point.
 
    If `acyclicity` dropped or `cycles.added` is non-empty, the
-   companion DSM diff names the specific edge that closed the cycle:
+   companion DSM diff names the added edges that close a cycle:
 
    - CLI: `archy dsm . --group topological --diff <path/to/dsm.json>`
    - MCP: `archy_dsm(path, group_by="topological",
      baseline_path=<path>)`
 
    The `new_back_edges` field on `DSMDiff` lists every source-target
-   pair that turned into a back-edge in the new ordering, which is the
-   exact information needed to pick which import to remove or invert.
+   pair the edit added between modules that share a strongly connected
+   component after it and would not without its additions, whatever the
+   ordering. Self-loops are left out, and a cycle that only split off a
+   larger one has no such edge. Use the same filters for both snapshots. These
+   edges are candidates for removal or inversion, not a minimal repair set.
 
 5. If `summary.headline` shows `overall -...` or `summary.top_regressions`
    is non-empty, the change introduced a regression. Inspect the named

@@ -84,10 +84,11 @@ class DSMDiff(BaseModel):
     indices are ordering-relative: `added` / `new_back_edges` index `after`,
     while `removed` index `before`; never index one's cells into the other.
 
-    `new_back_edges` is the load-bearing field for agent scenario 2 in
-    `docs/research/DSM_EMPIRICS.md`: cells that appeared above the diagonal in
-    `after` but did not exist in `before`, meaning the edit introduced a
-    new back-edge in the chosen ordering.
+    `new_back_edges` lists the added edges that close a cycle, whatever the
+    ordering: the two modules share a strongly connected component of `after`
+    and would not without the edges the edit added. An addition inside a
+    component that stands without the additions is left out, as is a self-loop.
+    An edge one snapshot's filter left out looks added or removed, as in `added`.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -126,8 +127,9 @@ class DSMSummary(BaseModel):
 
     `back_edges` are the load-bearing signal: cells whose source sits later
     in `ordering` than the target (`row > col`), i.e. an edge that points
-    against the chosen order -- the same back-edge test `diff_dsm` uses for
-    `new_back_edges`. `cross_group_edge_count` is the inter-block coupling
+    against the chosen order. Unlike `DSMDiff.new_back_edges`, this is a layout
+    measure, not a comparison of strongly connected components.
+    `cross_group_edge_count` is the inter-block coupling
     (edges whose endpoints fall in different groups).
     """
 
@@ -602,15 +604,18 @@ def diff_dsm(before: DSM, after: DSM) -> DSMDiff:
 
     Operates on names rather than positions so the diff is meaningful
     when reordering changes (e.g. after community detection re-runs on
-    a slightly different graph). `new_back_edges` is computed in
-    `after`'s ordering: an edge is a back-edge if the source is later in
-    `after.ordering` than the target.
+    a slightly different graph). `new_back_edges` compares strongly
+    connected components, so it does not depend on either ordering; only its
+    cells index `after.ordering`.
     """
     before_edges = _name_indexed(before)
     after_edges = _name_indexed(after)
-    after_pos = {n: i for i, n in enumerate(after.ordering)}
-
-    added, weight_changed, new_back_edges = _changes_in_after(before_edges, after_edges, after_pos)
+    added, weight_changed, new_back_edges = _changes_in_after(
+        before_edges,
+        after_edges,
+        _scc_index(after.ordering, before_edges.keys() & after_edges.keys()),
+        _scc_index(after.ordering, after_edges),
+    )
     removed = [cell for key, cell in before_edges.items() if key not in after_edges]
 
     before_nodes = set(before.ordering)
@@ -635,9 +640,10 @@ def diff_dsm(before: DSM, after: DSM) -> DSMDiff:
 def _changes_in_after(
     before_edges: dict[tuple[str, str], DSMCell],
     after_edges: dict[tuple[str, str], DSMCell],
-    after_pos: dict[str, int],
+    kept_scc: dict[str, int],
+    after_scc: dict[str, int],
 ) -> tuple[list[DSMCell], list[tuple[DSMCell, DSMCell]], list[DSMCell]]:
-    """Edges new in `after`, edges whose weight changed, and the new ones that point backward."""
+    """Edges new in `after`, edges whose weight changed, and the new ones that close a cycle."""
     added: list[DSMCell] = []
     weight_changed: list[tuple[DSMCell, DSMCell]] = []
     new_back_edges: list[DSMCell] = []
@@ -645,18 +651,33 @@ def _changes_in_after(
         before_cell = before_edges.get(key)
         if before_cell is None:
             added.append(after_cell)
-            if _points_backward(key, after_pos):
+            if _closes_cycle(key, kept_scc, after_scc):
                 new_back_edges.append(after_cell)
         elif before_cell.weight != after_cell.weight:
             weight_changed.append((before_cell, after_cell))
     return added, weight_changed, new_back_edges
 
 
-def _points_backward(key: tuple[str, str], after_pos: dict[str, int]) -> bool:
-    row_name, col_name = key
-    if row_name not in after_pos or col_name not in after_pos:
+def _closes_cycle(
+    key: tuple[str, str], kept_scc: dict[str, int], after_scc: dict[str, int]
+) -> bool:
+    """True when the edge joins two modules into one component only the additions made."""
+    source, target = key
+    if source == target:
         return False
-    return after_pos[row_name] > after_pos[col_name]
+    joined_after = after_scc[source] == after_scc[target]
+    return joined_after and kept_scc[source] != kept_scc[target]
+
+
+def _scc_index(nodes: Iterable[str], edges: Iterable[tuple[str, str]]) -> dict[str, int]:
+    graph: nx.DiGraph = nx.DiGraph()
+    graph.add_nodes_from(nodes)
+    graph.add_edges_from(edges)
+    return {
+        node: i
+        for i, component in enumerate(nx.strongly_connected_components(graph))
+        for node in component
+    }
 
 
 def _name_indexed(dsm: DSM) -> dict[tuple[str, str], DSMCell]:
@@ -692,7 +713,7 @@ def render_diff_text(diff: DSMDiff, after: DSM, before: DSM) -> str:
     )
 
     if diff.new_back_edges:
-        lines.extend(_edge_section("New back-edges", diff.new_back_edges, after, cap=None))
+        lines.extend(_edge_section("Cycle-closing edges", diff.new_back_edges, after, cap=None))
     if diff.added and not diff.new_back_edges:
         lines.extend(_edge_section("Added edges", diff.added, after, cap=10))
     if diff.removed:

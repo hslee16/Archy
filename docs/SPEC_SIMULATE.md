@@ -48,7 +48,7 @@ delta-application layer wrapped around functions that already ship:
 | score / cycles / layer + SDP violations of a graph | `diff.take_snapshot(graph, config_path)` |
 | added/resolved cycles, violations, per-axis score delta | `diff.compute_diff(before, after)` |
 | risk-ranked headline + judgment prompts (#154) | `diff_summary.summarize_diff(report, after_graph)` |
-| new back-edges in topological order | `dsm.build_dsm(.., "topological")` + `dsm.diff_dsm(before, after)` |
+| added edges that close a cycle | `dsm.build_dsm(.., "topological")` + `dsm.diff_dsm(before, after)` |
 | blast-radius / propagation cost | `reach.compute_propagation_cost(graph)` |
 
 The novel parts are only: (a) the **delta API**, (b) **applying** the delta to
@@ -171,7 +171,9 @@ simulated: it is an answer. It is a `computed_field`, because FastMCP sends
 `model_dump()` and a plain property would reach the CLI but not the agent.
 
 Notes:
-- `new_back_edges` is translated from `DSMCell(row, col)` positions back to
+- `new_back_edges` lists the added edges that close a cycle, whatever the
+  ordering (self-loops left out). It is translated from `DSMCell(row, col)`
+  positions back to
   `SRC -> DST` qualnames via the after-DSM ordering, because the agent does not
   hold the DSM ordering. (DSMCell is positional; an agent needs names.)
 - Simulation reuses `summarize_diff` for the risk-ranked headline + per-item
@@ -225,7 +227,7 @@ real = compute_diff(take_snapshot(g0), take_snapshot(g1))
 assert sim.cycles      == real.cycles
 assert sim.violations  == real.violations
 assert sim.score_delta == real.score_delta          # graph-shape axes
-assert sim.new_back_edges == <real DSM back-edges>
+assert sim.new_back_edges == <real DSM cycle-closing edges>
 ```
 
 **Equivalence boundary (must be documented, see Q3):** the equality holds for
