@@ -341,7 +341,10 @@ class ModuleView(BaseModel):
 
     So every list here is COMPLETE for the module named when
     ``census_complete`` is true, and truncating any of them would defeat the
-    point. When some modules could not be parsed,
+    point. The exception is ``exports`` when ``exports_complete`` is false:
+    either ``__all__`` is built in a way not read statically, so the names
+    listed are only those that were (#755), or the module did not parse and
+    ``exports`` is null. When some modules could not be parsed,
     ``census_complete`` is false and ``unparsed_modules`` names each skip so
     absence from `imported_by` is not mistaken for a negative (#666). `status`
     matters for the same reason: a module that was set aside must say so, or
@@ -357,6 +360,7 @@ class ModuleView(BaseModel):
     imports_internal: tuple[str, ...]
     imported_by: tuple[str, ...]
     exports: tuple[str, ...] | None
+    exports_complete: bool = True
     suffix_families: tuple[str, ...]
     gates: tuple[Gate, ...]
     census_complete: bool = True

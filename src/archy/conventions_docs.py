@@ -186,7 +186,8 @@ def _export_gaps(
     facts: Iterable[_ModuleFacts], families: tuple[BaseFamily, ...]
 ) -> tuple[ExportGap, ...]:
     """Family members missing from an ``__all__`` that already lists their siblings."""
-    exports = {f.qualname: f.exports for f in facts if f.exports is not None}
+    # A partly read `__all__` would report members as missing that it does list.
+    exports = {f.qualname: names for f in facts if (names := f.whole_exports()) is not None}
     if not exports:
         return ()
     out: list[ExportGap] = []
