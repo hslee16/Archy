@@ -23,7 +23,15 @@ CASES = {
     "augmented": ('__all__ = ["A"]\n__all__ += ["B"]', {"A", "B"}, True),
     "extend": ('__all__ = ["P"]\n__all__.extend(["Q"])', {"P", "Q"}, True),
     "append_insert_free": ('__all__ = []\n__all__.append("Q")', {"Q"}, True),
-    "remove": ('__all__ = ["A", "B"]\n__all__.remove("B")', {"A"}, True),
+    # A set cannot say whether a duplicate survives the removal.
+    "remove": ('__all__ = ["A", "B"]\n__all__.remove("B")', {"A", "B"}, False),
+    "reads": (
+        '__all__ = ["A"]\nfor n in __all__:\n    pass\nif "A" in __all__ and len(__all__):\n'
+        '    x = __all__ + ["B"]\n    y = ",".join(__all__[:])\n'
+        "def __dir__():\n    return __all__",
+        {"A"},
+        True,
+    ),
     "sorted": ('__all__ = ["B", "A"]\n__all__ = sorted(__all__)\n__all__.sort()', {"A", "B"}, True),
     "literal_concat": ('__all__ = ["A"] + ["B"]', {"A", "B"}, True),
     "literal_unpack": ('__all__ = [*["A"], "B"]', {"A", "B"}, True),
@@ -44,6 +52,41 @@ CASES = {
     ),
     "item_assignment": ('__all__ = ["A"]\n__all__[0] = name', {"A"}, False),
     "imported": ('from sub import __all__\n__all__ += ["A"]', {"A"}, False),
+    "imported_in_block": ('__all__ = ["A"]\nif flag:\n    from y import __all__', {"A"}, False),
+    "set_literal": ('__all__ = {"A"}', {"A"}, True),
+    "non_string": ('__all__ = ["A", name]', {"A"}, False),
+    "appended_name": ('__all__ = ["A"]\n__all__.append(name)', {"A"}, False),
+    "subtracted": ('__all__ = ["A"]\n__all__ -= ["A"]', {"A"}, False),
+    **{
+        f"escape_{n}": (f'__all__ = ["A"]\n{line}', {"A"}, False)
+        for n, line in {
+            "helper": "register(__all__)",
+            "keyword": "register(names=__all__)",
+            "alias": "a = __all__",
+            "chained": "__all__ = a = __all__",
+            "bound_method": "add = __all__.append",
+            "unbound_method": 'list.append(__all__, "B")',
+            "dunder": '__all__.__iadd__(["B"])',
+            "insert": '__all__.insert(0, "B")',
+            "pop": "__all__.pop()",
+            "clear": "__all__.clear()",
+            "in_tuple": "for item in (__all__,):\n    item.append(x)",
+            "walrus": '(a := __all__).append("B")',
+            "or": '(__all__ or []).append("B")',
+            "globals_item": 'globals()["__all__"] = ["B"]',
+            "globals_update": 'globals().update({"__all__": ["B"]})',
+            "vars_item": 'vars()["__all__"] += ["B"]',
+            "setattr": 'setattr(sys.modules[__name__], "__all__", ["B"])',
+            "module_attr": 'sys.modules[__name__].__all__.append("B")',
+            "module_dict": 'sys.modules[__name__].__dict__["__all__"] = []',
+            "exec": "exec(code)",
+            "match": "match x:\n    case __all__:\n        pass",
+            "except_as": "try:\n    pass\nexcept E as __all__:\n    pass",
+            "def": "def __all__():\n    pass",
+        }.items()
+    },
+    "second_name_for_the_literal": ('__all__ = other = ["A"]', {"A"}, False),
+    "shadowed_wrapper": ('def sorted(x):\n    return []\n__all__ = sorted(["A"])', set(), False),
 }
 
 
@@ -65,12 +108,13 @@ def test_expected_sets_match_cpython(source: str, names: set[str]):
     exec(source, namespace)
 
     members = namespace["__all__"]
-    assert isinstance(members, list)
+    assert isinstance(members, list | set)
     assert set(members) == names
 
 
 @pytest.mark.parametrize(
-    "source", ["x = 1", "print(__all__)", "__all__: list[str]", "def f():\n    return __all__"]
+    "source",
+    ["x = 1", "print(__all__)", "__all__: list[str]", "def __dir__():\n    return __all__"],
 )
 def test_reading_or_declaring_a_type_is_not_a_declaration(source: str):
     assert read_exports(ast.parse(source)) is None
@@ -134,3 +178,25 @@ def test_no_export_gap_for_a_partly_read_all(tmp_path: Path):
 
     assert compute_conventions(folded).export_gaps == ()
     assert compute_conventions(unreadable).export_gaps == ()
+
+
+def test_a_namespace_write_alone_is_a_declaration():
+    """Otherwise the view says "no __all__", which is as wrong as a short list."""
+    declared = read_exports(ast.parse('globals()["__all__"] = ["A"]'))
+
+    assert declared is not None and not declared.complete
+
+
+def test_a_long_concatenation_does_not_exhaust_the_stack():
+    declared = read_exports(ast.parse("__all__ = " + " + ".join(['["a"]'] * 1500)))
+
+    assert declared is not None
+    assert (declared.names, declared.complete) == (frozenset({"a"}), True)
+
+
+def test_an_unparsed_module_does_not_claim_its_exports(tmp_path: Path):
+    root = _project(tmp_path, {"__init__.py": "", "bad.py": "def (:\n"})
+
+    view = compute_module_view(root, "pkg.bad")
+
+    assert (view.exports, view.exports_complete) == (None, False)

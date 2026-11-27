@@ -49,7 +49,8 @@ def _conventions_to_dict(report: ConventionsReport, *, top_n: int) -> dict:
 
 
 def _module_view_to_text(view: ModuleView) -> str:
-    """Terse and COMPLETE. Every list is the whole list; see ModuleView."""
+    """Terse and COMPLETE. Every list is the whole list unless the text says
+    otherwise (a partial `exports`, unparsed modules); see ModuleView."""
     lines = [f"# {view.module}", f"  status        {view.status}"]
     # Classes and functions separately, each with a count. Completeness is the
     # point of this view, so nothing is dropped -- but a test module defines a
