@@ -714,7 +714,7 @@ When a scanned module imports a top-level name that is a directory with no `__in
 
 Without `roots:`, a project like `app/libs/db.py` (no `app/__init__.py`) is either skipped entirely or shows up as a top-level `libs.db`, which makes layer rules like `app.libs.**` match nothing.
 
-**Layer presence (`min_layers_present:`).** Forbidding edges *between* layers says nothing about whether the layers exist. A codebase that collapsed four layers into one module satisfies every `forbid` rule by having no cross-layer edges at all, and passes silently. Set a floor to catch that:
+**Layer presence (`min_layers_present:`).** Forbidding edges *between* layers says nothing about whether the layers exist. A codebase whose layers have disappeared satisfies every `forbid` rule by having no cross-layer edges at all. Set a floor on how many must exist:
 
 ```yaml
 min_layers_present: 3   # at least 3 of the declared layers must contain a module
@@ -727,9 +727,11 @@ Empty declared layers are reported either way, because every rule naming one is 
 #   FAIL: 2 layer(s) present, min_layers_present is 3
 ```
 
+**What "present" means, and what it misses.** A layer is present when at least one module matches it, and an empty package `__init__.py` is a module (a directory with no Python file in it is not). So if the code moves into one file and each layer keeps its `__init__.py`, the floor still passes. Coverage shows it only when the code has moved outside every layer: `0 of N internal edges`, with the note that no `forbid` rule can fire. If it collapsed into one of the layers instead, coverage can still read 100%, and neither signal catches it. A layer that matches an external package is present when something imports that package.
+
 Unset by default, so existing configs keep their exit codes. The shape is taken from the Constraint Decay paper ([arxiv:2605.06445](https://arxiv.org/abs/2605.06445)), whose architecture verifier pairs a dependency-direction rule with exactly this presence floor ("at least 3 of the 4 canonical layers present as distinct directories"). `bench/fixtures/conduit_clean/` reproduces its three cases.
 
-**It is a backstop, not the main event, and the measurement says so.** Across 50 agent-generated backends, every single one produced all four layer directories: this check never fired once, while the direction check caught every failure. Keep it for the collapsed-into-one-module case it is named for, but if you are deciding where to spend effort in a config, spend it on `forbid` rules.
+**It is a backstop, not the main event, and the measurement says so.** Across 50 agent-generated backends, every single one produced all four layer directories: this check never fired once, while the direction check caught every failure. Keep it for layers that lose their last module, but if you are deciding where to spend effort in a config, spend it on `forbid` rules.
 
 **Discovery.** `archy check` walks PATH upward to find `archy.yaml` unless `--config` is given. Exits 1 on violation.
 
