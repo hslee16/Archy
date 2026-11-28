@@ -404,3 +404,33 @@ def test_cc_aggregates_with_no_functions_are_zero():
     assert s.inputs.cc_total == 0
     assert s.inputs.cc_max == 0
     assert s.inputs.cc_mean == 0.0
+
+
+@pytest.mark.parametrize("compute", [compute_modularity, compute_modularity_weighted])
+@pytest.mark.parametrize(
+    ("nodes", "edges", "communities"),
+    [([], [], 1), (["a"], [], 1), (["a", "b", "c"], [], 3), (["a"], [("a", "a")], 1)],
+    ids=["empty", "one-node", "no-edges", "one-node-self-loop"],
+)
+def test_a_graph_with_nothing_to_partition_is_vacuously_modular(
+    compute, nodes: list[str], edges: list[tuple[str, str]], communities: int
+):
+    """The answer itself for both, not that the two agree."""
+    graph = nx.DiGraph()
+    graph.add_nodes_from(nodes)
+    graph.add_edges_from(edges)
+
+    assert compute(graph) == (1.0, communities, 1.0)
+
+
+@pytest.mark.parametrize("compute", [compute_modularity, compute_modularity_weighted])
+def test_two_connected_nodes_are_partitioned_not_waved_through(compute):
+    """The smallest graph with something to partition. One community holds both
+    nodes, so Q = 1 - 1 = 0, and the normalized score is (0 + 0.5) / 1.5 = 1/3.
+    """
+    graph = nx.DiGraph([("a", "b")])
+
+    score, communities, raw_q = compute(graph)
+
+    assert (communities, raw_q) == (1, pytest.approx(0.0))
+    assert score == pytest.approx(1 / 3)
