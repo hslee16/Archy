@@ -33,7 +33,8 @@ _WORDS = [
 def _rows() -> list[str]:
     """The tool named in the first cell of each row of the section's tool table."""
     table = SECTION.split("\n| Tool | Purpose |\n")[1].split("\n\n")[0]
-    rows = [line for line in table.splitlines() if not line.startswith("|---")]
+    # Any spelling of the header's separator row, as a formatter might write it.
+    rows = [line for line in table.splitlines() if not re.fullmatch(r"[|:\- ]+", line)]
     names = [re.match(r"\| `([a-z_]+)` \|", line) for line in rows]
     assert all(names), "a table row does not start with a backticked tool name"
     return [match[1] for match in names if match]
@@ -54,4 +55,5 @@ def test_the_sentence_above_the_table_counts_them():
     said = re.search(r"`archy mcp` exposes (\w+) tools", SECTION)
 
     assert said, "the sentence that counts the tools is gone"
+    assert said[1] in _WORDS, f"expected the count spelled out, ten to twenty, not {said[1]!r}"
     assert _WORDS.index(said[1]) + 10 == len(_registered())
