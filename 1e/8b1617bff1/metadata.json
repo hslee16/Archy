@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "1e8b1617bff1",
+  "strategy": "manual-commit",
+  "branch": "alee/675-pin-readme-tool-table",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/1e/8b1617bff1/0/metadata.json",
+      "transcript": "/1e/8b1617bff1/0/full.jsonl",
+      "content_hash": "/1e/8b1617bff1/0/content_hash.txt",
+      "prompt": "/1e/8b1617bff1/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 890,
+    "cache_creation_tokens": 1505038,
+    "cache_read_tokens": 171443909,
+    "output_tokens": 352670,
+    "api_call_count": 364
+  }
+}
