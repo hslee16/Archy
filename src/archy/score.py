@@ -80,11 +80,11 @@ class ScoreInputs(BaseModel):
     raw_modularity: float
     raw_gini: float
     propagation_cost: float = 0.0
-    # Call-graph diagnostics. Not folded into the four-axis geometric mean
-    # in v0.16 - shipped as a diagnostic first per the MacCormack v0.13.3
-    # precedent. The v0.20 axis-promotion review (docs/research/AXIS_REVIEW.md)
-    # decided against promoting `calls_per_edge` to a score axis on
-    # directionality / actionability / discriminant-validity grounds.
+    # Call-graph diagnostics. Not folded into the geometric mean: shipped as a
+    # diagnostic first (v0.16), per the MacCormack v0.13.3 precedent. The v0.20
+    # axis-promotion review (docs/research/AXIS_REVIEW.md) decided against
+    # promoting `calls_per_edge` to a score axis on directionality /
+    # actionability / discriminant-validity grounds.
     call_edge_count: int = 0
     total_calls: int = 0
     calls_per_edge: float = 0.0
@@ -96,13 +96,9 @@ class ScoreInputs(BaseModel):
     # and the call-graph decomposition. See `compute_modularity_weighted`.
     raw_modularity_weighted: float = 0.0
     modularity_weighted_community_count: int = 0
-    # Cyclomatic complexity diagnostics (v0.17, diagnostic). Per-function
-    # CC aggregated to the project level. Not folded into the four-axis
-    # geometric mean: ships diagnostic-first, same precedent as call edges
-    # (v0.16) and propagation cost (v0.13.3). The long-term target for the
-    # equality axis is gini(per_function_cc) instead of gini(out_degree);
-    # the underlying data lives here so a future promotion has empirical
-    # ground to stand on.
+    # Cyclomatic complexity inputs: per-function CC aggregated to the project
+    # level. The `complexity` axis, one of the five in the geometric mean since
+    # v0.20, is computed from `cc_mean` and `function_count`.
     function_count: int = 0
     cc_total: int = 0
     cc_max: int = 0
@@ -216,6 +212,13 @@ def _normalize_q(raw_q: float) -> float:
     return max(0.0, min(1.0, (raw_q + 0.5) / 1.5))
 
 
+def _trivial_modularity(graph: nx.DiGraph) -> tuple[float, int, float] | None:
+    """The vacuous answer for a graph with nothing to partition, else None."""
+    if graph.number_of_edges() == 0 or graph.number_of_nodes() < 2:
+        return 1.0, max(graph.number_of_nodes(), 1), 1.0
+    return None
+
+
 def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
     """Return (normalized_score, n_communities, raw_Q).
 
@@ -223,8 +226,8 @@ def compute_modularity(graph: nx.DiGraph) -> tuple[float, int, float]:
     canonical Newman range [-0.5, 1.0] onto [0, 1]. Trivial graphs
     (no edges, or fewer than two nodes) return 1.0 vacuously.
     """
-    if graph.number_of_edges() == 0 or graph.number_of_nodes() < 2:
-        return 1.0, max(graph.number_of_nodes(), 1), 1.0
+    if (trivial := _trivial_modularity(graph)) is not None:
+        return trivial
     communities = list(nx.community.greedy_modularity_communities(graph))
     raw_q = float(nx.community.modularity(graph, communities))
     return _normalize_q(raw_q), len(communities), raw_q
@@ -253,8 +256,8 @@ def compute_modularity_weighted(graph: nx.DiGraph) -> tuple[float, int, float]:
     fallback (call_count else 1) is a deliberate weight policy choice
     described in the bench script and the empirics doc.
     """
-    if graph.number_of_edges() == 0 or graph.number_of_nodes() < 2:
-        return 1.0, max(graph.number_of_nodes(), 1), 1.0
+    if (trivial := _trivial_modularity(graph)) is not None:
+        return trivial
     weighted = graph.copy()
     for _, _, data in weighted.edges(data=True):
         cc = data.get("call_count", 0)
