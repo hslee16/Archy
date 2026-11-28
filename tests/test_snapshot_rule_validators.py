@@ -19,6 +19,27 @@ from archy.diff import read_snapshot
 MALFORMED = {
     "forbid-pair": ("forbid", [["a"]], "forbid pair must be two strings, got ['a']"),
     "forbid-types": ("forbid", [["a", 1]], "forbid pair must be two strings, got ['a', 1]"),
+    # Too long, which a `< 2` check would truncate to the first two without a word.
+    "forbid-extra": (
+        "forbid",
+        [["a", "b", "c"]],
+        "forbid pair must be two strings, got ['a', 'b', 'c']",
+    ),
+    "layer-extra": (
+        "layers",
+        [["web", [], "x"]],
+        "layer entry must be [name, patterns], got ['web', [], 'x']",
+    ),
+    "required-source-type": (
+        "required",
+        [{"source": 1, "must_reach": "b"}],
+        "required entry needs string source and must_reach, got {'source': 1, 'must_reach': 'b'}",
+    ),
+    "required-reach-type": (
+        "required",
+        [{"source": "a", "must_reach": 2}],
+        "required entry needs string source and must_reach, got {'source': 'a', 'must_reach': 2}",
+    ),
     "layer-shape": ("layers", [["only"]], "layer entry must be [name, patterns], got ['only']"),
     "layer-name": ("layers", [[1, []]], "layer entry must be [name, patterns], got [1, []]"),
     "layer-patterns": (
@@ -52,18 +73,23 @@ def _snapshot_with(root: Path, rules: Mapping[str, object]) -> Path:
 
 
 def test_well_formed_rules_are_read(tmp_path: Path):
-    """Control: the same entries in their right shapes load, so each refusal
+    """Control: the same entries in their right shapes load whole, so each refusal
     below is about the one thing changed."""
     rules = {
         "forbid": [["a", "b"]],
         "layers": [["web", ["pkg.**"]]],
-        "required": [{"source": "a", "must_reach": "b", "within": None}],
+        "required": [
+            {"source": "a", "must_reach": "b", "within": "pkg"},
+            {"source": "c", "must_reach": "d", "within": None},
+        ],
     }
 
     snapshot = read_snapshot(_snapshot_with(tmp_path, rules))
 
     assert snapshot is not None and snapshot.rules is not None
     assert snapshot.rules.forbid == (("a", "b"),)
+    assert snapshot.rules.layers == (("web", ("pkg.**",)),)
+    assert snapshot.rules.required == (("a", "b", "pkg"), ("c", "d", None))
 
 
 @pytest.mark.parametrize(("key", "value", "reason"), MALFORMED.values(), ids=MALFORMED)
