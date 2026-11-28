@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "255624bffa0b",
+  "strategy": "manual-commit",
+  "branch": "alee/711-score-comments-guard",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/25/5624bffa0b/0/metadata.json",
+      "transcript": "/25/5624bffa0b/0/full.jsonl",
+      "content_hash": "/25/5624bffa0b/0/content_hash.txt",
+      "prompt": "/25/5624bffa0b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 946,
+    "cache_creation_tokens": 1539646,
+    "cache_read_tokens": 189869016,
+    "output_tokens": 368001,
+    "api_call_count": 387
+  }
+}
