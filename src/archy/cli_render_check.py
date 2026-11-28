@@ -116,7 +116,6 @@ def _violations_to_text(
     replacement. The exit code is untouched -- see `check`.
     """
     if not violations:
-        verdict = f"# No layer violations (config: {config_path})."
         if coverage.governs_nothing:
             return (
                 f"# No layer violations, but no module in the tree falls under any root "
@@ -128,7 +127,7 @@ def _violations_to_text(
                 f"{coverage.edges_governed} of {coverage.edges_total} internal edges "
                 f"(0%), so no forbid rule can fire (config: {config_path})."
             )
-        return verdict
+        return f"# No layer violations (config: {config_path})."
     lines = [f"# {len(violations)} layer violation(s) (config: {config_path})"]
     current_rule: tuple[str, str] | None = None
     for v in violations:
