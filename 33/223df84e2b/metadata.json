@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "33223df84e2b",
+  "strategy": "manual-commit",
+  "branch": "alee/703-uninstall-dry-run",
+  "checkpoints_count": 2,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/33/223df84e2b/0/metadata.json",
+      "transcript": "/33/223df84e2b/0/full.jsonl",
+      "content_hash": "/33/223df84e2b/0/content_hash.txt",
+      "prompt": "/33/223df84e2b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 866,
+    "cache_creation_tokens": 1490904,
+    "cache_read_tokens": 163669250,
+    "output_tokens": 345983,
+    "api_call_count": 354
+  }
+}
