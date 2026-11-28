@@ -421,3 +421,16 @@ def test_a_graph_with_nothing_to_partition_is_vacuously_modular(
     graph.add_edges_from(edges)
 
     assert compute(graph) == (1.0, communities, 1.0)
+
+
+@pytest.mark.parametrize("compute", [compute_modularity, compute_modularity_weighted])
+def test_two_connected_nodes_are_partitioned_not_waved_through(compute):
+    """The smallest graph with something to partition. One community holds both
+    nodes, so Q = 1 - 1 = 0, and the normalized score is (0 + 0.5) / 1.5 = 1/3.
+    """
+    graph = nx.DiGraph([("a", "b")])
+
+    score, communities, raw_q = compute(graph)
+
+    assert (communities, raw_q) == (1, pytest.approx(0.0))
+    assert score == pytest.approx(1 / 3)
