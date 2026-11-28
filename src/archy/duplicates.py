@@ -298,9 +298,44 @@ def _jaccard(a: Counter[str], b: Counter[str]) -> float:
     instead drops as the sizes diverge, which is the behavior a near-clone
     threshold needs.
     """
-    inter = sum((a & b).values())
-    union = sum((a | b).values())
+    return _jaccard_of_totals(a, a.total(), b, b.total())
+
+
+def _jaccard_of_totals(a: Counter[str], total_a: int, b: Counter[str], total_b: int) -> float:
+    """`_jaccard` for bags whose totals are already known.
+
+    The pass runs millions of these, and `a & b` and `a | b` each build a new
+    Counter (#812). |a | b| is |a| + |b| - |a & b|, so only the overlap needs
+    walking, over the smaller bag.
+    """
+    small, large = (a, b) if len(a) <= len(b) else (b, a)
+    get = large.get
+    inter = 0
+    for token, count in small.items():
+        other = get(token)
+        if other:
+            inter += count if count < other else other
+    union = total_a + total_b - inter
     return inter / union if union else 0.0
+
+
+# A bag and its total, computed once per function rather than once per pair.
+_Weighed = tuple[Counter[str], int]
+
+
+def _similarity_toward(floor: float, a: _Weighed, b: _Weighed) -> float:
+    """`_jaccard_of_totals`, or 0.0 for a pair that cannot reach `floor`.
+
+    The overlap is at most the smaller bag and the union at least the larger, so
+    the totals alone rule some pairs out. Divide, as the similarity itself does:
+    `smaller < floor * larger` rounds differently and loses pairs sitting exactly
+    on a floor such as 0.28.
+    """
+    total_a, total_b = a[1], b[1]
+    larger = max(total_a, total_b)
+    if larger and min(total_a, total_b) / larger < floor:
+        return 0.0
+    return _jaccard_of_totals(a[0], total_a, b[0], total_b)
 
 
 class _Candidate(NamedTuple):
@@ -380,6 +415,10 @@ def _near_miss_candidates(sized: list[tuple[str, str, FunctionComplexity]]) -> l
     return items
 
 
+def _weighed(items: list[_Candidate]) -> list[_Weighed]:
+    return [(item.bag, item.bag.total()) for item in items]
+
+
 def _cluster_by_similarity(
     items: list[_Candidate], min_similarity: float, max_comparisons: int
 ) -> tuple[dict[int, list[int]], dict[frozenset[int], float], bool]:
@@ -397,6 +436,7 @@ def _cluster_by_similarity(
     edge_weight: dict[frozenset[int], float] = {}
     budget = max_comparisons
     truncated = False
+    weighed = _weighed(items)
     for i in range(len(items)):
         limit = items[i].fn.size / min_similarity  # sizes above this cannot reach the floor
         for j in range(i + 1, len(items)):
@@ -406,7 +446,7 @@ def _cluster_by_similarity(
                 truncated = True
                 break
             budget -= 1
-            sim = _jaccard(items[i].bag, items[j].bag)
+            sim = _similarity_toward(min_similarity, weighed[i], weighed[j])
             if sim >= min_similarity:
                 parent[find(i)] = find(j)
                 edge_weight[frozenset((i, j))] = sim
