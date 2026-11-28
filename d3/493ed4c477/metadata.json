@@ -1,0 +1,23 @@
+{
+  "cli_version": "0.7.7",
+  "checkpoint_id": "d3493ed4c477",
+  "strategy": "manual-commit",
+  "branch": "alee/723-renderer-names",
+  "checkpoints_count": 1,
+  "files_touched": null,
+  "sessions": [
+    {
+      "metadata": "/d3/493ed4c477/0/metadata.json",
+      "transcript": "/d3/493ed4c477/0/full.jsonl",
+      "content_hash": "/d3/493ed4c477/0/content_hash.txt",
+      "prompt": "/d3/493ed4c477/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 968,
+    "cache_creation_tokens": 1550665,
+    "cache_read_tokens": 197293346,
+    "output_tokens": 372848,
+    "api_call_count": 396
+  }
+}
