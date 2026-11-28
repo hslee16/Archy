@@ -255,6 +255,7 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
     exact = [g for g in rows if g.category == "duplicate" and g.exact]
     near = [g for g in rows if g.category == "duplicate" and not g.exact]
     variants = [g for g in rows if g.category == "variant"]
+    near_miss = [g for g in rows if g.category == "near_miss"]
     out: list[str] = []
     if exact:
         _duplicates_section(
@@ -282,13 +283,12 @@ def _duplicates_to_text(rows: list[DuplicateGroup], *, top_n: int, min_nodes: in
             variants[:top_n],
             with_reason=True,
         )
-    near = [g for g in rows if g.category == "near_miss"]
-    if near:
+    if near_miss:
         _near_miss_section(
             out,
-            f"# {len(near)} possible near-miss (Type-3, gapped) cluster(s) (LOWER confidence; "
-            f"showing top {min(top_n, len(near))})",
-            near[:top_n],
+            f"# {len(near_miss)} possible near-miss (Type-3, gapped) cluster(s) (LOWER confidence; "
+            f"showing top {min(top_n, len(near_miss))})",
+            near_miss[:top_n],
         )
     return "\n".join(out)
 
