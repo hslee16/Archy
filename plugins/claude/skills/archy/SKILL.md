@@ -235,7 +235,7 @@ Returns a `DSMDiff` whose `new_back_edges` lists the added edges that close a cy
 
 The MCP server also exposes a `loop` **prompt** containing the canonical playbook in archy's own words. Fetch it via `prompts/get name="loop"` for the always-current version.
 
-**Error model (recovery contract).** A failure is one of two kinds. A **usage error** (bad argument value like `response_format="xml"` or `last_n=0`, a malformed `archy.yaml`, or a project over the scan ceiling) comes back as `isError: true` (a raised error); fix the call or the environment. A **recoverable condition** comes back as a normal `isError: false` result you branch on: either a payload with an `error` field and no success data (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no `archy.yaml` → `CheckErrorPayload`), or an advisory field on a still-valid result (`available=false`, `note`, `git_available`). So `archy_check` on a project with no config returns an in-band `CheckErrorPayload`, not an error: create a config or move on.
+**Error model (recovery contract).** A failure is one of two kinds. A **usage error** (bad argument value like `response_format="xml"` or `last_n=0`, a malformed `archy.yaml`, or a project over the scan ceiling) comes back as `isError: true` (a raised error); fix the call or the environment. A **recoverable condition** comes back as a normal `isError: false` result you branch on: either a payload with an `error` field and no success data (no baseline → `DiffErrorPayload`, output too large → `*TooLargePayload`, no `archy.yaml` → `CheckErrorPayload`), or an advisory field on a still-valid result (`available=false`, `note`, `git_available`). So `archy_check` on a project with no config returns an in-band `CheckErrorPayload`, not an error: tell the user the rules are not active here (see "Reporting what a check covered") and move on.
 
 ## Decision rules
 
@@ -245,6 +245,15 @@ The MCP server also exposes a `loop` **prompt** containing the canonical playboo
 - Project has `.importlinter` (or `archy[contracts]` installed and the user wants transitive enforcement) → `archy_check(contracts=True)`
 - Failed direct-edge check (`archy_check`) → fix or revert before continuing
 - Passed direct-edge check but a nested `contracts` result fails → an indirect path violates the rules; do not weaken the rule, restructure the path
+
+**Reporting what a check covered.** A verdict is only as wide as the rules. Pass the scope on with it:
+
+- **No `archy.yaml`** → do not create one unprompted. Tell the user archy's declared-intent checks (layers, `forbid`, `required`) are inactive here, and offer to draft a config for them to confirm. `archy_check` then returns only an `error`, with no `coverage`; `archy_brief` returns `coverage: null`.
+- **A pass from `archy_check`** (including any nested `contracts` result) → never a bare "passed". From `coverage`, say how much is layered and how much of that a rule names: `module_ratio` is the share of modules in some layer and `edge_ratio` the share of internal edges with both ends layered, whether or not any rule mentions those layers; `modules_in_ruled_layer` counts the modules in a layer a `forbid` rule names. For example "passed; 21% of modules are layered, and 4 of them are in a layer a forbid rule names". Add any `empty_layers`, and `modules_outside_declared_roots` when it is not zero (those are not counted in the ratios). None of these numbers reflects `required` rules, `min_layers_present`, SDP or edges to external packages (`external_edges_governed`).
+- **`governs_nothing` or `governs_no_edges` is true** → no direct import in the tree can be subject to a `forbid` rule, so say the pass is no evidence about `forbid`. `required`, `min_layers_present`, SDP and transitive contracts are separate checks and may still mean something.
+- **`transitive_checked` is false** → say `forbid` was not checked transitively, and quote `transitive_unverified_reason` when there is one (it is null when there are no `forbid` rules to check).
+- **`archy_brief`** runs no direct-edge check, so never report a pass from it. A null `coverage` with `coverage_error` set means a config exists but its layers are invalid: report that error, not a missing file.
+- **The user asks for a draft** → propose candidate layers as a proposal, since layers read off today's code describe it and do not say what the user intends. Canary every rule and revert: for a `forbid` rule add one deliberately violating import and confirm the check fails; for a `required` rule remove the import path it demands. Never widen a pattern only to raise coverage.
 
 **Which graph tool to reach for:**
 
