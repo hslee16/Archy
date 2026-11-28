@@ -1,0 +1,470 @@
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a450d765dd00a705d</task-id>
+<tool-use-id>toolu_014bCyPvpHq2aGsu21GE2vrq</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a450d765dd00a705d.output</output-file>
+<status>completed</status>
+<summary>Agent "Bounded review of overlap speedup" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict: results are not identical to main for every input.** I reproduced one real divergence.
+
+**1. The totals skip drops edges that sit exactly on the floor** (`src/archy/duplicates.py`, `_similarity_toward`)
+
+`min &lt; floor * max` rounds differently from `inter / union &gt;= floor`. For two bags `{x: m}` and `{x: M}`:
+
+| floor | m, M | `floor * M` | main | branch |
+|---|---|---|---|---|
+| 0.28 | 7, 25 | 7.000000000000001 | edge | no edge |
+| 0.56 | 14, 25 | 14.000000000000002 | edge | no edge |
+| 0.55 | 55, 100 | 55.00000000000001 | edge | no edge |
+
+I ran these through `_cluster_by_similarity`, which returned empty edge weights in all three cases. A lost edge can then change a component, its reported `similarity` and the group list.
+
+- **Affected floors:** of the two-decimal floors from 0.01 to 1.00 (totals up to 20,000), 12 are affected: 0.07, 0.14, 0.17, 0.27, 0.28, 0.34, 0.54, 0.55, 0.56, 0.67, 0.68 and 0.81.
+- **Unaffected:** I found no counterexample for the default 0.85, or for 0.7, 0.1, 0.3, 1/3 or 2/3, with totals up to 2,000,000 (checking the `m` nearest `floor * M`).
+- **Reach:** I saw no CLI or MCP option for `min_similarity`, so only library callers of `compute_near_duplicates` can hit this. The thresholds in `bench/near_duplicates_sweep.py` are 0.75, 0.8, 0.85 and 0.9; I did not test 0.75, 0.8 or 0.9 specifically.
+
+**Fix:** compare in the same form as main, for example `hi = max(...)` then `if hi and min(...) / hi &lt; floor: return 0.0`. Division rounding is monotonic and `inter/union &lt;= min/max`, so this cannot drop an edge main keeps. The `hi` guard covers two empty bags. The unguarded ratio form passes the 87 existing duplicate tests.
+
+**2. The new test cannot catch this.** `test_skipping_hopeless_pairs_drops_no_edge` uses floors 0.3, 0.5, 0.85 and 1.0, none of which showed the rounding problem on its fixtures. Add a case such as floor 0.28 with `Counter(x=7)` and `Counter(x=25)`.
+
+**3. Minor, not reachable from the pipeline:** with negative counts, `_jaccard` now differs from main. `{x: -1, y: 2}` against `{x: 3, y: 2}` gives 0.2, where the old definition gives 0.4. Token bags only hold positive counts, so I would not change code for this.
+
+**Test mutations (temp copy, 87 duplicate tests):**
+
+| Mutation | Result |
+|---|---|
+| Overlap takes the larger count | 9 failed |
+| Skip uses `&lt;=` | 4 failed |
+| Skip too eager (`floor + 0.1`) | 7 failed |
+| Skip removed | all pass, as expected for a pure optimisation |
+
+From reading the diff, budget accounting, truncation and the warning path are unchanged. `Counter.total()` is fine under the `&gt;=3.10` requirement.
+
+I did not edit, commit or switch branches in the working tree. Mutations ran in a copy under the scratchpad.</result>
+<usage><subagent_tokens>71150</subagent_tokens><tool_uses>5</tool_uses><duration_ms>60062</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b9wdyo9ca</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/b9wdyo9ca.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 812 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>aac7f92c795030a25</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/aac7f92c795030a25.output</output-file>
+<status>completed</status>
+<summary>Agent "Check skill guidance accuracy" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** the field names exist and the no-config instruction can be followed, but three statements in the new section are wrong. I reproduced each through the MCP tools on temp projects. All are in `/Users/hosanglee/archy/skills/archy/SKILL.md`, "Reporting what a check covered" (the plugin copy has the same text).
+
+**Wrong statements**
+
+1. **`module_ratio` / `edge_ratio` do not say what the rules reach.**
+   - `module_ratio` counts modules in any layer, ruled or not. `edge_ratio` counts internal edges with both ends layered.
+   - A config with two layers and no `forbid` or `required` returns `module_ratio=0.67`, `edge_ratio=1.0`, `governs_no_edges=false`, `modules_in_ruled_layer=0`, `passed=true`. The suggested wording would report "rules reach 67% of modules and 100% of edges" when there are no rules.
+   - The field for ruled layers is `modules_in_ruled_layer`, which the section omits. Neither ratio reflects `required` rules.
+   - External edges are not in `edge_ratio`. With `forbid` from an internal layer to `requests`, the rule fired while `edge_ratio=0.0` (`external_edges_governed=1`).
+
+2. **"If `governs_nothing` or `governs_no_edges` is true, say the pass carries no information" is false.** Both flags describe only `forbid` reach.
+   - **`required` rules:** with layers naming a nonexistent root plus a `required` rule, both flags are true. The result is `passed=true` when the requirement holds and `passed=false` when the import is removed, so the pass is informative.
+   - **Transitive contracts:** `a -&gt; m -&gt; b` with `forbid a-&gt;b` and `contracts=True` gives `governs_no_edges=true`, `transitive_checked=true` and a broken contract. A kept contract in that shape would be real evidence.
+   - **Top-level `passed`:** it stayed `true` in that broken-contract case. The existing decision rule covers this, but "A pass" should say it includes the nested `contracts` result.
+   - **`min_layers_present` and SDP:** these are separate gates too. A shortfall in the former set `passed=false` with `governs_no_edges=true`. I did not test SDP.
+
+3. **"If `transitive_checked` is false, quote `transitive_unverified_reason`" can have nothing to quote.** The reason is `null` while `transitive_checked=false` when the config has no `forbid` rules and contracts were not requested (layers only, or `required` only). It is also `null` in `archy_brief` with no config. With `contracts=True` and no `forbid`, a reason is returned.
+   - The README `archy_check` row says the reason names "the config that defines none". That held only with `contracts=True`. This README text predates the branch.
+
+**Likely misreadings**
+
+- **Canary:** "add one deliberately violating import, confirm the check fails" cannot test a `required` rule. Adding an import never violates it; you have to remove the path. It also does not apply to `min_layers_present`. A direct import canary does not test the transitive contracts.
+- **No config:**
+  - `archy_check` returns only `{"error": "no archy.yaml found near …"}`, with no `coverage` key.
+  - `archy_brief` returns `coverage: null` and `coverage_error: null`.
+  - `archy_brief` also returns `coverage: null` when a config exists but its layers overlap, with `coverage_error` set. The section should say to check that field, so an agent does not report "no archy.yaml" or find no coverage to read.
+- **`archy_brief` has no pass:** it runs no direct-edge check, but "A pass → read `coverage` (from `archy_check` or `archy_brief`)" suggests its output can stand behind one.
+- **Confusing quoted reason (predates the branch):** with `edge_ratio=1.0` and both ruled layers populated, the reason still said "this check governs too little of the graph to verify them". An agent quoting it next to "100% of edges" would look self-contradictory. This may deserve its own ticket; I did not search for an existing one.
+
+**Confirmed correct**
+
+- `modules_outside_declared_roots` is excluded from both ratios: two outside scripts, including one that imports `pkg.a`, left `modules_total=3` and `edges_total=1`.
+- `empty_layers` is populated as described.
+
+I did not edit, commit or switch anything. The only untracked file, `bench/diff_duplicates_precision.jsonl`, was already there.</result>
+<usage><subagent_tokens>84407</subagent_tokens><tool_uses>7</tool_uses><duration_ms>62120</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>bguvxkv0k</task-id>
+<tool-use-id>toolu_01TVgKg1H7b1UeCgTEmxDccT</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/bguvxkv0k.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 739 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a89be3d8468a74dde</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a89be3d8468a74dde.output</output-file>
+<status>completed</status>
+<summary>Agent "Bounded review of refusal tests" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No blocking findings. I couldn't find a way for these tests to pass while one of the refusals they target is broken.
+
+**Mutation results** (temp copy, `__pycache__` cleared; baseline 29 passed):
+- Removing the "does not exist" refusal fails 14 tests, and removing the "is a file" refusal also fails 14.
+- Removing the `depth` guard, or changing it to `&lt;= 0` or `&lt; -1`, fails 1 test each.
+- Replacing `_project_dir(path)` with `Path(path)` at each of the 15 call sites in `mcp_tools_*.py`, one at a time, fails 2 tests every time.
+
+**Minor, non-blocking**
+
+1. **Duplicate test.** `/Users/hosanglee/archy/tests/test_mcp_surface.py:80-106` (`test_mcp_tool_rejects_a_nonexistent_project_path`) is now fully covered by the new missing-directory test.
+   - Its comment (under mcp 2.x the message is lost, so only assert that something raises) is out of date since #636.
+   - There are now two tables of required arguments: `_PROJECT_PATH_ARGS` in `tests/mcp_helpers.py` and `_REQUIRED` in the new file.
+   - Tightening the old test in place and adding the file case beside it would avoid both.
+
+2. **Direct-call pin missing.** AGENTS.md and the proposal in #704 ask for the exact message on both the direct `run_*` call and the tool call. `depth must be &gt;= 0` is only pinned through the tool. `min_nodes` and `top_n` for duplicates are also only pinned through the tool, in the existing `tests/test_mcp_git.py:30-31`. This matters if the PR claims to close #704.
+
+**Checked, no issue**
+- **Another error satisfying the assertion:** each test matches the full message suffix.
+- **Directory created before refusing:** `assert not missing.exists()` would also catch a `.archy/` created underneath it.
+- **Collection-time `_tools()`:** a new tool with an unlisted required argument raises `KeyError` at collection, so it fails loudly. A tool that disappears from the registry is caught by `test_project_path_guard_covers_every_registered_tool`. Parameter ids are the sorted tool names.
+- **Windows:** the Windows jobs run only the `tests/install` suites and smoke checks, not this file (`ci.yml` is Ubuntu only). The messages also interpolate the raw path string rather than its `repr`, so backslashes would match anyway.
+- **mcp 2.x job:** the `tests/test_mcp_*.py` glob picks the file up. I didn't run it under 2.x.
+- **Project rules:** there are no em dashes, and the comments explain why.
+
+I did not edit, commit or switch anything in the working tree. The only untracked file there, `bench/diff_duplicates_precision.jsonl`, was already present.</result>
+<usage><subagent_tokens>82440</subagent_tokens><tool_uses>9</tool_uses><duration_ms>229474</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>ba0jzcll1</task-id>
+<tool-use-id>toolu_01XoeqFHE9iwBP8Z8NqKegXv</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/ba0jzcll1.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 704 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a6ed1833f0a645289</task-id>
+<tool-use-id>toolu_01BnAVZcA8zgEJjnhoHdiJKu</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a6ed1833f0a645289.output</output-file>
+<status>completed</status>
+<summary>Agent "Check min_layers doc claims" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>I reproduced four inaccuracies by running `archy check` on small temp projects. The base case holds: with empty `__init__.py` layer packages and the code outside them, the floor passes, and removing the packages makes it fail.
+
+1. **"The signal for that collapsed case is ... `0 of N internal edges` ... no `forbid` rule can fire"** (`/Users/hosanglee/archy/README.md`, the "What present means" paragraph) is false when the one file sits inside a layer.
+   - Setup: all code in `shop/api/everything.py` doing `import shop.domain` and `import shop.infra`, with the other layer `__init__.py` files empty.
+   - Result: exit 0, `4 of 5 modules (80%), 2 of 2 internal edges (100%)`, and no "no forbid rule can fire" note. A variant with an unlayered-looking helper (`shop/api/everything.py` importing `shop/api/helper.py`) gave `1 of 1 (100%)`.
+   - The "governs too little of the graph to verify them" line did still print.
+   - The same problem applies to the comment in `/Users/hosanglee/archy/src/archy/layers_models.py`: "the coverage figures show it before then".
+   - The signal holds when the collapsed file is outside every layer. I checked it with internal imports between unlayered modules (`0 of 1`) and with imports into the empty packages (`0 of 2`).
+
+2. **"If the code moves into one file while the layer directories stay behind, the floor still passes; it fails only once they are gone"** (README) is false for directories without `__init__.py`.
+   - With the three layer directories still present (empty, or one holding only a README), the result was exit 1, `layers present: 0 of 3`.
+   - Directories holding only `__pycache__` gave the same result.
+   - The claim is true only for directories that keep a Python module such as `__init__.py`.
+
+3. **"With the note that no `forbid` rule can fire" as the collapsed-case signal** has the limit in item 1, and the new test does not cover it. `/Users/hosanglee/archy/tests/test_layer_presence_docs.py` only puts the code outside the layers.
+
+4. **"It fails only once they are gone" and "Keep it for layers that vanish outright"** do not hold for layers that match external packages.
+   - Setup: layers `requests`, `sqlalchemy` and `flask`, no layer directories at all, one file importing all three, `min_layers_present: 3`.
+   - Result: exit 0. The coverage line read `NO modules under the declared root packages`, not `0 of N internal edges`.
+   - This comes from the separate open issue #527, so a short qualifier or no change are both defensible.
+
+A wording that covers items 1 and 2: "an empty `__init__.py` left behind still counts. When the code has moved outside every layer, coverage shows `0 of N internal edges`; if it collapsed into one of the layers, coverage can still read 100%."
+
+I did not run the test suite, and I did not edit, commit or post anything in the repository. My temp projects are in the session scratchpad.</result>
+<usage><subagent_tokens>65838</subagent_tokens><tool_uses>3</tool_uses><duration_ms>36930</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>bjvlyf3md</task-id>
+<tool-use-id>toolu_019jvKX9nQRPxqvxorrGRTNk</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/bjvlyf3md.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 762 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>baxqhx1v5</task-id>
+<tool-use-id>toolu_01UScoStNjAjFvbNeiFzgRoa</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/baxqhx1v5.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 1014 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>b0gq5op30</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/b0gq5op30.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI results on main after merging five PRs" stream ended</summary>
+<event>main 77a133a10014466c9414f740ff45be87c9324afa: all 17 checks passed</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7be5b53b646175f7</task-id>
+<tool-use-id>toolu_01JL3KtC5BpF8m2X8bSmuVCX</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a7be5b53b646175f7.output</output-file>
+<status>completed</status>
+<summary>Agent "Bounded review of dry-run tests" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** I found no way for this test to touch the real home directory or machine config, and no Windows failure by reading the code. It does have a few coverage gaps where a wrong preview would still pass.
+
+**Isolation**
+- Every adapter path resolves under the fake home or the tmp project, via the patched `paths.*` functions or `--project-root`.
+- `CODEX_HOME` and `XDG_CONFIG_HOME` are cleared. APPDATA and LOCALAPPDATA are patched to `None` on simulated linux.
+- No adapter reads `COPILOT_HOME`, a Gemini variable or `USERPROFILE`.
+- The `/Applications` probes are detection only, which `--target all` skips.
+- I ran a temp copy with `CODEX_HOME` and `COPILOT_HOME` set to sentinel directories, and they stayed empty. An audit hook on the first clean run showed no client config access outside tmp.
+
+**CI premise (correction)**
+This file does not run on macOS or Windows. `.github/workflows/install.yml` runs `tests/install/unit` only on ubuntu, and the three-OS matrix runs only `integration` and `contract`. `ci.yml`'s full `pytest` is also ubuntu. Reading the code, I'd expect it to pass on Windows, but I did not run it there.
+
+**Ways it passes while the preview is wrong**
+Each mutation below applied to the dry-run branch of `src/archy/cli_install.py` in the temp copy, and all 3 tests still passed.
+
+1. **Legacy global instruction blocks are never previewed.** A global install writes no instruction block, so the `global` case only ever has config and permission files. Hiding every `.md` strip line in global scope survived. A user with a pre-#560 block in `~/.claude/CLAUDE.md` or `~/.codex/AGENTS.md` is the case where an accurate preview matters. Fix: in the global case, seed one such file with user text plus `instructions_block()` before taking the snapshot.
+2. **The comment about `project/AGENTS.md` is false for `global`.** It says install adds to the file "so something is stripped". In global scope the file is never touched, and `assert stripped` is satisfied by archy-created config files. The seeding in item 1 also fixes this, with the comment scoped to `local`.
+3. **`--no-permissions` is not covered.** Making the dry run always pass `seed_permissions=True` survived. The preview would then list Claude permission changes that the real run leaves alone.
+4. **A `--target` subset is not covered.** Making the dry run ignore `--target` and use all adapters survived. The preview could list other clients' files. Running one case with a single target while everything is installed would catch it.
+5. **Minor: "a dry run changed the disk" only compares files.** A dry run that created a directory survived, because `_tree` filters on `is_file()`.
+
+I did not edit, commit or post anything in the repository. The mutated copy is in `/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/scratchpad/rv703`.</result>
+<usage><subagent_tokens>101808</subagent_tokens><tool_uses>8</tool_uses><duration_ms>51179</duration_ms></usage>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>bai8evzwq</task-id>
+<tool-use-id>toolu_01GWdV2Tok8EffYC86C2RCSR</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/bai8evzwq.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 703 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a549903f5655d22c3</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a549903f5655d22c3.output</output-file>
+<status>completed</status>
+<summary>Agent "Quick review of README table test" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>No significant defects. The row set and the spelled-out count are pinned in both directions, and the `test_mcp_*` name is picked up by the mcp 2.x CI glob. These are minor findings from reading the code; I did not run the test or any mutations.
+
+All are in `/Users/hosanglee/archy/tests/test_mcp_readme_table.py`.
+
+**Drift that still passes (narrow)**
+- `_rows()` stops at the first blank line. A stale or bogus tool row left after an accidental blank line inside or just below the table is never read, so the test passes while the README shows a broken extra row. A missing real tool would still fail.
+- A row inside an HTML comment still counts as present. For example, wrapping a single row in `&lt;!-- ... --&gt;` on its own lines fails on the regex, but commenting out the whole section passes. This is very unlikely and not worth code.
+
+**Brittle on harmless edits**
+- Only `|---` is skipped as the separator. `| --- | --- |` or `|:---|---|`, which Markdown formatters commonly produce, fails with the misleading message "a table row does not start with a backticked tool name". This is the one I would fix, for example with `re.fullmatch(r"[|:\- ]+", line)`.
+- Padding or realigning the header (`| Tool    | Purpose |`) or renaming the section heading gives a bare `IndexError`. The heading case fails at collection, because `SECTION` is computed at module level.
+- Writing the count as `15`, or capitalising it (`Fifteen`), raises `ValueError` from `_WORDS.index` instead of an assertion that explains the problem. The same happens above twenty.
+
+**Encoding and line endings:** no problem. `read_text(encoding="utf-8")` normalises CRLF through universal newlines.
+
+**AGENTS.md:** I found no violations.</result>
+<usage><subagent_tokens>62570</subagent_tokens><tool_uses>1</tool_uses><duration_ms>14626</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>b7p194h8g</task-id>
+<tool-use-id>toolu_01XtUQvrtRaa2otwWfVJgpso</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/b7p194h8g.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 675 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>a476e7ba0a6b58873</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a476e7ba0a6b58873.output</output-file>
+<status>completed</status>
+<summary>Agent "Review validator and glyph tests" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** the five raise paths are each exercised, and both of the ticket's mutations go red (forbid `raise` -&gt; `pass`: 2 failed; `return "+"` -&gt; `"?"`: 3 failed). Two things the ticket asks for are missing, and several conditions can still be broken with the new tests green.
+
+I mutated a temp copy of the branch and ran only the two new files (baseline 17 passed). "Survives" below means survives these files; I did not run the full suite against the mutants.
+
+**Missing from #706**
+1. **No negative-weight case.** Proposal item 2 names it. `if w &lt;= 0:` -&gt; `if w == 0:` survives. Add `(-1.0, ".")` to `tests/test_dsm_cell_glyph.py`.
+2. **No rendered 3-node DSM with an exact grid.** `_row_for` builds a 2-node matrix and reads one cell.
+
+**Validator conditions that can break while the tests pass** (`src/archy/diff.py`, `tests/test_snapshot_rule_validators.py`)
+
+| Mutation that survives | Input that would catch it |
+|---|---|
+| forbid: `len(pair) != 2` -&gt; `&lt; 2` | `[["a","b","c"]]` (silently truncated to `a, b`) |
+| layers: `len(row) != 2` -&gt; `&lt; 2` | `[["web", [], "extra"]]` |
+| required: drop `not isinstance(source, str)` | `{"source": 1, "must_reach": "b"}` |
+| required: both type checks -&gt; `is None` checks | a non-string `source` or `must_reach` (only a missing `must_reach` is tested) |
+| `within is not None and not isinstance(within, str)` -&gt; `within is not None` (rejects every valid string) | a control with `within: "x"` |
+| `required.append((source, must, within))` -&gt; `(source, must, None)` | the same control, asserting `snapshot.rules.required` |
+
+The control test only passes `within: None` and only asserts `rules.forbid`, so it does not show that valid `layers` or `required` entries load correctly.
+
+**No other findings**
+- `ruff check` (no path) and `ruff format --check` pass on the branch copy.
+- `ty check` passes on the two new files.
+- The new files contain no em dashes.
+- I found no platform or encoding brittleness in the tests. File writes specify UTF-8, the payload is ASCII, and the path assertions use `endswith`.
+
+The working tree was on `main`, so I reviewed a `git archive` export of `alee/706-pin-validators-glyph` in the scratchpad. I did not edit the working tree, commit, post or switch branches.</result>
+<usage><subagent_tokens>74985</subagent_tokens><tool_uses>6</tool_uses><duration_ms>59775</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>bhprwel23</task-id>
+<tool-use-id>toolu_01KBGsfwBvvgPoeRk5AfTBqe</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/bhprwel23.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the 706 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+Lets work on existing tickets. We have a lot so keep looping.
+
+---
+
+<task-notification>
+<task-id>b1d3wyu8o</task-id>
+<tool-use-id>toolu_01WYzjrZmkhBskweZbaajDbo</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/b1d3wyu8o.output</output-file>
+<status>completed</status>
+<summary>Monitor "CI and CodeScene for the updated 706 PR" stream ended</summary>
+<event>all checks success
+CodeScene Code Health Review (main)|completed|success</event>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a7ee32926f0041331</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-hosanglee-archy/f0f9d432-d3c2-4a4d-bbd3-adb2ac2e830d/tasks/a7ee32926f0041331.output</output-file>
+<status>completed</status>
+<summary>Agent "Review score.py cleanup" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>**Verdict:** I found no behaviour change and no false statement in the rewritten comments. There is one minor test gap.
+
+**Finding (minor): the upper boundary of the guard is not pinned**
+- Changing `graph.number_of_nodes() &lt; 2` to `&lt;= 2` in `_trivial_modularity` (`/Users/hosanglee/archy/src/archy/score.py`) leaves all 46 tests in `tests/test_score.py` passing. I did not run the rest of the suite against that mutant.
+- Under it, a two-node graph with one edge would score a vacuous 1.0 instead of being partitioned. By hand, one community gives Q=0, so about 0.333.
+- A non-trivial case in `/Users/hosanglee/archy/tests/test_score.py` for `[("a", "b")]`, asserting the hand-worked answer for both functions, would close it.
+
+**The test can fail.** On a temp copy, each of these turned the new test red:
+- `or` changed to `and`
+- `&lt; 2` changed to `&lt; 1`
+- dropping either clause
+- removing the `max(..., 1)` floor
+- removing the guard call from either function
+
+Without the new test, the rest of the file only caught removal of a guard call, so the new test adds real coverage.
+
+**Comments check out**
+- There are five axes with `** 0.2`.
+- Call edges shipped as a diagnostic in v0.16, and complexity was promoted in v0.20.
+- `compute_complexity` takes only `cc_mean` and `function_count`.
+- `AXIS_REVIEW.md` does reject `calls_per_edge` on directionality, actionability and discriminant validity.
+- The removed note about a future Gini-of-CC equality axis is still recorded in `docs/SCORING.md`.
+
+**No other stale claims that the ticket meant**
+- I found none in `score.py`. The "original four formulas" line refers to the sentrux set and is correct.
+- The "four-axis" mentions I saw in the docs are historical or refer to the other four axes besides the one under discussion.
+- The "diagnostic, not in score" lines in the README and CLI output are about propagation cost and calls, so they are true.
+- `SKILL.md` already says five-axis. #467 is closed and concerns Smithery's cached copy of an old `SKILL.md`, so there is nothing to change in the repo for it.
+
+**Behaviour:** the helper uses the same condition and return tuple as the two removed blocks, and runs at the same point, before the weighted copy. Self-loops, isolated nodes and edge weights are therefore handled as before. I checked this by reading the diff, not with a before/after run on sample graphs.
+
+I did not run the full CI gates. The working tree was not edited; mutations ran in a copy under the session scratchpad.</result>
+<usage><subagent_tokens>86166</subagent_tokens><tool_uses>8</tool_uses><duration_ms>52571</duration_ms></usage>
+</task-notification>
